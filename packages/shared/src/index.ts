@@ -70,6 +70,15 @@ export interface GitHubPullRequest {
   draft: boolean;
 }
 
+export interface GitHubRepository {
+  owner: string;
+  name: string;
+  fullName: string;
+  htmlUrl: string;
+  description: string | null;
+  private: boolean;
+}
+
 export interface CreateWorkspaceRequest {
   repoUrl: string;
   name?: string;
@@ -78,6 +87,10 @@ export interface CreateWorkspaceRequest {
 export interface CreateWorktreeFromBranchRequest {
   branch: string;
   name?: string;
+  /** When true, create a new branch instead of checking out an existing one. */
+  createNew?: boolean;
+  /** Base ref to branch from when createNew is true (defaults to workspace default branch). */
+  baseBranch?: string;
 }
 
 export interface CreateWorktreeFromPrRequest {

@@ -9,6 +9,7 @@ import type {
   CreateWorkspaceRequest,
   GitHubBranch,
   GitHubPullRequest,
+  GitHubRepository,
   Message,
   UpdateAgentRequest,
   WorktreeWithAgent,
@@ -67,6 +68,8 @@ export const api = {
     request<GitHubBranch[]>(`/workspaces/${workspaceId}/github/branches`),
   listPullRequests: (workspaceId: string) =>
     request<GitHubPullRequest[]>(`/workspaces/${workspaceId}/github/pulls`),
+  searchRepositories: (query: string) =>
+    request<GitHubRepository[]>(`/github/repos/search?q=${encodeURIComponent(query)}`),
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
   updateAgent: (agentId: string, body: UpdateAgentRequest) =>
     request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),
