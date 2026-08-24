@@ -1,4 +1,4 @@
-import type { GitHubBranch, GitHubPullRequest } from '@agent-orchestrator/shared';
+import type { GitHubBranch, GitHubPullRequest, GitHubRepository } from '@agent-orchestrator/shared';
 
 interface GitHubApiOptions {
   token?: string;
@@ -83,6 +83,49 @@ export class GitHubService {
     };
   }
 
+  async searchRepositories(query: string): Promise<GitHubRepository[]> {
+    if (!this.options.token) {
+      throw new Error('GitHub token is not configured');
+    }
+
+    const trimmed = query.trim();
+    let url: string;
+
+    if (trimmed) {
+      const searchQuery = encodeURIComponent(`${trimmed} in:name fork:true`);
+      url = `https://api.github.com/search/repositories?q=${searchQuery}&sort=updated&per_page=30`;
+    } else {
+      url =
+        'https://api.github.com/user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=30';
+    }
+
+    if (trimmed) {
+      const data = await this.request<{
+        items: Array<{
+          owner: { login: string };
+          name: string;
+          full_name: string;
+          html_url: string;
+          description: string | null;
+          private: boolean;
+        }>;
+      }>(url);
+      return data.items.map(mapRepository);
+    }
+
+    const data = await this.request<
+      Array<{
+        owner: { login: string };
+        name: string;
+        full_name: string;
+        html_url: string;
+        description: string | null;
+        private: boolean;
+      }>
+    >(url);
+    return data.map(mapRepository);
+  }
+
   async createPullRequest(
     owner: string,
     repo: string,
@@ -118,4 +161,22 @@ export class GitHubService {
     const data = (await response.json()) as { number: number; html_url: string };
     return { number: data.number, htmlUrl: data.html_url };
   }
+}
+
+function mapRepository(repo: {
+  owner: { login: string };
+  name: string;
+  full_name: string;
+  html_url: string;
+  description: string | null;
+  private: boolean;
+}): GitHubRepository {
+  return {
+    owner: repo.owner.login,
+    name: repo.name,
+    fullName: repo.full_name,
+    htmlUrl: repo.html_url,
+    description: repo.description,
+    private: repo.private,
+  };
 }

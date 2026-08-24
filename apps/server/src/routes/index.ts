@@ -19,6 +19,7 @@ import {
   listGitHubPullRequests,
   listWorkspaces,
   listWorktrees,
+  searchGitHubRepositories,
   startAgent,
   stopAgent,
   streamAgentChat,
@@ -96,6 +97,8 @@ export function createRouter(ctx: AppContext): express.Router {
         .object({
           branch: z.string().min(1),
           name: z.string().optional(),
+          createNew: z.boolean().optional(),
+          baseBranch: z.string().optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromBranch(ctx, param(req.params.workspaceId), body));
@@ -134,6 +137,14 @@ export function createRouter(ctx: AppContext): express.Router {
     '/workspaces/:workspaceId/github/pulls',
     asyncHandler(async (req, res) => {
       res.json(await listGitHubPullRequests(ctx, param(req.params.workspaceId)));
+    }),
+  );
+
+  router.get(
+    '/github/repos/search',
+    asyncHandler(async (req, res) => {
+      const query = typeof req.query.q === 'string' ? req.query.q : '';
+      res.json(await searchGitHubRepositories(ctx, query));
     }),
   );
 
