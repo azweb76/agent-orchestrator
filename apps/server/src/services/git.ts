@@ -23,11 +23,17 @@ export class GitService {
     });
   }
 
-  async addWorktree(mainRepoPath: string, worktreePath: string, branch: string, createBranch = false): Promise<void> {
+  async addWorktree(
+    mainRepoPath: string,
+    worktreePath: string,
+    branch: string,
+    options: { createBranch?: boolean; startRef?: string } = {},
+  ): Promise<void> {
     await fs.mkdir(path.dirname(worktreePath), { recursive: true });
     const args = ['-C', mainRepoPath, 'worktree', 'add'];
-    if (createBranch) {
-      args.push('-b', branch, worktreePath, branch);
+    if (options.createBranch) {
+      const startRef = options.startRef ?? branch;
+      args.push('-b', branch, worktreePath, startRef);
     } else {
       args.push(worktreePath, branch);
     }

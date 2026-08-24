@@ -13,12 +13,16 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
+  Radio,
+  RadioGroup,
   Select,
   Stack,
   Tab,
   Tabs,
+  TextField,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -34,7 +38,10 @@ export function WorkspaceDetailPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tab, setTab] = useState<'branch' | 'pr'>('branch');
+  const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
+  const [newBranchName, setNewBranchName] = useState('');
+  const [baseBranch, setBaseBranch] = useState('');
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
 
   const workspaceQuery = useQuery({
@@ -61,12 +68,24 @@ export function WorkspaceDetailPage() {
     enabled: dialogOpen && tab === 'pr',
   });
 
+  const workspace = workspaceQuery.data;
+  const defaultBaseBranch = baseBranch || workspace?.defaultBranch || '';
+
   const createFromBranch = useMutation({
-    mutationFn: () => api.createWorktreeFromBranch(workspaceId, { branch: selectedBranch }),
+    mutationFn: () => {
+      if (branchMode === 'new') {
+        return api.createWorktreeFromBranch(workspaceId, {
+          branch: newBranchName,
+          createNew: true,
+          baseBranch: defaultBaseBranch || undefined,
+        });
+      }
+      return api.createWorktreeFromBranch(workspaceId, { branch: selectedBranch });
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      setDialogOpen(false);
+      handleCloseDialog();
       navigate(`/agents/${data.agent.id}`);
     },
   });
@@ -76,7 +95,7 @@ export function WorkspaceDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      setDialogOpen(false);
+      handleCloseDialog();
       navigate(`/agents/${data.agent.id}`);
     },
   });
@@ -94,6 +113,15 @@ export function WorkspaceDetailPage() {
     onSuccess: () => navigate('/'),
   });
 
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+    setBranchMode('existing');
+    setSelectedBranch('');
+    setNewBranchName('');
+    setBaseBranch('');
+    setSelectedPr('');
+  };
+
   if (workspaceQuery.isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -102,13 +130,14 @@ export function WorkspaceDetailPage() {
     );
   }
 
-  if (workspaceQuery.error || !workspaceQuery.data) {
+  if (workspaceQuery.error || !workspace) {
     return <Alert severity="error">{(workspaceQuery.error as Error)?.message ?? 'Workspace not found'}</Alert>;
   }
 
-  const workspace = workspaceQuery.data;
   const createPending = createFromBranch.isPending || createFromPr.isPending;
   const createError = createFromBranch.error ?? createFromPr.error;
+  const canCreateBranch =
+    branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
 
   return (
     <Stack spacing={3}>
@@ -164,10 +193,10 @@ export function WorkspaceDetailPage() {
             <Card key={worktree.id}>
               <CardContent>
                 <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ justifyContent: 'space-between' }}
-      >
+                  direction={{ xs: 'column', sm: 'row' }}
+                  spacing={2}
+                  sx={{ justifyContent: 'space-between' }}
+                >
                   <Box>
                     <Stack direction="row" spacing={1} sx={{ mb: 0.5, alignItems: 'center' }}>
                       <Typography variant="h6">{worktree.name}</Typography>
@@ -216,7 +245,7 @@ export function WorkspaceDetailPage() {
         </Stack>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Create worktree</DialogTitle>
         <DialogContent>
           <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
@@ -225,20 +254,60 @@ export function WorkspaceDetailPage() {
           </Tabs>
 
           {tab === 'branch' ? (
-            <FormControl fullWidth>
-              <InputLabel>Branch</InputLabel>
-              <Select
-                label="Branch"
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-              >
-                {branchesQuery.data?.map((branch) => (
-                  <MenuItem key={branch.name} value={branch.name}>
-                    {branch.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Stack spacing={2}>
+              <FormControl>
+                <RadioGroup
+                  row
+                  value={branchMode}
+                  onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new')}
+                >
+                  <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
+                  <FormControlLabel value="new" control={<Radio />} label="New branch" />
+                </RadioGroup>
+              </FormControl>
+
+              {branchMode === 'existing' ? (
+                <FormControl fullWidth>
+                  <InputLabel>Branch</InputLabel>
+                  <Select
+                    label="Branch"
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                  >
+                    {branchesQuery.data?.map((branch) => (
+                      <MenuItem key={branch.name} value={branch.name}>
+                        {branch.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : (
+                <>
+                  <TextField
+                    label="New branch name"
+                    value={newBranchName}
+                    onChange={(e) => setNewBranchName(e.target.value)}
+                    placeholder="feature/my-change"
+                    fullWidth
+                    required
+                  />
+                  <FormControl fullWidth>
+                    <InputLabel>Base branch</InputLabel>
+                    <Select
+                      label="Base branch"
+                      value={defaultBaseBranch}
+                      onChange={(e) => setBaseBranch(e.target.value)}
+                    >
+                      {branchesQuery.data?.map((branch) => (
+                        <MenuItem key={branch.name} value={branch.name}>
+                          {branch.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </>
+              )}
+            </Stack>
           ) : (
             <FormControl fullWidth>
               <InputLabel>Pull request</InputLabel>
@@ -263,13 +332,10 @@ export function WorkspaceDetailPage() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button
             variant="contained"
-            disabled={
-              createPending ||
-              (tab === 'branch' ? !selectedBranch : selectedPr === '')
-            }
+            disabled={createPending || (tab === 'branch' ? !canCreateBranch : selectedPr === '')}
             onClick={() => {
               if (tab === 'branch') createFromBranch.mutate();
               else createFromPr.mutate();

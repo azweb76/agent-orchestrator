@@ -130,8 +130,17 @@ export async function createWorktreeFromBranch(
   const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
   const id = uuidv4();
 
+  const baseBranch = body.baseBranch ?? workspace.defaultBranch;
   await ctx.git.fetch(workspace.repoPath);
-  await ctx.git.addWorktree(workspace.repoPath, worktreePath, body.branch);
+
+  if (body.createNew) {
+    await ctx.git.addWorktree(workspace.repoPath, worktreePath, body.branch, {
+      createBranch: true,
+      startRef: `origin/${baseBranch}`,
+    });
+  } else {
+    await ctx.git.addWorktree(workspace.repoPath, worktreePath, body.branch);
+  }
 
   const worktree = ctx.repos.worktrees.create({
     id,
@@ -141,7 +150,7 @@ export async function createWorktreeFromBranch(
     branch: body.branch,
     prNumber: null,
     prTitle: null,
-    baseBranch: workspace.defaultBranch,
+    baseBranch: body.createNew ? baseBranch : workspace.defaultBranch,
     createdAt: nowIso(),
   });
 
@@ -434,6 +443,10 @@ export async function listGitHubPullRequests(ctx: AppContext, workspaceId: strin
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
   return ctx.github.listPullRequests(workspace.githubOwner, workspace.githubRepo);
+}
+
+export async function searchGitHubRepositories(ctx: AppContext, query: string) {
+  return ctx.github.searchRepositories(query);
 }
 
 export async function getSystemStatus(ctx: AppContext) {
