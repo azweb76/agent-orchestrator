@@ -55,6 +55,7 @@ pnpm dev
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GITHUB_TOKEN` | GitHub PAT for API access | — |
+| `GITHUB_LOGIN` | Optional GitHub username override for PR inbox searches | from token `/user` |
 | `CLAUDE_BIN` | Path to Claude Code binary | `claude` |
 | `DATA_DIR` | Directory for repos, worktrees, and SQLite DB | `./data` |
 | `PORT` | Server port | `3001` |

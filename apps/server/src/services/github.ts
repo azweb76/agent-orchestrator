@@ -31,6 +31,8 @@ export interface SearchedPullRequest {
 export class GitHubService {
   constructor(private options: GitHubApiOptions) {}
 
+  private loginCache: string | null | undefined;
+
   private requireToken(): string {
     if (!this.options.token) {
       throw new Error('GitHub token is not configured');
@@ -55,6 +57,38 @@ export class GitHubService {
       throw new Error(`GitHub API error ${response.status}: ${body}`);
     }
     return response.json() as Promise<T>;
+  }
+
+  /** Resolve the authenticated GitHub login for search queries (user PAT required). */
+  async getAuthenticatedLogin(): Promise<string> {
+    if (process.env.GITHUB_LOGIN?.trim()) {
+      return process.env.GITHUB_LOGIN.trim();
+    }
+
+    if (this.loginCache !== undefined) {
+      if (!this.loginCache) {
+        throw new Error(
+          'GITHUB_TOKEN must be a personal access token for a user account (not a GitHub App installation token). Optionally set GITHUB_LOGIN.',
+        );
+      }
+      return this.loginCache;
+    }
+
+    this.requireToken();
+    try {
+      const user = await this.request<{ login: string }>('https://api.github.com/user');
+      this.loginCache = user.login;
+      return user.login;
+    } catch (error) {
+      this.loginCache = null;
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('403') || message.includes('401')) {
+        throw new Error(
+          'GITHUB_TOKEN must be a personal access token for a user account (not a GitHub App installation token). Optionally set GITHUB_LOGIN.',
+        );
+      }
+      throw error;
+    }
   }
 
   private async searchPullRequests(query: string): Promise<SearchedPullRequest[]> {
@@ -85,11 +119,13 @@ export class GitHubService {
   }
 
   async listAuthoredOpenPullRequests(): Promise<SearchedPullRequest[]> {
-    return this.searchPullRequests('is:pr is:open author:@me');
+    const login = await this.getAuthenticatedLogin();
+    return this.searchPullRequests(`is:pr is:open author:${login}`);
   }
 
   async listReviewRequestedPullRequests(): Promise<SearchedPullRequest[]> {
-    return this.searchPullRequests('is:pr is:open review-requested:@me');
+    const login = await this.getAuthenticatedLogin();
+    return this.searchPullRequests(`is:pr is:open review-requested:${login}`);
   }
 
   async listBranches(owner: string, repo: string): Promise<GitHubBranch[]> {
