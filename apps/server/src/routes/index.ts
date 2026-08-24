@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
