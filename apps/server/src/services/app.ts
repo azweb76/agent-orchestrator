@@ -5,18 +5,21 @@ import type {
   Agent,
   AgentDetail,
   AgentEvent,
+  CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
+  InboxPullRequest,
   Message,
+  PullRequestInbox,
   UpdateAgentRequest,
   WorktreeWithAgent,
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, parseGitHubUrl, slugify } from '../services/git.js';
-import { GitHubService } from '../services/github.js';
+import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 
 export interface AppContext {
   repos: AppRepositories;
@@ -447,6 +450,85 @@ export async function listGitHubPullRequests(ctx: AppContext, workspaceId: strin
 
 export async function searchGitHubRepositories(ctx: AppContext, query: string) {
   return ctx.github.searchRepositories(query);
+}
+
+function enrichInboxPullRequest(
+  ctx: AppContext,
+  pr: SearchedPullRequest,
+  category: InboxPullRequest['category'],
+): InboxPullRequest {
+  const workspace = ctx.repos.workspaces.getByOwnerRepo(pr.owner, pr.repo);
+  let agentId: string | null = null;
+
+  if (workspace) {
+    const worktree = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, pr.number);
+    if (worktree) {
+      agentId = ctx.repos.agents.getByWorktreeId(worktree.id)?.id ?? null;
+    }
+  }
+
+  return {
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    htmlUrl: pr.htmlUrl,
+    draft: pr.draft,
+    owner: pr.owner,
+    repo: pr.repo,
+    authorLogin: pr.authorLogin,
+    updatedAt: pr.updatedAt,
+    category,
+    workspaceId: workspace?.id ?? null,
+    agentId,
+  };
+}
+
+export async function getPullRequestInbox(ctx: AppContext): Promise<PullRequestInbox> {
+  const [authored, reviewRequested] = await Promise.all([
+    ctx.github.listAuthoredOpenPullRequests(),
+    ctx.github.listReviewRequestedPullRequests(),
+  ]);
+
+  return {
+    authored: authored.map((pr) => enrichInboxPullRequest(ctx, pr, 'authored')),
+    reviewRequested: reviewRequested.map((pr) => enrichInboxPullRequest(ctx, pr, 'review_requested')),
+  };
+}
+
+export async function createAgentFromPullRequest(ctx: AppContext, body: CreateAgentFromPrRequest) {
+  let workspace = ctx.repos.workspaces.getByOwnerRepo(body.owner, body.repo);
+
+  if (!workspace) {
+    workspace = await createWorkspace(ctx, {
+      repoUrl: `https://github.com/${body.owner}/${body.repo}`,
+      name: body.repo,
+    });
+  }
+
+  const existingWorktree = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, body.prNumber);
+  if (existingWorktree) {
+    const existingAgent = ctx.repos.agents.getByWorktreeId(existingWorktree.id);
+    if (existingAgent) {
+      return {
+        workspace,
+        worktree: existingWorktree,
+        agent: existingAgent,
+        created: false as const,
+      };
+    }
+  }
+
+  const { worktree, agent } = await createWorktreeFromPr(ctx, workspace.id, {
+    prNumber: body.prNumber,
+    name: body.name,
+  });
+
+  return {
+    workspace,
+    worktree,
+    agent,
+    created: true as const,
+  };
 }
 
 export async function getSystemStatus(ctx: AppContext) {

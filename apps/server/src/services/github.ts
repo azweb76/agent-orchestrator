@@ -4,8 +4,39 @@ interface GitHubApiOptions {
   token?: string;
 }
 
+interface GitHubSearchIssue {
+  number: number;
+  title: string;
+  state: string;
+  draft?: boolean;
+  html_url: string;
+  updated_at: string;
+  user: { login: string };
+  repository_url: string;
+  pull_request?: { url: string };
+}
+
+export interface SearchedPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  htmlUrl: string;
+  draft: boolean;
+  owner: string;
+  repo: string;
+  authorLogin: string;
+  updatedAt: string;
+}
+
 export class GitHubService {
   constructor(private options: GitHubApiOptions) {}
+
+  private requireToken(): string {
+    if (!this.options.token) {
+      throw new Error('GitHub token is not configured');
+    }
+    return this.options.token;
+  }
 
   private async request<T>(url: string): Promise<T> {
     const headers: Record<string, string> = {
@@ -24,6 +55,41 @@ export class GitHubService {
       throw new Error(`GitHub API error ${response.status}: ${body}`);
     }
     return response.json() as Promise<T>;
+  }
+
+  private async searchPullRequests(query: string): Promise<SearchedPullRequest[]> {
+    this.requireToken();
+    const encoded = encodeURIComponent(query);
+    const data = await this.request<{ items: GitHubSearchIssue[] }>(
+      `https://api.github.com/search/issues?q=${encoded}&sort=updated&order=desc&per_page=50`,
+    );
+
+    return data.items
+      .filter((item) => Boolean(item.pull_request))
+      .map((item) => {
+        const match = item.repository_url.match(/repos\/([^/]+)\/([^/]+)$/);
+        const owner = match?.[1] ?? '';
+        const repo = match?.[2] ?? '';
+        return {
+          number: item.number,
+          title: item.title,
+          state: item.state,
+          htmlUrl: item.html_url,
+          draft: Boolean(item.draft),
+          owner,
+          repo,
+          authorLogin: item.user.login,
+          updatedAt: item.updated_at,
+        };
+      });
+  }
+
+  async listAuthoredOpenPullRequests(): Promise<SearchedPullRequest[]> {
+    return this.searchPullRequests('is:pr is:open author:@me');
+  }
+
+  async listReviewRequestedPullRequests(): Promise<SearchedPullRequest[]> {
+    return this.searchPullRequests('is:pr is:open review-requested:@me');
   }
 
   async listBranches(owner: string, repo: string): Promise<GitHubBranch[]> {

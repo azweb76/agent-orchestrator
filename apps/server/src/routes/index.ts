@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
   archiveAgent,
+  createAgentFromPullRequest,
   createAgentPullRequest,
   createWorktreeFromBranch,
   createWorktreeFromPr,
@@ -13,6 +14,7 @@ import {
   getAgentDiff,
   getAgentEvents,
   getAgentMessages,
+  getPullRequestInbox,
   getSystemStatus,
   getWorkspace,
   listGitHubBranches,
@@ -145,6 +147,29 @@ export function createRouter(ctx: AppContext): express.Router {
     asyncHandler(async (req, res) => {
       const query = typeof req.query.q === 'string' ? req.query.q : '';
       res.json(await searchGitHubRepositories(ctx, query));
+    }),
+  );
+
+  router.get(
+    '/github/pulls/inbox',
+    asyncHandler(async (_req, res) => {
+      res.json(await getPullRequestInbox(ctx));
+    }),
+  );
+
+  router.post(
+    '/github/pulls/create-agent',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          owner: z.string().min(1),
+          repo: z.string().min(1),
+          prNumber: z.number().int().positive(),
+          name: z.string().optional(),
+        })
+        .parse(req.body);
+      const result = await createAgentFromPullRequest(ctx, body);
+      res.status(result.created ? 201 : 200).json(result);
     }),
   );
 

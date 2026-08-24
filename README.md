@@ -5,6 +5,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
 ## Features
 
 - **Workspaces** — clone GitHub repos as managed workspaces
+- **Pull requests** — browse your open PRs and review requests, then create a workspace + agent from any PR
 - **Worktrees** — create worktrees from branches or existing pull requests
 - **Agents** — one Claude Code agent per worktree
 - **Chat** — streaming conversations with follow-up support via Claude session resume
