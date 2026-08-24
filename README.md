@@ -1,1 +1,78 @@
-# agent-orchestrator
+# Agent Orchestrator
+
+Local web app for managing git workspaces, worktrees, and Claude Code agents.
+
+## Features
+
+- **Workspaces** — clone GitHub repos as managed workspaces
+- **Worktrees** — create worktrees from branches or existing pull requests
+- **Agents** — one Claude Code agent per worktree
+- **Chat** — streaming conversations with follow-up support via Claude session resume
+- **Diff & PRs** — view agent changes and open pull requests on GitHub
+- **Events** — inspect Claude stream events and agent lifecycle activity
+
+## Stack
+
+- **Backend:** Node.js, Express, TypeScript (ESM), SQLite
+- **Frontend:** Vite, React, MUI v9, TanStack Query
+- **Agent runtime:** local [Claude Code](https://code.claude.com) CLI
+
+## Prerequisites
+
+- Node.js 20+
+- pnpm 10+
+- git
+- [Claude Code CLI](https://code.claude.com) installed and authenticated
+- GitHub personal access token with `repo` scope (for branches, PRs, and creating PRs)
+
+## Setup
+
+```bash
+cp .env.example .env
+# Edit .env and set GITHUB_TOKEN
+
+pnpm install
+pnpm build
+pnpm start
+```
+
+Open http://localhost:3001
+
+### Development
+
+Run backend and frontend together with hot reload:
+
+```bash
+pnpm dev
+```
+
+- API: http://localhost:3001/api
+- Web (dev): http://localhost:5173 (proxies `/api` to the server)
+
+## Environment variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GITHUB_TOKEN` | GitHub PAT for API access | — |
+| `CLAUDE_BIN` | Path to Claude Code binary | `claude` |
+| `DATA_DIR` | Directory for repos, worktrees, and SQLite DB | `./data` |
+| `PORT` | Server port | `3001` |
+
+## Usage
+
+1. **Add a workspace** — paste a GitHub repo URL; the app clones it locally.
+2. **Create a worktree** — pick a branch or open PR; a git worktree and agent are created automatically.
+3. **Open the agent** — chat with Claude Code in the worktree directory, view diffs, and create PRs when ready.
+
+## Architecture
+
+```
+apps/
+  server/   Express API, git/GitHub/Claude services, SQLite
+  web/      React UI
+packages/
+  shared/   Shared TypeScript types
+data/       Cloned repos, worktrees, database (gitignored)
+```
+
+Each worktree maps 1:1 to a Claude Code agent session. Chat uses `claude -p` with `stream-json` output; follow-ups resume via `--resume <session_id>`.

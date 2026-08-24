@@ -1,0 +1,74 @@
+import { Outlet, useLocation, Link as RouterLink } from 'react-router-dom';
+import {
+  AppBar,
+  Box,
+  Chip,
+  Container,
+  Link,
+  Stack,
+  Toolbar,
+  Typography,
+} from '@mui/material';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api/client';
+
+export function AppLayout() {
+  const location = useLocation();
+  const { data: status } = useQuery({
+    queryKey: ['status'],
+    queryFn: api.getStatus,
+    refetchInterval: 30_000,
+  });
+
+  return (
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AppBar
+        position="sticky"
+        elevation={0}
+        sx={{
+          bgcolor: 'rgba(11,15,23,0.85)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+        }}
+      >
+        <Toolbar>
+          <SmartToyOutlinedIcon sx={{ mr: 1.5, color: 'secondary.main' }} />
+          <Typography
+            component={RouterLink}
+            to="/"
+            variant="h6"
+            sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 700 }}
+          >
+            Agent Orchestrator
+          </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <Stack direction="row" spacing={1}>
+            <Chip
+              size="small"
+              label={status?.claudeInstalled ? 'Claude Code ready' : 'Claude Code missing'}
+              color={status?.claudeInstalled ? 'success' : 'warning'}
+              variant="outlined"
+            />
+            <Chip
+              size="small"
+              label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
+              color={status?.githubTokenConfigured ? 'success' : 'default'}
+              variant="outlined"
+            />
+          </Stack>
+        </Toolbar>
+      </AppBar>
+
+      <Container maxWidth="xl" sx={{ py: 3, flex: 1 }}>
+        {location.pathname !== '/' && (
+          <Link component={RouterLink} to="/" underline="hover" sx={{ display: 'inline-block', mb: 2 }}>
+            ← Back to workspaces
+          </Link>
+        )}
+        <Outlet />
+      </Container>
+    </Box>
+  );
+}
