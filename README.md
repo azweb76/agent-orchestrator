@@ -12,6 +12,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
 - **Chat** — streaming conversations with follow-up support via Claude session resume
   - Queue follow-ups or force-send (interrupts the current run)
   - Stop generation, clear history (`/clear` or Clear button), model + permission mode controls
+  - Rewind to any user message (`/rewind` or the history button on a bubble) to truncate later turns, reset the Claude session, and restore the prompt for editing
   - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that clears the session and implements in **auto** mode
   - Slash commands & skills autocomplete (project/personal/bundled)
   - Image attachments (paste or upload), markdown replies, interleaved tool activity

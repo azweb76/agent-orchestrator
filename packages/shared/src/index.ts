@@ -190,6 +190,18 @@ export interface ChatRequest {
   images?: ChatImageAttachment[];
 }
 
+/** Truncate chat from a user message onward and reset the Claude session. */
+export interface RewindChatRequest {
+  messageId: string;
+}
+
+export interface RewindChatResponse {
+  removed: number;
+  /** Original content of the rewound user message (for the composer draft). */
+  draft: string;
+  messageId: string;
+}
+
 /** Option for a clarifying question from the AskUserQuestion tool. */
 export interface AskUserQuestionOption {
   label: string;
@@ -336,6 +348,13 @@ export const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     description: 'Clear chat history and reset the Claude session',
     kind: 'local',
     aliases: ['/reset', '/new'],
+    source: 'app',
+  },
+  {
+    command: '/rewind',
+    description: 'Rewind to the last user message (edit and resend)',
+    kind: 'local',
+    aliases: ['/undo'],
     source: 'app',
   },
 ];

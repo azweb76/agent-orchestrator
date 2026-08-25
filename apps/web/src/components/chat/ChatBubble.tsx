@@ -8,7 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import ReplayIcon from '@mui/icons-material/Replay';
+import HistoryIcon from '@mui/icons-material/History';
 import type { Message } from '@agent-orchestrator/shared';
 import { MarkdownContent } from './MarkdownContent';
 
@@ -17,7 +17,7 @@ interface ChatBubbleProps {
   streaming?: boolean;
   onCopy?: () => void;
   onRetry?: () => void;
-  onEditResend?: () => void;
+  onRewind?: () => void;
 }
 
 export function ChatBubble({
@@ -25,7 +25,7 @@ export function ChatBubble({
   streaming,
   onCopy,
   onRetry,
-  onEditResend,
+  onRewind,
 }: ChatBubbleProps) {
   const isUser = message.role === 'user';
   const metaBits: string[] = [];
@@ -69,10 +69,10 @@ export function ChatBubble({
                   </IconButton>
                 </Tooltip>
               )}
-              {isUser && onEditResend && (
-                <Tooltip title="Edit & resend">
-                  <IconButton size="small" onClick={onEditResend}>
-                    <ReplayIcon fontSize="inherit" />
+              {isUser && onRewind && (
+                <Tooltip title="Rewind to here">
+                  <IconButton size="small" onClick={onRewind} aria-label="Rewind to here">
+                    <HistoryIcon fontSize="inherit" />
                   </IconButton>
                 </Tooltip>
               )}

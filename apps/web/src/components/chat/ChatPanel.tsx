@@ -106,6 +106,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
+  const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
   const [permissionBusy, setPermissionBusy] = useState(false);
   const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
@@ -139,6 +140,24 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       setStreamParts([]);
       setPermissionRequests([]);
       setChatError(null);
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+    },
+  });
+
+  const rewindMutation = useMutation({
+    mutationFn: (messageId: string) => api.rewindMessages(agentId, messageId),
+    onSuccess: (result) => {
+      setRewindTarget(null);
+      setOptimistic([]);
+      setQueue([]);
+      queueRef.current = [];
+      setStreamParts([]);
+      setPermissionRequests([]);
+      setChatError(null);
+      setLastFailed(null);
+      setDraft(result.draft);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
@@ -474,6 +493,21 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
 
   const requestClear = () => setClearOpen(true);
 
+  const requestRewind = (message: Message) => {
+    if (archived || isStreaming || agent.status === 'running') return;
+    if (message.id.startsWith('local-')) return;
+    setRewindTarget(message);
+  };
+
+  const requestRewindLast = () => {
+    const lastUser = [...displayMessages].reverse().find((m) => m.role === 'user');
+    if (!lastUser) {
+      setChatError('Nothing to rewind — send a message first.');
+      return;
+    }
+    requestRewind(lastUser);
+  };
+
   return (
     <Box
       sx={{
@@ -500,7 +534,11 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
                 /clear
               </Box>{' '}
-              to reset.
+              to reset, or{' '}
+              <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                /rewind
+              </Box>{' '}
+              to restore the last prompt.
             </Typography>
             <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
               <Button size="small" variant="outlined" onClick={() => setDraft('/diff')}>
@@ -524,11 +562,9 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
             key={message.id}
             message={message}
             onCopy={() => void navigator.clipboard.writeText(message.content)}
-            onEditResend={
-              message.role === 'user'
-                ? () => {
-                    setDraft(message.content);
-                  }
+            onRewind={
+              message.role === 'user' && !archived && !message.id.startsWith('local-')
+                ? () => requestRewind(message)
                 : undefined
             }
             onRetry={
@@ -606,6 +642,12 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           </Alert>
         )}
 
+        {rewindMutation.error && (
+          <Alert severity="error" sx={{ mb: 1 }} onClose={() => rewindMutation.reset()}>
+            {(rewindMutation.error as Error).message}
+          </Alert>
+        )}
+
         <ChatComposer
           agentId={agentId}
           archived={archived}
@@ -620,6 +662,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onSend={(text, images, force) => void runChat(text, images, force)}
           onStop={() => void stopStreaming()}
           onClear={requestClear}
+          onRewind={requestRewindLast}
           onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
         />
       </Box>
@@ -632,6 +675,19 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         loading={clearMutation.isPending}
         onCancel={() => setClearOpen(false)}
         onConfirm={() => clearMutation.mutate()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(rewindTarget)}
+        title="Rewind chat?"
+        description="This removes the selected message and everything after it, resets the Claude session, and puts that prompt back in the composer so you can edit and resend. Earlier messages stay visible; the next send starts a fresh Claude session."
+        confirmLabel="Rewind"
+        confirmColor="warning"
+        loading={rewindMutation.isPending}
+        onCancel={() => setRewindTarget(null)}
+        onConfirm={() => {
+          if (rewindTarget) rewindMutation.mutate(rewindTarget.id);
+        }}
       />
     </Box>
   );

@@ -57,6 +57,7 @@ interface ChatComposerProps {
   onSend: (text: string, images: PendingImage[], force: boolean) => void;
   onStop: () => void;
   onClear: () => void;
+  onRewind: () => void;
   onRemoveQueued: (id: string) => void;
   draft: string;
   onDraftChange: (value: string) => void;
@@ -113,6 +114,7 @@ export function ChatComposer({
   onSend,
   onStop,
   onClear,
+  onRewind,
   onRemoveQueued,
   draft,
   onDraftChange,
@@ -164,6 +166,13 @@ export function ChatComposer({
       onDraftChange('');
       setImages([]);
       onClear();
+      return;
+    }
+
+    if (slash?.kind === 'local' && slash.command === '/rewind') {
+      onDraftChange('');
+      setImages([]);
+      onRewind();
       return;
     }
 
