@@ -61,11 +61,13 @@ function setMessagesCache(
 function MessageTimeline({ message }: { message: Message }) {
   const parts = message.metadata?.timeline ?? [];
   const streaming = Boolean(message.metadata?.streaming);
-  const toolsRunning = parts.some(
-    (part) => part.type === 'tool' && part.status === 'running',
+  const toolItems = parts.filter(
+    (part): part is Extract<(typeof parts)[number], { type: 'tool' }> =>
+      part.type === 'tool',
   );
+  const toolsRunning = toolItems.some((part) => part.status === 'running');
   const lastPart = parts[parts.length - 1];
-  // Show a single progress bar during tool use — never per-tool chips.
+  // Progress bar + every tool event summary while tools are in use (no chips).
   const showToolProgress =
     streaming && (toolsRunning || lastPart?.type === 'tool');
 
@@ -106,7 +108,7 @@ function MessageTimeline({ message }: { message: Message }) {
           />
         );
       })}
-      {showToolProgress && <ToolProgressBar />}
+      {showToolProgress && <ToolProgressBar items={toolItems} />}
     </Box>
   );
 }
