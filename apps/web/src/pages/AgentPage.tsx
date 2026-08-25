@@ -32,6 +32,12 @@ import { statusColor } from '../theme';
 
 export function AgentPage() {
   const { agentId = '' } = useParams();
+  // Remount when the route agent changes so header/chat local state cannot leak
+  // across agents (React Router keeps the same route element instance otherwise).
+  return <AgentPageContent key={agentId} agentId={agentId} />;
+}
+
+function AgentPageContent({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
   const [prOpen, setPrOpen] = useState(false);
