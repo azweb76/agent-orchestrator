@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
+import { openSync, closeSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const execFileAsync = promisify(execFile);
@@ -110,22 +111,123 @@ export interface ClaudeRunOptions {
   sessionId?: string | null;
   allowedTools?: string;
   onEvent?: (event: ClaudeStreamEvent) => void;
+  /** Called once the detached process has been spawned (pid + log path). */
+  onStarted?: (handle: ClaudeRunHandle) => void;
+  /**
+   * When aborted, the Claude process is killed. Do not wire this to HTTP disconnect /
+   * server shutdown — only to explicit stop requests.
+   */
   signal?: AbortSignal;
 }
 
+export interface ClaudeRunHandle {
+  pid: number;
+  logPath: string;
+}
+
+export interface ClaudeRunResult {
+  result: string;
+  sessionId: string | null;
+  events: ClaudeStreamEvent[];
+  stopped: boolean;
+}
+
+interface TrackedRun {
+  pid: number;
+  logPath: string;
+  proc?: ChildProcess;
+}
+
+export function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Kill a detached Claude process group (falls back to the single pid). */
+export function killProcessTree(pid: number): void {
+  try {
+    process.kill(-pid, 'SIGTERM');
+  } catch {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Process already exited
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Follow a Claude stream-json log until the process exits.
+ */
+export async function followClaudeLog(
+  pid: number,
+  logPath: string,
+  onLine: (line: string) => void,
+  options: { pollMs?: number; signal?: AbortSignal } = {},
+): Promise<void> {
+  const pollMs = options.pollMs ?? 50;
+  let position = 0;
+  let buffer = '';
+
+  while (!options.signal?.aborted) {
+    const alive = isPidAlive(pid);
+
+    try {
+      const handle = await fs.open(logPath, 'r');
+      try {
+        const stat = await handle.stat();
+        if (stat.size > position) {
+          const length = stat.size - position;
+          const chunk = Buffer.alloc(length);
+          const { bytesRead } = await handle.read(chunk, 0, length, position);
+          position += bytesRead;
+          buffer += chunk.subarray(0, bytesRead).toString('utf8');
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+          for (const line of lines) {
+            if (line.trim()) onLine(line);
+          }
+        }
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      // Log may not exist yet right after spawn
+    }
+
+    if (!alive) {
+      if (buffer.trim()) onLine(buffer);
+      break;
+    }
+
+    await sleep(pollMs);
+  }
+}
+
 export class ClaudeService {
-  private running = new Map<string, ChildProcess>();
+  private running = new Map<string, TrackedRun>();
 
   constructor(
     private claudeBin: string,
+    private runsDir: string,
     private defaultAllowedTools = 'Read,Edit,Bash,Glob,Grep,Write',
-  ) {}
+  ) {
+    mkdirSync(this.runsDir, { recursive: true });
+  }
 
   isAvailable(): boolean {
     return Boolean(this.claudeBin);
   }
 
-  getRunningProcess(agentId: string): ChildProcess | undefined {
+  getRunningProcess(agentId: string): TrackedRun | undefined {
     return this.running.get(agentId);
   }
 
@@ -138,19 +240,29 @@ export class ClaudeService {
     }
   }
 
-  stop(agentId: string): boolean {
-    const proc = this.running.get(agentId);
-    if (!proc) return false;
-    proc.kill('SIGTERM');
+  /**
+   * Explicitly stop an agent's Claude process. App shutdown must NOT call this —
+   * detached runs are meant to outlive the orchestrator process.
+   */
+  stop(agentId: string, pidFallback?: number | null): boolean {
+    const tracked = this.running.get(agentId);
+    const pid = tracked?.pid ?? pidFallback ?? null;
+    if (pid == null) return false;
+    killProcessTree(pid);
     this.running.delete(agentId);
     return true;
   }
 
-  async runStreaming(agentId: string, options: ClaudeRunOptions): Promise<{
-    result: string;
-    sessionId: string | null;
-    events: ClaudeStreamEvent[];
-  }> {
+  /** Drop in-memory handles without killing processes (used on app shutdown). */
+  releaseAll(): void {
+    this.running.clear();
+  }
+
+  async runStreaming(agentId: string, options: ClaudeRunOptions): Promise<ClaudeRunResult> {
+    if (this.running.has(agentId)) {
+      throw new Error('Agent already has a running Claude process');
+    }
+
     const args = [
       '-p',
       options.prompt,
@@ -175,77 +287,106 @@ export class ClaudeService {
       args.push('--resume', options.sessionId);
     }
 
-    const events: ClaudeStreamEvent[] = [];
-    let result = '';
-    let sessionId: string | null = options.sessionId ?? null;
+    const logPath = path.join(this.runsDir, `${agentId}-${Date.now()}.log`);
+    const outFd = openSync(logPath, 'w');
 
-    return new Promise((resolve, reject) => {
-      const proc = spawn(this.claudeBin, args, {
+    let proc: ChildProcess;
+    try {
+      proc = spawn(this.claudeBin, args, {
         cwd: options.cwd,
         env: process.env,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
+        stdio: ['ignore', outFd, outFd],
       });
+    } finally {
+      closeSync(outFd);
+    }
 
-      this.running.set(agentId, proc);
+    if (proc.pid == null) {
+      throw new Error('Failed to start Claude process');
+    }
 
-      let buffer = '';
+    // Allow the Node event loop to exit without waiting on this handle; the OS process keeps running.
+    proc.unref();
 
-      const handleAbort = () => {
-        proc.kill('SIGTERM');
-      };
-      options.signal?.addEventListener('abort', handleAbort);
+    const handle: ClaudeRunHandle = { pid: proc.pid, logPath };
+    this.running.set(agentId, { ...handle, proc });
+    options.onStarted?.(handle);
 
-      proc.stdout?.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+    return this.monitorRun(agentId, handle, options.sessionId ?? null, options.onEvent, options.signal);
+  }
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const event = JSON.parse(line) as ClaudeStreamEvent;
-            events.push(event);
-            options.onEvent?.(event);
+  /**
+   * Re-attach to a Claude process that outlived a previous orchestrator instance.
+   */
+  async attachToRun(
+    agentId: string,
+    handle: ClaudeRunHandle,
+    options: {
+      sessionId?: string | null;
+      onEvent?: (event: ClaudeStreamEvent) => void;
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<ClaudeRunResult> {
+    this.running.set(agentId, { pid: handle.pid, logPath: handle.logPath });
+    return this.monitorRun(
+      agentId,
+      handle,
+      options.sessionId ?? null,
+      options.onEvent,
+      options.signal,
+    );
+  }
 
-            if (event.session_id) {
-              sessionId = event.session_id;
-            }
+  private async monitorRun(
+    agentId: string,
+    handle: ClaudeRunHandle,
+    initialSessionId: string | null,
+    onEvent?: (event: ClaudeStreamEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<ClaudeRunResult> {
+    const events: ClaudeStreamEvent[] = [];
+    let result = '';
+    let sessionId: string | null = initialSessionId;
+    let stopped = false;
 
-            if (event.type === 'result' && typeof event.result === 'string') {
-              result = event.result;
-            }
-          } catch {
-            // ignore malformed lines
+    const handleAbort = () => {
+      stopped = true;
+      killProcessTree(handle.pid);
+    };
+    signal?.addEventListener('abort', handleAbort);
+    if (signal?.aborted) {
+      handleAbort();
+    }
+
+    try {
+      await followClaudeLog(handle.pid, handle.logPath, (line) => {
+        try {
+          const event = JSON.parse(line) as ClaudeStreamEvent;
+          events.push(event);
+          onEvent?.(event);
+
+          if (event.session_id) {
+            sessionId = event.session_id;
           }
+
+          if (event.type === 'result' && typeof event.result === 'string') {
+            result = event.result;
+          }
+        } catch {
+          // ignore malformed lines
         }
       });
+    } finally {
+      signal?.removeEventListener('abort', handleAbort);
+      this.running.delete(agentId);
+    }
 
-      proc.stderr?.on('data', (chunk: Buffer) => {
-        const text = chunk.toString().trim();
-        if (text) {
-          options.onEvent?.({ type: 'stderr', result: text });
-        }
-      });
+    if (stopped && !result) {
+      return { result: '[stopped]', sessionId, events, stopped: true };
+    }
 
-      proc.on('error', (err) => {
-        this.running.delete(agentId);
-        options.signal?.removeEventListener('abort', handleAbort);
-        reject(err);
-      });
-
-      proc.on('close', (code) => {
-        this.running.delete(agentId);
-        options.signal?.removeEventListener('abort', handleAbort);
-
-        if (code === 0 || result) {
-          resolve({ result, sessionId, events });
-        } else if (options.signal?.aborted) {
-          resolve({ result: result || '[stopped]', sessionId, events });
-        } else {
-          reject(new Error(`Claude exited with code ${code ?? 'unknown'}`));
-        }
-      });
-    });
+    return { result, sessionId, events, stopped };
   }
 }
 

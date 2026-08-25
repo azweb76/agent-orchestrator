@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS agents (
   model TEXT NOT NULL DEFAULT 'sonnet',
   environment TEXT,
   claude_session_id TEXT,
+  pid INTEGER,
+  run_log_path TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   archived_at TEXT
@@ -68,6 +70,20 @@ CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 `;
 
+function migrateAgentsTable(db: Database.Database): void {
+  const columns = db
+    .prepare(`PRAGMA table_info(agents)`)
+    .all()
+    .map((row) => String((row as { name: string }).name));
+
+  if (!columns.includes('pid')) {
+    db.exec(`ALTER TABLE agents ADD COLUMN pid INTEGER`);
+  }
+  if (!columns.includes('run_log_path')) {
+    db.exec(`ALTER TABLE agents ADD COLUMN run_log_path TEXT`);
+  }
+}
+
 export function initDatabase(dataDir: string): Database.Database {
   fs.mkdirSync(dataDir, { recursive: true });
   const dbPath = path.join(dataDir, 'agent-orchestrator.db');
@@ -75,6 +91,7 @@ export function initDatabase(dataDir: string): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrateAgentsTable(db);
   return db;
 }
 
@@ -193,8 +210,8 @@ export class AgentRepository {
   create(agent: Agent): Agent {
     this.db
       .prepare(
-        `INSERT INTO agents (id, worktree_id, name, status, model, environment, claude_session_id, created_at, updated_at, archived_at)
-         VALUES (@id, @worktreeId, @name, @status, @model, @environment, @claudeSessionId, @createdAt, @updatedAt, @archivedAt)`,
+        `INSERT INTO agents (id, worktree_id, name, status, model, environment, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
+         VALUES (@id, @worktreeId, @name, @status, @model, @environment, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
       )
       .run({
         id: agent.id,
@@ -204,6 +221,8 @@ export class AgentRepository {
         model: agent.model,
         environment: agent.environment,
         claudeSessionId: agent.claudeSessionId,
+        pid: agent.pid,
+        runLogPath: agent.runLogPath,
         createdAt: agent.createdAt,
         updatedAt: agent.updatedAt,
         archivedAt: agent.archivedAt,
@@ -237,11 +256,23 @@ export class AgentRepository {
       .map(rowToAgent);
   }
 
+  listRunning(): Agent[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM agents
+         WHERE status = 'running' AND archived_at IS NULL
+         ORDER BY updated_at ASC`,
+      )
+      .all()
+      .map(rowToAgent);
+  }
+
   update(agent: Agent): Agent {
     this.db
       .prepare(
         `UPDATE agents SET name = @name, status = @status, model = @model, environment = @environment,
-         claude_session_id = @claudeSessionId, updated_at = @updatedAt, archived_at = @archivedAt
+         claude_session_id = @claudeSessionId, pid = @pid, run_log_path = @runLogPath,
+         updated_at = @updatedAt, archived_at = @archivedAt
          WHERE id = @id`,
       )
       .run({
@@ -251,6 +282,8 @@ export class AgentRepository {
         model: agent.model,
         environment: agent.environment,
         claudeSessionId: agent.claudeSessionId,
+        pid: agent.pid,
+        runLogPath: agent.runLogPath,
         updatedAt: agent.updatedAt,
         archivedAt: agent.archivedAt,
       });
@@ -348,6 +381,8 @@ function rowToAgent(row: unknown): Agent {
     model: String(r.model),
     environment: r.environment == null ? null : String(r.environment),
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
+    pid: r.pid == null ? null : Number(r.pid),
+    runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
     archivedAt: r.archived_at == null ? null : String(r.archived_at),

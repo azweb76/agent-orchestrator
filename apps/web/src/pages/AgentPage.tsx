@@ -61,6 +61,8 @@ export function AgentPage() {
     queryKey: ['messages', agentId],
     queryFn: () => api.getMessages(agentId),
     enabled: Boolean(agentId),
+    // Keep chat in sync when a run continues after SSE disconnect or app restart.
+    refetchInterval: () => (agentQuery.data?.status === 'running' ? 2000 : false),
   });
 
   const eventsQuery = useQuery({
@@ -156,10 +158,15 @@ export function AgentPage() {
         abortRef.current.signal,
       );
     } catch (error) {
-      alert((error as Error).message);
+      if ((error as Error).name !== 'AbortError') {
+        alert((error as Error).message);
+      }
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     }
   };
 

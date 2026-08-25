@@ -33,6 +33,10 @@ export interface Agent {
   model: string;
   environment: string | null;
   claudeSessionId: string | null;
+  /** OS pid of the active Claude run, if any. Survives app restarts while the process lives. */
+  pid: number | null;
+  /** Stream-json log path for the active Claude run (used to resume after app restart). */
+  runLogPath: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
