@@ -25,6 +25,7 @@ import {
   startAgent,
   stopAgent,
   streamAgentChat,
+  suggestBranchNameForWorkspace,
   updateAgent,
 } from '../services/app.js';
 
@@ -104,6 +105,19 @@ export function createRouter(ctx: AppContext): express.Router {
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromBranch(ctx, param(req.params.workspaceId), body));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/worktrees/suggest-branch-name',
+    asyncHandler(async (req, res) => {
+      const body = z.object({ idea: z.string().min(1) }).parse(req.body);
+      const branchName = await suggestBranchNameForWorkspace(
+        ctx,
+        param(req.params.workspaceId),
+        body.idea,
+      );
+      res.json({ branchName });
     }),
   );
 

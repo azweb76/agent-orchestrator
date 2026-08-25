@@ -6,6 +6,7 @@ import cors from 'cors';
 import { initDatabase, createRepositories } from './db/index.js';
 import { ClaudeService, GitService } from './services/git.js';
 import { GitHubService } from './services/github.js';
+import { AnthropicService } from './services/anthropic.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import type { AppContext } from './services/app.js';
 
@@ -26,6 +27,7 @@ const ctx: AppContext = {
   git: new GitService(),
   github: new GitHubService({ token: process.env.GITHUB_TOKEN }),
   claude: new ClaudeService(claudeBin),
+  anthropic: new AnthropicService(),
   dataDir,
 };
 

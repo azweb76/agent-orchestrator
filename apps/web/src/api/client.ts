@@ -13,6 +13,7 @@ import type {
   GitHubRepository,
   Message,
   PullRequestInbox,
+  SuggestBranchNameResponse,
   UpdateAgentRequest,
   Worktree,
   WorktreeWithAgent,
@@ -60,6 +61,11 @@ export const api = {
       `/workspaces/${workspaceId}/worktrees/from-branch`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  suggestBranchName: (workspaceId: string, idea: string) =>
+    request<SuggestBranchNameResponse>(`/workspaces/${workspaceId}/worktrees/suggest-branch-name`, {
+      method: 'POST',
+      body: JSON.stringify({ idea }),
+    }),
   createWorktreeFromPr: (workspaceId: string, body: CreateWorktreeFromPrRequest) =>
     request<{ worktree: WorktreeWithAgent; agent: Agent }>(
       `/workspaces/${workspaceId}/worktrees/from-pr`,

@@ -128,6 +128,14 @@ export interface CreateWorktreeFromPrRequest {
   name?: string;
 }
 
+export interface SuggestBranchNameRequest {
+  idea: string;
+}
+
+export interface SuggestBranchNameResponse {
+  branchName: string;
+}
+
 export interface UpdateAgentRequest {
   name?: string;
   model?: string;

@@ -38,10 +38,11 @@ export function WorkspaceDetailPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tab, setTab] = useState<'branch' | 'pr'>('branch');
-  const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
+  const [branchMode, setBranchMode] = useState<'existing' | 'new' | 'idea'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
+  const [ideaText, setIdeaText] = useState('');
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
 
   const workspaceQuery = useQuery({
@@ -73,7 +74,7 @@ export function WorkspaceDetailPage() {
 
   const createFromBranch = useMutation({
     mutationFn: () => {
-      if (branchMode === 'new') {
+      if (branchMode === 'new' || branchMode === 'idea') {
         return api.createWorktreeFromBranch(workspaceId, {
           branch: newBranchName,
           createNew: true,
@@ -100,6 +101,13 @@ export function WorkspaceDetailPage() {
     },
   });
 
+  const suggestBranchName = useMutation({
+    mutationFn: () => api.suggestBranchName(workspaceId, ideaText),
+    onSuccess: (data) => {
+      setNewBranchName(data.branchName);
+    },
+  });
+
   const deleteWorktree = useMutation({
     mutationFn: (worktreeId: string) => api.deleteWorktree(worktreeId),
     onSuccess: () => {
@@ -119,6 +127,7 @@ export function WorkspaceDetailPage() {
     setSelectedBranch('');
     setNewBranchName('');
     setBaseBranch('');
+    setIdeaText('');
     setSelectedPr('');
   };
 
@@ -135,7 +144,7 @@ export function WorkspaceDetailPage() {
   }
 
   const createPending = createFromBranch.isPending || createFromPr.isPending;
-  const createError = createFromBranch.error ?? createFromPr.error;
+  const createError = createFromBranch.error ?? createFromPr.error ?? suggestBranchName.error;
   const canCreateBranch =
     branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
 
@@ -259,10 +268,11 @@ export function WorkspaceDetailPage() {
                 <RadioGroup
                   row
                   value={branchMode}
-                  onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new')}
+                  onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new' | 'idea')}
                 >
                   <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
                   <FormControlLabel value="new" control={<Radio />} label="New branch" />
+                  <FormControlLabel value="idea" control={<Radio />} label="From idea" />
                 </RadioGroup>
               </FormControl>
 
@@ -283,6 +293,26 @@ export function WorkspaceDetailPage() {
                 </FormControl>
               ) : (
                 <>
+                  {branchMode === 'idea' && (
+                    <>
+                      <TextField
+                        label="Describe your idea"
+                        value={ideaText}
+                        onChange={(e) => setIdeaText(e.target.value)}
+                        placeholder="Add a dark mode toggle to the settings page"
+                        fullWidth
+                        multiline
+                        minRows={3}
+                      />
+                      <Button
+                        variant="outlined"
+                        onClick={() => suggestBranchName.mutate()}
+                        disabled={!ideaText.trim() || suggestBranchName.isPending}
+                      >
+                        {suggestBranchName.isPending ? 'Suggesting…' : 'Suggest'}
+                      </Button>
+                    </>
+                  )}
                   <TextField
                     label="New branch name"
                     value={newBranchName}
