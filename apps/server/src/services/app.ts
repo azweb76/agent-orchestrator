@@ -30,6 +30,7 @@ import { ClaudeService, GitService, isPidAlive, parseGitHubUrl, slugify } from '
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
+import { mergeLivePullRequest } from '../services/pr-overlay.js';
 
 export interface AppContext {
   repos: AppRepositories;
@@ -151,8 +152,7 @@ export async function deleteWorkspace(ctx: AppContext, workspaceId: string) {
 
 // Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
 // Falls back to the worktree's existing (DB-stored) values when no GitHub token is
-// configured or when the lookup fails, so a transient GitHub API issue never breaks
-// the worktree list/detail response.
+// configured, when the lookup fails, or when no PR matches the branch name.
 async function overlayLivePullRequest(
   ctx: AppContext,
   workspace: Workspace,
@@ -168,7 +168,7 @@ async function overlayLivePullRequest(
       workspace.githubRepo,
       worktree.branch,
     );
-    return { ...worktree, prNumber: pr?.number ?? null, prTitle: pr?.title ?? null };
+    return mergeLivePullRequest(worktree, pr);
   } catch {
     return worktree;
   }
@@ -439,6 +439,12 @@ export async function createAgentPullRequest(
       base,
     },
   );
+
+  ctx.repos.worktrees.update({
+    ...detail.worktree,
+    prNumber: pr.number,
+    prTitle: body.title,
+  });
 
   ctx.repos.events.create(
     makeEvent(agentId, 'pr_created', { number: pr.number, htmlUrl: pr.htmlUrl }),

@@ -211,6 +211,25 @@ export class WorktreeRepository {
     return row ? rowToWorktree(row) : null;
   }
 
+  update(worktree: Worktree): Worktree {
+    this.db
+      .prepare(
+        `UPDATE worktrees SET name = @name, path = @path, branch = @branch,
+         pr_number = @prNumber, pr_title = @prTitle, base_branch = @baseBranch
+         WHERE id = @id`,
+      )
+      .run({
+        id: worktree.id,
+        name: worktree.name,
+        path: worktree.path,
+        branch: worktree.branch,
+        prNumber: worktree.prNumber,
+        prTitle: worktree.prTitle,
+        baseBranch: worktree.baseBranch,
+      });
+    return worktree;
+  }
+
   delete(id: string): void {
     this.db.prepare('DELETE FROM worktrees WHERE id = ?').run(id);
   }

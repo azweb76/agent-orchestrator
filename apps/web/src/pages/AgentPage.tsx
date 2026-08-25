@@ -22,6 +22,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PermissionMode } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
@@ -100,7 +101,11 @@ export function AgentPage() {
     mutationFn: () => api.createPr(agentId, { title: prTitle, body: prBody }),
     onSuccess: () => {
       setPrOpen(false);
+      setPrTitle('');
+      setPrBody('');
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
 
@@ -122,6 +127,11 @@ export function AgentPage() {
 
   const agent = agentQuery.data;
   const archived = Boolean(agent.archivedAt);
+  const prNumber = agent.worktree.prNumber;
+  const prUrl =
+    prNumber != null
+      ? `https://github.com/${agent.workspace.githubOwner}/${agent.workspace.githubRepo}/pull/${prNumber}`
+      : null;
 
   return (
     <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
@@ -136,6 +146,19 @@ export function AgentPage() {
               {agent.name}
             </Typography>
             <Chip size="small" label={agent.status} color={statusColor(agent.status)} />
+            {prNumber != null && (
+              <Chip
+                size="small"
+                label={agent.worktree.prTitle ? `PR #${prNumber}: ${agent.worktree.prTitle}` : `PR #${prNumber}`}
+                color="info"
+                variant="outlined"
+                component="a"
+                href={prUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                clickable
+              />
+            )}
           </Stack>
           <Typography variant="body2" color="text.secondary" noWrap>
             {agent.workspace.githubOwner}/{agent.workspace.githubRepo} • {agent.worktree.name} •{' '}
@@ -189,15 +212,28 @@ export function AgentPage() {
           >
             Archive
           </Button>
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<MergeTypeIcon />}
-            disabled={archived}
-            onClick={() => setPrOpen(true)}
-          >
-            Create PR
-          </Button>
+          {prUrl ? (
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<OpenInNewIcon />}
+              href={prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View PR #{prNumber}
+            </Button>
+          ) : (
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<MergeTypeIcon />}
+              disabled={archived}
+              onClick={() => setPrOpen(true)}
+            >
+              Create PR
+            </Button>
+          )}
         </Stack>
       </Stack>
 
