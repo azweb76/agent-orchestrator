@@ -11,7 +11,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import type { AskUserQuestionItem, PermissionRequest } from '@agent-orchestrator/shared';
+import { ChatPromptCard } from './ChatPromptCard';
 
 interface AskUserQuestionCardProps {
   request: PermissionRequest;
@@ -22,7 +24,6 @@ interface AskUserQuestionCardProps {
 }
 
 export function AskUserQuestionCard({
-  request,
   questions,
   submitting,
   onSubmit,
@@ -82,32 +83,29 @@ export function AskUserQuestionCard({
   };
 
   return (
-    <Box
-      sx={{
-        mb: 1.5,
-        p: 2,
-        border: 1,
-        borderColor: 'info.main',
-        borderRadius: 2,
-        bgcolor: 'action.hover',
-      }}
+    <ChatPromptCard
+      accent="info"
+      icon={<HelpOutlineOutlinedIcon />}
+      title={questions.length > 1 ? 'A few questions before continuing' : 'Claude has a question'}
+      description={
+        questions.length > 0
+          ? 'Answer below so Claude can keep going with the right defaults.'
+          : 'Structured options were not included. Type a reply to continue.'
+      }
+      actions={
+        <>
+          <Button variant="contained" disabled={!canSubmit || submitting} onClick={handleSubmit}>
+            Submit answers
+          </Button>
+          {onDismiss ? (
+            <Button variant="text" color="inherit" disabled={submitting} onClick={onDismiss}>
+              Skip
+            </Button>
+          ) : null}
+        </>
+      }
     >
-      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-        Claude has questions
-      </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        {questions.length > 0
-          ? `Answer all questions below to continue (${request.requestId.slice(0, 8)}…)`
-          : `Reply below to continue (${request.requestId.slice(0, 8)}…)`}
-      </Typography>
-
       <Stack spacing={2}>
-        {questions.length === 0 && (
-          <Typography variant="body2" color="text.secondary">
-            Structured options were not included in this request. Type a freeform reply to continue.
-          </Typography>
-        )}
-
         {questions.map((q) => (
           <Box key={q.question}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -219,31 +217,12 @@ export function AskUserQuestionCard({
           fullWidth
           multiline
           minRows={2}
-          label={
-            questions.length > 0
-              ? 'Or reply freely (skips structured answers)'
-              : 'Your reply'
-          }
+          label={questions.length > 0 ? 'Or reply freely (skips structured answers)' : 'Your reply'}
           value={freeResponse}
           disabled={submitting}
           onChange={(e) => setFreeResponse(e.target.value)}
         />
-
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="contained"
-            disabled={!canSubmit || submitting}
-            onClick={handleSubmit}
-          >
-            Submit answers
-          </Button>
-          {onDismiss && (
-            <Button variant="text" color="inherit" disabled={submitting} onClick={onDismiss}>
-              Skip
-            </Button>
-          )}
-        </Stack>
       </Stack>
-    </Box>
+    </ChatPromptCard>
   );
 }

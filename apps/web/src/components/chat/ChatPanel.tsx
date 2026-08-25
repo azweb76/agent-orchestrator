@@ -3,9 +3,14 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
+  CircularProgress,
+  Fab,
   Stack,
-  Typography,
+  Tooltip,
 } from '@mui/material';
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   appendStreamText,
@@ -20,12 +25,15 @@ import {
 } from '@agent-orchestrator/shared';
 import { api, streamBuildPlan, streamChat } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
-import { ToolProgressBar } from './ToolActivity';
+import { ThinkingIndicator, ToolProgressBar } from './ToolActivity';
+
+const CHAT_COLUMN_MAX_WIDTH = 780;
 
 interface ChatPanelProps {
   agent: AgentDetail;
@@ -67,44 +75,37 @@ function MessageTimeline({ message }: { message: Message }) {
   );
   const toolsRunning = toolItems.some((part) => part.status === 'running');
   const lastPart = parts[parts.length - 1];
-  // Single progress bar that updates with the active tool — never a tool list.
+  // Single progress card that updates with the active tool — never a tool list.
   const showToolProgress =
     streaming && (toolsRunning || lastPart?.type === 'tool');
   // One bubble per assistant turn — never split text across tool boundaries.
   const textContent = message.content.trim()
     ? message.content
     : coalesceTimelineText(parts);
-  const showBubble = Boolean(textContent) || (streaming && !showToolProgress);
-
-  if (parts.length === 0) {
-    return (
-      <ChatBubble
-        message={message}
-        streaming={streaming}
-        onCopy={() => void navigator.clipboard.writeText(message.content)}
-      />
-    );
-  }
+  const showText = Boolean(textContent);
+  const showThinking = streaming && !showText && !showToolProgress;
 
   return (
-    <Box sx={{ mb: 1.5 }}>
-      {showBubble && (
-        <ChatBubble
-          streaming={streaming && !showToolProgress}
-          message={{
-            ...message,
-            content: textContent,
-            metadata: {
-              costUsd: message.metadata?.costUsd,
-              durationMs: message.metadata?.durationMs,
-              stopped: message.metadata?.stopped,
-              error: message.metadata?.error,
-            },
-          }}
-          onCopy={() => void navigator.clipboard.writeText(textContent)}
-        />
-      )}
-      {showToolProgress && <ToolProgressBar items={toolItems} />}
+    <Box sx={{ mb: 2 }}>
+      <ChatBubble
+        gutter={false}
+        hideBody={!showText && streaming}
+        streaming={streaming}
+        cursor={streaming && showText && !showToolProgress}
+        message={{
+          ...message,
+          content: textContent,
+          metadata: {
+            costUsd: message.metadata?.costUsd,
+            durationMs: message.metadata?.durationMs,
+            stopped: message.metadata?.stopped,
+            error: message.metadata?.error,
+          },
+        }}
+        onCopy={() => void navigator.clipboard.writeText(textContent)}
+      />
+      {showThinking ? <ThinkingIndicator /> : null}
+      {showToolProgress ? <ToolProgressBar items={toolItems} /> : null}
     </Box>
   );
 }
@@ -125,7 +126,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   );
   const abortRef = useRef<AbortController | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const sendingRef = useRef(false);
   const queueRef = useRef<QueuedChatItem[]>([]);
   const mountedRef = useRef(true);
@@ -216,6 +219,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
 
   useEffect(() => {
     stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
   }, [agentId]);
 
   useEffect(() => {
@@ -229,10 +233,36 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const handleChatScroll = () => {
     const el = chatScrollRef.current;
     if (!el) return;
-    stickToBottomRef.current = isNearBottom(el);
+    const near = isNearBottom(el);
+    stickToBottomRef.current = near;
+    setShowJumpToLatest(!near);
+  };
+
+  const jumpToLatest = () => {
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   };
 
   const displayMessages = messagesQuery.data ?? [];
+
+  useEffect(() => {
+    const root = chatScrollRef.current;
+    const target = bottomSentinelRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const near = Boolean(entry?.isIntersecting);
+        stickToBottomRef.current = near;
+        setShowJumpToLatest(!near && root.scrollHeight - root.clientHeight > NEAR_BOTTOM_PX);
+      },
+      { root, threshold: 0.01, rootMargin: '0px 0px 80px 0px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [agentId, displayMessages.length, permissionRequests.length, messagesQuery.isLoading]);
 
   const patchStreamingAssistant = (
     mutate: (message: Message) => Message,
@@ -282,6 +312,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     sendingRef.current = true;
     // Sending should always pin the viewport to the latest messages.
     stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
     abortRef.current = new AbortController();
 
     try {
@@ -530,6 +561,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setIsSending(true);
     sendingRef.current = true;
     stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
     abortRef.current = new AbortController();
 
     const plan = extractPlanFromInput(request.input);
@@ -648,165 +680,199 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         height: '100%',
       }}
     >
-      <Box
-        ref={chatScrollRef}
-        onScroll={handleChatScroll}
-        sx={{ flex: 1, overflowY: 'auto', px: 1.5, pt: 1.5, pb: 1, minHeight: 0 }}
-      >
-        {displayMessages.length === 0 && (
-          <Stack spacing={1} sx={{ py: 3, alignItems: 'center', textAlign: 'center' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              Start a conversation
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
-              Sessions start in plan mode. Describe what you want; Claude will explore, ask
-              clarifying questions, and present a plan to build. Type{' '}
-              <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                /
-              </Box>{' '}
-              for slash commands, or{' '}
-              <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                /clear
-              </Box>{' '}
-              to reset, or{' '}
-              <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                /rewind
-              </Box>{' '}
-              to restore the last prompt.
-            </Typography>
-            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-              <Button size="small" variant="outlined" onClick={() => setDraft('/diff')}>
-                /diff
-              </Button>
-              <Button size="small" variant="outlined" onClick={() => setDraft('/test')}>
-                /test
-              </Button>
-              <Button size="small" variant="outlined" onClick={() => setDraft('/pr')}>
-                /pr
-              </Button>
-              <Button size="small" variant="outlined" onClick={() => setDraft('/code-review')}>
-                /code-review
-              </Button>
-            </Stack>
-          </Stack>
-        )}
-
-        {displayMessages.map((message) => {
-          if (message.role === 'assistant') {
-            return (
-              <MessageTimeline key={message.id} message={message} />
-            );
-          }
-          return (
-            <ChatBubble
-              key={message.id}
-              message={message}
-              onCopy={() => void navigator.clipboard.writeText(message.content)}
-              onRewind={
-                !archived
-                  ? () => requestRewind(message)
-                  : undefined
-              }
-              onRetry={
-                message.metadata?.error && lastFailed
-                  ? () => void runChat(lastFailed.text, lastFailed.images, true)
-                  : undefined
-              }
-            />
-          );
-        })}
-
-        {permissionRequests.map((request) => {
-          if (request.toolName === 'AskUserQuestion') {
-            const questions = parseAskUserQuestions(request.input);
-            return (
-              <AskUserQuestionCard
-                key={request.requestId}
-                request={request}
-                questions={questions}
-                submitting={permissionBusy}
-                onSubmit={(answers, response) =>
-                  void submitAnswers(request, answers, response)
+      <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        <Box
+          ref={chatScrollRef}
+          onScroll={handleChatScroll}
+          sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}
+        >
+          <Box
+            sx={{
+              maxWidth: CHAT_COLUMN_MAX_WIDTH,
+              mx: 'auto',
+              px: { xs: 1.5, sm: 2.5 },
+              py: { xs: 1.5, sm: 2 },
+              minHeight: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            {messagesQuery.isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress size={28} />
+              </Box>
+            ) : messagesQuery.error ? (
+              <Alert severity="error">{(messagesQuery.error as Error).message}</Alert>
+            ) : displayMessages.length === 0 ? (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+                <EmptyState
+                  compact
+                  icon={<ChatOutlinedIcon />}
+                  title="Start a conversation"
+                  description="Sessions begin in plan mode. Describe what you want; Claude will explore, ask clarifying questions, and present a plan. Type / for commands, /clear to reset, or /rewind to restore the last prompt."
+                  action={
+                    <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+                      {['/diff', '/test', '/pr', '/code-review'].map((command) => (
+                        <Chip
+                          key={command}
+                          size="small"
+                          label={command}
+                          variant="outlined"
+                          clickable
+                          onClick={() => setDraft(command)}
+                          sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
+                        />
+                      ))}
+                    </Stack>
+                  }
+                />
+              </Box>
+            ) : (
+              displayMessages.map((message) => {
+                if (message.role === 'assistant') {
+                  return <MessageTimeline key={message.id} message={message} />;
                 }
-                onDismiss={() => void skipAskUserQuestion(request)}
-              />
-            );
-          }
-          if (request.toolName === 'ExitPlanMode') {
-            return (
-              <ExitPlanModeCard
-                key={request.requestId}
-                request={request}
-                plan={extractPlanFromInput(request.input)}
-                submitting={permissionBusy}
-                onBuild={() => void buildPlan(request)}
-                onKeepPlanning={() => void keepPlanning(request)}
-              />
-            );
-          }
-          return (
-            <ToolPermissionCard
-              key={request.requestId}
-              request={request}
-              submitting={permissionBusy}
-              onAllow={() => void allowTool(request)}
-              onDeny={() => void denyTool(request)}
-            />
-          );
-        })}
+                return (
+                  <ChatBubble
+                    key={message.id}
+                    message={message}
+                    onCopy={() => void navigator.clipboard.writeText(message.content)}
+                    onRewind={!archived ? () => requestRewind(message) : undefined}
+                    onRetry={
+                      message.metadata?.error && lastFailed
+                        ? () => void runChat(lastFailed.text, lastFailed.images, true)
+                        : undefined
+                    }
+                  />
+                );
+              })
+            )}
+
+            {permissionRequests.map((request) => {
+              if (request.toolName === 'AskUserQuestion') {
+                const questions = parseAskUserQuestions(request.input);
+                return (
+                  <AskUserQuestionCard
+                    key={request.requestId}
+                    request={request}
+                    questions={questions}
+                    submitting={permissionBusy}
+                    onSubmit={(answers, response) =>
+                      void submitAnswers(request, answers, response)
+                    }
+                    onDismiss={() => void skipAskUserQuestion(request)}
+                  />
+                );
+              }
+              if (request.toolName === 'ExitPlanMode') {
+                return (
+                  <ExitPlanModeCard
+                    key={request.requestId}
+                    request={request}
+                    plan={extractPlanFromInput(request.input)}
+                    submitting={permissionBusy}
+                    onBuild={() => void buildPlan(request)}
+                    onKeepPlanning={() => void keepPlanning(request)}
+                  />
+                );
+              }
+              return (
+                <ToolPermissionCard
+                  key={request.requestId}
+                  request={request}
+                  submitting={permissionBusy}
+                  onAllow={() => void allowTool(request)}
+                  onDeny={() => void denyTool(request)}
+                />
+              );
+            })}
+            <Box ref={bottomSentinelRef} sx={{ height: 1, width: '100%' }} aria-hidden />
+          </Box>
+        </Box>
+
+        {showJumpToLatest ? (
+          <Tooltip title="Jump to latest">
+            <Fab
+              size="small"
+              color="primary"
+              onClick={jumpToLatest}
+              aria-label="Jump to latest messages"
+              sx={{
+                position: 'absolute',
+                bottom: 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 2,
+                color: '#0b0f17',
+              }}
+            >
+              <KeyboardArrowDownIcon />
+            </Fab>
+          </Tooltip>
+        ) : null}
       </Box>
 
-      <Box sx={{ borderTop: 1, borderColor: 'divider', px: 1.5, py: 1.25, flexShrink: 0 }}>
-        {chatError && (
-          <Alert
-            severity="error"
-            sx={{ mb: 1 }}
-            action={
-              lastFailed ? (
-                <Button
-                  color="inherit"
-                  size="small"
-                  onClick={() => void runChat(lastFailed.text, lastFailed.images, true)}
-                >
-                  Retry
-                </Button>
-              ) : undefined
-            }
-            onClose={() => setChatError(null)}
-          >
-            {chatError}
-          </Alert>
-        )}
+      <Box
+        sx={{
+          flexShrink: 0,
+          borderTop: 1,
+          borderColor: 'divider',
+          bgcolor: 'rgba(18,24,38,0.72)',
+          backdropFilter: 'blur(12px)',
+        }}
+      >
+        <Box sx={{ maxWidth: CHAT_COLUMN_MAX_WIDTH, mx: 'auto', px: { xs: 1.5, sm: 2.5 }, py: 1.5 }}>
+          {chatError && (
+            <Alert
+              severity="error"
+              sx={{ mb: 1 }}
+              action={
+                lastFailed ? (
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => void runChat(lastFailed.text, lastFailed.images, true)}
+                  >
+                    Retry
+                  </Button>
+                ) : undefined
+              }
+              onClose={() => setChatError(null)}
+            >
+              {chatError}
+            </Alert>
+          )}
 
-        {clearMutation.error && (
-          <Alert severity="error" sx={{ mb: 1 }}>
-            {(clearMutation.error as Error).message}
-          </Alert>
-        )}
+          {clearMutation.error && (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              {(clearMutation.error as Error).message}
+            </Alert>
+          )}
 
-        {rewindMutation.error && (
-          <Alert severity="error" sx={{ mb: 1 }} onClose={() => rewindMutation.reset()}>
-            {(rewindMutation.error as Error).message}
-          </Alert>
-        )}
+          {rewindMutation.error && (
+            <Alert severity="error" sx={{ mb: 1 }} onClose={() => rewindMutation.reset()}>
+              {(rewindMutation.error as Error).message}
+            </Alert>
+          )}
 
-        <ChatComposer
-          agentId={agentId}
-          archived={archived}
-          isStreaming={agentBusy}
-          model={agent.model}
-          permissionMode={agent.permissionMode ?? 'plan'}
-          queue={queue}
-          draft={draft}
-          onDraftChange={setDraft}
-          onModelChange={(model) => updateMutation.mutate({ model })}
-          onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
-          onSend={(text, images, force) => void runChat(text, images, force)}
-          onStop={() => void stopStreaming()}
-          onClear={requestClear}
-          onRewind={requestRewindLast}
-          onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
-        />
+          <ChatComposer
+            agentId={agentId}
+            archived={archived}
+            isStreaming={agentBusy}
+            model={agent.model}
+            permissionMode={agent.permissionMode ?? 'plan'}
+            queue={queue}
+            draft={draft}
+            onDraftChange={setDraft}
+            onModelChange={(model) => updateMutation.mutate({ model })}
+            onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
+            onSend={(text, images, force) => void runChat(text, images, force)}
+            onStop={() => void stopStreaming()}
+            onClear={requestClear}
+            onRewind={requestRewindLast}
+            onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
+          />
+        </Box>
       </Box>
 
       <ConfirmDialog

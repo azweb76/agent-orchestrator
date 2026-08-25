@@ -1,11 +1,9 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
   Chip,
-  FormControl,
   IconButton,
-  InputLabel,
   MenuItem,
   Select,
   Stack,
@@ -19,7 +17,6 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import CloseIcon from '@mui/icons-material/Close';
-import CircularProgress from '@mui/material/CircularProgress';
 import {
   CLAUDE_MODELS,
   LOCAL_SLASH_COMMANDS,
@@ -102,6 +99,13 @@ function filterSlashCommands(commands: SlashCommand[], draft: string): SlashComm
 
 const FALLBACK_COMMANDS: SlashCommand[] = [...LOCAL_SLASH_COMMANDS, ...PROMPT_SLASH_COMMANDS];
 
+const selectSx = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'text.secondary',
+  '& .MuiSelect-select': { py: 0.5, pr: '28px !important' },
+} as const;
+
 export function ChatComposer({
   agentId,
   archived,
@@ -120,6 +124,8 @@ export function ChatComposer({
   onDraftChange,
 }: ChatComposerProps) {
   const [images, setImages] = useState<PendingImage[]>([]);
+  const [slashDismissed, setSlashDismissed] = useState(false);
+  const [highlight, setHighlight] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const slashQuery = useQuery({
@@ -132,7 +138,14 @@ export function ChatComposer({
   const commands = slashQuery.data ?? FALLBACK_COMMANDS;
   const slashMatch = useMemo(() => filterSlashCommands(commands, draft), [commands, draft]);
   const showSlashMenu =
-    slashMatch.length > 0 && draft.trim().startsWith('/') && !draft.includes('\n');
+    !slashDismissed &&
+    slashMatch.length > 0 &&
+    draft.trim().startsWith('/') &&
+    !draft.includes('\n');
+
+  useEffect(() => {
+    setHighlight(0);
+  }, [draft]);
 
   const addFiles = async (files: FileList | File[]) => {
     const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
@@ -151,12 +164,15 @@ export function ChatComposer({
   };
 
   const applySlashSelection = (item: SlashCommand) => {
+    setSlashDismissed(true);
     if (item.kind === 'prompt' && item.prompt) {
       onDraftChange(item.prompt);
       return;
     }
     onDraftChange(`${item.command} `);
   };
+
+  const canSend = !archived && Boolean(draft.trim() || images.length > 0);
 
   const submit = (force: boolean) => {
     const raw = draft.trim();
@@ -180,7 +196,6 @@ export function ChatComposer({
     if (slash?.kind === 'prompt' && slash.prompt && raw === slash.command) {
       text = slash.prompt;
     }
-    // skill commands (and skill invocations with args) are sent through as-is
 
     if ((!text && images.length === 0) || archived) return;
     onSend(text, images, force);
@@ -193,7 +208,7 @@ export function ChatComposer({
       {queue.length > 0 && (
         <Stack spacing={0.5}>
           <Typography variant="caption" color="text.secondary">
-            Queued ({queue.length})
+            Queued — sends when this reply finishes
           </Typography>
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
             {queue.map((item, index) => (
@@ -208,55 +223,55 @@ export function ChatComposer({
         </Stack>
       )}
 
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-        <FormControl size="small" sx={{ minWidth: 140 }}>
-          <InputLabel>Model</InputLabel>
-          <Select
-            label="Model"
-            value={model}
-            disabled={archived}
-            onChange={(e) => onModelChange(e.target.value)}
-          >
-            {CLAUDE_MODELS.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>Permissions</InputLabel>
-          <Select
-            label="Permissions"
-            value={permissionMode}
-            disabled={archived}
-            onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
-          >
-            {PERMISSION_MODES.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <Box sx={{ flex: 1 }} />
-
-        <Tooltip title="Clear chat history and reset session (/clear)">
-          <span>
-            <Button
-              size="small"
-              color="inherit"
-              startIcon={<DeleteOutlinedIcon />}
-              disabled={archived || isStreaming}
-              onClick={onClear}
+      {showSlashMenu && (
+        <Box
+          sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            bgcolor: 'background.paper',
+            overflow: 'hidden',
+            maxHeight: 260,
+            overflowY: 'auto',
+          }}
+          role="listbox"
+          aria-label="Slash commands"
+        >
+          {slashMatch.map((item, index) => (
+            <Box
+              key={`${item.command}-${item.source ?? 'app'}`}
+              role="option"
+              aria-selected={index === highlight}
+              onMouseEnter={() => setHighlight(index)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                applySlashSelection(item);
+              }}
+              sx={{
+                px: 1.5,
+                py: 0.85,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 2,
+                bgcolor: index === highlight ? 'rgba(94,234,212,0.1)' : 'transparent',
+                '&:hover': { bgcolor: 'rgba(94,234,212,0.1)' },
+              }}
             >
-              Clear
-            </Button>
-          </span>
-        </Tooltip>
-      </Stack>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 600, flexShrink: 0 }}
+              >
+                {item.command}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {item.description}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
 
       {images.length > 0 && (
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
@@ -278,6 +293,7 @@ export function ChatComposer({
               <IconButton
                 size="small"
                 onClick={() => removeImage(image.id)}
+                aria-label={`Remove ${image.name}`}
                 sx={{
                   position: 'absolute',
                   top: -8,
@@ -294,57 +310,38 @@ export function ChatComposer({
         </Stack>
       )}
 
-      {showSlashMenu && (
-        <Stack spacing={0.75}>
-          <Typography variant="caption" color="text.secondary">
-            Slash commands & skills
-          </Typography>
-          <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {slashMatch.map((item) => (
-              <Chip
-                key={`${item.command}-${item.source ?? 'app'}`}
-                size="small"
-                label={item.command}
-                title={item.description}
-                onClick={() => applySlashSelection(item)}
-                clickable
-                color={item.kind === 'local' ? 'warning' : item.kind === 'skill' ? 'secondary' : 'default'}
-                variant="outlined"
-              />
-            ))}
-          </Stack>
-        </Stack>
-      )}
-
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-end' }}>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
-          multiple
-          hidden
-          onChange={(e) => {
-            if (e.target.files) void addFiles(e.target.files);
-            e.target.value = '';
-          }}
-        />
-        <Tooltip title="Attach image">
-          <span>
-            <IconButton disabled={archived} onClick={() => fileRef.current?.click()}>
-              <ImageOutlinedIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-
+      <Box
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 3,
+          bgcolor: 'rgba(11,15,23,0.55)',
+          px: 1.25,
+          pt: 0.75,
+          pb: 0.75,
+          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+          '&:focus-within': {
+            borderColor: 'primary.main',
+            boxShadow: '0 0 0 3px rgba(139,164,255,0.12)',
+          },
+        }}
+      >
         <TextField
           fullWidth
           multiline
           minRows={1}
           maxRows={8}
-          placeholder="Message Claude… (Enter send, Shift+Enter newline, / for commands & skills, paste images)"
+          placeholder={archived ? 'This agent is archived' : 'Message Claude…'}
           value={draft}
           disabled={archived}
-          onChange={(e) => onDraftChange(e.target.value)}
+          variant="standard"
+          slotProps={{
+            input: { disableUnderline: true },
+          }}
+          onChange={(e) => {
+            setSlashDismissed(false);
+            onDraftChange(e.target.value);
+          }}
           onPaste={(e) => {
             const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'));
             if (files.length > 0) {
@@ -353,6 +350,31 @@ export function ChatComposer({
             }
           }}
           onKeyDown={(e) => {
+            if (showSlashMenu) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlight((prev) => Math.min(prev + 1, slashMatch.length - 1));
+                return;
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlight((prev) => Math.max(prev - 1, 0));
+                return;
+              }
+              if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
+                const selected = slashMatch[highlight];
+                if (selected) {
+                  e.preventDefault();
+                  applySlashSelection(selected);
+                  return;
+                }
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setSlashDismissed(true);
+                return;
+              }
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               submit(false);
@@ -362,59 +384,164 @@ export function ChatComposer({
               submit(isStreaming);
             }
           }}
+          sx={{
+            '& .MuiInputBase-input': {
+              py: 0.75,
+              px: 0.5,
+              lineHeight: 1.5,
+            },
+          }}
         />
 
-        {isStreaming ? (
-          <>
-            <Button
-              variant="outlined"
-              color="warning"
-              startIcon={<StopIcon />}
-              onClick={onStop}
-              sx={{ alignSelf: 'flex-end', minWidth: 110 }}
-            >
-              Stop
-            </Button>
-            <Button
-              variant="contained"
-              color="secondary"
-              endIcon={<BoltIcon />}
-              disabled={archived || (!draft.trim() && images.length === 0)}
-              onClick={() => submit(true)}
-              sx={{ alignSelf: 'flex-end', minWidth: 130 }}
-            >
-              Force send
-            </Button>
-            <Button
-              variant="contained"
-              endIcon={<SendIcon />}
-              disabled={archived || (!draft.trim() && images.length === 0)}
-              onClick={() => submit(false)}
-              sx={{ alignSelf: 'flex-end', minWidth: 110 }}
-            >
-              Queue
-            </Button>
-          </>
-        ) : (
-          <Button
-            variant="contained"
-            endIcon={<SendIcon />}
-            disabled={archived || (!draft.trim() && images.length === 0)}
-            onClick={() => submit(false)}
-            sx={{ alignSelf: 'flex-end', minWidth: 120 }}
+        <Stack
+          direction="row"
+          spacing={0.5}
+          useFlexGap
+          sx={{ alignItems: 'center', flexWrap: 'wrap', pt: 0.25 }}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            hidden
+            onChange={(e) => {
+              if (e.target.files) void addFiles(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <Tooltip title="Attach image">
+            <span>
+              <IconButton
+                size="small"
+                disabled={archived}
+                onClick={() => fileRef.current?.click()}
+                aria-label="Attach image"
+              >
+                <ImageOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          <Select
+            variant="standard"
+            disableUnderline
+            value={model}
+            disabled={archived}
+            onChange={(e) => onModelChange(e.target.value)}
+            inputProps={{ 'aria-label': 'Model' }}
+            sx={{ ...selectSx, minWidth: 108, ml: 0.25 }}
           >
-            Send
-          </Button>
-        )}
-      </Stack>
+            {CLAUDE_MODELS.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.label.replace('Claude ', '')}
+              </MenuItem>
+            ))}
+          </Select>
+
+          <Select
+            variant="standard"
+            disableUnderline
+            value={permissionMode}
+            disabled={archived}
+            onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
+            inputProps={{ 'aria-label': 'Permission mode' }}
+            sx={{ ...selectSx, minWidth: 118 }}
+          >
+            {PERMISSION_MODES.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </Select>
+
+          <Box sx={{ flex: 1 }} />
+
+          <Tooltip title="Clear chat history and reset session (/clear)">
+            <span>
+              <IconButton
+                size="small"
+                color="inherit"
+                disabled={archived || isStreaming}
+                onClick={onClear}
+                aria-label="Clear chat"
+              >
+                <DeleteOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          {isStreaming ? (
+            <>
+              <Tooltip title="Stop this reply">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<StopIcon />}
+                  onClick={onStop}
+                  sx={{ minWidth: 0 }}
+                >
+                  Stop
+                </Button>
+              </Tooltip>
+              <Tooltip title="Interrupt and send now">
+                <span>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<BoltIcon />}
+                    disabled={!canSend}
+                    onClick={() => submit(true)}
+                    sx={{ minWidth: 0 }}
+                  >
+                    Force
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Send after this reply finishes">
+                <span>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    endIcon={<SendIcon />}
+                    disabled={!canSend}
+                    onClick={() => submit(false)}
+                    sx={{ minWidth: 0 }}
+                  >
+                    Queue
+                  </Button>
+                </span>
+              </Tooltip>
+            </>
+          ) : (
+            <Tooltip title="Send (Enter)">
+              <span>
+                <IconButton
+                  color="primary"
+                  disabled={!canSend}
+                  onClick={() => submit(false)}
+                  aria-label="Send"
+                  sx={{
+                    bgcolor: canSend ? 'primary.main' : 'action.disabledBackground',
+                    color: canSend ? '#0b0f17' : 'text.disabled',
+                    '&:hover': { bgcolor: 'primary.light' },
+                    '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
+                  }}
+                >
+                  <SendIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      </Box>
 
       {isStreaming && (
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <CircularProgress size={14} />
-          <Typography variant="caption" color="text.secondary">
-            Agent running — Queue waits for the current reply; Force send interrupts it.
-          </Typography>
-        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
+          Queue waits for this reply · Force interrupts it
+        </Typography>
       )}
     </Stack>
   );

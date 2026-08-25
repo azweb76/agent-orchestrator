@@ -116,7 +116,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       : null;
 
   return (
-    <Stack spacing={1.25} sx={{ height: '100%', minHeight: 0 }}>
+    <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
       <PageBreadcrumbs
         items={[
           { label: 'Workspaces', to: '/workspaces' },
@@ -132,7 +132,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       >
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, fontSize: { xs: '1.2rem', md: '1.4rem' } }}>
               {agent.name}
             </Typography>
             <Chip
