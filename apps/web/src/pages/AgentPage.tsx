@@ -9,10 +9,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   Paper,
   Stack,
   Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   Tabs,
   TextField,
   Typography,
@@ -21,6 +26,7 @@ import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AgentEvent } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -48,6 +54,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState<AgentEvent | null>(null);
 
   // Consume one-shot navigation state so refresh does not re-send the idea.
   useEffect(() => {
@@ -294,21 +301,30 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                 description="Lifecycle and stream events will appear here as the agent runs."
               />
             ) : (
-              <Stack spacing={1} divider={<Divider flexItem />}>
-                {eventsQuery.data?.map((event) => (
-                  <Box key={event.id}>
-                    <Typography variant="caption" color="text.secondary">
-                      {new Date(event.createdAt).toLocaleString()} · {event.type}
-                    </Typography>
-                    <Box
-                      component="pre"
-                      sx={{ m: 0, mt: 0.5, fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                    >
-                      {JSON.stringify(event.data, null, 2)}
-                    </Box>
-                  </Box>
-                ))}
-              </Stack>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Time</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {eventsQuery.data?.map((event) => (
+                      <TableRow key={event.id}>
+                        <TableCell>{new Date(event.createdAt).toLocaleString()}</TableCell>
+                        <TableCell>{event.type}</TableCell>
+                        <TableCell align="right">
+                          <Button size="small" onClick={() => setSelectedEvent(event)}>
+                            Details
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </Box>
         )}
@@ -353,6 +369,24 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           >
             {createPrMutation.isPending ? 'Creating…' : 'Create PR'}
           </Button>
+        </DialogActions>
+      </ResponsiveDialog>
+
+      <ResponsiveDialog open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>{selectedEvent?.type}</DialogTitle>
+        <DialogContent>
+          <Typography variant="caption" color="text.secondary">
+            {selectedEvent && new Date(selectedEvent.createdAt).toLocaleString()}
+          </Typography>
+          <Box
+            component="pre"
+            sx={{ m: 0, mt: 0.5, fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+          >
+            {JSON.stringify(selectedEvent?.data, null, 2)}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedEvent(null)}>Close</Button>
         </DialogActions>
       </ResponsiveDialog>
 
