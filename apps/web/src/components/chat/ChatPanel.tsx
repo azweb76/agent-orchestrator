@@ -115,6 +115,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const streamingRef = useRef(false);
   const queueRef = useRef<QueuedChatItem[]>([]);
+  const mountedRef = useRef(true);
 
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId],
@@ -156,6 +157,16 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   }, [queue]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+      streamingRef.current = false;
+      queueRef.current = [];
+    };
+  }, []);
+
+  useEffect(() => {
     const remote = pendingPermissionsQuery.data;
     if (!remote) return;
     setPermissionRequests(remote);
@@ -166,6 +177,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     if (!msgs) return;
     setOptimistic((prev) =>
       prev.filter((m) => {
+        if (m.agentId !== agentId) return false;
         if (msgs.some((s) => s.id === m.id)) return false;
         if (m.id.startsWith('local-')) {
           return !msgs.some(
@@ -175,7 +187,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         return true;
       }),
     );
-  }, [messagesQuery.data]);
+  }, [agentId, messagesQuery.data]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -184,11 +196,13 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const serverMessages = messagesQuery.data ?? [];
   const displayMessages = [
     ...serverMessages,
-    ...optimistic.filter((m) => !serverMessages.some((s) => s.id === m.id)),
+    ...optimistic.filter(
+      (m) => m.agentId === agentId && !serverMessages.some((s) => s.id === m.id),
+    ),
   ];
 
   const runChat = async (text: string, images: PendingImage[], force: boolean) => {
-    if (archived) return;
+    if (archived || !mountedRef.current) return;
 
     if (streamingRef.current && !force) {
       const item: QueuedChatItem = {
@@ -209,6 +223,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       }
       // allow previous stream finally to settle
       await new Promise((r) => setTimeout(r, 200));
+      if (!mountedRef.current) return;
     }
 
     setChatError(null);
@@ -237,22 +252,29 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         },
         {
           onUserMessage: (message) => {
+            if (!mountedRef.current) return;
             setOptimistic((prev) => [
               ...prev.filter((m) => m.id !== localUser.id),
               message,
             ]);
           },
-          onToken: (token) => setStreamParts((prev) => appendStreamText(prev, token)),
+          onToken: (token) => {
+            if (!mountedRef.current) return;
+            setStreamParts((prev) => appendStreamText(prev, token));
+          },
           onEvent: (event) => {
+            if (!mountedRef.current) return;
             setStreamParts((prev) => applyStreamEvent(prev, event));
           },
           onPermissionRequest: (request) => {
+            if (!mountedRef.current) return;
             setPermissionRequests((prev) => {
               if (prev.some((item) => item.requestId === request.requestId)) return prev;
               return [...prev, request];
             });
           },
           onDone: (payload) => {
+            if (!mountedRef.current) return;
             setStreamParts((prev) =>
               prev.map((part) =>
                 part.type === 'tool' && part.status === 'running'
@@ -273,6 +295,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
             queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
           },
           onError: (err) => {
+            if (!mountedRef.current) return;
             setChatError(err);
             setLastFailed({ text, images });
             setStreamParts([]);
@@ -281,12 +304,17 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         abortRef.current.signal,
       );
     } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
+      if (mountedRef.current && (error as Error).name !== 'AbortError') {
         setChatError((error as Error).message);
         setLastFailed({ text, images });
       }
-      setStreamParts([]);
+      if (mountedRef.current) setStreamParts([]);
     } finally {
+      if (!mountedRef.current) {
+        streamingRef.current = false;
+        abortRef.current = null;
+        return;
+      }
       setIsStreaming(false);
       streamingRef.current = false;
       abortRef.current = null;
@@ -357,13 +385,14 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   };
 
   const buildPlan = async (request: PermissionRequest) => {
-    if (archived) return;
+    if (archived || !mountedRef.current) return;
     setPermissionBusy(true);
     setChatError(null);
 
     // Abort the plan-mode SSE; Build starts a fresh auto-mode stream.
     abortRef.current?.abort();
     await new Promise((r) => setTimeout(r, 150));
+    if (!mountedRef.current) return;
 
     setOptimistic([]);
     setQueue([]);
@@ -382,19 +411,26 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         { requestId: request.requestId, plan: plan || undefined },
         {
           onUserMessage: (message) => {
+            if (!mountedRef.current) return;
             setOptimistic((prev) => [...prev.filter((m) => m.id !== message.id), message]);
           },
-          onToken: (token) => setStreamParts((prev) => appendStreamText(prev, token)),
+          onToken: (token) => {
+            if (!mountedRef.current) return;
+            setStreamParts((prev) => appendStreamText(prev, token));
+          },
           onEvent: (event) => {
+            if (!mountedRef.current) return;
             setStreamParts((prev) => applyStreamEvent(prev, event));
           },
           onPermissionRequest: (nextRequest) => {
+            if (!mountedRef.current) return;
             setPermissionRequests((prev) => {
               if (prev.some((item) => item.requestId === nextRequest.requestId)) return prev;
               return [...prev, nextRequest];
             });
           },
           onDone: (payload) => {
+            if (!mountedRef.current) return;
             setOptimistic((prev) => [
               ...prev.filter((m) => m.id !== payload.message.id),
               payload.message,
@@ -409,6 +445,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
             queryClient.invalidateQueries({ queryKey: ['sidebar'] });
           },
           onError: (err) => {
+            if (!mountedRef.current) return;
             setChatError(err);
             setStreamParts([]);
           },
@@ -416,11 +453,16 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         abortRef.current.signal,
       );
     } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
+      if (mountedRef.current && (error as Error).name !== 'AbortError') {
         setChatError((error as Error).message);
       }
-      setStreamParts([]);
+      if (mountedRef.current) setStreamParts([]);
     } finally {
+      if (!mountedRef.current) {
+        streamingRef.current = false;
+        abortRef.current = null;
+        return;
+      }
       setIsStreaming(false);
       streamingRef.current = false;
       abortRef.current = null;
