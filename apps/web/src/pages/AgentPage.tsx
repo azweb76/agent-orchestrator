@@ -117,13 +117,15 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
   return (
     <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
-      <PageBreadcrumbs
-        items={[
-          { label: 'Workspaces', to: '/workspaces' },
-          { label: agent.workspace.name, to: `/workspaces/${agent.workspace.id}` },
-          { label: agent.name },
-        ]}
-      />
+      <Box sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 0 }}>
+        <PageBreadcrumbs
+          items={[
+            { label: 'Workspaces', to: '/workspaces' },
+            { label: agent.workspace.name, to: `/workspaces/${agent.workspace.id}` },
+            { label: agent.name },
+          ]}
+        />
+      </Box>
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}

@@ -291,15 +291,15 @@ export function AppLayout() {
         <Container
           maxWidth="xl"
           sx={{
-            py: onAgent ? { xs: 1, md: 1.5 } : { xs: 2, md: 3 },
+            pt: onAgent ? { xs: 1, md: 1.5 } : { xs: 2, md: 3 },
             px: { xs: 1.25, sm: 2, md: 3 },
             flex: 1,
             minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
             pb: onAgent
-              ? { xs: 'calc(8px + env(safe-area-inset-bottom))', sm: 1.5 }
-              : { xs: 'calc(16px + env(safe-area-inset-bottom))', md: 3 },
+              ? { xs: 'calc(8px + env(safe-area-inset-bottom, 0px))', sm: 1.5 }
+              : { xs: 'calc(16px + env(safe-area-inset-bottom, 0px))', md: 3 },
             ...(onAgent
               ? {
                   height: {

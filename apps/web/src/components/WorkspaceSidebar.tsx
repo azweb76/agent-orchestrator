@@ -205,7 +205,7 @@ export function WorkspaceSidebar({
       component="nav"
       aria-label="Workspaces and agents"
       sx={{
-        width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : '100%',
+        width: '100%',
         flexShrink: 0,
         borderRight: '1px solid',
         borderColor: 'divider',
