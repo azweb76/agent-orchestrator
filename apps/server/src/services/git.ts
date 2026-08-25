@@ -436,7 +436,10 @@ export class ClaudeService {
 
     const payload = `${JSON.stringify(buildControlResponse(requestId, decision))}\n`;
     try {
-      tracked.stdin.write(payload);
+      const ok = tracked.stdin.write(payload);
+      if (!ok) {
+        // Backpressure — still delivered asynchronously; continue.
+      }
       tracked.pendingPermissions.delete(requestId);
       return true;
     } catch {

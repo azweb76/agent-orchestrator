@@ -39,8 +39,11 @@ export function AskUserQuestionCard({
 
   const canSubmit = useMemo(() => {
     if (freeResponse.trim()) return true;
+    if (questions.length === 0) return false;
     return questions.every((q) => {
-      if (useOther[q.question]) return Boolean(otherText[q.question]?.trim());
+      if (q.options.length === 0 || useOther[q.question]) {
+        return Boolean(otherText[q.question]?.trim());
+      }
       return (selections[q.question]?.length ?? 0) > 0;
     });
   }, [freeResponse, otherText, questions, selections, useOther]);
@@ -69,7 +72,7 @@ export function AskUserQuestionCard({
 
     const answers: Record<string, string> = {};
     for (const q of questions) {
-      if (useOther[q.question]) {
+      if (q.options.length === 0 || useOther[q.question]) {
         answers[q.question] = otherText[q.question]?.trim() ?? '';
       } else {
         answers[q.question] = (selections[q.question] ?? []).join(', ');
@@ -93,10 +96,18 @@ export function AskUserQuestionCard({
         Claude has questions
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        Answer all questions below to continue ({request.requestId.slice(0, 8)}…)
+        {questions.length > 0
+          ? `Answer all questions below to continue (${request.requestId.slice(0, 8)}…)`
+          : `Reply below to continue (${request.requestId.slice(0, 8)}…)`}
       </Typography>
 
       <Stack spacing={2}>
+        {questions.length === 0 && (
+          <Typography variant="body2" color="text.secondary">
+            Structured options were not included in this request. Type a freeform reply to continue.
+          </Typography>
+        )}
+
         {questions.map((q) => (
           <Box key={q.question}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -104,7 +115,20 @@ export function AskUserQuestionCard({
               {q.question}
             </Typography>
 
-            {q.multiSelect ? (
+            {q.options.length === 0 ? (
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Type your answer"
+                value={otherText[q.question] ?? ''}
+                disabled={submitting}
+                onChange={(e) => {
+                  setUseOther((prev) => ({ ...prev, [q.question]: true }));
+                  setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }));
+                }}
+                sx={{ mt: 0.5 }}
+              />
+            ) : q.multiSelect ? (
               <FormGroup>
                 {q.options.map((opt) => (
                   <FormControlLabel
@@ -156,32 +180,36 @@ export function AskUserQuestionCard({
               </RadioGroup>
             )}
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  size="small"
-                  checked={Boolean(useOther[q.question])}
-                  disabled={submitting}
-                  onChange={(_, checked) => {
-                    setUseOther((prev) => ({ ...prev, [q.question]: checked }));
-                    if (checked) setSelections((prev) => ({ ...prev, [q.question]: [] }));
-                  }}
+            {q.options.length > 0 && (
+              <>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={Boolean(useOther[q.question])}
+                      disabled={submitting}
+                      onChange={(_, checked) => {
+                        setUseOther((prev) => ({ ...prev, [q.question]: checked }));
+                        if (checked) setSelections((prev) => ({ ...prev, [q.question]: [] }));
+                      }}
+                    />
+                  }
+                  label={<Typography variant="body2">Other</Typography>}
                 />
-              }
-              label={<Typography variant="body2">Other</Typography>}
-            />
-            {useOther[q.question] && (
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Type your own answer"
-                value={otherText[q.question] ?? ''}
-                disabled={submitting}
-                onChange={(e) =>
-                  setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }))
-                }
-                sx={{ mt: 0.5 }}
-              />
+                {useOther[q.question] && (
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder="Type your own answer"
+                    value={otherText[q.question] ?? ''}
+                    disabled={submitting}
+                    onChange={(e) =>
+                      setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }))
+                    }
+                    sx={{ mt: 0.5 }}
+                  />
+                )}
+              </>
             )}
           </Box>
         ))}
@@ -191,7 +219,11 @@ export function AskUserQuestionCard({
           fullWidth
           multiline
           minRows={2}
-          label="Or reply freely (skips structured answers)"
+          label={
+            questions.length > 0
+              ? 'Or reply freely (skips structured answers)'
+              : 'Your reply'
+          }
           value={freeResponse}
           disabled={submitting}
           onChange={(e) => setFreeResponse(e.target.value)}

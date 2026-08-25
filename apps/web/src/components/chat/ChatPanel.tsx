@@ -175,8 +175,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const pendingPermissionsQuery = useQuery({
     queryKey: ['permissions', agentId],
     queryFn: () => api.listPendingPermissions(agentId),
-    enabled: Boolean(agentId) && agentBusy,
-    refetchInterval: () => (agentBusy ? 2000 : false),
+    enabled: Boolean(agentId) && (agentBusy || permissionRequests.length > 0),
+    refetchInterval: () => (agentBusy || permissionRequests.length > 0 ? 2000 : false),
   });
 
   useEffect(() => {
@@ -196,9 +196,15 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
 
   useEffect(() => {
     const remote = pendingPermissionsQuery.data;
-    if (!remote) return;
-    setPermissionRequests(remote);
-  }, [pendingPermissionsQuery.data]);
+    if (remote === undefined) return;
+    // Prefer the server list. If a poll returns empty while SSE already showed a
+    // prompt and the stream is still open, keep the local cards until the next
+    // non-empty poll or the stream ends.
+    setPermissionRequests((prev) => {
+      if (remote.length === 0 && isSending && prev.length > 0) return prev;
+      return remote;
+    });
+  }, [pendingPermissionsQuery.data, isSending]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -308,12 +314,21 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           onDone: (payload) => {
             if (!mountedRef.current) return;
             setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
-            setPermissionRequests([]);
+            // Refresh from server instead of blindly clearing — avoids racing a
+            // late permission_request that arrives near turn end.
+            void queryClient
+              .invalidateQueries({ queryKey: ['permissions', agentId] })
+              .then(() => api.listPendingPermissions(agentId))
+              .then((pending) => {
+                if (mountedRef.current) setPermissionRequests(pending);
+              })
+              .catch(() => {
+                if (mountedRef.current) setPermissionRequests([]);
+              });
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
             queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
-            queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
           },
           onError: (err) => {
             if (!mountedRef.current) return;
@@ -425,6 +440,26 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     }
   };
 
+  /** Skip AskUserQuestion with an allow+response so Claude continues (deny can stall the tool). */
+  const skipAskUserQuestion = async (request: PermissionRequest) => {
+    setPermissionBusy(true);
+    setChatError(null);
+    try {
+      await api.answerPermission(agentId, {
+        requestId: request.requestId,
+        answers: {},
+        response:
+          'User skipped these questions. Continue with sensible defaults and ask again only if blocked.',
+      });
+      removePermission(request.requestId);
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setPermissionBusy(false);
+    }
+  };
+
   const allowTool = async (request: PermissionRequest) => {
     setPermissionBusy(true);
     setChatError(null);
@@ -520,12 +555,19 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           onDone: (payload) => {
             if (!mountedRef.current) return;
             setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
-            setPermissionRequests([]);
+            void queryClient
+              .invalidateQueries({ queryKey: ['permissions', agentId] })
+              .then(() => api.listPendingPermissions(agentId))
+              .then((pending) => {
+                if (mountedRef.current) setPermissionRequests(pending);
+              })
+              .catch(() => {
+                if (mountedRef.current) setPermissionRequests([]);
+              });
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
             queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
-            queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
             queryClient.invalidateQueries({ queryKey: ['sidebar'] });
           },
           onError: (err) => {
@@ -648,7 +690,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         {permissionRequests.map((request) => {
           if (request.toolName === 'AskUserQuestion') {
             const questions = parseAskUserQuestions(request.input);
-            if (questions.length === 0) return null;
             return (
               <AskUserQuestionCard
                 key={request.requestId}
@@ -658,7 +699,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
                 onSubmit={(answers, response) =>
                   void submitAnswers(request, answers, response)
                 }
-                onDismiss={() => void keepPlanning(request)}
+                onDismiss={() => void skipAskUserQuestion(request)}
               />
             );
           }

@@ -6,7 +6,7 @@ import {
   parsePermissionRequest,
   shouldAutoAllowToolPermission,
 } from './permission-protocol.js';
-import { extractPlanFromInput, parseAskUserQuestions } from '@agent-orchestrator/shared';
+import { buildAskUserQuestionUpdatedInput, extractPlanFromInput, parseAskUserQuestions } from '@agent-orchestrator/shared';
 
 test('parsePermissionRequest handles can_use_tool control_request', () => {
   const parsed = parsePermissionRequest({
@@ -31,6 +31,24 @@ test('parsePermissionRequest handles can_use_tool control_request', () => {
   assert.equal(parsed.requestId, 'req-1');
   assert.equal(parsed.toolName, 'AskUserQuestion');
   assert.equal(parseAskUserQuestions(parsed.input).length, 1);
+});
+
+test('parsePermissionRequest handles sdk_control_request permission subtype with tool_input', () => {
+  const parsed = parsePermissionRequest({
+    type: 'sdk_control_request',
+    request: {
+      subtype: 'permission',
+      request_id: 'perm-9',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' },
+      toolUseId: 'toolu_1',
+    },
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.requestId, 'perm-9');
+  assert.equal(parsed.toolName, 'Bash');
+  assert.deepEqual(parsed.input, { command: 'ls' });
+  assert.equal(parsed.toolUseId, 'toolu_1');
 });
 
 test('parsePermissionRequest handles ExitPlanMode with plan', () => {
@@ -112,4 +130,42 @@ test('parseAskUserQuestions supports multiple questions', () => {
   assert.equal(questions[0]?.multiSelect, false);
   assert.equal(questions[1]?.multiSelect, true);
   assert.equal(questions[1]?.options.length, 2);
+});
+
+test('buildAskUserQuestionUpdatedInput echoes original questions and answers', () => {
+  const originalQuestions = [
+    {
+      question: 'How should I format the output?',
+      header: 'Format',
+      options: [
+        { label: 'Summary', description: 'Brief' },
+        { label: 'Detailed', description: 'Full' },
+      ],
+      multiSelect: false,
+    },
+  ];
+  const pendingInput = {
+    questions: originalQuestions,
+    metadata: { source: 'test' },
+  };
+
+  const updated = buildAskUserQuestionUpdatedInput(pendingInput, {
+    answers: { 'How should I format the output?': 'Summary' },
+  });
+
+  assert.equal(updated.questions, originalQuestions);
+  assert.deepEqual(updated.answers, { 'How should I format the output?': 'Summary' });
+  assert.deepEqual(updated.metadata, { source: 'test' });
+  assert.equal(updated.response, undefined);
+});
+
+test('buildAskUserQuestionUpdatedInput supports freeform response', () => {
+  const pendingInput = { questions: [{ question: 'Q?', header: 'Q', options: [], multiSelect: false }] };
+  const updated = buildAskUserQuestionUpdatedInput(pendingInput, {
+    answers: {},
+    response: '  Just use defaults  ',
+  });
+  assert.equal(updated.questions, pendingInput.questions);
+  assert.deepEqual(updated.answers, {});
+  assert.equal(updated.response, 'Just use defaults');
 });
