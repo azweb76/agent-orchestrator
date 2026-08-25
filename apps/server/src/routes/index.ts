@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
   archiveAgent,
+  allowPermissionRequest,
   answerAskUserQuestion,
   buildApprovedPlan,
   clearAgentChat,
@@ -289,6 +290,19 @@ export function createRouter(ctx: AppContext): express.Router {
         })
         .parse(req.body);
       res.json(await answerAskUserQuestion(ctx, param(req.params.agentId), body));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/permissions/allow',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().min(1),
+          updatedInput: z.record(z.string(), z.unknown()).optional(),
+        })
+        .parse(req.body);
+      res.json(await allowPermissionRequest(ctx, param(req.params.agentId), body));
     }),
   );
 

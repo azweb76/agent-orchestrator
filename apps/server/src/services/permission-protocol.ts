@@ -57,6 +57,50 @@ export function isInteractivePermissionTool(toolName: string): boolean {
   return toolName === 'AskUserQuestion' || toolName === 'ExitPlanMode';
 }
 
+/**
+ * Whether a non-interactive tool permission can be auto-allowed without UI.
+ * AskUserQuestion / ExitPlanMode are never auto-allowed.
+ *
+ * Modes that already minimize prompting (`auto`, `dontAsk`, `bypassPermissions`)
+ * auto-allow ordinary tools if Claude still sends a can_use_tool request.
+ * Manual / plan / acceptEdits surface those prompts on the agent page.
+ */
+export function shouldAutoAllowToolPermission(
+  toolName: string,
+  permissionMode: string | null | undefined,
+): boolean {
+  if (isInteractivePermissionTool(toolName)) return false;
+  const mode = permissionMode ?? 'plan';
+  return mode === 'auto' || mode === 'dontAsk' || mode === 'bypassPermissions';
+}
+
+/** Safe read-only tools that may run without a UI prompt. */
+export const SAFE_AUTO_ALLOWED_TOOLS = 'Read,Glob,Grep';
+
+/**
+ * Build `--allowedTools` for a permission mode.
+ * Never includes AskUserQuestion / ExitPlanMode — those must hit the stdio
+ * permission prompt so the agent page can collect answers / plan approval.
+ * (`--allowedTools` means auto-approve without prompting.)
+ */
+export function allowedToolsForPermissionMode(
+  permissionMode: string | null | undefined,
+): string {
+  const mode = permissionMode ?? 'plan';
+  switch (mode) {
+    case 'acceptEdits':
+      return `${SAFE_AUTO_ALLOWED_TOOLS},Edit,Write`;
+    case 'auto':
+    case 'dontAsk':
+    case 'bypassPermissions':
+      return `${SAFE_AUTO_ALLOWED_TOOLS},Edit,Write,Bash`;
+    case 'default':
+    case 'plan':
+    default:
+      return SAFE_AUTO_ALLOWED_TOOLS;
+  }
+}
+
 export function buildControlResponse(
   requestId: string,
   decision: PermissionDecision,

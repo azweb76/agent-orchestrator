@@ -14,6 +14,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
   - Stop generation, clear history (`/clear` or Clear button), model + permission mode controls
   - Rewind to any user message (`/rewind` or the history button on a bubble) to truncate later turns, reset the Claude session, and restore the prompt for editing
   - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that clears the session and implements in **auto** mode
+  - Manual / plan modes prompt on the agent page for tool permissions; `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved via `--allowedTools`
   - Slash commands & skills autocomplete (project/personal/bundled)
   - Image attachments (paste or upload), markdown replies, interleaved tool activity
 - **Diff & PRs** — view agent changes and open pull requests on GitHub

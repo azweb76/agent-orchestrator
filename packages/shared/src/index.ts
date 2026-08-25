@@ -256,6 +256,12 @@ export interface DenyPermissionRequest {
   message?: string;
 }
 
+export interface AllowPermissionRequest {
+  requestId: string;
+  /** Optional override of tool input when allowing (defaults to pending input). */
+  updatedInput?: Record<string, unknown>;
+}
+
 export interface BuildPlanRequest {
   /** Pending ExitPlanMode request id, when still waiting on the current run. */
   requestId?: string;

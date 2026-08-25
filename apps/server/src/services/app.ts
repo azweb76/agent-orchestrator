@@ -6,6 +6,7 @@ import type {
   Agent,
   AgentDetail,
   AgentEvent,
+  AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
   BuildPlanRequest,
   ChatImageAttachment,
@@ -508,6 +509,40 @@ export async function answerAskUserQuestion(
       requestId: body.requestId,
       answers: body.answers,
       response: body.response ?? null,
+    }),
+  );
+  return { ok: true };
+}
+
+export async function allowPermissionRequest(
+  ctx: AppContext,
+  agentId: string,
+  body: AllowPermissionRequest,
+): Promise<{ ok: true }> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  const pending = ctx.claude
+    .listPendingPermissions(agentId)
+    .find((item) => item.requestId === body.requestId);
+  if (!pending) throw new Error('Permission request not found');
+  if (pending.toolName === 'AskUserQuestion') {
+    throw new Error('Use the answer endpoint for AskUserQuestion');
+  }
+  if (pending.toolName === 'ExitPlanMode') {
+    throw new Error('Use Build to approve ExitPlanMode (avoids CLI stdio hang)');
+  }
+
+  const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
+    behavior: 'allow',
+    updatedInput: body.updatedInput ?? pending.input,
+  });
+  if (!ok) throw new Error('Permission request not found or Claude stdin unavailable');
+
+  ctx.repos.events.create(
+    makeEvent(agentId, 'permission_allowed', {
+      requestId: body.requestId,
+      toolName: pending.toolName,
     }),
   );
   return { ok: true };

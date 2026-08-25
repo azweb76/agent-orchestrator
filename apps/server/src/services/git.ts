@@ -1,19 +1,23 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
-import { openSync, closeSync, mkdirSync } from 'node:fs';
+import { openSync, closeSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
+  allowedToolsForPermissionMode,
   buildControlResponse,
-  isInteractivePermissionTool,
   parsePermissionRequest,
+  shouldAutoAllowToolPermission,
   type PermissionDecision,
 } from './permission-protocol.js';
 
 const execFileAsync = promisify(execFile);
 
-export const DEFAULT_ALLOWED_TOOLS =
-  'Read,Edit,Bash,Glob,Grep,Write,AskUserQuestion,ExitPlanMode';
+/** @deprecated Prefer allowedToolsForPermissionMode — kept for tests/compat. */
+export const DEFAULT_ALLOWED_TOOLS = allowedToolsForPermissionMode('plan');
+
+/** Interactive tools available for plan-mode sessions (never auto-approved). */
+export const INTERACTIVE_TOOLS = 'AskUserQuestion,ExitPlanMode';
 
 export class GitService {
   async clone(url: string, targetPath: string): Promise<string> {
@@ -160,6 +164,14 @@ export function buildClaudeArgs(options: {
   const permissionMode = options.permissionMode ?? 'plan';
   // Stream-json stdin is required for --permission-prompt-tool stdio.
   // Do not pass -p here: the prompt is written as a user message on stdin after spawn.
+  //
+  // --allowedTools auto-approves without prompting. Never list AskUserQuestion /
+  // ExitPlanMode here or the agent page cannot collect answers / plan approval.
+  // Omit --tools so all built-ins (including interactive plan tools) stay available.
+  const allowedTools =
+    options.allowedTools ??
+    options.defaultAllowedTools ??
+    allowedToolsForPermissionMode(permissionMode);
   const args = [
     '--output-format',
     'stream-json',
@@ -170,7 +182,7 @@ export function buildClaudeArgs(options: {
     '--permission-prompt-tool',
     'stdio',
     '--allowedTools',
-    options.allowedTools ?? options.defaultAllowedTools ?? DEFAULT_ALLOWED_TOOLS,
+    allowedTools,
   ];
 
   if (permissionMode === 'bypassPermissions') {
@@ -234,6 +246,8 @@ interface TrackedRun {
   pendingPermissions: Map<string, ClaudePermissionRequest>;
   /** True when stdin is available for interactive permission replies. */
   canRespondToPermissions: boolean;
+  /** Agent permission mode for this run (controls auto-allow vs UI prompts). */
+  permissionMode: ClaudePermissionMode;
 }
 
 export function isPidAlive(pid: number): boolean {
@@ -316,7 +330,6 @@ export class ClaudeService {
   constructor(
     private claudeBin: string,
     private runsDir: string,
-    private defaultAllowedTools = DEFAULT_ALLOWED_TOOLS,
   ) {
     mkdirSync(this.runsDir, { recursive: true });
   }
@@ -414,13 +427,13 @@ export class ClaudeService {
     }
 
     const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
+    const permissionMode = options.permissionMode ?? 'plan';
     const args = buildClaudeArgs({
       model: options.model,
       environment: options.environment,
       sessionId: options.sessionId,
       allowedTools: options.allowedTools,
-      permissionMode: options.permissionMode,
-      defaultAllowedTools: this.defaultAllowedTools,
+      permissionMode,
     });
 
     const logPath = path.join(this.runsDir, `${agentId}-${Date.now()}.log`);
@@ -464,6 +477,7 @@ export class ClaudeService {
       stdin: proc.stdin,
       pendingPermissions: new Map(),
       canRespondToPermissions: true,
+      permissionMode,
     });
     options.onStarted?.(handle);
 
@@ -491,6 +505,7 @@ export class ClaudeService {
       stdin: null,
       pendingPermissions: new Map(),
       canRespondToPermissions: false,
+      permissionMode: 'plan',
     });
     return this.monitorRun(agentId, handle, options.sessionId ?? null, options, options.signal);
   }
@@ -585,7 +600,7 @@ export class ClaudeService {
       return;
     }
 
-    if (!isInteractivePermissionTool(parsed.toolName)) {
+    if (shouldAutoAllowToolPermission(parsed.toolName, tracked.permissionMode)) {
       this.respondToPermission(
         agentId,
         parsed.requestId,
@@ -598,15 +613,37 @@ export class ClaudeService {
       return;
     }
 
+    const input = enrichPermissionInput(parsed.toolName, parsed.input);
     const request: ClaudePermissionRequest = {
       requestId: parsed.requestId,
       toolName: parsed.toolName,
-      input: parsed.input,
+      input,
       toolUseId: parsed.toolUseId,
     };
     tracked.pendingPermissions.set(parsed.requestId, request);
     options.onPermissionRequest?.(request);
   }
+}
+
+/** Load ExitPlanMode plan text from planFilePath when the CLI omits inline plan. */
+function enrichPermissionInput(
+  toolName: string,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  if (toolName !== 'ExitPlanMode') return input;
+  if (typeof input.plan === 'string' && input.plan.trim()) return input;
+
+  const planFilePath =
+    typeof input.planFilePath === 'string' ? input.planFilePath : null;
+  if (!planFilePath) return input;
+
+  try {
+    const text = readFileSync(planFilePath, 'utf8');
+    if (text.trim()) return { ...input, plan: text.trim() };
+  } catch {
+    // fall through — Build can still resolve from messages
+  }
+  return input;
 }
 
 export function parseGitHubUrl(repoUrl: string): { owner: string; repo: string } {
