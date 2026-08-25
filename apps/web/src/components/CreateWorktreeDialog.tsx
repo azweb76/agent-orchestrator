@@ -21,6 +21,12 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  CLAUDE_EFFORT_LEVELS,
+  CLAUDE_MODELS,
+  DEFAULT_EFFORT_LEVEL,
+  type EffortLevel,
+} from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 
 interface CreateWorktreeDialogProps {
@@ -44,6 +50,8 @@ export function CreateWorktreeDialog({
   const [newBranchName, setNewBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
   const [ideaText, setIdeaText] = useState('');
+  const [ideaModel, setIdeaModel] = useState<string>(CLAUDE_MODELS[0].id);
+  const [ideaEffort, setIdeaEffort] = useState<EffortLevel>(DEFAULT_EFFORT_LEVEL);
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
 
   const workspaceQuery = useQuery({
@@ -80,6 +88,8 @@ export function CreateWorktreeDialog({
     setNewBranchName('');
     setBaseBranch('');
     setIdeaText('');
+    setIdeaModel(CLAUDE_MODELS[0].id);
+    setIdeaEffort(DEFAULT_EFFORT_LEVEL);
     setSelectedPr('');
   };
 
@@ -120,6 +130,8 @@ export function CreateWorktreeDialog({
       api.createWorktreeFromIdea(workspaceId, {
         idea: ideaText.trim(),
         baseBranch: resolvedDefaultBranch || undefined,
+        model: ideaModel,
+        effort: ideaEffort,
       }),
     onSuccess: (data) => {
       invalidateAfterCreate();
@@ -164,9 +176,39 @@ export function CreateWorktreeDialog({
               minRows={4}
               autoFocus
             />
+            <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+              <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
+                <InputLabel>Model</InputLabel>
+                <Select
+                  label="Model"
+                  value={ideaModel}
+                  onChange={(e) => setIdeaModel(e.target.value)}
+                >
+                  {CLAUDE_MODELS.map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
+                <InputLabel>Effort</InputLabel>
+                <Select
+                  label="Effort"
+                  value={ideaEffort}
+                  onChange={(e) => setIdeaEffort(e.target.value as EffortLevel)}
+                >
+                  {CLAUDE_EFFORT_LEVELS.map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
             <Typography variant="body2" color="text.secondary">
-              A branch name is suggested automatically. The agent starts in plan mode with your idea
-              and will ask clarifying questions before drafting a plan.
+              A branch name is suggested automatically. Your idea is sent as the first message in
+              plan mode.
             </Typography>
           </Stack>
         )}
