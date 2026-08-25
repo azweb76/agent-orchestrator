@@ -20,6 +20,7 @@ import {
   getPullRequestInbox,
   getSystemStatus,
   getWorkspace,
+  listAgentSlashCommands,
   listGitHubBranches,
   listGitHubPullRequests,
   listSidebarTree,
@@ -286,6 +287,13 @@ export function createRouter(ctx: AppContext): express.Router {
     '/agents/:agentId/diff',
     asyncHandler(async (req, res) => {
       res.json(await getAgentDiff(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/slash-commands',
+    asyncHandler(async (req, res) => {
+      res.json(await listAgentSlashCommands(ctx, param(req.params.agentId)));
     }),
   );
 

@@ -13,6 +13,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -22,6 +23,7 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useQuery } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 
 export const SIDEBAR_EXPANDED_WIDTH = 280;
 export const SIDEBAR_COLLAPSED_WIDTH = 72;
@@ -114,6 +116,7 @@ export function WorkspaceSidebar({ collapsed, onCollapsedChange }: WorkspaceSide
   const location = useLocation();
   const { workspaceId: routeWorkspaceId, agentId: routeAgentId } = useParams();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(loadExpandedWorkspaces);
+  const [createWorkspaceId, setCreateWorkspaceId] = useState<string | null>(null);
 
   const sidebarQuery = useQuery({
     queryKey: ['sidebar'],
@@ -259,12 +262,22 @@ export function WorkspaceSidebar({ collapsed, onCollapsedChange }: WorkspaceSide
             tree={tree}
             expandedWorkspaces={expandedWorkspaces}
             onToggleWorkspace={toggleWorkspace}
+            onCreateAgent={(workspaceId) => setCreateWorkspaceId(workspaceId)}
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
             isLoading={sidebarQuery.isLoading}
           />
         )}
       </Box>
+
+      {createWorkspaceId && (
+        <CreateWorktreeDialog
+          open
+          onClose={() => setCreateWorkspaceId(null)}
+          workspaceId={createWorkspaceId}
+          defaultBranch={tree.find((ws) => ws.id === createWorkspaceId)?.defaultBranch}
+        />
+      )}
     </Box>
   );
 }
@@ -363,6 +376,7 @@ function ExpandedWorkspaceTree({
   tree,
   expandedWorkspaces,
   onToggleWorkspace,
+  onCreateAgent,
   selectedAgentId,
   selectedWorkspaceId,
   isLoading,
@@ -370,6 +384,7 @@ function ExpandedWorkspaceTree({
   tree: SidebarWorkspace[];
   expandedWorkspaces: Set<string>;
   onToggleWorkspace: (workspaceId: string) => void;
+  onCreateAgent: (workspaceId: string) => void;
   selectedAgentId?: string;
   selectedWorkspaceId: string | null;
   isLoading: boolean;
@@ -413,7 +428,7 @@ function ExpandedWorkspaceTree({
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
                     <Typography
                       variant="body2"
                       sx={{
@@ -440,6 +455,20 @@ function ExpandedWorkspaceTree({
                   secondary: { component: 'div' },
                 }}
               />
+              <Tooltip title="New agent">
+                <IconButton
+                  size="small"
+                  aria-label={`Create agent in ${workspace.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCreateAgent(workspace.id);
+                    if (!open) onToggleWorkspace(workspace.id);
+                  }}
+                  sx={{ mr: 0.25, mt: 0.25 }}
+                >
+                  <AddIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
               {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
             </ListItemButton>
 
@@ -460,10 +489,26 @@ function ExpandedWorkspaceTree({
                   />
                 </ListItemButton>
 
+                <ListItemButton
+                  onClick={() => onCreateAgent(workspace.id)}
+                  sx={{ pl: 5, py: 0.5 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <AddIcon fontSize="small" color="secondary" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
+                        New agent
+                      </Typography>
+                    }
+                  />
+                </ListItemButton>
+
                 {workspace.agents.length === 0 ? (
                   <Box sx={{ pl: 5, pr: 2, py: 0.75 }}>
                     <Typography variant="caption" color="text.secondary">
-                      No agents
+                      No agents yet
                     </Typography>
                   </Box>
                 ) : (
