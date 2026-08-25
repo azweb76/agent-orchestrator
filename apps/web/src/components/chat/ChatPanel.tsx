@@ -34,6 +34,13 @@ interface ChatPanelProps {
   initialPrompt?: string;
 }
 
+/** Distance from the bottom (px) still treated as "stuck" for auto-scroll. */
+const NEAR_BOTTOM_PX = 80;
+
+function isNearBottom(el: HTMLElement, thresholdPx = NEAR_BOTTOM_PX): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= thresholdPx;
+}
+
 function upsertMessage(messages: Message[] | undefined, message: Message): Message[] {
   if (!messages?.length) return [message];
   const index = messages.findIndex((item) => item.id === message.id);
@@ -117,7 +124,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     null,
   );
   const abortRef = useRef<AbortController | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const sendingRef = useRef(false);
   const queueRef = useRef<QueuedChatItem[]>([]);
   const mountedRef = useRef(true);
@@ -207,8 +215,22 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   }, [pendingPermissionsQuery.data, isSending]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    stickToBottomRef.current = true;
+  }, [agentId]);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    // Instant scroll keeps stick-to-bottom accurate; smooth scrollIntoView can
+    // fire onScroll mid-animation and clear the near-bottom flag.
+    el.scrollTop = el.scrollHeight;
   }, [messagesQuery.data, permissionRequests]);
+
+  const handleChatScroll = () => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = isNearBottom(el);
+  };
 
   const displayMessages = messagesQuery.data ?? [];
 
@@ -258,6 +280,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionRequests([]);
     setIsSending(true);
     sendingRef.current = true;
+    // Sending should always pin the viewport to the latest messages.
+    stickToBottomRef.current = true;
     abortRef.current = new AbortController();
 
     try {
@@ -505,6 +529,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionRequests([]);
     setIsSending(true);
     sendingRef.current = true;
+    stickToBottomRef.current = true;
     abortRef.current = new AbortController();
 
     const plan = extractPlanFromInput(request.input);
@@ -623,7 +648,11 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         height: '100%',
       }}
     >
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pt: 1.5, pb: 1, minHeight: 0 }}>
+      <Box
+        ref={chatScrollRef}
+        onScroll={handleChatScroll}
+        sx={{ flex: 1, overflowY: 'auto', px: 1.5, pt: 1.5, pb: 1, minHeight: 0 }}
+      >
         {displayMessages.length === 0 && (
           <Stack spacing={1} sx={{ py: 3, alignItems: 'center', textAlign: 'center' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
@@ -725,8 +754,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             />
           );
         })}
-
-        <div ref={chatEndRef} />
       </Box>
 
       <Box sx={{ borderTop: 1, borderColor: 'divider', px: 1.5, py: 1.25, flexShrink: 0 }}>
