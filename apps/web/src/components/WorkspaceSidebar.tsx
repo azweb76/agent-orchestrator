@@ -112,9 +112,16 @@ interface WorkspaceSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void;
   /** When true, stretch to parent height (e.g. mobile drawer). */
   fillHeight?: boolean;
+  /** Hide the expand/collapse control (mobile drawer). */
+  hideCollapseControl?: boolean;
 }
 
-export function WorkspaceSidebar({ collapsed, onCollapsedChange, fillHeight }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({
+  collapsed,
+  onCollapsedChange,
+  fillHeight,
+  hideCollapseControl,
+}: WorkspaceSidebarProps) {
   const location = useLocation();
   const { workspaceId: routeWorkspaceId, agentId: routeAgentId } = useParams();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(loadExpandedWorkspaces);
@@ -240,15 +247,19 @@ export function WorkspaceSidebar({ collapsed, onCollapsedChange, fillHeight }: W
             </Typography>
           </Box>
         )}
-        <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
-          <IconButton
-            size="small"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
+        {!hideCollapseControl ? (
+          <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
+            <IconButton
+              size="small"
+              onClick={() => setCollapsed(!collapsed)}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+        ) : (
+          <Box sx={{ width: 8 }} />
+        )}
       </Stack>
 
       <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 0.5 }}>

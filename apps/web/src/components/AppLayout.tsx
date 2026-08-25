@@ -189,13 +189,24 @@ export function AppLayout() {
                 boxSizing: 'border-box',
                 bgcolor: 'rgba(18,24,38,0.98)',
                 backgroundImage: 'none',
-                top: 0,
-                height: '100%',
+                top: { xs: 56, sm: 64 },
+                height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' },
+                display: 'flex',
+                flexDirection: 'column',
               },
             }}
           >
-            <Box sx={{ pt: 1, px: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-              <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <Box
+              sx={{
+                pt: 1.25,
+                px: 1.5,
+                pb: 1.25,
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                flexShrink: 0,
+              }}
+            >
+              <Stack direction="column" spacing={0.5}>
                 {NAV_ITEMS.map((item) => {
                   const active = item.match(location.pathname);
                   return (
@@ -207,7 +218,13 @@ export function AppLayout() {
                       startIcon={item.icon}
                       color={active ? 'secondary' : 'inherit'}
                       onClick={() => setMobileNavOpen(false)}
-                      sx={{ fontWeight: active ? 700 : 500 }}
+                      fullWidth
+                      sx={{
+                        fontWeight: active ? 700 : 500,
+                        justifyContent: 'flex-start',
+                        px: 1.25,
+                        bgcolor: active ? 'rgba(94,234,212,0.08)' : 'transparent',
+                      }}
                     >
                       {item.label}
                     </Button>
@@ -215,11 +232,12 @@ export function AppLayout() {
                 })}
               </Stack>
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0, height: 'calc(100% - 56px)' }}>
+            <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <WorkspaceSidebar
                 collapsed={false}
-                onCollapsedChange={() => setMobileNavOpen(false)}
+                onCollapsedChange={() => undefined}
                 fillHeight
+                hideCollapseControl
               />
             </Box>
           </Drawer>
