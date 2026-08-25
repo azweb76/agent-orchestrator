@@ -255,7 +255,8 @@ export function createRouter(ctx: AppContext): express.Router {
   router.post(
     '/agents/:agentId/archive',
     asyncHandler(async (req, res) => {
-      res.json(await archiveAgent(ctx, param(req.params.agentId)));
+      const body = z.object({ deleteWorktree: z.boolean().optional() }).parse(req.body ?? {});
+      res.json(await archiveAgent(ctx, param(req.params.agentId), body));
     }),
   );
 

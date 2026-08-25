@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
   Collapse,
   IconButton,
   LinearProgress,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -14,15 +15,17 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { ArchiveAgentDialog } from './ArchiveAgentDialog';
 import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 
 export const SIDEBAR_EXPANDED_WIDTH = 280;
@@ -123,9 +126,38 @@ export function WorkspaceSidebar({
   hideCollapseControl,
 }: WorkspaceSidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { workspaceId: routeWorkspaceId, agentId: routeAgentId } = useParams();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(loadExpandedWorkspaces);
   const [createWorkspaceId, setCreateWorkspaceId] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<{
+    agentId: string;
+    name: string;
+    worktreeName: string;
+    workspaceId: string;
+  } | null>(null);
+
+  const archiveMutation = useMutation({
+    mutationFn: ({
+      agentId,
+      deleteWorktree,
+    }: {
+      agentId: string;
+      deleteWorktree: boolean;
+      workspaceId: string;
+    }) => api.archiveAgent(agentId, { deleteWorktree }),
+    onSuccess: (result, variables) => {
+      setArchiveTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['worktrees'] });
+      queryClient.invalidateQueries({ queryKey: ['agent', variables.agentId] });
+      if (result.deletedWorktree && routeAgentId === variables.agentId) {
+        navigate(variables.workspaceId ? `/workspaces/${variables.workspaceId}` : '/');
+      }
+    },
+  });
 
   const sidebarQuery = useQuery({
     queryKey: ['sidebar'],
@@ -269,6 +301,16 @@ export function WorkspaceSidebar({
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
             pathname={location.pathname}
+            onContextArchive={(event, agent, workspaceId) => {
+              event.preventDefault();
+              archiveMutation.reset();
+              setArchiveTarget({
+                agentId: agent.id,
+                name: agent.name,
+                worktreeName: agent.worktree.name,
+                workspaceId,
+              });
+            }}
           />
         ) : (
           <ExpandedWorkspaceTree
@@ -276,6 +318,15 @@ export function WorkspaceSidebar({
             expandedWorkspaces={expandedWorkspaces}
             onToggleWorkspace={toggleWorkspace}
             onCreateAgent={(workspaceId) => setCreateWorkspaceId(workspaceId)}
+            onArchiveAgent={(agent, workspaceId) => {
+              archiveMutation.reset();
+              setArchiveTarget({
+                agentId: agent.id,
+                name: agent.name,
+                worktreeName: agent.worktree.name,
+                workspaceId,
+              });
+            }}
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
             isLoading={sidebarQuery.isLoading}
@@ -291,6 +342,26 @@ export function WorkspaceSidebar({
           defaultBranch={tree.find((ws) => ws.id === createWorkspaceId)?.defaultBranch}
         />
       )}
+
+      <ArchiveAgentDialog
+        open={Boolean(archiveTarget)}
+        agentName={archiveTarget?.name}
+        worktreeName={archiveTarget?.worktreeName}
+        loading={archiveMutation.isPending}
+        error={archiveMutation.error ? (archiveMutation.error as Error).message : null}
+        onCancel={() => {
+          setArchiveTarget(null);
+          archiveMutation.reset();
+        }}
+        onConfirm={(deleteWorktree) => {
+          if (!archiveTarget) return;
+          archiveMutation.mutate({
+            agentId: archiveTarget.agentId,
+            deleteWorktree,
+            workspaceId: archiveTarget.workspaceId,
+          });
+        }}
+      />
     </Box>
   );
 }
@@ -300,11 +371,13 @@ function CollapsedAgentRail({
   selectedAgentId,
   selectedWorkspaceId,
   pathname,
+  onContextArchive,
 }: {
   agents: Array<{ agent: SidebarAgent; workspace: SidebarWorkspace }>;
   selectedAgentId?: string;
   selectedWorkspaceId: string | null;
   pathname: string;
+  onContextArchive: (event: MouseEvent, agent: SidebarAgent, workspaceId: string) => void;
 }) {
   if (agents.length === 0) {
     return (
@@ -333,6 +406,9 @@ function CollapsedAgentRail({
                 <Typography variant="caption" sx={{ display: 'block' }}>
                   {workspace.name} · {agent.status}
                 </Typography>
+                <Typography variant="caption" sx={{ display: 'block', opacity: 0.8 }}>
+                  Right-click to archive
+                </Typography>
                 {agent.status === 'running' && (
                   <Typography variant="caption" color="info.light">
                     In progress…
@@ -346,6 +422,7 @@ function CollapsedAgentRail({
               to={`/agents/${agent.id}`}
               size="small"
               aria-label={`${agent.name} (${agent.status})`}
+              onContextMenu={(event) => onContextArchive(event, agent, workspace.id)}
               sx={{
                 width: 40,
                 height: 40,
@@ -390,6 +467,7 @@ function ExpandedWorkspaceTree({
   expandedWorkspaces,
   onToggleWorkspace,
   onCreateAgent,
+  onArchiveAgent,
   selectedAgentId,
   selectedWorkspaceId,
   isLoading,
@@ -398,6 +476,7 @@ function ExpandedWorkspaceTree({
   expandedWorkspaces: Set<string>;
   onToggleWorkspace: (workspaceId: string) => void;
   onCreateAgent: (workspaceId: string) => void;
+  onArchiveAgent: (agent: SidebarAgent, workspaceId: string) => void;
   selectedAgentId?: string;
   selectedWorkspaceId: string | null;
   isLoading: boolean;
@@ -546,6 +625,7 @@ function ExpandedWorkspaceTree({
                       key={agent.id}
                       agent={agent}
                       selected={selectedAgentId === agent.id}
+                      onArchive={() => onArchiveAgent(agent, workspace.id)}
                     />
                   ))
                 )}
@@ -558,52 +638,93 @@ function ExpandedWorkspaceTree({
   );
 }
 
-function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boolean }) {
+function AgentListItem({
+  agent,
+  selected,
+  onArchive,
+}: {
+  agent: SidebarAgent;
+  selected: boolean;
+  onArchive: () => void;
+}) {
   return (
-    <ListItemButton
-      component={RouterLink}
-      to={`/agents/${agent.id}`}
-      selected={selected}
-      sx={{ pl: 5, py: 0.85, alignItems: 'flex-start' }}
+    <ListItem
+      disablePadding
+      secondaryAction={
+        <Tooltip title="Archive">
+          <IconButton
+            edge="end"
+            size="small"
+            aria-label={`Archive ${agent.name}`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onArchive();
+            }}
+            onMouseDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <ArchiveOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      }
+      sx={{
+        '& .MuiListItemSecondaryAction-root': {
+          right: 6,
+        },
+      }}
     >
-      <ListItemIcon sx={{ minWidth: 28, mt: 0.35 }}>
-        <SmartToyOutlinedIcon fontSize="small" color={selected ? 'secondary' : 'inherit'} />
-      </ListItemIcon>
-      <ListItemText
-        primary={
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: selected ? 700 : 500,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {agent.name}
-            </Typography>
-            <AgentStatusDot status={agent.status} />
-          </Stack>
-        }
-        secondary={
-          <Box component="span" sx={{ display: 'block' }}>
-            <Typography variant="caption" color="text.secondary" noWrap component="span" sx={{ display: 'block' }}>
-              {agent.worktree.branch}
-              {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
-              {' · '}
-              <Box component="span" sx={{ textTransform: 'capitalize' }}>
-                {agent.status}
-              </Box>
-            </Typography>
-            <AgentProgressBar status={agent.status} />
-          </Box>
-        }
-        slotProps={{
-          secondary: { component: 'div' },
+      <ListItemButton
+        component={RouterLink}
+        to={`/agents/${agent.id}`}
+        selected={selected}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onArchive();
         }}
-      />
-    </ListItemButton>
+        sx={{ pl: 5, pr: 6, py: 0.85, alignItems: 'flex-start' }}
+      >
+        <ListItemIcon sx={{ minWidth: 28, mt: 0.35 }}>
+          <SmartToyOutlinedIcon fontSize="small" color={selected ? 'secondary' : 'inherit'} />
+        </ListItemIcon>
+        <ListItemText
+          primary={
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: selected ? 700 : 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {agent.name}
+              </Typography>
+              <AgentStatusDot status={agent.status} />
+            </Stack>
+          }
+          secondary={
+            <Box component="span" sx={{ display: 'block' }}>
+              <Typography variant="caption" color="text.secondary" noWrap component="span" sx={{ display: 'block' }}>
+                {agent.worktree.branch}
+                {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
+                {' · '}
+                <Box component="span" sx={{ textTransform: 'capitalize' }}>
+                  {agent.status}
+                </Box>
+              </Typography>
+              <AgentProgressBar status={agent.status} />
+            </Box>
+          }
+          slotProps={{
+            secondary: { component: 'div' },
+          }}
+        />
+      </ListItemButton>
+    </ListItem>
   );
 }
 

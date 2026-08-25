@@ -23,8 +23,8 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { ChatPanel } from '../components/chat/ChatPanel';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { statusColor } from '../theme';
@@ -75,11 +75,18 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   });
 
   const archiveMutation = useMutation({
-    mutationFn: () => api.archiveAgent(agentId),
-    onSuccess: () => {
+    mutationFn: (deleteWorktree: boolean) => api.archiveAgent(agentId, { deleteWorktree }),
+    onSuccess: (result) => {
       setArchiveOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['worktrees'] });
+      if (result.deletedWorktree) {
+        const detail = queryClient.getQueryData<{ workspace: { id: string } }>(['agent', agentId]);
+        navigate(detail?.workspace.id ? `/workspaces/${detail.workspace.id}` : '/');
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     },
   });
 
@@ -183,7 +190,10 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             color="error"
             startIcon={<ArchiveOutlinedIcon />}
             disabled={archived || archiveMutation.isPending}
-            onClick={() => setArchiveOpen(true)}
+            onClick={() => {
+              archiveMutation.reset();
+              setArchiveOpen(true);
+            }}
           >
             Archive
           </Button>
@@ -350,14 +360,17 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         </DialogActions>
       </Dialog>
 
-      <ConfirmDialog
+      <ArchiveAgentDialog
         open={archiveOpen}
-        title="Archive agent?"
-        description="This archives the agent so it no longer appears as active. You can still view its history."
-        confirmLabel="Archive"
+        agentName={agent.name}
+        worktreeName={agent.worktree.name}
         loading={archiveMutation.isPending}
-        onCancel={() => setArchiveOpen(false)}
-        onConfirm={() => archiveMutation.mutate()}
+        error={archiveMutation.error ? (archiveMutation.error as Error).message : null}
+        onCancel={() => {
+          setArchiveOpen(false);
+          archiveMutation.reset();
+        }}
+        onConfirm={(deleteWorktree) => archiveMutation.mutate(deleteWorktree)}
       />
     </Stack>
   );

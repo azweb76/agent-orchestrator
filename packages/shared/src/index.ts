@@ -198,6 +198,17 @@ export interface UpdateAgentRequest {
   permissionMode?: PermissionMode;
 }
 
+export interface ArchiveAgentRequest {
+  /** When true, also remove the agent's git worktree from disk and the database. */
+  deleteWorktree?: boolean;
+}
+
+export interface ArchiveAgentResponse {
+  /** Null when the agent was removed along with its worktree. */
+  agent: Agent | null;
+  deletedWorktree: boolean;
+}
+
 export interface ChatImageAttachment {
   name: string;
   mimeType: string;

@@ -4,6 +4,8 @@ import type {
   AgentDiff,
   AgentEvent,
   AllowPermissionRequest,
+  ArchiveAgentRequest,
+  ArchiveAgentResponse,
   AnswerAskUserQuestionRequest,
   BuildPlanRequest,
   CreateAgentFromPrRequest,
@@ -105,8 +107,11 @@ export const api = {
     request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),
   stopAgent: (agentId: string) =>
     request<Agent>(`/agents/${agentId}/stop`, { method: 'POST' }),
-  archiveAgent: (agentId: string) =>
-    request<Agent>(`/agents/${agentId}/archive`, { method: 'POST' }),
+  archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>
+    request<ArchiveAgentResponse>(`/agents/${agentId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   getMessages: (agentId: string) => request<Message[]>(`/agents/${agentId}/messages`),
   clearMessages: (agentId: string) =>
     request<{ cleared: number }>(`/agents/${agentId}/messages`, { method: 'DELETE' }),

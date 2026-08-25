@@ -8,6 +8,8 @@ import type {
   AgentEvent,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
+  ArchiveAgentRequest,
+  ArchiveAgentResponse,
   BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
@@ -362,11 +364,21 @@ export async function stopAgent(ctx: AppContext, agentId: string) {
   return updated;
 }
 
-export async function archiveAgent(ctx: AppContext, agentId: string) {
+export async function archiveAgent(
+  ctx: AppContext,
+  agentId: string,
+  body: ArchiveAgentRequest = {},
+): Promise<ArchiveAgentResponse> {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
   ctx.claude.stop(agentId, agent.pid);
+
+  if (body.deleteWorktree) {
+    await deleteWorktree(ctx, agent.worktreeId);
+    return { agent: null, deletedWorktree: true };
+  }
+
   const updated: Agent = {
     ...agent,
     status: 'archived',
@@ -377,7 +389,7 @@ export async function archiveAgent(ctx: AppContext, agentId: string) {
   };
   ctx.repos.agents.update(updated);
   ctx.repos.events.create(makeEvent(agentId, 'agent_archived', {}));
-  return updated;
+  return { agent: updated, deletedWorktree: false };
 }
 
 export function getAgentMessages(ctx: AppContext, agentId: string): Message[] {
