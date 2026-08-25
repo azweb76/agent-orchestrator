@@ -9,6 +9,7 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
+import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
@@ -31,6 +32,8 @@ export function AppLayout() {
   });
 
   const onHome = location.pathname === '/';
+  const onWorkspaces =
+    location.pathname === '/workspaces' || location.pathname.startsWith('/workspaces/');
   const onPulls = location.pathname.startsWith('/pull-requests');
   const onAgent = location.pathname.startsWith('/agents/');
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
@@ -64,9 +67,19 @@ export function AppLayout() {
               component={RouterLink}
               to="/"
               size="small"
-              startIcon={<FolderOpenOutlinedIcon />}
+              startIcon={<DashboardOutlinedIcon />}
               color={onHome ? 'secondary' : 'inherit'}
               sx={{ fontWeight: onHome ? 700 : 500 }}
+            >
+              Command
+            </Button>
+            <Button
+              component={RouterLink}
+              to="/workspaces"
+              size="small"
+              startIcon={<FolderOpenOutlinedIcon />}
+              color={onWorkspaces ? 'secondary' : 'inherit'}
+              sx={{ fontWeight: onWorkspaces ? 700 : 500 }}
             >
               Workspaces
             </Button>
