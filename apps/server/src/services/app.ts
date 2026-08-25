@@ -33,7 +33,7 @@ import type {
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
-import { ClaudeService, GitService, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
+import { ClaudeService, GitService, followClaudeLog, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
@@ -1099,6 +1099,102 @@ export async function streamAgentChat(
       res.end();
     }
   }
+}
+
+/**
+ * Re-attach to an in-flight Claude run for UI resume (agent toggle / page reload).
+ * Read-only: does not own the process or finalize messages — the original chat handler does.
+ */
+export async function streamAgentLive(ctx: AppContext, agentId: string, res: Response) {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  let clientOpen = true;
+  const followAbort = new AbortController();
+  res.on('close', () => {
+    clientOpen = false;
+    followAbort.abort();
+  });
+
+  const send = (event: string, data: unknown) => {
+    if (!clientOpen || res.writableEnded) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      clientOpen = false;
+    }
+  };
+
+  if (agent.status !== 'running' || agent.pid == null || !agent.runLogPath) {
+    send('idle', { reason: 'not_running' });
+    if (clientOpen && !res.writableEnded) res.end();
+    return;
+  }
+
+  const pid = agent.pid;
+  const logPath = agent.runLogPath;
+
+  try {
+    await followClaudeLog(
+      pid,
+      logPath,
+      (line) => {
+        try {
+          const event = JSON.parse(line) as Record<string, unknown>;
+          if (
+            event.type === 'stream_event' &&
+            (event.event as { delta?: { type?: string; text?: string } } | undefined)?.delta
+              ?.type === 'text_delta' &&
+            (event.event as { delta?: { text?: string } }).delta?.text
+          ) {
+            send('token', {
+              text: (event.event as { delta: { text: string } }).delta.text,
+            });
+          } else if (event.type !== 'stderr') {
+            send('event', event);
+          }
+        } catch {
+          // ignore malformed lines
+        }
+      },
+      { signal: followAbort.signal },
+    );
+  } catch (error) {
+    if (clientOpen) {
+      send('error', {
+        message: error instanceof Error ? error.message : 'Failed to follow agent run',
+      });
+    }
+  }
+
+  if (!clientOpen || res.writableEnded) return;
+
+  // Wait briefly for the owning chat handler to persist the assistant message.
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const current = ctx.repos.agents.getById(agentId);
+    const messages = ctx.repos.messages.listByAgent(agentId);
+    const last = messages[messages.length - 1];
+    if (current && current.status !== 'running' && last?.role === 'assistant') {
+      send('done', { message: last, sessionId: current.claudeSessionId });
+      if (clientOpen && !res.writableEnded) res.end();
+      return;
+    }
+    if (!isPidAlive(pid) && current?.status !== 'running' && last?.role === 'assistant') {
+      send('done', { message: last, sessionId: current?.claudeSessionId ?? null });
+      if (clientOpen && !res.writableEnded) res.end();
+      return;
+    }
+    await sleep(100);
+    if (!clientOpen) return;
+  }
+
+  send('idle', { reason: 'timeout' });
+  if (clientOpen && !res.writableEnded) res.end();
 }
 
 function makeEvent(agentId: string, type: string, data: Record<string, unknown>): AgentEvent {

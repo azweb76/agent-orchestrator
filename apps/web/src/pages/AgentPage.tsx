@@ -32,8 +32,8 @@ import { statusColor } from '../theme';
 
 export function AgentPage() {
   const { agentId = '' } = useParams();
-  // Remount when the route agent changes so header/chat local state cannot leak
-  // across agents (React Router keeps the same route element instance otherwise).
+  // Remount when the route agent changes so header fields (tabs, dialogs, draft)
+  // reset. In-flight chat streams live in agentChatSession and survive the remount.
   return <AgentPageContent key={agentId} agentId={agentId} />;
 }
 
@@ -263,11 +263,16 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           <Tab label="Events" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
-        {tab === 0 && (
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <ChatPanel agent={agent} archived={archived} />
-          </Box>
-        )}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: tab === 0 ? 'flex' : 'none',
+            flexDirection: 'column',
+          }}
+        >
+          <ChatPanel agent={agent} archived={archived} />
+        </Box>
 
         {tab === 1 && (
           <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'auto' }}>

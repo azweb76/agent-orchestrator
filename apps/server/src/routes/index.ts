@@ -36,6 +36,7 @@ import {
   startAgent,
   stopAgent,
   streamAgentChat,
+  streamAgentLive,
   suggestBranchNameForWorkspace,
   updateAgent,
 } from '../services/app.js';
@@ -407,6 +408,13 @@ export function createRouter(ctx: AppContext): express.Router {
         })
         .parse(req.body);
       await streamAgentChat(ctx, param(req.params.agentId), body, res);
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/chat/live',
+    asyncHandler(async (req, res) => {
+      await streamAgentLive(ctx, param(req.params.agentId), res);
     }),
   );
 

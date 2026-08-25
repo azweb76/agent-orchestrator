@@ -146,6 +146,7 @@ export interface ChatStreamHandlers {
   onUserMessage?: (message: Message) => void;
   onDone: (payload: { message: Message; sessionId: string | null }) => void;
   onError: (message: string) => void;
+  onIdle?: (payload: Record<string, unknown>) => void;
 }
 
 export interface StreamChatOptions {
@@ -203,6 +204,8 @@ async function consumeChatSse(
         handlers.onDone(data as { message: Message; sessionId: string | null });
       } else if (eventType === 'error') {
         handlers.onError(String(data.message ?? 'Unknown error'));
+      } else if (eventType === 'idle') {
+        handlers.onIdle?.(data);
       }
     }
   }
@@ -222,6 +225,21 @@ export async function streamChat(
       force: options.force,
       images: options.images,
     }),
+    signal,
+  });
+
+  await consumeChatSse(response, handlers);
+}
+
+/** Follow an in-flight agent run (read-only) to restore streaming UI after navigation. */
+export async function streamChatLive(
+  agentId: string,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/agents/${agentId}/chat/live`, {
+    method: 'GET',
+    headers: { Accept: 'text/event-stream' },
     signal,
   });
 
