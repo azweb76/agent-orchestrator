@@ -2,6 +2,14 @@ export type AgentStatus = 'idle' | 'running' | 'stopped' | 'archived';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+export type PermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'plan'
+  | 'auto'
+  | 'dontAsk'
+  | 'bypassPermissions';
+
 export interface Workspace {
   id: string;
   name: string;
@@ -32,6 +40,7 @@ export interface Agent {
   status: AgentStatus;
   model: string;
   environment: string | null;
+  permissionMode: PermissionMode;
   claudeSessionId: string | null;
   /** OS pid of the active Claude run, if any. Survives app restarts while the process lives. */
   pid: number | null;
@@ -42,11 +51,31 @@ export interface Agent {
   archivedAt: string | null;
 }
 
+export interface MessageAttachment {
+  id: string;
+  type: 'image';
+  mimeType: string;
+  name: string;
+  /** Absolute path on the server filesystem. */
+  path: string;
+  /** Public API URL for the web client. */
+  url: string;
+}
+
+export interface MessageMetadata {
+  costUsd?: number;
+  stopped?: boolean;
+  error?: string;
+  durationMs?: number;
+}
+
 export interface Message {
   id: string;
   agentId: string;
   role: MessageRole;
   content: string;
+  attachments: MessageAttachment[];
+  metadata: MessageMetadata;
   createdAt: string;
 }
 
@@ -144,10 +173,21 @@ export interface UpdateAgentRequest {
   name?: string;
   model?: string;
   environment?: string | null;
+  permissionMode?: PermissionMode;
+}
+
+export interface ChatImageAttachment {
+  name: string;
+  mimeType: string;
+  /** Raw base64 without data-URL prefix. */
+  dataBase64: string;
 }
 
 export interface ChatRequest {
   message: string;
+  /** When true, stop any in-flight Claude run before starting this message. */
+  force?: boolean;
+  images?: ChatImageAttachment[];
 }
 
 export interface CreatePrRequest {
@@ -189,4 +229,20 @@ export const CLAUDE_MODELS = [
   { id: 'sonnet', label: 'Claude Sonnet' },
   { id: 'opus', label: 'Claude Opus' },
   { id: 'haiku', label: 'Claude Haiku' },
+] as const;
+
+export const PERMISSION_MODES = [
+  { id: 'default', label: 'Manual' },
+  { id: 'acceptEdits', label: 'Accept edits' },
+  { id: 'plan', label: 'Plan' },
+  { id: 'auto', label: 'Auto' },
+  { id: 'dontAsk', label: "Don't ask" },
+  { id: 'bypassPermissions', label: 'Bypass permissions' },
+] as const satisfies ReadonlyArray<{ id: PermissionMode; label: string }>;
+
+export const CHAT_SLASH_COMMANDS = [
+  { command: '/diff', prompt: 'Show a summary of the current git diff and what still needs work.' },
+  { command: '/test', prompt: 'Run the relevant tests for recent changes and fix any failures.' },
+  { command: '/pr', prompt: 'Prepare a pull request: summarize changes, suggest a title and description.' },
+  { command: '/review', prompt: 'Review the current changes for bugs, edge cases, and missing tests.' },
 ] as const;

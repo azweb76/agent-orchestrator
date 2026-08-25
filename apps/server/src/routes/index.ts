@@ -1,8 +1,10 @@
 import express from 'express';
+import fs from 'node:fs';
 import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
   archiveAgent,
+  clearAgentChat,
   createAgentFromPullRequest,
   createAgentPullRequest,
   createWorktreeFromBranch,
@@ -10,6 +12,7 @@ import {
   createWorkspace,
   deleteWorktree,
   deleteWorkspace,
+  getAgentAttachment,
   getAgentDetail,
   getAgentDiff,
   getAgentEvents,
@@ -210,6 +213,9 @@ export function createRouter(ctx: AppContext): express.Router {
           name: z.string().optional(),
           model: z.string().optional(),
           environment: z.string().nullable().optional(),
+          permissionMode: z
+            .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
+            .optional(),
         })
         .parse(req.body);
       res.json(await updateAgent(ctx, param(req.params.agentId), body));
@@ -244,6 +250,31 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
+  router.delete(
+    '/agents/:agentId/messages',
+    asyncHandler(async (req, res) => {
+      res.json(await clearAgentChat(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/attachments/:attachmentId',
+    asyncHandler(async (req, res) => {
+      const attachment = getAgentAttachment(
+        ctx,
+        param(req.params.agentId),
+        param(req.params.attachmentId),
+      );
+      if (!fs.existsSync(attachment.path)) {
+        res.status(404).json({ error: 'Attachment file missing' });
+        return;
+      }
+      res.setHeader('Content-Type', attachment.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${attachment.name}"`);
+      fs.createReadStream(attachment.path).pipe(res);
+    }),
+  );
+
   router.get(
     '/agents/:agentId/events',
     asyncHandler(async (req, res) => {
@@ -275,8 +306,25 @@ export function createRouter(ctx: AppContext): express.Router {
   router.post(
     '/agents/:agentId/chat',
     asyncHandler(async (req, res) => {
-      const body = z.object({ message: z.string().min(1) }).parse(req.body);
-      await streamAgentChat(ctx, param(req.params.agentId), body.message, res);
+      const body = z
+        .object({
+          message: z.string(),
+          force: z.boolean().optional(),
+          images: z
+            .array(
+              z.object({
+                name: z.string().min(1),
+                mimeType: z.string().min(1),
+                dataBase64: z.string().min(1),
+              }),
+            )
+            .optional(),
+        })
+        .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
+          message: 'Message or image required',
+        })
+        .parse(req.body);
+      await streamAgentChat(ctx, param(req.params.agentId), body, res);
     }),
   );
 

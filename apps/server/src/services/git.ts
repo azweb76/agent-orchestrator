@@ -103,6 +103,14 @@ export interface ClaudeStreamEvent {
   [key: string]: unknown;
 }
 
+export type ClaudePermissionMode =
+  | 'default'
+  | 'acceptEdits'
+  | 'plan'
+  | 'auto'
+  | 'dontAsk'
+  | 'bypassPermissions';
+
 export interface ClaudeRunOptions {
   cwd: string;
   prompt: string;
@@ -110,6 +118,9 @@ export interface ClaudeRunOptions {
   environment?: string | null;
   sessionId?: string | null;
   allowedTools?: string;
+  permissionMode?: ClaudePermissionMode;
+  /** Absolute image paths to reference in the prompt for Claude's Read tool. */
+  imagePaths?: string[];
   onEvent?: (event: ClaudeStreamEvent) => void;
   /** Called once the detached process has been spawned (pid + log path). */
   onStarted?: (handle: ClaudeRunHandle) => void;
@@ -118,6 +129,56 @@ export interface ClaudeRunOptions {
    * server shutdown — only to explicit stop requests.
    */
   signal?: AbortSignal;
+}
+
+export function buildClaudeArgs(options: {
+  prompt: string;
+  model?: string;
+  environment?: string | null;
+  sessionId?: string | null;
+  allowedTools?: string;
+  permissionMode?: ClaudePermissionMode;
+  imagePaths?: string[];
+  defaultAllowedTools?: string;
+}): string[] {
+  const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
+  const permissionMode = options.permissionMode ?? 'bypassPermissions';
+  const args = [
+    '-p',
+    prompt,
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--allowedTools',
+    options.allowedTools ?? options.defaultAllowedTools ?? 'Read,Edit,Bash,Glob,Grep,Write',
+  ];
+
+  if (permissionMode === 'bypassPermissions') {
+    args.push('--dangerously-skip-permissions');
+  } else {
+    args.push('--permission-mode', permissionMode);
+  }
+
+  if (options.model) {
+    args.push('--model', options.model);
+  }
+
+  if (options.environment) {
+    args.push('--environment', options.environment);
+  }
+
+  if (options.sessionId) {
+    args.push('--resume', options.sessionId);
+  }
+
+  return args;
+}
+
+export function buildPromptWithImages(prompt: string, imagePaths: string[]): string {
+  if (imagePaths.length === 0) return prompt;
+  const list = imagePaths.map((p) => `- ${p}`).join('\n');
+  return `${prompt}\n\nAttached images (read these files with the Read tool):\n${list}`;
 }
 
 export interface ClaudeRunHandle {
@@ -263,29 +324,16 @@ export class ClaudeService {
       throw new Error('Agent already has a running Claude process');
     }
 
-    const args = [
-      '-p',
-      options.prompt,
-      '--output-format',
-      'stream-json',
-      '--verbose',
-      '--include-partial-messages',
-      '--allowedTools',
-      options.allowedTools ?? this.defaultAllowedTools,
-      '--dangerously-skip-permissions',
-    ];
-
-    if (options.model) {
-      args.push('--model', options.model);
-    }
-
-    if (options.environment) {
-      args.push('--environment', options.environment);
-    }
-
-    if (options.sessionId) {
-      args.push('--resume', options.sessionId);
-    }
+    const args = buildClaudeArgs({
+      prompt: options.prompt,
+      model: options.model,
+      environment: options.environment,
+      sessionId: options.sessionId,
+      allowedTools: options.allowedTools,
+      permissionMode: options.permissionMode,
+      imagePaths: options.imagePaths,
+      defaultAllowedTools: this.defaultAllowedTools,
+    });
 
     const logPath = path.join(this.runsDir, `${agentId}-${Date.now()}.log`);
     const outFd = openSync(logPath, 'w');

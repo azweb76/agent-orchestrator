@@ -5,6 +5,9 @@ import type {
   Agent,
   AgentEvent,
   Message,
+  MessageAttachment,
+  MessageMetadata,
+  PermissionMode,
   Worktree,
   Workspace,
 } from '@agent-orchestrator/shared';
@@ -40,6 +43,7 @@ CREATE TABLE IF NOT EXISTS agents (
   status TEXT NOT NULL DEFAULT 'idle',
   model TEXT NOT NULL DEFAULT 'sonnet',
   environment TEXT,
+  permission_mode TEXT NOT NULL DEFAULT 'bypassPermissions',
   claude_session_id TEXT,
   pid INTEGER,
   run_log_path TEXT,
@@ -53,6 +57,8 @@ CREATE TABLE IF NOT EXISTS messages (
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
+  attachments TEXT NOT NULL DEFAULT '[]',
+  metadata TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL
 );
 
@@ -70,18 +76,24 @@ CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 `;
 
-function migrateAgentsTable(db: Database.Database): void {
-  const columns = db
-    .prepare(`PRAGMA table_info(agents)`)
-    .all()
-    .map((row) => String((row as { name: string }).name));
+function ensureColumn(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!cols.some((col) => col.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
 
-  if (!columns.includes('pid')) {
-    db.exec(`ALTER TABLE agents ADD COLUMN pid INTEGER`);
-  }
-  if (!columns.includes('run_log_path')) {
-    db.exec(`ALTER TABLE agents ADD COLUMN run_log_path TEXT`);
-  }
+function migrateSchema(db: Database.Database): void {
+  ensureColumn(db, 'agents', 'pid', 'INTEGER');
+  ensureColumn(db, 'agents', 'run_log_path', 'TEXT');
+  ensureColumn(db, 'agents', 'permission_mode', "TEXT NOT NULL DEFAULT 'bypassPermissions'");
+  ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
 }
 
 export function initDatabase(dataDir: string): Database.Database {
@@ -91,7 +103,7 @@ export function initDatabase(dataDir: string): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
-  migrateAgentsTable(db);
+  migrateSchema(db);
   return db;
 }
 
@@ -210,8 +222,8 @@ export class AgentRepository {
   create(agent: Agent): Agent {
     this.db
       .prepare(
-        `INSERT INTO agents (id, worktree_id, name, status, model, environment, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
-         VALUES (@id, @worktreeId, @name, @status, @model, @environment, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
+        `INSERT INTO agents (id, worktree_id, name, status, model, environment, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
+         VALUES (@id, @worktreeId, @name, @status, @model, @environment, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
       )
       .run({
         id: agent.id,
@@ -220,6 +232,7 @@ export class AgentRepository {
         status: agent.status,
         model: agent.model,
         environment: agent.environment,
+        permissionMode: agent.permissionMode,
         claudeSessionId: agent.claudeSessionId,
         pid: agent.pid,
         runLogPath: agent.runLogPath,
@@ -271,8 +284,8 @@ export class AgentRepository {
     this.db
       .prepare(
         `UPDATE agents SET name = @name, status = @status, model = @model, environment = @environment,
-         claude_session_id = @claudeSessionId, pid = @pid, run_log_path = @runLogPath,
-         updated_at = @updatedAt, archived_at = @archivedAt
+         permission_mode = @permissionMode, claude_session_id = @claudeSessionId, pid = @pid,
+         run_log_path = @runLogPath, updated_at = @updatedAt, archived_at = @archivedAt
          WHERE id = @id`,
       )
       .run({
@@ -281,6 +294,7 @@ export class AgentRepository {
         status: agent.status,
         model: agent.model,
         environment: agent.environment,
+        permissionMode: agent.permissionMode,
         claudeSessionId: agent.claudeSessionId,
         pid: agent.pid,
         runLogPath: agent.runLogPath,
@@ -297,10 +311,18 @@ export class MessageRepository {
   create(message: Message): Message {
     this.db
       .prepare(
-        `INSERT INTO messages (id, agent_id, role, content, created_at)
-         VALUES (@id, @agentId, @role, @content, @createdAt)`,
+        `INSERT INTO messages (id, agent_id, role, content, attachments, metadata, created_at)
+         VALUES (@id, @agentId, @role, @content, @attachments, @metadata, @createdAt)`,
       )
-      .run(message);
+      .run({
+        id: message.id,
+        agentId: message.agentId,
+        role: message.role,
+        content: message.content,
+        attachments: JSON.stringify(message.attachments ?? []),
+        metadata: JSON.stringify(message.metadata ?? {}),
+        createdAt: message.createdAt,
+      });
     return message;
   }
 
@@ -309,6 +331,20 @@ export class MessageRepository {
       .prepare('SELECT * FROM messages WHERE agent_id = ? ORDER BY created_at ASC')
       .all(agentId)
       .map(rowToMessage);
+  }
+
+  deleteByAgent(agentId: string): number {
+    const result = this.db.prepare('DELETE FROM messages WHERE agent_id = ?').run(agentId);
+    return result.changes;
+  }
+
+  findAttachment(agentId: string, attachmentId: string): MessageAttachment | null {
+    const messages = this.listByAgent(agentId);
+    for (const message of messages) {
+      const match = message.attachments.find((item) => item.id === attachmentId);
+      if (match) return match;
+    }
+    return null;
   }
 }
 
@@ -380,6 +416,7 @@ function rowToAgent(row: unknown): Agent {
     status: r.status as Agent['status'],
     model: String(r.model),
     environment: r.environment == null ? null : String(r.environment),
+    permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'bypassPermissions',
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
     pid: r.pid == null ? null : Number(r.pid),
     runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
@@ -389,13 +426,26 @@ function rowToAgent(row: unknown): Agent {
   };
 }
 
+function attachmentUrl(agentId: string, attachmentId: string): string {
+  return `/api/agents/${agentId}/attachments/${attachmentId}`;
+}
+
 function rowToMessage(row: unknown): Message {
   const r = row as Record<string, unknown>;
+  const agentId = String(r.agent_id);
+  const attachments = parseJson<MessageAttachment[]>(String(r.attachments ?? '[]'), []).map(
+    (item) => ({
+      ...item,
+      url: item.url || attachmentUrl(agentId, item.id),
+    }),
+  );
   return {
     id: String(r.id),
-    agentId: String(r.agent_id),
+    agentId,
     role: r.role as Message['role'],
     content: String(r.content),
+    attachments,
+    metadata: parseJson<MessageMetadata>(String(r.metadata ?? '{}'), {}),
     createdAt: String(r.created_at),
   };
 }

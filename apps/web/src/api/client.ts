@@ -97,6 +97,8 @@ export const api = {
   archiveAgent: (agentId: string) =>
     request<Agent>(`/agents/${agentId}/archive`, { method: 'POST' }),
   getMessages: (agentId: string) => request<Message[]>(`/agents/${agentId}/messages`),
+  clearMessages: (agentId: string) =>
+    request<{ cleared: number }>(`/agents/${agentId}/messages`, { method: 'DELETE' }),
   getEvents: (agentId: string) => request<AgentEvent[]>(`/agents/${agentId}/events`),
   getDiff: (agentId: string) => request<AgentDiff>(`/agents/${agentId}/diff`),
   createPr: (agentId: string, body: CreatePrRequest) =>
@@ -109,20 +111,31 @@ export const api = {
 export interface ChatStreamHandlers {
   onToken: (text: string) => void;
   onEvent: (event: Record<string, unknown>) => void;
+  onUserMessage?: (message: Message) => void;
   onDone: (payload: { message: Message; sessionId: string | null }) => void;
   onError: (message: string) => void;
 }
 
+export interface StreamChatOptions {
+  message: string;
+  force?: boolean;
+  images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
+}
+
 export async function streamChat(
   agentId: string,
-  message: string,
+  options: StreamChatOptions,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/agents/${agentId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message: options.message,
+      force: options.force,
+      images: options.images,
+    }),
     signal,
   });
 
@@ -163,6 +176,8 @@ export async function streamChat(
         handlers.onToken(String(data.text ?? ''));
       } else if (eventType === 'event') {
         handlers.onEvent(data);
+      } else if (eventType === 'user_message') {
+        handlers.onUserMessage?.(data as unknown as Message);
       } else if (eventType === 'done') {
         handlers.onDone(data as { message: Message; sessionId: string | null });
       } else if (eventType === 'error') {
