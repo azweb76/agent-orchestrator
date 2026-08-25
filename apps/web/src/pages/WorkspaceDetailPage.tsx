@@ -86,6 +86,7 @@ export function WorkspaceDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       handleCloseDialog();
       navigate(`/agents/${data.agent.id}`);
     },
@@ -96,6 +97,7 @@ export function WorkspaceDetailPage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       handleCloseDialog();
       navigate(`/agents/${data.agent.id}`);
     },
@@ -113,12 +115,17 @@ export function WorkspaceDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
 
   const deleteWorkspace = useMutation({
     mutationFn: () => api.deleteWorkspace(workspaceId),
-    onSuccess: () => navigate('/'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      navigate('/');
+    },
   });
 
   const handleCloseDialog = () => {

@@ -78,22 +78,34 @@ export function AgentPage() {
   const updateMutation = useMutation({
     mutationFn: (body: { model?: string; environment?: string | null }) =>
       api.updateAgent(agentId, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent', agentId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+    },
   });
 
   const startMutation = useMutation({
     mutationFn: () => api.startAgent(agentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent', agentId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+    },
   });
 
   const stopMutation = useMutation({
     mutationFn: () => api.stopAgent(agentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent', agentId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+    },
   });
 
   const archiveMutation = useMutation({
     mutationFn: () => api.archiveAgent(agentId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent', agentId] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+    },
   });
 
   const createPrMutation = useMutation({
@@ -134,6 +146,7 @@ export function AgentPage() {
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['sidebar'] });
           },
           onError: (err) => {
             setStreamingText('');

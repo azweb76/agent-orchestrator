@@ -14,6 +14,7 @@ import type {
   Message,
   PullRequestInbox,
   UpdateAgentRequest,
+  SidebarWorkspace,
   Workspace,
   Worktree,
   WorktreeWithAgent,
@@ -75,6 +76,28 @@ export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCoun
       worktreeCount: worktrees.length,
       agentCount: agents.length,
     };
+  });
+}
+
+/** Workspace → agents tree for the persistent app sidebar. */
+export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace[]> {
+  const workspaces = ctx.repos.workspaces.list();
+  return workspaces.map((workspace) => {
+    const worktrees = ctx.repos.worktrees.listByWorkspace(workspace.id);
+    const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]));
+    const agents = ctx.repos.agents.listByWorkspace(workspace.id).map((agent) => {
+      const worktree = worktreeById.get(agent.worktreeId);
+      return {
+        ...agent,
+        worktree: {
+          id: worktree?.id ?? agent.worktreeId,
+          name: worktree?.name ?? 'Unknown',
+          branch: worktree?.branch ?? '',
+          prNumber: worktree?.prNumber ?? null,
+        },
+      };
+    });
+    return { ...workspace, agents };
   });
 }
 
