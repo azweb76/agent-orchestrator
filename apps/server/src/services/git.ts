@@ -3,8 +3,17 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import { openSync, closeSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import {
+  buildControlResponse,
+  isInteractivePermissionTool,
+  parsePermissionRequest,
+  type PermissionDecision,
+} from './permission-protocol.js';
 
 const execFileAsync = promisify(execFile);
+
+export const DEFAULT_ALLOWED_TOOLS =
+  'Read,Edit,Bash,Glob,Grep,Write,AskUserQuestion,ExitPlanMode';
 
 export class GitService {
   async clone(url: string, targetPath: string): Promise<string> {
@@ -111,6 +120,13 @@ export type ClaudePermissionMode =
   | 'dontAsk'
   | 'bypassPermissions';
 
+export interface ClaudePermissionRequest {
+  requestId: string;
+  toolName: string;
+  input: Record<string, unknown>;
+  toolUseId?: string;
+}
+
 export interface ClaudeRunOptions {
   cwd: string;
   prompt: string;
@@ -122,6 +138,8 @@ export interface ClaudeRunOptions {
   /** Absolute image paths to reference in the prompt for Claude's Read tool. */
   imagePaths?: string[];
   onEvent?: (event: ClaudeStreamEvent) => void;
+  /** Interactive tool permission / AskUserQuestion / ExitPlanMode requests. */
+  onPermissionRequest?: (request: ClaudePermissionRequest) => void;
   /** Called once the detached process has been spawned (pid + log path). */
   onStarted?: (handle: ClaudeRunHandle) => void;
   /**
@@ -142,20 +160,26 @@ export function buildClaudeArgs(options: {
   defaultAllowedTools?: string;
 }): string[] {
   const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
-  const permissionMode = options.permissionMode ?? 'bypassPermissions';
+  const permissionMode = options.permissionMode ?? 'plan';
   const args = [
     '-p',
     prompt,
     '--output-format',
     'stream-json',
+    '--input-format',
+    'stream-json',
     '--verbose',
     '--include-partial-messages',
+    '--permission-prompt-tool',
+    'stdio',
     '--allowedTools',
-    options.allowedTools ?? options.defaultAllowedTools ?? 'Read,Edit,Bash,Glob,Grep,Write',
+    options.allowedTools ?? options.defaultAllowedTools ?? DEFAULT_ALLOWED_TOOLS,
   ];
 
   if (permissionMode === 'bypassPermissions') {
-    args.push('--dangerously-skip-permissions');
+    // Prefer --permission-mode so AskUserQuestion / ExitPlanMode still reach stdio prompts.
+    // --dangerously-skip-permissions can suppress interactive tool gating.
+    args.push('--permission-mode', 'bypassPermissions');
   } else {
     args.push('--permission-mode', permissionMode);
   }
@@ -197,6 +221,11 @@ interface TrackedRun {
   pid: number;
   logPath: string;
   proc?: ChildProcess;
+  /** Kept open for control_response writes; null when re-attached after restart. */
+  stdin: NodeJS.WritableStream | null;
+  pendingPermissions: Map<string, ClaudePermissionRequest>;
+  /** True when stdin is available for interactive permission replies. */
+  canRespondToPermissions: boolean;
 }
 
 export function isPidAlive(pid: number): boolean {
@@ -279,7 +308,7 @@ export class ClaudeService {
   constructor(
     private claudeBin: string,
     private runsDir: string,
-    private defaultAllowedTools = 'Read,Edit,Bash,Glob,Grep,Write',
+    private defaultAllowedTools = DEFAULT_ALLOWED_TOOLS,
   ) {
     mkdirSync(this.runsDir, { recursive: true });
   }
@@ -290,6 +319,12 @@ export class ClaudeService {
 
   getRunningProcess(agentId: string): TrackedRun | undefined {
     return this.running.get(agentId);
+  }
+
+  listPendingPermissions(agentId: string): ClaudePermissionRequest[] {
+    const tracked = this.running.get(agentId);
+    if (!tracked) return [];
+    return [...tracked.pendingPermissions.values()];
   }
 
   async checkInstalled(): Promise<boolean> {
@@ -309,6 +344,11 @@ export class ClaudeService {
     const tracked = this.running.get(agentId);
     const pid = tracked?.pid ?? pidFallback ?? null;
     if (pid == null) return false;
+    try {
+      tracked?.stdin?.end();
+    } catch {
+      // ignore
+    }
     killProcessTree(pid);
     this.running.delete(agentId);
     return true;
@@ -316,7 +356,48 @@ export class ClaudeService {
 
   /** Drop in-memory handles without killing processes (used on app shutdown). */
   releaseAll(): void {
+    for (const tracked of this.running.values()) {
+      try {
+        // Keep the OS process alive, but drop our stdin handle (EOF).
+        tracked.stdin = null;
+        tracked.canRespondToPermissions = false;
+      } catch {
+        // ignore
+      }
+    }
     this.running.clear();
+  }
+
+  /**
+   * Reply to a pending can_use_tool control request over Claude's stdin.
+   * Returns false when the request is unknown or stdin is unavailable.
+   */
+  respondToPermission(
+    agentId: string,
+    requestId: string,
+    decision: PermissionDecision,
+    options: { requirePending?: boolean } = {},
+  ): boolean {
+    const tracked = this.running.get(agentId);
+    if (!tracked?.canRespondToPermissions || !tracked.stdin) return false;
+    const requirePending = options.requirePending !== false;
+    if (requirePending && !tracked.pendingPermissions.has(requestId)) return false;
+
+    const payload = `${JSON.stringify(buildControlResponse(requestId, decision))}\n`;
+    try {
+      tracked.stdin.write(payload);
+      tracked.pendingPermissions.delete(requestId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Drop a pending permission without writing a control response (e.g. Build kills the run). */
+  dismissPermission(agentId: string, requestId: string): boolean {
+    const tracked = this.running.get(agentId);
+    if (!tracked) return false;
+    return tracked.pendingPermissions.delete(requestId);
   }
 
   async runStreaming(agentId: string, options: ClaudeRunOptions): Promise<ClaudeRunResult> {
@@ -344,7 +425,7 @@ export class ClaudeService {
         cwd: options.cwd,
         env: process.env,
         detached: true,
-        stdio: ['ignore', outFd, outFd],
+        stdio: ['pipe', outFd, outFd],
       });
     } finally {
       closeSync(outFd);
@@ -358,14 +439,22 @@ export class ClaudeService {
     proc.unref();
 
     const handle: ClaudeRunHandle = { pid: proc.pid, logPath };
-    this.running.set(agentId, { ...handle, proc });
+    this.running.set(agentId, {
+      ...handle,
+      proc,
+      stdin: proc.stdin,
+      pendingPermissions: new Map(),
+      canRespondToPermissions: Boolean(proc.stdin),
+    });
     options.onStarted?.(handle);
 
-    return this.monitorRun(agentId, handle, options.sessionId ?? null, options.onEvent, options.signal);
+    return this.monitorRun(agentId, handle, options.sessionId ?? null, options, options.signal);
   }
 
   /**
    * Re-attach to a Claude process that outlived a previous orchestrator instance.
+   * Stdin is not recoverable, so interactive permission prompts cannot be answered —
+   * those runs are stopped when a control_request is observed.
    */
   async attachToRun(
     agentId: string,
@@ -373,24 +462,28 @@ export class ClaudeService {
     options: {
       sessionId?: string | null;
       onEvent?: (event: ClaudeStreamEvent) => void;
+      onPermissionRequest?: (request: ClaudePermissionRequest) => void;
       signal?: AbortSignal;
     } = {},
   ): Promise<ClaudeRunResult> {
-    this.running.set(agentId, { pid: handle.pid, logPath: handle.logPath });
-    return this.monitorRun(
-      agentId,
-      handle,
-      options.sessionId ?? null,
-      options.onEvent,
-      options.signal,
-    );
+    this.running.set(agentId, {
+      pid: handle.pid,
+      logPath: handle.logPath,
+      stdin: null,
+      pendingPermissions: new Map(),
+      canRespondToPermissions: false,
+    });
+    return this.monitorRun(agentId, handle, options.sessionId ?? null, options, options.signal);
   }
 
   private async monitorRun(
     agentId: string,
     handle: ClaudeRunHandle,
     initialSessionId: string | null,
-    onEvent?: (event: ClaudeStreamEvent) => void,
+    options: {
+      onEvent?: (event: ClaudeStreamEvent) => void;
+      onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+    },
     signal?: AbortSignal,
   ): Promise<ClaudeRunResult> {
     const events: ClaudeStreamEvent[] = [];
@@ -412,7 +505,7 @@ export class ClaudeService {
         try {
           const event = JSON.parse(line) as ClaudeStreamEvent;
           events.push(event);
-          onEvent?.(event);
+          options.onEvent?.(event);
 
           if (event.session_id) {
             sessionId = event.session_id;
@@ -421,12 +514,20 @@ export class ClaudeService {
           if (event.type === 'result' && typeof event.result === 'string') {
             result = event.result;
           }
+
+          this.handleControlEvent(agentId, event as Record<string, unknown>, options);
         } catch {
           // ignore malformed lines
         }
       });
     } finally {
       signal?.removeEventListener('abort', handleAbort);
+      const tracked = this.running.get(agentId);
+      try {
+        tracked?.stdin?.end();
+      } catch {
+        // ignore
+      }
       this.running.delete(agentId);
     }
 
@@ -435,6 +536,48 @@ export class ClaudeService {
     }
 
     return { result, sessionId, events, stopped };
+  }
+
+  private handleControlEvent(
+    agentId: string,
+    event: Record<string, unknown>,
+    options: {
+      onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+    },
+  ): void {
+    const parsed = parsePermissionRequest(event);
+    if (!parsed) return;
+
+    const tracked = this.running.get(agentId);
+    if (!tracked) return;
+
+    if (!tracked.canRespondToPermissions) {
+      // Re-attached run: cannot answer interactive prompts — stop so the agent does not hang.
+      killProcessTree(tracked.pid);
+      return;
+    }
+
+    if (!isInteractivePermissionTool(parsed.toolName)) {
+      this.respondToPermission(
+        agentId,
+        parsed.requestId,
+        {
+          behavior: 'allow',
+          updatedInput: parsed.input,
+        },
+        { requirePending: false },
+      );
+      return;
+    }
+
+    const request: ClaudePermissionRequest = {
+      requestId: parsed.requestId,
+      toolName: parsed.toolName,
+      input: parsed.input,
+      toolUseId: parsed.toolUseId,
+    };
+    tracked.pendingPermissions.set(parsed.requestId, request);
+    options.onPermissionRequest?.(request);
   }
 }
 

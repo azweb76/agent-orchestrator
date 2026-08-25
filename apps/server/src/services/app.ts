@@ -6,6 +6,8 @@ import type {
   Agent,
   AgentDetail,
   AgentEvent,
+  AnswerAskUserQuestionRequest,
+  BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
   CreateAgentFromPrRequest,
@@ -13,10 +15,12 @@ import type {
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
+  DenyPermissionRequest,
   InboxPullRequest,
   Message,
   MessageAttachment,
   MessageMetadata,
+  PermissionRequest,
   PullRequestInbox,
   UpdateAgentRequest,
   SidebarWorkspace,
@@ -31,6 +35,10 @@ import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
 import { mergeLivePullRequest } from '../services/pr-overlay.js';
+import {
+  extractPlanFromInput,
+  parseAskUserQuestions,
+} from '@agent-orchestrator/shared';
 
 export interface AppContext {
   repos: AppRepositories;
@@ -63,7 +71,7 @@ async function createAgentForWorktree(
     status: 'idle',
     model: 'sonnet',
     environment: null,
-    permissionMode: 'bypassPermissions',
+    permissionMode: 'plan',
     claudeSessionId: null,
     pid: null,
     runLogPath: null,
@@ -376,10 +384,201 @@ export async function clearAgentChat(ctx: AppContext, agentId: string): Promise<
   ctx.repos.agents.update({
     ...agent,
     claudeSessionId: null,
+    // Every new session starts in plan mode.
+    permissionMode: 'plan',
     updatedAt: nowIso(),
   });
   ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared }));
   return { cleared };
+}
+
+export function listPendingPermissions(ctx: AppContext, agentId: string): PermissionRequest[] {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+  return ctx.claude.listPendingPermissions(agentId).map((item) => ({
+    requestId: item.requestId,
+    toolName: item.toolName,
+    input: item.input,
+    toolUseId: item.toolUseId,
+    createdAt: nowIso(),
+  }));
+}
+
+export async function answerAskUserQuestion(
+  ctx: AppContext,
+  agentId: string,
+  body: AnswerAskUserQuestionRequest,
+): Promise<{ ok: true }> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  const pending = ctx.claude
+    .listPendingPermissions(agentId)
+    .find((item) => item.requestId === body.requestId);
+  if (!pending) throw new Error('Permission request not found');
+  if (pending.toolName !== 'AskUserQuestion') {
+    throw new Error('Permission request is not AskUserQuestion');
+  }
+
+  const questions = parseAskUserQuestions(pending.input);
+  const updatedInput: Record<string, unknown> = {
+    ...pending.input,
+    questions: questions.length > 0 ? questions : pending.input.questions,
+    answers: body.answers,
+  };
+  if (body.response?.trim()) {
+    updatedInput.response = body.response.trim();
+  }
+
+  const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
+    behavior: 'allow',
+    updatedInput,
+  });
+  if (!ok) throw new Error('Failed to send answers to Claude');
+
+  ctx.repos.events.create(
+    makeEvent(agentId, 'ask_user_question_answered', {
+      requestId: body.requestId,
+      answers: body.answers,
+      response: body.response ?? null,
+    }),
+  );
+  return { ok: true };
+}
+
+export async function denyPermissionRequest(
+  ctx: AppContext,
+  agentId: string,
+  body: DenyPermissionRequest,
+): Promise<{ ok: true }> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  const message = body.message?.trim() || 'User declined this request. Continue planning.';
+  const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
+    behavior: 'deny',
+    message,
+  });
+  if (!ok) throw new Error('Permission request not found or Claude stdin unavailable');
+
+  ctx.repos.events.create(
+    makeEvent(agentId, 'permission_denied', {
+      requestId: body.requestId,
+      message,
+    }),
+  );
+  return { ok: true };
+}
+
+async function resolvePlanText(
+  ctx: AppContext,
+  agentId: string,
+  body: BuildPlanRequest,
+): Promise<string> {
+  if (body.plan?.trim()) return body.plan.trim();
+
+  if (body.requestId) {
+    const pending = ctx.claude
+      .listPendingPermissions(agentId)
+      .find((item) => item.requestId === body.requestId);
+    if (pending) {
+      const fromInput = extractPlanFromInput(pending.input);
+      if (fromInput) return fromInput;
+
+      const planFilePath =
+        typeof pending.input.planFilePath === 'string' ? pending.input.planFilePath : null;
+      if (planFilePath) {
+        try {
+          const text = await fs.readFile(planFilePath, 'utf8');
+          if (text.trim()) return text.trim();
+        } catch {
+          // fall through
+        }
+      }
+    }
+  }
+
+  // Last resort: use the most recent assistant message as the plan body.
+  const messages = ctx.repos.messages.listByAgent(agentId);
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role === 'assistant' && message.content.trim()) {
+      return message.content.trim();
+    }
+  }
+
+  throw new Error('No plan content available to build');
+}
+
+/**
+ * Exit plan mode via Build: stop the current run, clear the session, switch to auto,
+ * and start implementing the approved plan.
+ */
+export async function buildApprovedPlan(
+  ctx: AppContext,
+  agentId: string,
+  body: BuildPlanRequest,
+  res: Response,
+): Promise<void> {
+  const detail = await getAgentDetail(ctx, agentId);
+  if (detail.archivedAt) throw new Error('Cannot build with archived agent');
+
+  const plan = await resolvePlanText(ctx, agentId, body);
+
+  if (body.requestId) {
+    ctx.claude.dismissPermission(agentId, body.requestId);
+  }
+
+  // Stop any in-flight plan-mode run (avoids ExitPlanMode stdio hang on approve).
+  if (detail.status === 'running' && detail.pid != null) {
+    const pid = detail.pid;
+    ctx.claude.stop(agentId, pid);
+    const deadline = Date.now() + 5_000;
+    while (isPidAlive(pid) && Date.now() < deadline) {
+      await sleep(100);
+    }
+    await sleep(150);
+    const afterStop = ctx.repos.agents.getById(agentId) ?? detail;
+    if (afterStop.status === 'running' || afterStop.pid != null) {
+      ctx.repos.agents.update(clearAgentRunFields(afterStop, { status: 'idle' }));
+    }
+  }
+
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  ctx.repos.messages.deleteByAgent(agentId);
+  ctx.repos.agents.update({
+    ...agent,
+    claudeSessionId: null,
+    permissionMode: 'auto',
+    status: 'idle',
+    pid: null,
+    runLogPath: null,
+    updatedAt: nowIso(),
+  });
+  ctx.repos.events.create(
+    makeEvent(agentId, 'plan_build_started', {
+      requestId: body.requestId ?? null,
+      planLength: plan.length,
+    }),
+  );
+
+  const implementPrompt = [
+    'The user approved the following plan. Implement it now in auto mode.',
+    'Do not ask clarifying questions unless blocked. Prefer making progress with sensible defaults.',
+    '',
+    '## Approved plan',
+    '',
+    plan,
+  ].join('\n');
+
+  await streamAgentChat(
+    ctx,
+    agentId,
+    { message: implementPrompt, force: true },
+    res,
+  );
 }
 
 export function getAgentAttachment(
@@ -725,6 +924,19 @@ export async function streamAgentChat(
           updatedAt: nowIso(),
         };
         ctx.repos.agents.update(runningAgent);
+      },
+      onPermissionRequest: (request) => {
+        const payload: PermissionRequest = {
+          requestId: request.requestId,
+          toolName: request.toolName,
+          input: request.input,
+          toolUseId: request.toolUseId,
+          createdAt: nowIso(),
+        };
+        ctx.repos.events.create(
+          makeEvent(agentId, 'permission_request', payload as unknown as Record<string, unknown>),
+        );
+        send('permission_request', payload);
       },
       onEvent: (event) => {
         if (

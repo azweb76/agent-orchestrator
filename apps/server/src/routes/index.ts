@@ -4,12 +4,15 @@ import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
   archiveAgent,
+  answerAskUserQuestion,
+  buildApprovedPlan,
   clearAgentChat,
   createAgentFromPullRequest,
   createAgentPullRequest,
   createWorktreeFromBranch,
   createWorktreeFromPr,
   createWorkspace,
+  denyPermissionRequest,
   deleteWorktree,
   deleteWorkspace,
   getAgentAttachment,
@@ -23,6 +26,7 @@ import {
   listAgentSlashCommands,
   listGitHubBranches,
   listGitHubPullRequests,
+  listPendingPermissions,
   listSidebarTree,
   listWorkspaces,
   listWorktrees,
@@ -255,6 +259,53 @@ export function createRouter(ctx: AppContext): express.Router {
     '/agents/:agentId/messages',
     asyncHandler(async (req, res) => {
       res.json(await clearAgentChat(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/permissions',
+    asyncHandler(async (req, res) => {
+      res.json(listPendingPermissions(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/permissions/answer',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().min(1),
+          answers: z.record(z.string(), z.string()),
+          response: z.string().optional(),
+        })
+        .parse(req.body);
+      res.json(await answerAskUserQuestion(ctx, param(req.params.agentId), body));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/permissions/deny',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().min(1),
+          message: z.string().optional(),
+        })
+        .parse(req.body);
+      res.json(await denyPermissionRequest(ctx, param(req.params.agentId), body));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/permissions/build',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().optional(),
+          plan: z.string().optional(),
+        })
+        .parse(req.body);
+      await buildApprovedPlan(ctx, param(req.params.agentId), body, res);
     }),
   );
 

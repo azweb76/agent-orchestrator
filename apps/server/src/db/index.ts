@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS agents (
   status TEXT NOT NULL DEFAULT 'idle',
   model TEXT NOT NULL DEFAULT 'sonnet',
   environment TEXT,
-  permission_mode TEXT NOT NULL DEFAULT 'bypassPermissions',
+  permission_mode TEXT NOT NULL DEFAULT 'plan',
   claude_session_id TEXT,
   pid INTEGER,
   run_log_path TEXT,
@@ -91,7 +91,7 @@ function ensureColumn(
 function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'pid', 'INTEGER');
   ensureColumn(db, 'agents', 'run_log_path', 'TEXT');
-  ensureColumn(db, 'agents', 'permission_mode', "TEXT NOT NULL DEFAULT 'bypassPermissions'");
+  ensureColumn(db, 'agents', 'permission_mode', "TEXT NOT NULL DEFAULT 'plan'");
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
 }
@@ -435,7 +435,7 @@ function rowToAgent(row: unknown): Agent {
     status: r.status as Agent['status'],
     model: String(r.model),
     environment: r.environment == null ? null : String(r.environment),
-    permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'bypassPermissions',
+    permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
     pid: r.pid == null ? null : Number(r.pid),
     runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
