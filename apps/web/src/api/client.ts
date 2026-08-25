@@ -97,8 +97,6 @@ export const api = {
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
   updateAgent: (agentId: string, body: UpdateAgentRequest) =>
     request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  startAgent: (agentId: string) =>
-    request<Agent>(`/agents/${agentId}/start`, { method: 'POST' }),
   stopAgent: (agentId: string) =>
     request<Agent>(`/agents/${agentId}/stop`, { method: 'POST' }),
   archiveAgent: (agentId: string) =>

@@ -16,10 +16,9 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -76,23 +75,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     }) => api.updateAgent(agentId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    },
-  });
-
-  const startMutation = useMutation({
-    mutationFn: () => api.startAgent(agentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    },
-  });
-
-  const stopMutation = useMutation({
-    mutationFn: () => api.stopAgent(agentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
@@ -204,41 +186,25 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         </Box>
 
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <TextField
-            size="small"
-            label="Environment"
-            placeholder="ccpool_..."
-            value={environment}
-            disabled={archived}
-            onChange={(e) => setEnvironment(e.target.value)}
-            onBlur={() => {
-              const next = environment || null;
-              if (next !== (agent.environment ?? null)) {
-                updateMutation.mutate({ environment: next });
-              }
-            }}
-            sx={{ width: { xs: '100%', sm: 160 } }}
-          />
-
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<PlayArrowIcon />}
-            disabled={archived || startMutation.isPending || agent.status === 'running'}
-            onClick={() => startMutation.mutate()}
+          <Tooltip
+            title="Optional Claude Code self-hosted environment ID (ccpool_…). When set, runs are dispatched to that remote environment instead of the local worktree."
           >
-            Start
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            color="warning"
-            startIcon={<StopIcon />}
-            disabled={archived || stopMutation.isPending || agent.status !== 'running'}
-            onClick={() => stopMutation.mutate()}
-          >
-            Stop
-          </Button>
+            <TextField
+              size="small"
+              label="Cloud env"
+              placeholder="ccpool_..."
+              value={environment}
+              disabled={archived}
+              onChange={(e) => setEnvironment(e.target.value)}
+              onBlur={() => {
+                const next = environment || null;
+                if (next !== (agent.environment ?? null)) {
+                  updateMutation.mutate({ environment: next });
+                }
+              }}
+              sx={{ width: { xs: '100%', sm: 160 } }}
+            />
+          </Tooltip>
           <Button
             size="small"
             variant="outlined"
