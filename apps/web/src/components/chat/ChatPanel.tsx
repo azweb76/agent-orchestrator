@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentDetail, Message, PermissionMode } from '@agent-orchestrator/shared';
 import { api, streamChat } from '../../api/client';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import {
@@ -95,6 +96,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const [streamParts, setStreamParts] = useState<StreamPart[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
   const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
     null,
   );
@@ -118,6 +120,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const clearMutation = useMutation({
     mutationFn: () => api.clearMessages(agentId),
     onSuccess: () => {
+      setClearOpen(false);
       setOptimistic([]);
       setQueue([]);
       queueRef.current = [];
@@ -274,26 +277,25 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
   };
 
-  const requestClear = () => {
-    if (confirm('Clear chat history and reset the Claude session?')) {
-      clearMutation.mutate();
-    }
-  };
+  const requestClear = () => setClearOpen(true);
 
   return (
     <Box
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: { xs: 520, md: 'calc(100vh - 280px)' },
-        maxHeight: { xs: 'none', md: 'calc(100vh - 200px)' },
+        flex: 1,
+        minHeight: 0,
+        height: '100%',
       }}
     >
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pt: 2, pb: 1 }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pt: 1.5, pb: 1, minHeight: 0 }}>
         {displayMessages.length === 0 && streamParts.length === 0 && (
-          <Stack spacing={1.5} sx={{ py: 6, alignItems: 'center', textAlign: 'center' }}>
-            <Typography variant="h6">Start a conversation</Typography>
-            <Typography color="text.secondary" sx={{ maxWidth: 420 }}>
+          <Stack spacing={1} sx={{ py: 3, alignItems: 'center', textAlign: 'center' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Start a conversation
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
               Ask the agent to explore the worktree, fix a bug, or draft a PR. Type{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
                 /
@@ -304,7 +306,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               </Box>{' '}
               to reset the session.
             </Typography>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
               <Button size="small" variant="outlined" onClick={() => setDraft('/diff')}>
                 /diff
               </Button>
@@ -348,11 +350,11 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         <div ref={chatEndRef} />
       </Box>
 
-      <Box sx={{ borderTop: 1, borderColor: 'divider', p: 2 }}>
+      <Box sx={{ borderTop: 1, borderColor: 'divider', px: 1.5, py: 1.25, flexShrink: 0 }}>
         {chatError && (
           <Alert
             severity="error"
-            sx={{ mb: 1.5 }}
+            sx={{ mb: 1 }}
             action={
               lastFailed ? (
                 <Button
@@ -371,7 +373,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         )}
 
         {clearMutation.error && (
-          <Alert severity="error" sx={{ mb: 1.5 }}>
+          <Alert severity="error" sx={{ mb: 1 }}>
             {(clearMutation.error as Error).message}
           </Alert>
         )}
@@ -393,6 +395,16 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
         />
       </Box>
+
+      <ConfirmDialog
+        open={clearOpen}
+        title="Clear chat?"
+        description="This clears chat history and resets the Claude session for this agent."
+        confirmLabel="Clear"
+        loading={clearMutation.isPending}
+        onCancel={() => setClearOpen(false)}
+        onConfirm={() => clearMutation.mutate()}
+      />
     </Box>
   );
 }

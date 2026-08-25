@@ -32,6 +32,7 @@ export function AppLayout() {
 
   const onHome = location.pathname === '/';
   const onPulls = location.pathname.startsWith('/pull-requests');
+  const onAgent = location.pathname.startsWith('/agents/');
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
   return (
@@ -121,9 +122,18 @@ export function AppLayout() {
         <Container
           maxWidth="xl"
           sx={{
-            py: 3,
+            py: onAgent ? 1.5 : 3,
+            px: { xs: 1.5, sm: 2 },
             flex: 1,
             minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            ...(onAgent
+              ? {
+                  height: 'calc(100vh - 64px)',
+                  overflow: 'hidden',
+                }
+              : {}),
             transition: (theme) =>
               theme.transitions.create('margin', {
                 easing: theme.transitions.easing.sharp,
@@ -131,7 +141,9 @@ export function AppLayout() {
               }),
           }}
         >
-          <Outlet />
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <Outlet />
+          </Box>
         </Container>
       </Box>
     </Box>
