@@ -144,9 +144,9 @@ export interface ChatStreamHandlers {
   onEvent: (event: Record<string, unknown>) => void;
   onPermissionRequest?: (request: PermissionRequest) => void;
   onUserMessage?: (message: Message) => void;
+  onAssistantMessage?: (message: Message) => void;
   onDone: (payload: { message: Message; sessionId: string | null }) => void;
   onError: (message: string) => void;
-  onIdle?: (payload: Record<string, unknown>) => void;
 }
 
 export interface StreamChatOptions {
@@ -200,12 +200,12 @@ async function consumeChatSse(
         handlers.onPermissionRequest?.(data as unknown as PermissionRequest);
       } else if (eventType === 'user_message') {
         handlers.onUserMessage?.(data as unknown as Message);
+      } else if (eventType === 'assistant_message') {
+        handlers.onAssistantMessage?.(data as unknown as Message);
       } else if (eventType === 'done') {
         handlers.onDone(data as { message: Message; sessionId: string | null });
       } else if (eventType === 'error') {
         handlers.onError(String(data.message ?? 'Unknown error'));
-      } else if (eventType === 'idle') {
-        handlers.onIdle?.(data);
       }
     }
   }
@@ -225,21 +225,6 @@ export async function streamChat(
       force: options.force,
       images: options.images,
     }),
-    signal,
-  });
-
-  await consumeChatSse(response, handlers);
-}
-
-/** Follow an in-flight agent run (read-only) to restore streaming UI after navigation. */
-export async function streamChatLive(
-  agentId: string,
-  handlers: ChatStreamHandlers,
-  signal?: AbortSignal,
-): Promise<void> {
-  const response = await fetch(`${API_BASE}/agents/${agentId}/chat/live`, {
-    method: 'GET',
-    headers: { Accept: 'text/event-stream' },
     signal,
   });
 

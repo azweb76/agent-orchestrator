@@ -33,7 +33,7 @@ import { statusColor } from '../theme';
 export function AgentPage() {
   const { agentId = '' } = useParams();
   // Remount when the route agent changes so header fields (tabs, dialogs, draft)
-  // reset. In-flight chat streams live in agentChatSession and survive the remount.
+  // reset. Chat history is loaded from the backend for each agent.
   return <AgentPageContent key={agentId} agentId={agentId} />;
 }
 

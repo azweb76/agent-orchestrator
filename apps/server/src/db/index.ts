@@ -345,6 +345,22 @@ export class MessageRepository {
     return message;
   }
 
+  update(message: Message): Message {
+    this.db
+      .prepare(
+        `UPDATE messages SET content = @content, attachments = @attachments, metadata = @metadata
+         WHERE id = @id AND agent_id = @agentId`,
+      )
+      .run({
+        id: message.id,
+        agentId: message.agentId,
+        content: message.content,
+        attachments: JSON.stringify(message.attachments ?? []),
+        metadata: JSON.stringify(message.metadata ?? {}),
+      });
+    return message;
+  }
+
   listByAgent(agentId: string): Message[] {
     return this.db
       .prepare('SELECT * FROM messages WHERE agent_id = ? ORDER BY created_at ASC')

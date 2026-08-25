@@ -6,8 +6,10 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
+  appendStreamText,
+  applyStreamEvent,
   extractPlanFromInput,
   parseAskUserQuestions,
   type AgentDetail,
@@ -15,42 +17,50 @@ import {
   type PermissionMode,
   type PermissionRequest,
 } from '@agent-orchestrator/shared';
-import { api } from '../../api/client';
-import {
-  attachAgentLiveIfNeeded,
-  buildApprovedPlanChat,
-  reconcileOptimisticWithServer,
-  removePermissionRequest,
-  removeQueuedItem,
-  resetChatSessionUi,
-  runAgentChat,
-  setChatError,
-  setPermissionBusy,
-  setPermissionRequests,
-  stopAgentChat,
-  useAgentChatSession,
-} from '../../chat/agentChatSession';
+import { api, streamBuildPlan, streamChat } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
-import { ChatComposer, type PendingImage } from './ChatComposer';
+import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
-import { ToolChip, type StreamPart } from './ToolActivity';
+import { ToolChip } from './ToolActivity';
 
 interface ChatPanelProps {
   agent: AgentDetail;
   archived: boolean;
 }
 
-function StreamingTimeline({
-  agentId,
-  parts,
-}: {
-  agentId: string;
-  parts: StreamPart[];
-}) {
-  if (parts.length === 0) return null;
+function upsertMessage(messages: Message[] | undefined, message: Message): Message[] {
+  if (!messages?.length) return [message];
+  const index = messages.findIndex((item) => item.id === message.id);
+  if (index < 0) return [...messages, message];
+  const next = [...messages];
+  next[index] = message;
+  return next;
+}
+
+function setMessagesCache(
+  queryClient: QueryClient,
+  agentId: string,
+  updater: (prev: Message[] | undefined) => Message[],
+): void {
+  queryClient.setQueryData<Message[]>(['messages', agentId], (prev) => updater(prev));
+}
+
+function MessageTimeline({ message }: { message: Message }) {
+  const parts = message.metadata?.timeline ?? [];
+  const streaming = Boolean(message.metadata?.streaming);
+
+  if (parts.length === 0) {
+    return (
+      <ChatBubble
+        message={message}
+        streaming={streaming}
+        onCopy={() => void navigator.clipboard.writeText(message.content)}
+      />
+    );
+  }
 
   return (
     <Box sx={{ mb: 1.5 }}>
@@ -66,16 +76,22 @@ function StreamingTimeline({
         return (
           <ChatBubble
             key={part.id}
-            streaming
+            streaming={streaming}
             message={{
-              id: part.id,
-              agentId,
+              id: `${message.id}-${part.id}`,
+              agentId: message.agentId,
               role: 'assistant',
               content: part.text,
               attachments: [],
-              metadata: {},
-              createdAt: new Date().toISOString(),
+              metadata: {
+                costUsd: message.metadata?.costUsd,
+                durationMs: message.metadata?.durationMs,
+                stopped: message.metadata?.stopped,
+                error: message.metadata?.error,
+              },
+              createdAt: message.createdAt,
             }}
+            onCopy={() => void navigator.clipboard.writeText(part.text)}
           />
         );
       })}
@@ -87,25 +103,27 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const agentId = agent.id;
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
+  const [queue, setQueue] = useState<QueuedChatItem[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
+  const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
+  const [permissionBusy, setPermissionBusy] = useState(false);
+  const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
+    null,
+  );
+  const abortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  const {
-    optimistic,
-    streamParts,
-    isStreaming,
-    queue,
-    permissionRequests,
-    chatError,
-    lastFailed,
-    permissionBusy,
-  } = useAgentChatSession(agentId);
+  const sendingRef = useRef(false);
+  const queueRef = useRef<QueuedChatItem[]>([]);
+  const mountedRef = useRef(true);
 
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId],
     queryFn: () => api.getMessages(agentId),
-    refetchInterval: () => (agent.status === 'running' || isStreaming ? 2000 : false),
+    // Backend is the source of truth — poll while a run is in progress.
+    refetchInterval: () => (agent.status === 'running' || isSending ? 1000 : false),
   });
 
   const updateMutation = useMutation({
@@ -118,7 +136,10 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     mutationFn: () => api.clearMessages(agentId),
     onSuccess: () => {
       setClearOpen(false);
-      resetChatSessionUi(agentId);
+      setQueue([]);
+      queueRef.current = [];
+      setPermissionRequests([]);
+      setChatError(null);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
@@ -129,7 +150,11 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     mutationFn: (messageId: string) => api.rewindMessages(agentId, messageId),
     onSuccess: (result) => {
       setRewindTarget(null);
-      resetChatSessionUi(agentId);
+      setQueue([]);
+      queueRef.current = [];
+      setPermissionRequests([]);
+      setChatError(null);
+      setLastFailed(null);
       setDraft(result.draft);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -137,129 +162,389 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     },
   });
 
+  const hasStreamingMessage = (messagesQuery.data ?? []).some((m) => m.metadata?.streaming);
+  const agentBusy = agent.status === 'running' || isSending || hasStreamingMessage;
+
   const pendingPermissionsQuery = useQuery({
     queryKey: ['permissions', agentId],
     queryFn: () => api.listPendingPermissions(agentId),
-    enabled: Boolean(agentId) && (agent.status === 'running' || isStreaming),
-    refetchInterval: () => (agent.status === 'running' || isStreaming ? 2000 : false),
+    enabled: Boolean(agentId) && agentBusy,
+    refetchInterval: () => (agentBusy ? 2000 : false),
   });
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Aborting only drops the UI SSE subscription — the backend keeps the run
+      // and continues persisting chat history.
+      abortRef.current?.abort();
+      sendingRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const remote = pendingPermissionsQuery.data;
     if (!remote) return;
-    setPermissionRequests(agentId, remote);
-  }, [agentId, pendingPermissionsQuery.data]);
-
-  useEffect(() => {
-    const msgs = messagesQuery.data;
-    if (!msgs) return;
-    reconcileOptimisticWithServer(agentId, msgs);
-  }, [agentId, messagesQuery.data]);
-
-  useEffect(() => {
-    attachAgentLiveIfNeeded(agentId, queryClient, agent.status === 'running');
-  }, [agentId, agent.status, queryClient]);
+    setPermissionRequests(remote);
+  }, [pendingPermissionsQuery.data]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messagesQuery.data, optimistic, streamParts, permissionRequests]);
+  }, [messagesQuery.data, permissionRequests]);
 
-  const serverMessages = messagesQuery.data ?? [];
-  const displayMessages = [
-    ...serverMessages,
-    ...optimistic.filter(
-      (m) => m.agentId === agentId && !serverMessages.some((s) => s.id === m.id),
-    ),
-  ];
+  const displayMessages = messagesQuery.data ?? [];
 
-  const runChat = (text: string, images: PendingImage[], force: boolean) =>
-    runAgentChat(agentId, queryClient, text, images, force, { archived });
+  const patchStreamingAssistant = (
+    mutate: (message: Message) => Message,
+  ) => {
+    setMessagesCache(queryClient, agentId, (prev) => {
+      if (!prev?.length) return prev ?? [];
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i -= 1) {
+        const item = next[i]!;
+        if (item.role === 'assistant' && item.metadata?.streaming) {
+          next[i] = mutate(item);
+          break;
+        }
+      }
+      return next;
+    });
+  };
+
+  const runChat = async (text: string, images: PendingImage[], force: boolean) => {
+    if (archived || !mountedRef.current) return;
+
+    if (sendingRef.current && !force) {
+      const item: QueuedChatItem = {
+        id: `q-${Date.now()}-${Math.random()}`,
+        text,
+        images,
+      };
+      setQueue((prev) => [...prev, item]);
+      return;
+    }
+
+    if ((sendingRef.current || agent.status === 'running') && force) {
+      abortRef.current?.abort();
+      try {
+        await api.stopAgent(agentId);
+      } catch {
+        // best-effort interrupt
+      }
+      await new Promise((r) => setTimeout(r, 200));
+      if (!mountedRef.current) return;
+    }
+
+    setChatError(null);
+    setLastFailed(null);
+    setPermissionRequests([]);
+    setIsSending(true);
+    sendingRef.current = true;
+    abortRef.current = new AbortController();
+
+    try {
+      await streamChat(
+        agentId,
+        {
+          message: text,
+          force,
+          images: images.map((image) => ({
+            name: image.name,
+            mimeType: image.mimeType,
+            dataBase64: image.dataBase64,
+          })),
+        },
+        {
+          onUserMessage: (message) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+          },
+          onAssistantMessage: (message) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+          },
+          onToken: (token) => {
+            if (!mountedRef.current) return;
+            patchStreamingAssistant((message) => ({
+              ...message,
+              content: message.content + token,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: appendStreamText(message.metadata.timeline ?? [], token),
+              },
+            }));
+          },
+          onEvent: (event) => {
+            if (!mountedRef.current) return;
+            patchStreamingAssistant((message) => ({
+              ...message,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
+              },
+            }));
+          },
+          onPermissionRequest: (request) => {
+            if (!mountedRef.current) return;
+            setPermissionRequests((prev) => {
+              if (prev.some((item) => item.requestId === request.requestId)) return prev;
+              return [...prev, request];
+            });
+          },
+          onDone: (payload) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
+            setPermissionRequests([]);
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+          },
+          onError: (err) => {
+            if (!mountedRef.current) return;
+            setChatError(err);
+            setLastFailed({ text, images });
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+          },
+        },
+        abortRef.current.signal,
+      );
+    } catch (error) {
+      if (mountedRef.current && (error as Error).name !== 'AbortError') {
+        setChatError((error as Error).message);
+        setLastFailed({ text, images });
+      }
+      if (mountedRef.current) {
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      }
+    } finally {
+      // Always refresh from the backend after the UI subscription ends so a
+      // remount / toggle-back sees persisted history.
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+
+      if (!mountedRef.current) {
+        sendingRef.current = false;
+        abortRef.current = null;
+        return;
+      }
+      setIsSending(false);
+      sendingRef.current = false;
+      abortRef.current = null;
+
+      const next = queueRef.current[0];
+      if (next) {
+        setQueue((prev) => prev.slice(1));
+        void runChat(next.text, next.images, false);
+      }
+    }
+  };
+
+  const stopStreaming = async () => {
+    abortRef.current?.abort();
+    try {
+      await api.stopAgent(agentId);
+    } catch {
+      // ignore
+    }
+    setPermissionRequests([]);
+    queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+    queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+  };
+
+  const removePermission = (requestId: string) => {
+    setPermissionRequests((prev) => prev.filter((item) => item.requestId !== requestId));
+  };
 
   const submitAnswers = async (
     request: PermissionRequest,
     answers: Record<string, string>,
     response?: string,
   ) => {
-    setPermissionBusy(agentId, true);
-    setChatError(agentId, null);
+    setPermissionBusy(true);
+    setChatError(null);
     try {
       await api.answerPermission(agentId, {
         requestId: request.requestId,
         answers,
         response,
       });
-      removePermissionRequest(agentId, request.requestId);
+      removePermission(request.requestId);
       queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
     } catch (error) {
-      setChatError(agentId, (error as Error).message);
+      setChatError((error as Error).message);
     } finally {
-      setPermissionBusy(agentId, false);
+      setPermissionBusy(false);
     }
   };
 
   const keepPlanning = async (request: PermissionRequest) => {
-    setPermissionBusy(agentId, true);
-    setChatError(agentId, null);
+    setPermissionBusy(true);
+    setChatError(null);
     try {
       await api.denyPermission(agentId, {
         requestId: request.requestId,
         message: 'User wants to keep planning. Revise the plan based on further feedback.',
       });
-      removePermissionRequest(agentId, request.requestId);
+      removePermission(request.requestId);
       queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
     } catch (error) {
-      setChatError(agentId, (error as Error).message);
+      setChatError((error as Error).message);
     } finally {
-      setPermissionBusy(agentId, false);
+      setPermissionBusy(false);
     }
   };
 
   const allowTool = async (request: PermissionRequest) => {
-    setPermissionBusy(agentId, true);
-    setChatError(agentId, null);
+    setPermissionBusy(true);
+    setChatError(null);
     try {
       await api.allowPermission(agentId, { requestId: request.requestId });
-      removePermissionRequest(agentId, request.requestId);
+      removePermission(request.requestId);
       queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
     } catch (error) {
-      setChatError(agentId, (error as Error).message);
+      setChatError((error as Error).message);
     } finally {
-      setPermissionBusy(agentId, false);
+      setPermissionBusy(false);
     }
   };
 
   const denyTool = async (request: PermissionRequest) => {
-    setPermissionBusy(agentId, true);
-    setChatError(agentId, null);
+    setPermissionBusy(true);
+    setChatError(null);
     try {
       await api.denyPermission(agentId, {
         requestId: request.requestId,
         message: 'User denied this tool request.',
       });
-      removePermissionRequest(agentId, request.requestId);
+      removePermission(request.requestId);
       queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
     } catch (error) {
-      setChatError(agentId, (error as Error).message);
+      setChatError((error as Error).message);
     } finally {
-      setPermissionBusy(agentId, false);
+      setPermissionBusy(false);
     }
   };
 
-  const buildPlan = (request: PermissionRequest) =>
-    void buildApprovedPlanChat(agentId, queryClient, request, { archived });
+  const buildPlan = async (request: PermissionRequest) => {
+    if (archived || !mountedRef.current) return;
+    setPermissionBusy(true);
+    setChatError(null);
+
+    abortRef.current?.abort();
+    await new Promise((r) => setTimeout(r, 150));
+    if (!mountedRef.current) return;
+
+    setQueue([]);
+    queueRef.current = [];
+    setPermissionRequests([]);
+    setIsSending(true);
+    sendingRef.current = true;
+    abortRef.current = new AbortController();
+
+    const plan = extractPlanFromInput(request.input);
+
+    try {
+      await streamBuildPlan(
+        agentId,
+        { requestId: request.requestId, plan: plan || undefined },
+        {
+          onUserMessage: (message) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+          },
+          onAssistantMessage: (message) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+          },
+          onToken: (token) => {
+            if (!mountedRef.current) return;
+            patchStreamingAssistant((message) => ({
+              ...message,
+              content: message.content + token,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: appendStreamText(message.metadata.timeline ?? [], token),
+              },
+            }));
+          },
+          onEvent: (event) => {
+            if (!mountedRef.current) return;
+            patchStreamingAssistant((message) => ({
+              ...message,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
+              },
+            }));
+          },
+          onPermissionRequest: (nextRequest) => {
+            if (!mountedRef.current) return;
+            setPermissionRequests((prev) => {
+              if (prev.some((item) => item.requestId === nextRequest.requestId)) return prev;
+              return [...prev, nextRequest];
+            });
+          },
+          onDone: (payload) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
+            setPermissionRequests([]);
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+          },
+          onError: (err) => {
+            if (!mountedRef.current) return;
+            setChatError(err);
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+          },
+        },
+        abortRef.current.signal,
+      );
+    } catch (error) {
+      if (mountedRef.current && (error as Error).name !== 'AbortError') {
+        setChatError((error as Error).message);
+      }
+    } finally {
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      if (!mountedRef.current) {
+        sendingRef.current = false;
+        abortRef.current = null;
+        return;
+      }
+      setIsSending(false);
+      sendingRef.current = false;
+      abortRef.current = null;
+      setPermissionBusy(false);
+    }
+  };
 
   const requestClear = () => setClearOpen(true);
 
   const requestRewind = (message: Message) => {
-    if (archived || isStreaming || agent.status === 'running') return;
-    if (message.id.startsWith('local-')) return;
+    if (archived || agentBusy) return;
     setRewindTarget(message);
   };
 
   const requestRewindLast = () => {
     const lastUser = [...displayMessages].reverse().find((m) => m.role === 'user');
     if (!lastUser) {
-      setChatError(agentId, 'Nothing to rewind — send a message first.');
+      setChatError('Nothing to rewind — send a message first.');
       return;
     }
     requestRewind(lastUser);
@@ -276,7 +561,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       }}
     >
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pt: 1.5, pb: 1, minHeight: 0 }}>
-        {displayMessages.length === 0 && streamParts.length === 0 && (
+        {displayMessages.length === 0 && (
           <Stack spacing={1} sx={{ py: 3, alignItems: 'center', textAlign: 'center' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               Start a conversation
@@ -314,27 +599,30 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           </Stack>
         )}
 
-        {displayMessages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            onCopy={() => void navigator.clipboard.writeText(message.content)}
-            onRewind={
-              message.role === 'user' && !archived && !message.id.startsWith('local-')
-                ? () => requestRewind(message)
-                : undefined
-            }
-            onRetry={
-              message.metadata?.error && lastFailed
-                ? () => void runChat(lastFailed.text, lastFailed.images, true)
-                : undefined
-            }
-          />
-        ))}
-
-        {(isStreaming || streamParts.length > 0) && (
-          <StreamingTimeline agentId={agentId} parts={streamParts} />
-        )}
+        {displayMessages.map((message) => {
+          if (message.role === 'assistant') {
+            return (
+              <MessageTimeline key={message.id} message={message} />
+            );
+          }
+          return (
+            <ChatBubble
+              key={message.id}
+              message={message}
+              onCopy={() => void navigator.clipboard.writeText(message.content)}
+              onRewind={
+                !archived
+                  ? () => requestRewind(message)
+                  : undefined
+              }
+              onRetry={
+                message.metadata?.error && lastFailed
+                  ? () => void runChat(lastFailed.text, lastFailed.images, true)
+                  : undefined
+              }
+            />
+          );
+        })}
 
         {permissionRequests.map((request) => {
           if (request.toolName === 'AskUserQuestion') {
@@ -360,7 +648,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
                 request={request}
                 plan={extractPlanFromInput(request.input)}
                 submitting={permissionBusy}
-                onBuild={() => buildPlan(request)}
+                onBuild={() => void buildPlan(request)}
                 onKeepPlanning={() => void keepPlanning(request)}
               />
             );
@@ -395,7 +683,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
                 </Button>
               ) : undefined
             }
-            onClose={() => setChatError(agentId, null)}
+            onClose={() => setChatError(null)}
           >
             {chatError}
           </Alert>
@@ -416,7 +704,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         <ChatComposer
           agentId={agentId}
           archived={archived}
-          isStreaming={isStreaming || agent.status === 'running'}
+          isStreaming={agentBusy}
           model={agent.model}
           permissionMode={agent.permissionMode ?? 'plan'}
           queue={queue}
@@ -425,10 +713,10 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onModelChange={(model) => updateMutation.mutate({ model })}
           onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
           onSend={(text, images, force) => void runChat(text, images, force)}
-          onStop={() => void stopAgentChat(agentId, queryClient)}
+          onStop={() => void stopStreaming()}
           onClear={requestClear}
           onRewind={requestRewindLast}
-          onRemoveQueued={(id) => removeQueuedItem(agentId, id)}
+          onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
         />
       </Box>
 
