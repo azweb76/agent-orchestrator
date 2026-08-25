@@ -171,6 +171,8 @@ export interface ClaudeRunOptions {
   cwd: string;
   prompt: string;
   model?: string;
+  /** Claude Code `--effort` level. */
+  effort?: string;
   sessionId?: string | null;
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
@@ -190,6 +192,7 @@ export interface ClaudeRunOptions {
 
 export function buildClaudeArgs(options: {
   model?: string;
+  effort?: string;
   sessionId?: string | null;
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
@@ -229,6 +232,10 @@ export function buildClaudeArgs(options: {
 
   if (options.model) {
     args.push('--model', options.model);
+  }
+
+  if (options.effort) {
+    args.push('--effort', options.effort);
   }
 
   if (options.sessionId) {
@@ -463,6 +470,7 @@ export class ClaudeService {
     const permissionMode = options.permissionMode ?? 'plan';
     const args = buildClaudeArgs({
       model: options.model,
+      effort: options.effort,
       sessionId: options.sessionId,
       allowedTools: options.allowedTools,
       permissionMode,

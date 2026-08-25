@@ -73,6 +73,26 @@ test('buildClaudeArgs passes permission-mode for non-bypass modes', () => {
   assert.equal(args[modeIdx + 1], 'plan');
 });
 
+test('buildClaudeArgs passes effort when provided', () => {
+  const args = buildClaudeArgs({
+    permissionMode: 'plan',
+    model: 'opus',
+    effort: 'xhigh',
+  });
+  assert.deepEqual(args.slice(args.indexOf('--effort'), args.indexOf('--effort') + 2), [
+    '--effort',
+    'xhigh',
+  ]);
+});
+
+test('buildClaudeArgs omits effort when unset', () => {
+  const args = buildClaudeArgs({
+    permissionMode: 'plan',
+    model: 'sonnet',
+  });
+  assert.ok(!args.includes('--effort'));
+});
+
 test('buildStreamUserMessage wraps the prompt as stream-json', () => {
   const line = buildStreamUserMessage('hello');
   assert.ok(line.endsWith('\n'));

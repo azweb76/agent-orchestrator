@@ -2,16 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildIdeaKickoffPrompt } from '@agent-orchestrator/shared';
 
-test('buildIdeaKickoffPrompt keeps the idea and requires clarifying questions before planning', () => {
+test('buildIdeaKickoffPrompt returns the trimmed idea with no appended instructions', () => {
   const prompt = buildIdeaKickoffPrompt('  Add dark mode  ');
-  assert.match(prompt, /^Add dark mode\n/);
-  assert.match(prompt, /AskUserQuestion/);
-  assert.match(prompt, /ExitPlanMode/);
-  assert.match(prompt, /until I have answered/);
+  assert.equal(prompt, 'Add dark mode');
+  assert.ok(!prompt.includes('AskUserQuestion'));
+  assert.ok(!prompt.includes('ExitPlanMode'));
 });
 
-test('buildIdeaKickoffPrompt trims whitespace-only ideas to empty lead-in', () => {
+test('buildIdeaKickoffPrompt trims whitespace-only ideas to empty string', () => {
   const prompt = buildIdeaKickoffPrompt('   \n  ');
-  assert.ok(prompt.startsWith('\n'));
-  assert.match(prompt, /AskUserQuestion/);
+  assert.equal(prompt, '');
 });

@@ -13,7 +13,6 @@ import {
   coalesceTimelineText,
   extractPlanFromInput,
   parseAskUserQuestions,
-  buildIdeaKickoffPrompt,
   type AgentDetail,
   type Message,
   type PermissionMode,
@@ -406,7 +405,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       return;
     }
     autoStartedRef.current = true;
-    void runChatRef.current(buildIdeaKickoffPrompt(initialPrompt), [], false);
+    void runChatRef.current(initialPrompt, [], false);
   }, [initialPrompt, archived, messagesQuery.isLoading, messagesQuery.data]);
 
   const stopStreaming = async () => {

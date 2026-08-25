@@ -20,6 +20,7 @@ import type {
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   DenyPermissionRequest,
+  EffortLevel,
   InboxPullRequest,
   Message,
   MessageAttachment,
@@ -33,6 +34,7 @@ import type {
   WorktreeWithAgent,
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
+import { DEFAULT_EFFORT_LEVEL } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
@@ -64,6 +66,7 @@ async function createAgentForWorktree(
   ctx: AppContext,
   worktreeId: string,
   name: string,
+  options?: { model?: string; effort?: EffortLevel },
 ): Promise<Agent> {
   const existing = ctx.repos.agents.getByWorktreeId(worktreeId);
   if (existing) {
@@ -76,7 +79,8 @@ async function createAgentForWorktree(
     worktreeId,
     name,
     status: 'idle',
-    model: 'sonnet',
+    model: options?.model?.trim() || 'sonnet',
+    effort: options?.effort ?? DEFAULT_EFFORT_LEVEL,
     permissionMode: 'plan',
     claudeSessionId: null,
     pid: null,
@@ -330,6 +334,7 @@ export async function updateAgent(ctx: AppContext, agentId: string, body: Update
     ...agent,
     name: body.name ?? agent.name,
     model: body.model ?? agent.model,
+    effort: body.effort ?? agent.effort,
     permissionMode: body.permissionMode ?? agent.permissionMode,
     updatedAt: nowIso(),
   };
@@ -1118,6 +1123,7 @@ export async function streamAgentChat(
       cwd: detail.worktree.path,
       prompt: userMessage.content,
       model: runningAgent.model,
+      effort: runningAgent.effort,
       permissionMode: runningAgent.permissionMode,
       sessionId: runningAgent.claudeSessionId,
       imagePaths: attachments.map((item) => item.path),
@@ -1319,7 +1325,7 @@ export async function suggestBranchNameForWorkspace(
 
 /**
  * Suggest a branch name from the idea, create a new worktree + agent, and return both.
- * The client should kick off chat with the idea as the first prompt (plan mode asks clarifying questions).
+ * The client should kick off chat with the idea as the first prompt.
  */
 export async function createWorktreeFromIdea(
   ctx: AppContext,
@@ -1337,7 +1343,17 @@ export async function createWorktreeFromIdea(
     name: body.name,
   });
 
-  return { worktree, agent, branchName, idea };
+  const configured: Agent = {
+    ...agent,
+    model: body.model?.trim() || agent.model,
+    effort: body.effort ?? agent.effort,
+    updatedAt: nowIso(),
+  };
+  if (configured.model !== agent.model || configured.effort !== agent.effort) {
+    ctx.repos.agents.update(configured);
+  }
+
+  return { worktree, agent: configured, branchName, idea };
 }
 
 export async function getSystemStatus(ctx: AppContext) {

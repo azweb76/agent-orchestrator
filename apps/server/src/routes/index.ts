@@ -147,6 +147,8 @@ export function createRouter(ctx: AppContext): express.Router {
           idea: z.string().min(1),
           name: z.string().optional(),
           baseBranch: z.string().optional(),
+          model: z.string().optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromIdea(ctx, param(req.params.workspaceId), body));
@@ -233,6 +235,7 @@ export function createRouter(ctx: AppContext): express.Router {
         .object({
           name: z.string().optional(),
           model: z.string().optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
           permissionMode: z
             .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
             .optional(),

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import type {
   Agent,
   AgentEvent,
+  EffortLevel,
   Message,
   MessageAttachment,
   MessageMetadata,
@@ -11,6 +12,7 @@ import type {
   Worktree,
   Workspace,
 } from '@agent-orchestrator/shared';
+import { DEFAULT_EFFORT_LEVEL } from '@agent-orchestrator/shared';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS workspaces (
@@ -42,6 +44,7 @@ CREATE TABLE IF NOT EXISTS agents (
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'idle',
   model TEXT NOT NULL DEFAULT 'sonnet',
+  effort TEXT NOT NULL DEFAULT 'high',
   permission_mode TEXT NOT NULL DEFAULT 'plan',
   claude_session_id TEXT,
   pid INTEGER,
@@ -91,6 +94,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'pid', 'INTEGER');
   ensureColumn(db, 'agents', 'run_log_path', 'TEXT');
   ensureColumn(db, 'agents', 'permission_mode', "TEXT NOT NULL DEFAULT 'plan'");
+  ensureColumn(db, 'agents', 'effort', "TEXT NOT NULL DEFAULT 'high'");
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
 }
@@ -240,8 +244,8 @@ export class AgentRepository {
   create(agent: Agent): Agent {
     this.db
       .prepare(
-        `INSERT INTO agents (id, worktree_id, name, status, model, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
-         VALUES (@id, @worktreeId, @name, @status, @model, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
+        `INSERT INTO agents (id, worktree_id, name, status, model, effort, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
+         VALUES (@id, @worktreeId, @name, @status, @model, @effort, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
       )
       .run({
         id: agent.id,
@@ -249,6 +253,7 @@ export class AgentRepository {
         name: agent.name,
         status: agent.status,
         model: agent.model,
+        effort: agent.effort,
         permissionMode: agent.permissionMode,
         claudeSessionId: agent.claudeSessionId,
         pid: agent.pid,
@@ -300,7 +305,7 @@ export class AgentRepository {
   update(agent: Agent): Agent {
     this.db
       .prepare(
-        `UPDATE agents SET name = @name, status = @status, model = @model,
+        `UPDATE agents SET name = @name, status = @status, model = @model, effort = @effort,
          permission_mode = @permissionMode, claude_session_id = @claudeSessionId, pid = @pid,
          run_log_path = @runLogPath, updated_at = @updatedAt, archived_at = @archivedAt
          WHERE id = @id`,
@@ -310,6 +315,7 @@ export class AgentRepository {
         name: agent.name,
         status: agent.status,
         model: agent.model,
+        effort: agent.effort,
         permissionMode: agent.permissionMode,
         claudeSessionId: agent.claudeSessionId,
         pid: agent.pid,
@@ -465,6 +471,13 @@ function rowToWorktree(row: unknown): Worktree {
   };
 }
 
+const EFFORT_LEVELS = new Set<EffortLevel>(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function parseEffort(value: unknown): EffortLevel {
+  const raw = typeof value === 'string' ? value : '';
+  return EFFORT_LEVELS.has(raw as EffortLevel) ? (raw as EffortLevel) : DEFAULT_EFFORT_LEVEL;
+}
+
 function rowToAgent(row: unknown): Agent {
   const r = row as Record<string, unknown>;
   return {
@@ -473,6 +486,7 @@ function rowToAgent(row: unknown): Agent {
     name: String(r.name),
     status: r.status as Agent['status'],
     model: String(r.model),
+    effort: parseEffort(r.effort),
     permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
     pid: r.pid == null ? null : Number(r.pid),

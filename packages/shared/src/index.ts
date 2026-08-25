@@ -12,6 +12,9 @@ export type PermissionMode =
   | 'dontAsk'
   | 'bypassPermissions';
 
+/** Claude Code `--effort` levels (available levels depend on the model). */
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface Workspace {
   id: string;
   name: string;
@@ -41,6 +44,8 @@ export interface Agent {
   name: string;
   status: AgentStatus;
   model: string;
+  /** Claude Code effort level passed as `--effort`. */
+  effort: EffortLevel;
   permissionMode: PermissionMode;
   claudeSessionId: string | null;
   /** OS pid of the active Claude run, if any. Survives app restarts while the process lives. */
@@ -172,6 +177,10 @@ export interface CreateWorktreeFromIdeaRequest {
   name?: string;
   /** Base ref to branch from (defaults to workspace default branch). */
   baseBranch?: string;
+  /** Claude model alias (e.g. sonnet, opus, haiku). */
+  model?: string;
+  /** Claude Code effort level for runs. */
+  effort?: EffortLevel;
 }
 
 export interface SuggestBranchNameRequest {
@@ -185,6 +194,7 @@ export interface SuggestBranchNameResponse {
 export interface UpdateAgentRequest {
   name?: string;
   model?: string;
+  effort?: EffortLevel;
   permissionMode?: PermissionMode;
 }
 
@@ -321,6 +331,16 @@ export const CLAUDE_MODELS = [
   { id: 'opus', label: 'Claude Opus' },
   { id: 'haiku', label: 'Claude Haiku' },
 ] as const;
+
+export const CLAUDE_EFFORT_LEVELS = [
+  { id: 'low', label: 'Low' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High' },
+  { id: 'xhigh', label: 'Extra high' },
+  { id: 'max', label: 'Max' },
+] as const satisfies ReadonlyArray<{ id: EffortLevel; label: string }>;
+
+export const DEFAULT_EFFORT_LEVEL: EffortLevel = 'high';
 
 export const PERMISSION_MODES = [
   { id: 'default', label: 'Manual' },

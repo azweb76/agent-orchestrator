@@ -1,12 +1,7 @@
 /**
- * Build the first user prompt when creating an agent from an idea.
- * Requires clarifying questions before ExitPlanMode.
+ * First user prompt when creating an agent from an idea.
+ * Sends the idea text as-is (no appended instructions).
  */
 export function buildIdeaKickoffPrompt(idea: string): string {
-  const trimmed = idea.trim();
-  return [
-    trimmed,
-    '',
-    'Before drafting a plan, use AskUserQuestion to clarify anything ambiguous about scope, constraints, edge cases, and success criteria. Do not present a plan (ExitPlanMode) until I have answered your questions.',
-  ].join('\n');
+  return idea.trim();
 }
