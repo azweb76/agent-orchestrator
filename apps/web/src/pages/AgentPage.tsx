@@ -4,8 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Dialog,
@@ -13,11 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControl,
-  InputLabel,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Tab,
   Tabs,
@@ -29,9 +23,10 @@ import StopIcon from '@mui/icons-material/Stop';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CLAUDE_MODELS, PERMISSION_MODES, type PermissionMode } from '@agent-orchestrator/shared';
+import type { PermissionMode } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { statusColor } from '../theme';
 
 export function AgentPage() {
@@ -39,6 +34,7 @@ export function AgentPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
   const [prOpen, setPrOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [environment, setEnvironment] = useState('');
@@ -94,6 +90,7 @@ export function AgentPage() {
   const archiveMutation = useMutation({
     mutationFn: () => api.archiveAgent(agentId),
     onSuccess: () => {
+      setArchiveOpen(false);
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
@@ -113,7 +110,7 @@ export function AgentPage() {
 
   if (agentQuery.isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
         <CircularProgress />
       </Box>
     );
@@ -127,145 +124,127 @@ export function AgentPage() {
   const archived = Boolean(agent.archivedAt);
 
   return (
-    <Stack spacing={3}>
-      <Card>
-        <CardContent>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={2}
-            sx={{ justifyContent: 'space-between' }}
-          >
-            <Box>
-              <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-                <Typography variant="h4">{agent.name}</Typography>
-                <Chip label={agent.status} color={statusColor(agent.status)} />
-              </Stack>
-              <Typography color="text.secondary">
-                {agent.workspace.githubOwner}/{agent.workspace.githubRepo} • {agent.worktree.name} •{' '}
-                {agent.worktree.branch}
-              </Typography>
-            </Box>
-
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>Model</InputLabel>
-                <Select
-                  label="Model"
-                  value={agent.model}
-                  disabled={archived}
-                  onChange={(e) => updateMutation.mutate({ model: e.target.value })}
-                >
-                  {CLAUDE_MODELS.map((model) => (
-                    <MenuItem key={model.id} value={model.id}>
-                      {model.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ minWidth: 170 }}>
-                <InputLabel>Permissions</InputLabel>
-                <Select
-                  label="Permissions"
-                  value={agent.permissionMode ?? 'bypassPermissions'}
-                  disabled={archived}
-                  onChange={(e) =>
-                    updateMutation.mutate({ permissionMode: e.target.value as PermissionMode })
-                  }
-                >
-                  {PERMISSION_MODES.map((mode) => (
-                    <MenuItem key={mode.id} value={mode.id}>
-                      {mode.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <TextField
-                size="small"
-                label="Environment ID"
-                placeholder="ccpool_..."
-                value={environment}
-                disabled={archived}
-                onChange={(e) => setEnvironment(e.target.value)}
-                onBlur={() => {
-                  const next = environment || null;
-                  if (next !== (agent.environment ?? null)) {
-                    updateMutation.mutate({ environment: next });
-                  }
-                }}
-                sx={{ minWidth: 180 }}
-              />
-
-              <Button
-                variant="outlined"
-                startIcon={<PlayArrowIcon />}
-                disabled={archived || startMutation.isPending}
-                onClick={() => startMutation.mutate()}
-              >
-                Start
-              </Button>
-              <Button
-                variant="outlined"
-                color="warning"
-                startIcon={<StopIcon />}
-                disabled={archived || stopMutation.isPending}
-                onClick={() => stopMutation.mutate()}
-              >
-                Stop
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<ArchiveOutlinedIcon />}
-                disabled={archived || archiveMutation.isPending}
-                onClick={() => {
-                  if (confirm('Archive this agent?')) archiveMutation.mutate();
-                }}
-              >
-                Archive
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<MergeTypeIcon />}
-                disabled={archived}
-                onClick={() => setPrOpen(true)}
-              >
-                Create PR
-              </Button>
-            </Stack>
+    <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={1}
+        sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, flexShrink: 0 }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+              {agent.name}
+            </Typography>
+            <Chip size="small" label={agent.status} color={statusColor(agent.status)} />
           </Stack>
-        </CardContent>
-      </Card>
+          <Typography variant="body2" color="text.secondary" noWrap>
+            {agent.workspace.githubOwner}/{agent.workspace.githubRepo} • {agent.worktree.name} •{' '}
+            {agent.worktree.branch}
+          </Typography>
+        </Box>
 
-      <Paper sx={{ p: 0, overflow: 'hidden' }}>
-        <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label="Chat" />
-          <Tab label="Diff" />
-          <Tab label="Events" />
+        <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <TextField
+            size="small"
+            label="Environment"
+            placeholder="ccpool_..."
+            value={environment}
+            disabled={archived}
+            onChange={(e) => setEnvironment(e.target.value)}
+            onBlur={() => {
+              const next = environment || null;
+              if (next !== (agent.environment ?? null)) {
+                updateMutation.mutate({ environment: next });
+              }
+            }}
+            sx={{ width: { xs: '100%', sm: 160 } }}
+          />
+
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PlayArrowIcon />}
+            disabled={archived || startMutation.isPending}
+            onClick={() => startMutation.mutate()}
+          >
+            Start
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            startIcon={<StopIcon />}
+            disabled={archived || stopMutation.isPending}
+            onClick={() => stopMutation.mutate()}
+          >
+            Stop
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            startIcon={<ArchiveOutlinedIcon />}
+            disabled={archived || archiveMutation.isPending}
+            onClick={() => setArchiveOpen(true)}
+          >
+            Archive
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={<MergeTypeIcon />}
+            disabled={archived}
+            onClick={() => setPrOpen(true)}
+          >
+            Create PR
+          </Button>
+        </Stack>
+      </Stack>
+
+      <Paper
+        sx={{
+          p: 0,
+          overflow: 'hidden',
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <Tabs
+          value={tab}
+          onChange={(_, value) => setTab(value)}
+          sx={{ px: 1.5, minHeight: 40, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
+        >
+          <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
+          <Tab label="Diff" sx={{ minHeight: 40, py: 1 }} />
+          <Tab label="Events" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
-        {tab === 0 && <ChatPanel agent={agent} archived={archived} />}
+        {tab === 0 && (
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <ChatPanel agent={agent} archived={archived} />
+          </Box>
+        )}
 
         {tab === 1 && (
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'auto' }}>
             {diffQuery.isLoading ? (
               <CircularProgress />
             ) : diffQuery.error ? (
               <Alert severity="error">{(diffQuery.error as Error).message}</Alert>
             ) : (
-              <Stack spacing={2}>
+              <Stack spacing={1.5}>
                 <Typography variant="subtitle2" color="text.secondary">
                   {diffQuery.data?.stat || 'No changes'}
                 </Typography>
                 <Box
                   component="pre"
                   sx={{
-                    p: 2,
+                    p: 1.5,
                     bgcolor: 'rgba(0,0,0,0.35)',
                     borderRadius: 2,
                     overflow: 'auto',
-                    maxHeight: 520,
                     fontSize: 13,
                     m: 0,
                   }}
@@ -278,7 +257,7 @@ export function AgentPage() {
         )}
 
         {tab === 2 && (
-          <Box sx={{ p: 2, maxHeight: 560, overflowY: 'auto' }}>
+          <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {eventsQuery.isLoading ? (
               <CircularProgress />
             ) : eventsQuery.data?.length === 0 ? (
@@ -344,6 +323,16 @@ export function AgentPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={archiveOpen}
+        title="Archive agent?"
+        description="This archives the agent so it no longer appears as active. You can still view its history."
+        confirmLabel="Archive"
+        loading={archiveMutation.isPending}
+        onCancel={() => setArchiveOpen(false)}
+        onConfirm={() => archiveMutation.mutate()}
+      />
     </Stack>
   );
 }

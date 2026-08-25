@@ -16,6 +16,7 @@ import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateWorktreeDialog } from '../components/CreateWorktreeDialog';
 import { statusColor } from '../theme';
 
@@ -24,6 +25,8 @@ export function WorkspaceDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteWorkspaceOpen, setDeleteWorkspaceOpen] = useState(false);
+  const [removeWorktreeId, setRemoveWorktreeId] = useState<string | null>(null);
 
   const workspaceQuery = useQuery({
     queryKey: ['workspace', workspaceId],
@@ -42,6 +45,7 @@ export function WorkspaceDetailPage() {
   const deleteWorktree = useMutation({
     mutationFn: (worktreeId: string) => api.deleteWorktree(worktreeId),
     onSuccess: () => {
+      setRemoveWorktreeId(null);
       queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
@@ -51,6 +55,7 @@ export function WorkspaceDetailPage() {
   const deleteWorkspace = useMutation({
     mutationFn: () => api.deleteWorkspace(workspaceId),
     onSuccess: () => {
+      setDeleteWorkspaceOpen(false);
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       navigate('/');
@@ -90,11 +95,7 @@ export function WorkspaceDetailPage() {
             color="error"
             variant="outlined"
             startIcon={<DeleteOutlineOutlinedIcon />}
-            onClick={() => {
-              if (confirm('Delete this workspace and all worktrees?')) {
-                deleteWorkspace.mutate();
-              }
-            }}
+            onClick={() => setDeleteWorkspaceOpen(true)}
           >
             Delete
           </Button>
@@ -159,11 +160,7 @@ export function WorkspaceDetailPage() {
                     <Button
                       color="error"
                       variant="outlined"
-                      onClick={() => {
-                        if (confirm('Remove this worktree and its agent?')) {
-                          deleteWorktree.mutate(worktree.id);
-                        }
-                      }}
+                      onClick={() => setRemoveWorktreeId(worktree.id)}
                     >
                       Remove
                     </Button>
@@ -180,6 +177,28 @@ export function WorkspaceDetailPage() {
         onClose={() => setDialogOpen(false)}
         workspaceId={workspaceId}
         defaultBranch={workspace.defaultBranch}
+      />
+
+      <ConfirmDialog
+        open={deleteWorkspaceOpen}
+        title="Delete workspace?"
+        description="This deletes the workspace and all of its worktrees and agents. This cannot be undone."
+        confirmLabel="Delete"
+        loading={deleteWorkspace.isPending}
+        onCancel={() => setDeleteWorkspaceOpen(false)}
+        onConfirm={() => deleteWorkspace.mutate()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(removeWorktreeId)}
+        title="Remove worktree?"
+        description="This removes the worktree and its agent from the workspace."
+        confirmLabel="Remove"
+        loading={deleteWorktree.isPending}
+        onCancel={() => setRemoveWorktreeId(null)}
+        onConfirm={() => {
+          if (removeWorktreeId) deleteWorktree.mutate(removeWorktreeId);
+        }}
       />
     </Stack>
   );

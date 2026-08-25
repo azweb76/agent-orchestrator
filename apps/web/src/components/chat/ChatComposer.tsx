@@ -180,9 +180,9 @@ export function ChatComposer({
   };
 
   return (
-    <Stack spacing={1.25}>
+    <Stack spacing={1}>
       {queue.length > 0 && (
-        <Stack spacing={0.75}>
+        <Stack spacing={0.5}>
           <Typography variant="caption" color="text.secondary">
             Queued ({queue.length})
           </Typography>
@@ -199,8 +199,8 @@ export function ChatComposer({
         </Stack>
       )}
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-        <FormControl size="small" sx={{ minWidth: 150 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <FormControl size="small" sx={{ minWidth: 140 }}>
           <InputLabel>Model</InputLabel>
           <Select
             label="Model"
@@ -216,7 +216,7 @@ export function ChatComposer({
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 180 }}>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel>Permissions</InputLabel>
           <Select
             label="Permissions"
@@ -330,7 +330,7 @@ export function ChatComposer({
         <TextField
           fullWidth
           multiline
-          minRows={2}
+          minRows={1}
           maxRows={8}
           placeholder="Message Claude… (Enter send, Shift+Enter newline, / for commands & skills, paste images)"
           value={draft}
