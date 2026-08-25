@@ -7,11 +7,20 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentDetail, Message, PermissionMode } from '@agent-orchestrator/shared';
-import { api, streamChat } from '../../api/client';
+import {
+  extractPlanFromInput,
+  parseAskUserQuestions,
+  type AgentDetail,
+  type Message,
+  type PermissionMode,
+  type PermissionRequest,
+} from '@agent-orchestrator/shared';
+import { api, streamBuildPlan, streamChat } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
+import { ExitPlanModeCard } from './ExitPlanModeCard';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -97,6 +106,8 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
+  const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
+  const [permissionBusy, setPermissionBusy] = useState(false);
   const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
     null,
   );
@@ -125,6 +136,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       setQueue([]);
       queueRef.current = [];
       setStreamParts([]);
+      setPermissionRequests([]);
       setChatError(null);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -132,9 +144,22 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     },
   });
 
+  const pendingPermissionsQuery = useQuery({
+    queryKey: ['permissions', agentId],
+    queryFn: () => api.listPendingPermissions(agentId),
+    enabled: Boolean(agentId) && (agent.status === 'running' || isStreaming),
+    refetchInterval: () => (agent.status === 'running' || isStreaming ? 2000 : false),
+  });
+
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
+
+  useEffect(() => {
+    const remote = pendingPermissionsQuery.data;
+    if (!remote) return;
+    setPermissionRequests(remote);
+  }, [pendingPermissionsQuery.data]);
 
   useEffect(() => {
     const msgs = messagesQuery.data;
@@ -154,7 +179,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messagesQuery.data, optimistic, streamParts]);
+  }, [messagesQuery.data, optimistic, streamParts, permissionRequests]);
 
   const serverMessages = messagesQuery.data ?? [];
   const displayMessages = [
@@ -189,6 +214,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     setChatError(null);
     setLastFailed(null);
     setStreamParts([]);
+    setPermissionRequests([]);
     setIsStreaming(true);
     streamingRef.current = true;
 
@@ -220,6 +246,12 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onEvent: (event) => {
             setStreamParts((prev) => applyStreamEvent(prev, event));
           },
+          onPermissionRequest: (request) => {
+            setPermissionRequests((prev) => {
+              if (prev.some((item) => item.requestId === request.requestId)) return prev;
+              return [...prev, request];
+            });
+          },
           onDone: (payload) => {
             setStreamParts((prev) =>
               prev.map((part) =>
@@ -233,10 +265,12 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               payload.message,
             ]);
             setStreamParts([]);
+            setPermissionRequests([]);
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
             queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
           },
           onError: (err) => {
             setChatError(err);
@@ -273,8 +307,127 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     } catch {
       // ignore
     }
+    setPermissionRequests([]);
     queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+  };
+
+  const removePermission = (requestId: string) => {
+    setPermissionRequests((prev) => prev.filter((item) => item.requestId !== requestId));
+  };
+
+  const submitAnswers = async (
+    request: PermissionRequest,
+    answers: Record<string, string>,
+    response?: string,
+  ) => {
+    setPermissionBusy(true);
+    setChatError(null);
+    try {
+      await api.answerPermission(agentId, {
+        requestId: request.requestId,
+        answers,
+        response,
+      });
+      removePermission(request.requestId);
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setPermissionBusy(false);
+    }
+  };
+
+  const keepPlanning = async (request: PermissionRequest) => {
+    setPermissionBusy(true);
+    setChatError(null);
+    try {
+      await api.denyPermission(agentId, {
+        requestId: request.requestId,
+        message: 'User wants to keep planning. Revise the plan based on further feedback.',
+      });
+      removePermission(request.requestId);
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setPermissionBusy(false);
+    }
+  };
+
+  const buildPlan = async (request: PermissionRequest) => {
+    if (archived) return;
+    setPermissionBusy(true);
+    setChatError(null);
+
+    // Abort the plan-mode SSE; Build starts a fresh auto-mode stream.
+    abortRef.current?.abort();
+    await new Promise((r) => setTimeout(r, 150));
+
+    setOptimistic([]);
+    setQueue([]);
+    queueRef.current = [];
+    setStreamParts([]);
+    setPermissionRequests([]);
+    setIsStreaming(true);
+    streamingRef.current = true;
+    abortRef.current = new AbortController();
+
+    const plan = extractPlanFromInput(request.input);
+
+    try {
+      await streamBuildPlan(
+        agentId,
+        { requestId: request.requestId, plan: plan || undefined },
+        {
+          onUserMessage: (message) => {
+            setOptimistic((prev) => [...prev.filter((m) => m.id !== message.id), message]);
+          },
+          onToken: (token) => setStreamParts((prev) => appendStreamText(prev, token)),
+          onEvent: (event) => {
+            setStreamParts((prev) => applyStreamEvent(prev, event));
+          },
+          onPermissionRequest: (nextRequest) => {
+            setPermissionRequests((prev) => {
+              if (prev.some((item) => item.requestId === nextRequest.requestId)) return prev;
+              return [...prev, nextRequest];
+            });
+          },
+          onDone: (payload) => {
+            setOptimistic((prev) => [
+              ...prev.filter((m) => m.id !== payload.message.id),
+              payload.message,
+            ]);
+            setStreamParts([]);
+            setPermissionRequests([]);
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+          },
+          onError: (err) => {
+            setChatError(err);
+            setStreamParts([]);
+          },
+        },
+        abortRef.current.signal,
+      );
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        setChatError((error as Error).message);
+      }
+      setStreamParts([]);
+    } finally {
+      setIsStreaming(false);
+      streamingRef.current = false;
+      abortRef.current = null;
+      setPermissionBusy(false);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+    }
   };
 
   const requestClear = () => setClearOpen(true);
@@ -296,15 +449,16 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               Start a conversation
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
-              Ask the agent to explore the worktree, fix a bug, or draft a PR. Type{' '}
+              Sessions start in plan mode. Describe what you want; Claude will explore, ask
+              clarifying questions, and present a plan to build. Type{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
                 /
               </Box>{' '}
-              for slash commands and skills, or try{' '}
+              for slash commands, or{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
                 /clear
               </Box>{' '}
-              to reset the session.
+              to reset.
             </Typography>
             <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
               <Button size="small" variant="outlined" onClick={() => setDraft('/diff')}>
@@ -347,6 +501,38 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           <StreamingTimeline agentId={agentId} parts={streamParts} />
         )}
 
+        {permissionRequests.map((request) => {
+          if (request.toolName === 'AskUserQuestion') {
+            const questions = parseAskUserQuestions(request.input);
+            if (questions.length === 0) return null;
+            return (
+              <AskUserQuestionCard
+                key={request.requestId}
+                request={request}
+                questions={questions}
+                submitting={permissionBusy}
+                onSubmit={(answers, response) =>
+                  void submitAnswers(request, answers, response)
+                }
+                onDismiss={() => void keepPlanning(request)}
+              />
+            );
+          }
+          if (request.toolName === 'ExitPlanMode') {
+            return (
+              <ExitPlanModeCard
+                key={request.requestId}
+                request={request}
+                plan={extractPlanFromInput(request.input)}
+                submitting={permissionBusy}
+                onBuild={() => void buildPlan(request)}
+                onKeepPlanning={() => void keepPlanning(request)}
+              />
+            );
+          }
+          return null;
+        })}
+
         <div ref={chatEndRef} />
       </Box>
 
@@ -383,7 +569,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           archived={archived}
           isStreaming={isStreaming || agent.status === 'running'}
           model={agent.model}
-          permissionMode={agent.permissionMode ?? 'bypassPermissions'}
+          permissionMode={agent.permissionMode ?? 'plan'}
           queue={queue}
           draft={draft}
           onDraftChange={setDraft}
@@ -399,7 +585,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       <ConfirmDialog
         open={clearOpen}
         title="Clear chat?"
-        description="This clears chat history and resets the Claude session for this agent."
+        description="This clears chat history, resets the Claude session, and returns the agent to plan mode."
         confirmLabel="Clear"
         loading={clearMutation.isPending}
         onCancel={() => setClearOpen(false)}

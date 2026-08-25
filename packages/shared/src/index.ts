@@ -190,6 +190,67 @@ export interface ChatRequest {
   images?: ChatImageAttachment[];
 }
 
+/** Option for a clarifying question from the AskUserQuestion tool. */
+export interface AskUserQuestionOption {
+  label: string;
+  description: string;
+  preview?: string;
+}
+
+/** One question from AskUserQuestion (supports multiple questions per call). */
+export interface AskUserQuestionItem {
+  question: string;
+  header: string;
+  options: AskUserQuestionOption[];
+  multiSelect: boolean;
+}
+
+export interface AskUserQuestionInput {
+  questions: AskUserQuestionItem[];
+  answers?: Record<string, string>;
+  annotations?: Record<string, { preview?: string; notes?: string }>;
+  metadata?: { source?: string };
+}
+
+/** ExitPlanMode input (plan text is injected by Claude Code for SDK consumers). */
+export interface ExitPlanModeInput {
+  plan?: string;
+  planFilePath?: string;
+  allowedPrompts?: Array<{ tool: string; prompt: string }>;
+  [key: string]: unknown;
+}
+
+export type PermissionToolName = 'AskUserQuestion' | 'ExitPlanMode' | (string & {});
+
+/** Pending interactive tool request waiting for a user decision. */
+export interface PermissionRequest {
+  requestId: string;
+  toolName: PermissionToolName;
+  input: Record<string, unknown>;
+  toolUseId?: string;
+  createdAt: string;
+}
+
+export interface AnswerAskUserQuestionRequest {
+  requestId: string;
+  /** Map of question text → selected label(s). Multi-select values may be comma-joined. */
+  answers: Record<string, string>;
+  /** Optional freeform reply instead of structured answers. */
+  response?: string;
+}
+
+export interface DenyPermissionRequest {
+  requestId: string;
+  message?: string;
+}
+
+export interface BuildPlanRequest {
+  /** Pending ExitPlanMode request id, when still waiting on the current run. */
+  requestId?: string;
+  /** Plan markdown to implement (falls back to the pending request input). */
+  plan?: string;
+}
+
 export interface CreatePrRequest {
   title: string;
   body?: string;
@@ -310,4 +371,9 @@ export {
   type StreamPart,
   type ToolActivityItem,
 } from './stream-timeline.js';
+
+export {
+  extractPlanFromInput,
+  parseAskUserQuestions,
+} from './permission-tools.js';
 

@@ -3,15 +3,19 @@ import type {
   AgentDetail,
   AgentDiff,
   AgentEvent,
+  AnswerAskUserQuestionRequest,
+  BuildPlanRequest,
   CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
+  DenyPermissionRequest,
   GitHubBranch,
   GitHubPullRequest,
   GitHubRepository,
   Message,
+  PermissionRequest,
   PullRequestInbox,
   SidebarWorkspace,
   SlashCommand,
@@ -104,6 +108,18 @@ export const api = {
   getDiff: (agentId: string) => request<AgentDiff>(`/agents/${agentId}/diff`),
   listSlashCommands: (agentId: string) =>
     request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),
+  listPendingPermissions: (agentId: string) =>
+    request<PermissionRequest[]>(`/agents/${agentId}/permissions`),
+  answerPermission: (agentId: string, body: AnswerAskUserQuestionRequest) =>
+    request<{ ok: true }>(`/agents/${agentId}/permissions/answer`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  denyPermission: (agentId: string, body: DenyPermissionRequest) =>
+    request<{ ok: true }>(`/agents/${agentId}/permissions/deny`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   createPr: (agentId: string, body: CreatePrRequest) =>
     request<{ number: number; htmlUrl: string }>(`/agents/${agentId}/create-pr`, {
       method: 'POST',
@@ -114,6 +130,7 @@ export const api = {
 export interface ChatStreamHandlers {
   onToken: (text: string) => void;
   onEvent: (event: Record<string, unknown>) => void;
+  onPermissionRequest?: (request: PermissionRequest) => void;
   onUserMessage?: (message: Message) => void;
   onDone: (payload: { message: Message; sessionId: string | null }) => void;
   onError: (message: string) => void;
@@ -125,23 +142,10 @@ export interface StreamChatOptions {
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
 }
 
-export async function streamChat(
-  agentId: string,
-  options: StreamChatOptions,
+async function consumeChatSse(
+  response: Response,
   handlers: ChatStreamHandlers,
-  signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/agents/${agentId}/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message: options.message,
-      force: options.force,
-      images: options.images,
-    }),
-    signal,
-  });
-
   if (!response.ok || !response.body) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(body.error ?? 'Chat request failed');
@@ -179,6 +183,8 @@ export async function streamChat(
         handlers.onToken(String(data.text ?? ''));
       } else if (eventType === 'event') {
         handlers.onEvent(data);
+      } else if (eventType === 'permission_request') {
+        handlers.onPermissionRequest?.(data as unknown as PermissionRequest);
       } else if (eventType === 'user_message') {
         handlers.onUserMessage?.(data as unknown as Message);
       } else if (eventType === 'done') {
@@ -188,4 +194,41 @@ export async function streamChat(
       }
     }
   }
+}
+
+export async function streamChat(
+  agentId: string,
+  options: StreamChatOptions,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/agents/${agentId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: options.message,
+      force: options.force,
+      images: options.images,
+    }),
+    signal,
+  });
+
+  await consumeChatSse(response, handlers);
+}
+
+/** Clear session, switch to auto, and stream implementation of an approved plan. */
+export async function streamBuildPlan(
+  agentId: string,
+  body: BuildPlanRequest,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/agents/${agentId}/permissions/build`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  await consumeChatSse(response, handlers);
 }
