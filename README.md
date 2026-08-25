@@ -9,6 +9,9 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
 - **Worktrees** — create worktrees from branches or existing pull requests
 - **Agents** — one Claude Code agent per worktree
 - **Chat** — streaming conversations with follow-up support via Claude session resume
+  - Queue follow-ups or force-send (interrupts the current run)
+  - Stop generation, clear history, model + permission mode controls
+  - Image attachments (paste or upload), markdown replies, live tool activity
 - **Diff & PRs** — view agent changes and open pull requests on GitHub
 - **Events** — inspect Claude stream events and agent lifecycle activity
 

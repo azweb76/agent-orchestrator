@@ -1,10 +1,13 @@
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import type { Response } from 'express';
 import type {
   Agent,
   AgentDetail,
   AgentEvent,
+  ChatImageAttachment,
+  ChatRequest,
   CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
@@ -12,6 +15,8 @@ import type {
   CreateWorkspaceRequest,
   InboxPullRequest,
   Message,
+  MessageAttachment,
+  MessageMetadata,
   PullRequestInbox,
   UpdateAgentRequest,
   SidebarWorkspace,
@@ -56,6 +61,7 @@ async function createAgentForWorktree(
     status: 'idle',
     model: 'sonnet',
     environment: null,
+    permissionMode: 'bypassPermissions',
     claudeSessionId: null,
     pid: null,
     runLogPath: null,
@@ -294,6 +300,7 @@ export async function updateAgent(ctx: AppContext, agentId: string, body: Update
     name: body.name ?? agent.name,
     model: body.model ?? agent.model,
     environment: body.environment !== undefined ? body.environment : agent.environment,
+    permissionMode: body.permissionMode ?? agent.permissionMode,
     updatedAt: nowIso(),
   };
 
@@ -356,6 +363,36 @@ export function getAgentMessages(ctx: AppContext, agentId: string): Message[] {
   return ctx.repos.messages.listByAgent(agentId);
 }
 
+export async function clearAgentChat(ctx: AppContext, agentId: string): Promise<{ cleared: number }> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+  if (agent.archivedAt) throw new Error('Cannot clear chat for archived agent');
+  if (agent.status === 'running') {
+    throw new Error('Cannot clear chat while the agent is running. Stop it first.');
+  }
+
+  const cleared = ctx.repos.messages.deleteByAgent(agentId);
+  ctx.repos.agents.update({
+    ...agent,
+    claudeSessionId: null,
+    updatedAt: nowIso(),
+  });
+  ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared }));
+  return { cleared };
+}
+
+export function getAgentAttachment(
+  ctx: AppContext,
+  agentId: string,
+  attachmentId: string,
+): MessageAttachment {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+  const attachment = ctx.repos.messages.findAttachment(agentId, attachmentId);
+  if (!attachment) throw new Error('Attachment not found');
+  return attachment;
+}
+
 export function getAgentEvents(ctx: AppContext, agentId: string): AgentEvent[] {
   return ctx.repos.events.listByAgent(agentId);
 }
@@ -414,11 +451,20 @@ function clearAgentRunFields(agent: Agent, overrides: Partial<Agent> = {}): Agen
   };
 }
 
+function extractCostUsd(events: Array<{ total_cost_usd?: number; type?: string }>): number | undefined {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const cost = events[i]?.total_cost_usd;
+    if (typeof cost === 'number') return cost;
+  }
+  return undefined;
+}
+
 function finalizeAgentRun(
   ctx: AppContext,
   agent: Agent,
-  result: { result: string; sessionId: string | null },
+  result: { result: string; sessionId: string | null; events?: Array<{ total_cost_usd?: number }>; stopped?: boolean },
   assistantText: string,
+  extras: MessageMetadata = {},
 ): Message {
   const status = agent.status === 'stopped' || agent.status === 'archived' ? agent.status : 'idle';
   ctx.repos.agents.update(
@@ -429,9 +475,15 @@ function finalizeAgentRun(
   );
 
   const content = result.result || assistantText;
+  const metadata: MessageMetadata = {
+    ...extras,
+    costUsd: extras.costUsd ?? extractCostUsd(result.events ?? []),
+    stopped: extras.stopped ?? result.stopped,
+  };
+
   const messages = ctx.repos.messages.listByAgent(agent.id);
   const last = messages[messages.length - 1];
-  if (last?.role === 'assistant' && last.content === content) {
+  if (last?.role === 'assistant' && last.content === content && !metadata.stopped && !metadata.error) {
     return last;
   }
 
@@ -439,11 +491,71 @@ function finalizeAgentRun(
     id: uuidv4(),
     agentId: agent.id,
     role: 'assistant',
-    content: content || '[no output]',
+    content: content || (metadata.stopped ? '[stopped]' : '[no output]'),
+    attachments: [],
+    metadata,
     createdAt: nowIso(),
   };
   ctx.repos.messages.create(assistantMessage);
   return assistantMessage;
+}
+
+const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']);
+
+function extensionForMime(mimeType: string): string {
+  switch (mimeType) {
+    case 'image/png':
+      return 'png';
+    case 'image/jpeg':
+    case 'image/jpg':
+      return 'jpg';
+    case 'image/gif':
+      return 'gif';
+    case 'image/webp':
+      return 'webp';
+    default:
+      return 'bin';
+  }
+}
+
+async function saveChatImages(
+  ctx: AppContext,
+  agentId: string,
+  images: ChatImageAttachment[] | undefined,
+): Promise<MessageAttachment[]> {
+  if (!images?.length) return [];
+
+  const dir = path.join(ctx.dataDir, 'attachments', agentId);
+  await fs.mkdir(dir, { recursive: true });
+
+  const saved: MessageAttachment[] = [];
+  for (const image of images) {
+    if (!ALLOWED_IMAGE_MIME.has(image.mimeType)) {
+      throw new Error(`Unsupported image type: ${image.mimeType}`);
+    }
+    if (!image.dataBase64 || image.dataBase64.length > 8_000_000) {
+      throw new Error('Image payload is missing or too large (max ~6MB decoded)');
+    }
+
+    const id = uuidv4();
+    const ext = extensionForMime(image.mimeType);
+    const filePath = path.join(dir, `${id}.${ext}`);
+    await fs.writeFile(filePath, Buffer.from(image.dataBase64, 'base64'));
+
+    saved.push({
+      id,
+      type: 'image',
+      mimeType: image.mimeType,
+      name: image.name || `image.${ext}`,
+      path: filePath,
+      url: `/api/agents/${agentId}/attachments/${id}`,
+    });
+  }
+  return saved;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -508,22 +620,46 @@ async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
 export async function streamAgentChat(
   ctx: AppContext,
   agentId: string,
-  message: string,
+  body: ChatRequest,
   res: Response,
 ) {
   const detail = await getAgentDetail(ctx, agentId);
   if (detail.archivedAt) {
     throw new Error('Cannot chat with archived agent');
   }
-  if (detail.status === 'running' && detail.pid != null) {
-    throw new Error('Agent already has a running Claude process');
+
+  const force = Boolean(body.force);
+  const message = body.message.trim();
+  if (!message && !(body.images && body.images.length > 0)) {
+    throw new Error('Message or image attachment required');
   }
+
+  if (detail.status === 'running' && detail.pid != null) {
+    if (!force) {
+      throw new Error('Agent already has a running Claude process. Queue the message or force-send.');
+    }
+    const pid = detail.pid;
+    ctx.claude.stop(agentId, pid);
+    const deadline = Date.now() + 5_000;
+    while (isPidAlive(pid) && Date.now() < deadline) {
+      await sleep(100);
+    }
+    await sleep(150);
+    const afterStop = ctx.repos.agents.getById(agentId) ?? detail;
+    if (afterStop.status === 'running' || afterStop.pid != null) {
+      ctx.repos.agents.update(clearAgentRunFields(afterStop, { status: 'idle' }));
+    }
+  }
+
+  const attachments = await saveChatImages(ctx, agentId, body.images);
 
   const userMessage: Message = {
     id: uuidv4(),
     agentId,
     role: 'user',
-    content: message,
+    content: message || '(image attachment)',
+    attachments,
+    metadata: {},
     createdAt: nowIso(),
   };
   ctx.repos.messages.create(userMessage);
@@ -550,18 +686,25 @@ export async function streamAgentChat(
 
   send('user_message', userMessage);
 
-  let runningAgent: Agent = { ...detail, status: 'running', updatedAt: nowIso() };
+  let runningAgent: Agent = {
+    ...(ctx.repos.agents.getById(agentId) ?? detail),
+    status: 'running',
+    updatedAt: nowIso(),
+  };
   ctx.repos.agents.update(runningAgent);
 
   let assistantText = '';
+  const startedAt = Date.now();
 
   try {
     const result = await ctx.claude.runStreaming(agentId, {
       cwd: detail.worktree.path,
-      prompt: message,
-      model: detail.model,
-      environment: detail.environment,
-      sessionId: detail.claudeSessionId,
+      prompt: userMessage.content,
+      model: runningAgent.model,
+      environment: runningAgent.environment,
+      permissionMode: runningAgent.permissionMode,
+      sessionId: runningAgent.claudeSessionId,
+      imagePaths: attachments.map((item) => item.path),
       onStarted: (handle) => {
         runningAgent = {
           ...runningAgent,
@@ -587,12 +730,28 @@ export async function streamAgentChat(
     });
 
     const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
-    const assistantMessage = finalizeAgentRun(ctx, current, result, assistantText);
+    const assistantMessage = finalizeAgentRun(ctx, current, result, assistantText, {
+      durationMs: Date.now() - startedAt,
+      stopped: result.stopped,
+    });
     send('done', { message: assistantMessage, sessionId: result.sessionId });
   } catch (error) {
     const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
-    ctx.repos.agents.update(clearAgentRunFields(current, { status: 'idle' }));
-    send('error', { message: error instanceof Error ? error.message : 'Unknown error' });
+    const errMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    if (assistantText.trim()) {
+      const partial = finalizeAgentRun(
+        ctx,
+        current,
+        { result: assistantText, sessionId: current.claudeSessionId, stopped: true },
+        assistantText,
+        { error: errMessage, stopped: true, durationMs: Date.now() - startedAt },
+      );
+      send('done', { message: partial, sessionId: current.claudeSessionId });
+    } else {
+      ctx.repos.agents.update(clearAgentRunFields(current, { status: 'idle' }));
+      send('error', { message: errMessage });
+    }
   } finally {
     if (clientOpen && !res.writableEnded) {
       res.end();

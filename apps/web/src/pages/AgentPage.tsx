@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Alert,
@@ -14,7 +14,6 @@ import {
   DialogTitle,
   Divider,
   FormControl,
-  Grid,
   InputLabel,
   MenuItem,
   Paper,
@@ -28,41 +27,27 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
-import SendIcon from '@mui/icons-material/Send';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Message } from '@agent-orchestrator/shared';
-import { CLAUDE_MODELS } from '@agent-orchestrator/shared';
-import { api, streamChat } from '../api/client';
+import { CLAUDE_MODELS, PERMISSION_MODES, type PermissionMode } from '@agent-orchestrator/shared';
+import { api } from '../api/client';
+import { ChatPanel } from '../components/chat/ChatPanel';
 import { statusColor } from '../theme';
 
 export function AgentPage() {
   const { agentId = '' } = useParams();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState(0);
-  const [input, setInput] = useState('');
-  const [streamingText, setStreamingText] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
   const [prOpen, setPrOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [environment, setEnvironment] = useState('');
-  const abortRef = useRef<AbortController | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const agentQuery = useQuery({
     queryKey: ['agent', agentId],
     queryFn: () => api.getAgent(agentId),
     enabled: Boolean(agentId),
     refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
-  });
-
-  const messagesQuery = useQuery({
-    queryKey: ['messages', agentId],
-    queryFn: () => api.getMessages(agentId),
-    enabled: Boolean(agentId),
-    // Keep chat in sync when a run continues after SSE disconnect or app restart.
-    refetchInterval: () => (agentQuery.data?.status === 'running' ? 2000 : false),
   });
 
   const eventsQuery = useQuery({
@@ -78,8 +63,11 @@ export function AgentPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (body: { model?: string; environment?: string | null }) =>
-      api.updateAgent(agentId, body),
+    mutationFn: (body: {
+      model?: string;
+      environment?: string | null;
+      permissionMode?: PermissionMode;
+    }) => api.updateAgent(agentId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
@@ -98,6 +86,7 @@ export function AgentPage() {
     mutationFn: () => api.stopAgent(agentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
@@ -119,56 +108,8 @@ export function AgentPage() {
   });
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messagesQuery.data, streamingText]);
-
-  useEffect(() => {
     setEnvironment(agentQuery.data?.environment ?? '');
   }, [agentQuery.data?.environment]);
-
-  const sendMessage = async () => {
-    if (!input.trim() || isStreaming) return;
-
-    const message = input.trim();
-    setInput('');
-    setStreamingText('');
-    setIsStreaming(true);
-
-    abortRef.current = new AbortController();
-
-    try {
-      await streamChat(
-        agentId,
-        message,
-        {
-          onToken: (text) => setStreamingText((prev) => prev + text),
-          onEvent: () => undefined,
-          onDone: () => {
-            setStreamingText('');
-            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
-            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-            queryClient.invalidateQueries({ queryKey: ['events', agentId] });
-            queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-          },
-          onError: (err) => {
-            setStreamingText('');
-            alert(err);
-          },
-        },
-        abortRef.current.signal,
-      );
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        alert((error as Error).message);
-      }
-    } finally {
-      setIsStreaming(false);
-      abortRef.current = null;
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    }
-  };
 
   if (agentQuery.isLoading) {
     return (
@@ -184,7 +125,6 @@ export function AgentPage() {
 
   const agent = agentQuery.data;
   const archived = Boolean(agent.archivedAt);
-  const messages = messagesQuery.data ?? [];
 
   return (
     <Stack spacing={3}>
@@ -218,6 +158,24 @@ export function AgentPage() {
                   {CLAUDE_MODELS.map((model) => (
                     <MenuItem key={model.id} value={model.id}>
                       {model.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel>Permissions</InputLabel>
+                <Select
+                  label="Permissions"
+                  value={agent.permissionMode ?? 'bypassPermissions'}
+                  disabled={archived}
+                  onChange={(e) =>
+                    updateMutation.mutate({ permissionMode: e.target.value as PermissionMode })
+                  }
+                >
+                  {PERMISSION_MODES.map((mode) => (
+                    <MenuItem key={mode.id} value={mode.id}>
+                      {mode.label}
                     </MenuItem>
                   ))}
                 </Select>
@@ -280,67 +238,14 @@ export function AgentPage() {
         </CardContent>
       </Card>
 
-      <Paper sx={{ p: 0 }}>
+      <Paper sx={{ p: 0, overflow: 'hidden' }}>
         <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="Chat" />
           <Tab label="Diff" />
           <Tab label="Events" />
         </Tabs>
 
-        {tab === 0 && (
-          <Box sx={{ p: 2 }}>
-            <Box sx={{ minHeight: 420, maxHeight: 520, overflowY: 'auto', mb: 2 }}>
-              {messages.map((message) => (
-                <ChatBubble key={message.id} message={message} />
-              ))}
-              {streamingText && (
-                <ChatBubble
-                  message={{
-                    id: 'streaming',
-                    agentId,
-                    role: 'assistant',
-                    content: streamingText,
-                    createdAt: new Date().toISOString(),
-                  }}
-                />
-              )}
-              <div ref={chatEndRef} />
-            </Box>
-
-            {startMutation.error && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {(startMutation.error as Error).message}
-              </Alert>
-            )}
-
-            <Stack direction="row" spacing={1}>
-              <TextField
-                fullWidth
-                multiline
-                minRows={2}
-                placeholder="Send a message to the Claude agent…"
-                value={input}
-                disabled={archived || isStreaming}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    void sendMessage();
-                  }
-                }}
-              />
-              <Button
-                variant="contained"
-                endIcon={isStreaming ? <CircularProgress size={18} color="inherit" /> : <SendIcon />}
-                disabled={archived || isStreaming || !input.trim()}
-                onClick={() => void sendMessage()}
-                sx={{ alignSelf: 'flex-end', minWidth: 120 }}
-              >
-                Send
-              </Button>
-            </Stack>
-          </Box>
-        )}
+        {tab === 0 && <ChatPanel agent={agent} archived={archived} />}
 
         {tab === 1 && (
           <Box sx={{ p: 2 }}>
@@ -440,27 +345,5 @@ export function AgentPage() {
         </DialogActions>
       </Dialog>
     </Stack>
-  );
-}
-
-function ChatBubble({ message }: { message: Message }) {
-  const isUser = message.role === 'user';
-  return (
-    <Grid container sx={{ mb: 1.5, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-      <Grid size={{ xs: 12, md: 9 }}>
-        <Paper
-          sx={{
-            p: 1.5,
-            bgcolor: isUser ? 'primary.dark' : 'rgba(255,255,255,0.04)',
-            borderColor: isUser ? 'primary.main' : 'divider',
-          }}
-        >
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            {isUser ? 'You' : 'Claude'} • {new Date(message.createdAt).toLocaleTimeString()}
-          </Typography>
-          <Typography sx={{ whiteSpace: 'pre-wrap' }}>{message.content}</Typography>
-        </Paper>
-      </Grid>
-    </Grid>
   );
 }
