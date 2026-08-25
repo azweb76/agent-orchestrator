@@ -38,7 +38,7 @@ export function CreateWorktreeDialog({
 }: CreateWorktreeDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'branch' | 'pr' | 'idea'>('branch');
+  const [tab, setTab] = useState<'branch' | 'pr' | 'idea'>('idea');
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
@@ -74,7 +74,7 @@ export function CreateWorktreeDialog({
   };
 
   const resetForm = () => {
-    setTab('branch');
+    setTab('idea');
     setBranchMode('existing');
     setSelectedBranch('');
     setNewBranchName('');
@@ -147,10 +147,29 @@ export function CreateWorktreeDialog({
       <DialogTitle>Create agent</DialogTitle>
       <DialogContent>
         <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+          <Tab value="idea" label="From idea" />
           <Tab value="branch" label="From branch" />
           <Tab value="pr" label="From PR" />
-          <Tab value="idea" label="From idea" />
         </Tabs>
+
+        {tab === 'idea' && (
+          <Stack spacing={1.5}>
+            <TextField
+              label="Describe your idea"
+              value={ideaText}
+              onChange={(e) => setIdeaText(e.target.value)}
+              placeholder="Add a dark mode toggle to the settings page"
+              fullWidth
+              multiline
+              minRows={4}
+              autoFocus
+            />
+            <Typography variant="body2" color="text.secondary">
+              A branch name is suggested automatically. The agent starts in plan mode with your idea
+              and will ask clarifying questions before drafting a plan.
+            </Typography>
+          </Stack>
+        )}
 
         {tab === 'branch' && (
           <Stack spacing={2}>
@@ -224,25 +243,6 @@ export function CreateWorktreeDialog({
               ))}
             </Select>
           </FormControl>
-        )}
-
-        {tab === 'idea' && (
-          <Stack spacing={1.5}>
-            <TextField
-              label="Describe your idea"
-              value={ideaText}
-              onChange={(e) => setIdeaText(e.target.value)}
-              placeholder="Add a dark mode toggle to the settings page"
-              fullWidth
-              multiline
-              minRows={4}
-              autoFocus
-            />
-            <Typography variant="body2" color="text.secondary">
-              A branch name is suggested automatically. The agent starts in plan mode with your idea
-              and will ask clarifying questions before drafting a plan.
-            </Typography>
-          </Stack>
         )}
 
         {createError && (
