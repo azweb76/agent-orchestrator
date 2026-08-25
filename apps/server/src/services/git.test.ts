@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import {
   ClaudeService,
+  GitService,
   isPidAlive,
   killProcessTree,
   slugify,
 } from './git.js';
 
+const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function writeFakeClaude(binPath: string, script: string): Promise<void> {
@@ -149,4 +152,95 @@ test('killProcessTree terminates process groups started detached', async () => {
 test('slugify turns a PR head ref into a worktree-safe name', () => {
   assert.equal(slugify('feature/dark-mode'), 'feature-dark-mode');
   assert.equal(slugify('cursor/from-pr-worktree-branch-name-3bcb'), 'cursor-from-pr-worktree-branch-name-3bcb');
+});
+
+async function execGit(cwd: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync('git', ['-C', cwd, ...args], {
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  return stdout.trim();
+}
+
+async function setupPrFetchFixture(): Promise<{
+  tmp: string;
+  origin: string;
+  main: string;
+  prCommit: string;
+}> {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'pr-fetch-'));
+  const origin = path.join(tmp, 'origin.git');
+  const main = path.join(tmp, 'main');
+
+  await execGit(tmp, ['init', '--bare', origin]);
+  await execGit(tmp, ['clone', origin, main]);
+  await execGit(main, ['config', 'user.email', 'test@example.com']);
+  await execGit(main, ['config', 'user.name', 'Test']);
+  await fs.writeFile(path.join(main, 'README.md'), 'main\n');
+  await execGit(main, ['add', 'README.md']);
+  await execGit(main, ['commit', '-m', 'initial']);
+  const current = await execGit(main, ['branch', '--show-current']);
+  if (current !== 'main') {
+    await execGit(main, ['branch', '-M', 'main']);
+  }
+  await execGit(main, ['push', '-u', 'origin', 'main']);
+
+  await execGit(main, ['checkout', '-b', 'pr-head']);
+  await fs.writeFile(path.join(main, 'feature.txt'), 'pr change\n');
+  await execGit(main, ['add', 'feature.txt']);
+  await execGit(main, ['commit', '-m', 'pr commit']);
+  const prCommit = await execGit(main, ['rev-parse', 'HEAD']);
+  await execGit(main, ['push', 'origin', 'pr-head']);
+  // Simulate GitHub's pull/N/head ref on the remote
+  await execGit(origin, ['update-ref', 'refs/pull/33/head', prCommit]);
+  await execGit(main, ['checkout', 'main']);
+
+  return { tmp, origin, main, prCommit };
+}
+
+test('fetchPullRequest creates local branch when not checked out', async () => {
+  const { tmp, main, prCommit } = await setupPrFetchFixture();
+  const git = new GitService();
+
+  await git.fetchPullRequest(main, 33, 'pr-33');
+
+  const tip = await execGit(main, ['rev-parse', 'pr-33']);
+  assert.equal(tip, prCommit);
+  assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), null);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('fetchPullRequest succeeds when local PR branch is already checked out in a worktree', async () => {
+  const { tmp, main, origin, prCommit } = await setupPrFetchFixture();
+  const git = new GitService();
+  const worktreePath = path.join(tmp, 'pr-33-update-node');
+
+  // First fetch + worktree — the real-world state that triggered the bug
+  await git.fetchPullRequest(main, 33, 'pr-33');
+  await git.addWorktree(main, worktreePath, 'pr-33');
+  assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
+
+  // Advance the remote PR head so a direct fetch into refs/heads/pr-33 would refuse
+  const updater = path.join(tmp, 'updater');
+  await execGit(tmp, ['clone', origin, updater]);
+  await execGit(updater, ['config', 'user.email', 'test@example.com']);
+  await execGit(updater, ['config', 'user.name', 'Test']);
+  await execGit(updater, ['fetch', 'origin', 'pull/33/head']);
+  await execGit(updater, ['checkout', '-B', 'pr-head', 'FETCH_HEAD']);
+  await fs.writeFile(path.join(updater, 'feature.txt'), 'pr change v2\n');
+  await execGit(updater, ['add', 'feature.txt']);
+  await execGit(updater, ['commit', '-m', 'pr commit v2']);
+  const newerCommit = await execGit(updater, ['rev-parse', 'HEAD']);
+  await execGit(updater, ['push', 'origin', 'pr-head']);
+  await execGit(origin, ['update-ref', 'refs/pull/33/head', newerCommit]);
+
+  // This used to throw: refusing to fetch into branch 'refs/heads/pr-33' checked out at ...
+  await assert.doesNotReject(() => git.fetchPullRequest(main, 33, 'pr-33'));
+
+  assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
+  // Local checked-out tip is left alone; remote-tracking pull ref is updated
+  assert.equal(await execGit(worktreePath, ['rev-parse', 'pr-33']), prCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/remotes/pull/33/head']), newerCommit);
+
+  await fs.rm(tmp, { recursive: true, force: true });
 });
