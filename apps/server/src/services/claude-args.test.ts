@@ -5,7 +5,12 @@ import {
   buildPromptWithImages,
   buildStreamUserMessage,
   DEFAULT_ALLOWED_TOOLS,
+  INTERACTIVE_TOOLS,
 } from './git.js';
+import {
+  allowedToolsForPermissionMode,
+  shouldAutoAllowToolPermission,
+} from './permission-protocol.js';
 
 test('buildPromptWithImages appends image paths for the Read tool', () => {
   const prompt = buildPromptWithImages('Fix this UI', ['/tmp/a.png', '/tmp/b.jpg']);
@@ -27,10 +32,18 @@ test('buildClaudeArgs enables stdio permission prompts and interactive tools', (
   assert.equal(args[args.indexOf('--input-format') + 1], 'stream-json');
   assert.ok(args.includes('--permission-mode'));
   assert.equal(args[args.indexOf('--permission-mode') + 1], 'plan');
-  const tools = args[args.indexOf('--allowedTools') + 1];
-  assert.match(String(tools), /AskUserQuestion/);
-  assert.match(String(tools), /ExitPlanMode/);
-  assert.equal(DEFAULT_ALLOWED_TOOLS.includes('AskUserQuestion'), true);
+
+  // Interactive tools must remain available (default tool set) but never
+  // appear in --allowedTools, or Claude auto-approves them without the UI.
+  assert.ok(!args.includes('--tools'));
+  assert.match(INTERACTIVE_TOOLS, /AskUserQuestion/);
+  assert.match(INTERACTIVE_TOOLS, /ExitPlanMode/);
+
+  const allowed = args[args.indexOf('--allowedTools') + 1];
+  assert.ok(!String(allowed).includes('AskUserQuestion'));
+  assert.ok(!String(allowed).includes('ExitPlanMode'));
+  assert.equal(DEFAULT_ALLOWED_TOOLS.includes('AskUserQuestion'), false);
+  assert.equal(allowed, allowedToolsForPermissionMode('plan'));
 });
 
 test('buildClaudeArgs passes permission-mode for bypass without dangerously-skip', () => {
@@ -45,6 +58,9 @@ test('buildClaudeArgs passes permission-mode for bypass without dangerously-skip
     '--model',
     'sonnet',
   ]);
+  const allowed = args[args.indexOf('--allowedTools') + 1];
+  assert.match(String(allowed), /Bash/);
+  assert.ok(!String(allowed).includes('AskUserQuestion'));
 });
 
 test('buildClaudeArgs passes permission-mode for non-bypass modes', () => {
@@ -57,14 +73,41 @@ test('buildClaudeArgs passes permission-mode for non-bypass modes', () => {
   assert.equal(args[modeIdx + 1], 'plan');
 });
 
-test('buildStreamUserMessage wraps the prompt for stream-json stdin', () => {
-  const line = buildStreamUserMessage('Hello');
-  assert.equal(line.endsWith('\n'), true);
-  const parsed = JSON.parse(line) as {
+test('buildStreamUserMessage wraps the prompt as stream-json', () => {
+  const line = buildStreamUserMessage('hello');
+  assert.ok(line.endsWith('\n'));
+  const parsed = JSON.parse(line.trim()) as {
     type: string;
     message: { role: string; content: string };
   };
   assert.equal(parsed.type, 'user');
   assert.equal(parsed.message.role, 'user');
-  assert.equal(parsed.message.content, 'Hello');
+  assert.equal(parsed.message.content, 'hello');
+});
+
+test('allowedToolsForPermissionMode never auto-approves interactive tools', () => {
+  for (const mode of [
+    'default',
+    'acceptEdits',
+    'plan',
+    'auto',
+    'dontAsk',
+    'bypassPermissions',
+  ]) {
+    const tools = allowedToolsForPermissionMode(mode);
+    assert.ok(!tools.includes('AskUserQuestion'), mode);
+    assert.ok(!tools.includes('ExitPlanMode'), mode);
+  }
+  assert.equal(allowedToolsForPermissionMode('plan'), 'Read,Glob,Grep');
+  assert.match(allowedToolsForPermissionMode('acceptEdits'), /Edit/);
+  assert.match(allowedToolsForPermissionMode('auto'), /Bash/);
+});
+
+test('shouldAutoAllowToolPermission keeps interactive tools on the UI', () => {
+  assert.equal(shouldAutoAllowToolPermission('AskUserQuestion', 'auto'), false);
+  assert.equal(shouldAutoAllowToolPermission('ExitPlanMode', 'bypassPermissions'), false);
+  assert.equal(shouldAutoAllowToolPermission('Bash', 'plan'), false);
+  assert.equal(shouldAutoAllowToolPermission('Bash', 'default'), false);
+  assert.equal(shouldAutoAllowToolPermission('Bash', 'auto'), true);
+  assert.equal(shouldAutoAllowToolPermission('Edit', 'bypassPermissions'), true);
 });

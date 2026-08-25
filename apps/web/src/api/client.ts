@@ -3,6 +3,7 @@ import type {
   AgentDetail,
   AgentDiff,
   AgentEvent,
+  AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
   BuildPlanRequest,
   CreateAgentFromPrRequest,
@@ -118,6 +119,11 @@ export const api = {
     request<PermissionRequest[]>(`/agents/${agentId}/permissions`),
   answerPermission: (agentId: string, body: AnswerAskUserQuestionRequest) =>
     request<{ ok: true }>(`/agents/${agentId}/permissions/answer`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  allowPermission: (agentId: string, body: AllowPermissionRequest) =>
+    request<{ ok: true }>(`/agents/${agentId}/permissions/allow`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

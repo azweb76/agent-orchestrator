@@ -21,6 +21,7 @@ import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
+import { ToolPermissionCard } from './ToolPermissionCard';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -403,6 +404,37 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     }
   };
 
+  const allowTool = async (request: PermissionRequest) => {
+    setPermissionBusy(true);
+    setChatError(null);
+    try {
+      await api.allowPermission(agentId, { requestId: request.requestId });
+      removePermission(request.requestId);
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setPermissionBusy(false);
+    }
+  };
+
+  const denyTool = async (request: PermissionRequest) => {
+    setPermissionBusy(true);
+    setChatError(null);
+    try {
+      await api.denyPermission(agentId, {
+        requestId: request.requestId,
+        message: 'User denied this tool request.',
+      });
+      removePermission(request.requestId);
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setPermissionBusy(false);
+    }
+  };
+
   const buildPlan = async (request: PermissionRequest) => {
     if (archived || !mountedRef.current) return;
     setPermissionBusy(true);
@@ -608,7 +640,15 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               />
             );
           }
-          return null;
+          return (
+            <ToolPermissionCard
+              key={request.requestId}
+              request={request}
+              submitting={permissionBusy}
+              onAllow={() => void allowTool(request)}
+              onDeny={() => void denyTool(request)}
+            />
+          );
         })}
 
         <div ref={chatEndRef} />

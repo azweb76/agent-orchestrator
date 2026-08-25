@@ -4,6 +4,7 @@ import {
   buildControlResponse,
   isInteractivePermissionTool,
   parsePermissionRequest,
+  shouldAutoAllowToolPermission,
 } from './permission-protocol.js';
 import { extractPlanFromInput, parseAskUserQuestions } from '@agent-orchestrator/shared';
 
@@ -51,6 +52,13 @@ test('isInteractivePermissionTool only flags AskUserQuestion and ExitPlanMode', 
   assert.equal(isInteractivePermissionTool('AskUserQuestion'), true);
   assert.equal(isInteractivePermissionTool('ExitPlanMode'), true);
   assert.equal(isInteractivePermissionTool('Bash'), false);
+});
+
+test('shouldAutoAllowToolPermission never auto-allows interactive tools', () => {
+  assert.equal(shouldAutoAllowToolPermission('AskUserQuestion', 'auto'), false);
+  assert.equal(shouldAutoAllowToolPermission('ExitPlanMode', 'plan'), false);
+  assert.equal(shouldAutoAllowToolPermission('Bash', 'default'), false);
+  assert.equal(shouldAutoAllowToolPermission('Bash', 'auto'), true);
 });
 
 test('buildControlResponse allow includes updatedInput', () => {
