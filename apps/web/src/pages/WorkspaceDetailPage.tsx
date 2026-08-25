@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -22,6 +22,7 @@ import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { PageHeader } from '../components/ui/PageHeader';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
+import { pullRequestPath } from '../utils/paths';
 
 export function WorkspaceDetailPage() {
   const { workspaceId = '' } = useParams();
@@ -176,7 +177,20 @@ export function WorkspaceDetailPage() {
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.25 }}>
                   <ListRowTitle>{worktree.name}</ListRowTitle>
                   {worktree.prNumber ? (
-                    <Chip size="small" label={`PR #${worktree.prNumber}`} color="info" variant="outlined" />
+                    <Chip
+                      size="small"
+                      label={`PR #${worktree.prNumber}`}
+                      color="info"
+                      variant="outlined"
+                      clickable
+                      component={RouterLink}
+                      to={pullRequestPath(
+                        workspace.githubOwner,
+                        workspace.githubRepo,
+                        worktree.prNumber,
+                      )}
+                      onClick={(event) => event.stopPropagation()}
+                    />
                   ) : null}
                 </Stack>
                 <ListRowMeta>

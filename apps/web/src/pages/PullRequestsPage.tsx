@@ -22,6 +22,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
 import { PageHeader } from '../components/ui/PageHeader';
 import { formatRelativeTime } from '../utils/format';
+import { pullRequestPath } from '../utils/paths';
 
 type InboxTab = 'authored' | 'review';
 
@@ -141,6 +142,8 @@ export function PullRequestsPage() {
             return (
               <ListRow
                 key={key}
+                component={RouterLink}
+                to={pullRequestPath(pr.owner, pr.repo, pr.number)}
                 secondaryAction={
                   <>
                     {pr.workspaceId ? (

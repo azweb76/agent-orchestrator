@@ -22,6 +22,7 @@ import { api } from '../api/client';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
+import { pullRequestPath } from '../utils/paths';
 
 function greetingForHour(hour: number): string {
   if (hour < 12) return 'Good morning';
@@ -654,7 +655,7 @@ export function DashboardPage() {
                   <Box
                     key={`${pr.owner}/${pr.repo}#${pr.number}`}
                     component={RouterLink}
-                    to="/pull-requests"
+                    to={pullRequestPath(pr.owner, pr.repo, pr.number)}
                     sx={{
                       display: 'block',
                       textDecoration: 'none',
