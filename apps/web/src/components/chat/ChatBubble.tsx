@@ -136,11 +136,11 @@ export function ChatBubble({
         sx={{
           display: 'flex',
           justifyContent: 'flex-end',
-          mb: gutter ? 2.5 : 0,
+          mb: gutter ? 2 : 0,
           '&:hover .chat-actions, &:focus-within .chat-actions': { opacity: 1 },
         }}
       >
-        <Box sx={{ position: 'relative', maxWidth: { xs: '92%', sm: '78%' } }}>
+        <Box sx={{ position: 'relative', maxWidth: { xs: '90%', sm: 440 } }}>
           <Box
             sx={{
               position: 'absolute',
@@ -185,7 +185,7 @@ export function ChatBubble({
   return (
     <Box
       sx={{
-        mb: gutter ? 2.5 : 0,
+        mb: gutter ? 2 : 0,
         '&:hover .chat-actions, &:focus-within .chat-actions': { opacity: 1 },
       }}
     >

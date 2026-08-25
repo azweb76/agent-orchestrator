@@ -125,7 +125,7 @@ export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
           {active ? toolIcon(active.name) : <BuildOutlinedIcon sx={{ fontSize: 16 }} />}
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
               {label}
             </Typography>

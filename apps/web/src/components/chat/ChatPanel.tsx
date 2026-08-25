@@ -7,6 +7,7 @@ import {
   CircularProgress,
   Fab,
   Stack,
+  Tooltip,
 } from '@mui/material';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -85,7 +86,7 @@ function MessageTimeline({ message }: { message: Message }) {
   const showThinking = streaming && !showText && !showToolProgress;
 
   return (
-    <Box sx={{ mb: 2.75 }}>
+    <Box sx={{ mb: 2 }}>
       <ChatBubble
         gutter={false}
         hideBody={!showText && streaming}
@@ -125,6 +126,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   );
   const abortRef = useRef<AbortController | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const sendingRef = useRef(false);
@@ -244,6 +246,23 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   };
 
   const displayMessages = messagesQuery.data ?? [];
+
+  useEffect(() => {
+    const root = chatScrollRef.current;
+    const target = bottomSentinelRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const near = Boolean(entry?.isIntersecting);
+        stickToBottomRef.current = near;
+        setShowJumpToLatest(!near && root.scrollHeight - root.clientHeight > NEAR_BOTTOM_PX);
+      },
+      { root, threshold: 0.01, rootMargin: '0px 0px 80px 0px' },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [agentId, displayMessages.length, permissionRequests.length, messagesQuery.isLoading]);
 
   const patchStreamingAssistant = (
     mutate: (message: Message) => Message,
@@ -767,28 +786,29 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
                 />
               );
             })}
+            <Box ref={bottomSentinelRef} sx={{ height: 1, width: '100%' }} aria-hidden />
           </Box>
         </Box>
 
         {showJumpToLatest ? (
-          <Fab
-            size="small"
-            onClick={jumpToLatest}
-            aria-label="Jump to latest messages"
-            sx={{
-              position: 'absolute',
-              bottom: 12,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 1,
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
-            }}
-          >
-            <KeyboardArrowDownIcon />
-          </Fab>
+          <Tooltip title="Jump to latest">
+            <Fab
+              size="small"
+              color="primary"
+              onClick={jumpToLatest}
+              aria-label="Jump to latest messages"
+              sx={{
+                position: 'absolute',
+                bottom: 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 2,
+                color: '#0b0f17',
+              }}
+            >
+              <KeyboardArrowDownIcon />
+            </Fab>
+          </Tooltip>
         ) : null}
       </Box>
 
