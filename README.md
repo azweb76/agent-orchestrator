@@ -4,6 +4,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
 
 ## Features
 
+- **Command center** — Jarvis-style home dashboard with live agent fleet, system readiness, workspaces, and PR inbox
 - **Workspaces** — clone GitHub repos as managed workspaces
 - **Pull requests** — browse your open PRs and review requests, then create a workspace + agent from any PR
 - **Worktrees** — create worktrees from branches or existing pull requests
