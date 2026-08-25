@@ -171,7 +171,6 @@ export interface ClaudeRunOptions {
   cwd: string;
   prompt: string;
   model?: string;
-  environment?: string | null;
   sessionId?: string | null;
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
@@ -191,7 +190,6 @@ export interface ClaudeRunOptions {
 
 export function buildClaudeArgs(options: {
   model?: string;
-  environment?: string | null;
   sessionId?: string | null;
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
@@ -231,10 +229,6 @@ export function buildClaudeArgs(options: {
 
   if (options.model) {
     args.push('--model', options.model);
-  }
-
-  if (options.environment) {
-    args.push('--environment', options.environment);
   }
 
   if (options.sessionId) {
@@ -466,7 +460,6 @@ export class ClaudeService {
     const permissionMode = options.permissionMode ?? 'plan';
     const args = buildClaudeArgs({
       model: options.model,
-      environment: options.environment,
       sessionId: options.sessionId,
       allowedTools: options.allowedTools,
       permissionMode,

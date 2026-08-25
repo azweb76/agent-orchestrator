@@ -76,7 +76,6 @@ async function createAgentForWorktree(
     name,
     status: 'idle',
     model: 'sonnet',
-    environment: null,
     permissionMode: 'plan',
     claudeSessionId: null,
     pid: null,
@@ -330,28 +329,11 @@ export async function updateAgent(ctx: AppContext, agentId: string, body: Update
     ...agent,
     name: body.name ?? agent.name,
     model: body.model ?? agent.model,
-    environment: body.environment !== undefined ? body.environment : agent.environment,
     permissionMode: body.permissionMode ?? agent.permissionMode,
     updatedAt: nowIso(),
   };
 
   ctx.repos.agents.update(updated);
-  return updated;
-}
-
-export async function startAgent(ctx: AppContext, agentId: string) {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
-  if (agent.archivedAt) throw new Error('Cannot start archived agent');
-
-  const installed = await ctx.claude.checkInstalled();
-  if (!installed) {
-    throw new Error('Claude Code CLI is not installed or not on PATH');
-  }
-
-  const updated: Agent = { ...agent, status: 'idle', updatedAt: nowIso() };
-  ctx.repos.agents.update(updated);
-  ctx.repos.events.create(makeEvent(agentId, 'agent_started', { message: 'Agent ready for chat' }));
   return updated;
 }
 
@@ -361,9 +343,10 @@ export async function stopAgent(ctx: AppContext, agentId: string) {
 
   ctx.claude.stop(agentId, agent.pid);
   markStreamingAssistantStopped(ctx, agentId);
+  // Return to idle so the next chat message can start a run without a manual Start.
   const updated: Agent = {
     ...agent,
-    status: 'stopped',
+    status: agent.archivedAt ? 'archived' : 'idle',
     pid: null,
     runLogPath: null,
     updatedAt: nowIso(),
@@ -799,7 +782,9 @@ function finalizeAgentRun(
   assistantText: string,
   extras: MessageMetadata = {},
 ): Message {
-  const status = agent.status === 'stopped' || agent.status === 'archived' ? agent.status : 'idle';
+  // Runs auto-start on chat send and auto-stop when the process ends.
+  // Preserve archived; otherwise always return to idle (including user interrupts).
+  const status = agent.status === 'archived' ? agent.status : 'idle';
   ctx.repos.agents.update(
     clearAgentRunFields(agent, {
       claudeSessionId: result.sessionId ?? agent.claudeSessionId,
@@ -1135,7 +1120,6 @@ export async function streamAgentChat(
       cwd: detail.worktree.path,
       prompt: userMessage.content,
       model: runningAgent.model,
-      environment: runningAgent.environment,
       permissionMode: runningAgent.permissionMode,
       sessionId: runningAgent.claudeSessionId,
       imagePaths: attachments.map((item) => item.path),

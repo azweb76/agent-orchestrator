@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -18,13 +18,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import StopIcon from '@mui/icons-material/Stop';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PermissionMode } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -47,7 +44,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
-  const [environment, setEnvironment] = useState('');
 
   const agentQuery = useQuery({
     queryKey: ['agent', agentId],
@@ -66,35 +62,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     queryKey: ['diff', agentId],
     queryFn: () => api.getDiff(agentId),
     enabled: Boolean(agentId) && tab === 1,
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (body: {
-      model?: string;
-      environment?: string | null;
-      permissionMode?: PermissionMode;
-    }) => api.updateAgent(agentId, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    },
-  });
-
-  const startMutation = useMutation({
-    mutationFn: () => api.startAgent(agentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    },
-  });
-
-  const stopMutation = useMutation({
-    mutationFn: () => api.stopAgent(agentId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    },
   });
 
   const archiveMutation = useMutation({
@@ -117,10 +84,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
-
-  useEffect(() => {
-    setEnvironment(agentQuery.data?.environment ?? '');
-  }, [agentQuery.data?.environment]);
 
   if (agentQuery.isLoading) {
     return (
@@ -204,41 +167,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         </Box>
 
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <TextField
-            size="small"
-            label="Environment"
-            placeholder="ccpool_..."
-            value={environment}
-            disabled={archived}
-            onChange={(e) => setEnvironment(e.target.value)}
-            onBlur={() => {
-              const next = environment || null;
-              if (next !== (agent.environment ?? null)) {
-                updateMutation.mutate({ environment: next });
-              }
-            }}
-            sx={{ width: { xs: '100%', sm: 160 } }}
-          />
-
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<PlayArrowIcon />}
-            disabled={archived || startMutation.isPending || agent.status === 'running'}
-            onClick={() => startMutation.mutate()}
-          >
-            Start
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            color="warning"
-            startIcon={<StopIcon />}
-            disabled={archived || stopMutation.isPending || agent.status !== 'running'}
-            onClick={() => stopMutation.mutate()}
-          >
-            Stop
-          </Button>
           <Button
             size="small"
             variant="outlined"
