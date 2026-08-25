@@ -821,7 +821,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           backdropFilter: 'blur(12px)',
         }}
       >
-        <Box sx={{ maxWidth: CHAT_COLUMN_MAX_WIDTH, mx: 'auto', px: { xs: 1.5, sm: 2.5 }, py: 1.5 }}>
+        <Box sx={{ maxWidth: CHAT_COLUMN_MAX_WIDTH, mx: 'auto', px: { xs: 1.25, sm: 2.5 }, py: { xs: 1.25, sm: 1.5 }, pb: { xs: 'calc(10px + env(safe-area-inset-bottom, 0px))', sm: 1.5 } }}>
           {chatError && (
             <Alert
               severity="error"

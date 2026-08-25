@@ -10,8 +10,19 @@ export function PageBreadcrumbs({ items }: { items: Crumb[] }) {
   return (
     <Breadcrumbs
       aria-label="Breadcrumb"
+      maxItems={3}
+      itemsBeforeCollapse={1}
       sx={{
-        '& .MuiBreadcrumbs-separator': { color: 'text.disabled', mx: 0.75 },
+        minWidth: 0,
+        '& .MuiBreadcrumbs-ol': { flexWrap: 'nowrap' },
+        '& .MuiBreadcrumbs-li': {
+          minWidth: 0,
+          maxWidth: { xs: 160, sm: 240 },
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        },
+        '& .MuiBreadcrumbs-separator': { color: 'text.disabled', mx: { xs: 0.5, sm: 0.75 } },
       }}
     >
       {items.map((item, index) => {
@@ -25,7 +36,7 @@ export function PageBreadcrumbs({ items }: { items: Crumb[] }) {
               underline="hover"
               color="text.secondary"
               variant="body2"
-              sx={{ fontWeight: 500 }}
+              sx={{ fontWeight: 500, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis' }}
             >
               {item.label}
             </Link>
@@ -36,7 +47,7 @@ export function PageBreadcrumbs({ items }: { items: Crumb[] }) {
             key={`${item.label}-${index}`}
             variant="body2"
             color="text.primary"
-            sx={{ fontWeight: 600 }}
+            sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}
           >
             {item.label}
           </Typography>

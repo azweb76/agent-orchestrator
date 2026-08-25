@@ -52,6 +52,7 @@ const components: Components = {
         p: 1.5,
         my: 1,
         overflow: 'auto',
+        overflowWrap: 'anywhere',
         borderRadius: 2,
         bgcolor: 'rgba(0,0,0,0.35)',
         border: '1px solid',
@@ -105,6 +106,14 @@ const components: Components = {
     >
       {children}
     </Box>
+  ),
+  img: ({ src, alt }) => (
+    <Box
+      component="img"
+      src={src}
+      alt={alt ?? ''}
+      sx={{ maxWidth: '100%', height: 'auto', borderRadius: 1, my: 1, display: 'block' }}
+    />
   ),
   hr: () => (
     <Box

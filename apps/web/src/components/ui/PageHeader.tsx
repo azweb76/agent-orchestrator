@@ -46,7 +46,7 @@ export function PageHeader({ eyebrow, title, description, actions, breadcrumbs }
             {title}
           </Typography>
           {description ? (
-            <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 640, lineHeight: 1.5 }}>
+            <Typography color="text.secondary" sx={{ mt: 0.75, maxWidth: 640, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
               {description}
             </Typography>
           ) : null}
@@ -56,7 +56,12 @@ export function PageHeader({ eyebrow, title, description, actions, breadcrumbs }
             direction="row"
             spacing={1}
             useFlexGap
-            sx={{ flexWrap: 'wrap', flexShrink: 0, alignItems: 'center' }}
+            sx={{
+              flexWrap: 'wrap',
+              flexShrink: 0,
+              alignItems: 'center',
+              width: { xs: '100%', sm: 'auto' },
+            }}
           >
             {actions}
           </Stack>

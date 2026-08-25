@@ -89,21 +89,24 @@ export function PullRequestsPage() {
       <Tabs
         value={tab}
         onChange={(_, value: InboxTab) => setTab(value)}
-        sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 44 }}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ borderBottom: 1, borderColor: 'divider', minHeight: 44, maxWidth: '100%' }}
       >
         <Tab
           value="authored"
           icon={<MergeTypeIcon />}
           iconPosition="start"
           disabled={!status?.githubTokenConfigured}
-          label={`My open PRs (${authoredCount})`}
+          label={`My PRs (${authoredCount})`}
         />
         <Tab
           value="review"
           icon={<RateReviewOutlinedIcon />}
           iconPosition="start"
           disabled={!status?.githubTokenConfigured}
-          label={`Waiting for review (${reviewCount})`}
+          label={`Reviews (${reviewCount})`}
         />
       </Tabs>
 
@@ -174,7 +177,7 @@ export function PullRequestsPage() {
                         disabled={createMutation.isPending}
                         onClick={() => createMutation.mutate(pr)}
                       >
-                        {pr.workspaceId ? 'Create agent' : 'Create workspace & agent'}
+                        {pr.workspaceId ? 'Create agent' : 'Start agent'}
                       </Button>
                     )}
                   </>

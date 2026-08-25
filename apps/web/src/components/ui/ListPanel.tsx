@@ -52,10 +52,11 @@ export function ListRow({
       onClick={onClick}
       sx={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        px: { xs: 1.75, sm: 2.25 },
-        py: 1.75,
+        flexDirection: { xs: 'column', sm: 'row' },
+        alignItems: { xs: 'stretch', sm: 'center' },
+        gap: { xs: 1.25, sm: 2 },
+        px: { xs: 1.5, sm: 2.25 },
+        py: { xs: 1.5, sm: 1.75 },
         textDecoration: 'none',
         color: 'inherit',
         borderBottom: '1px solid',
@@ -82,7 +83,12 @@ export function ListRow({
           direction="row"
           spacing={1}
           useFlexGap
-          sx={{ flexWrap: 'wrap', flexShrink: 0, alignItems: 'center' }}
+          sx={{
+            flexWrap: 'wrap',
+            flexShrink: 0,
+            alignItems: 'center',
+            justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {secondaryAction}
@@ -94,7 +100,11 @@ export function ListRow({
 
 export function ListRowTitle({ children }: { children: ReactNode }) {
   return (
-    <Typography variant="body1" component="span" sx={{ fontWeight: 600, lineHeight: 1.35 }}>
+    <Typography
+      variant="body1"
+      component="span"
+      sx={{ fontWeight: 600, lineHeight: 1.35, overflowWrap: 'anywhere' }}
+    >
       {children}
     </Typography>
   );
@@ -102,7 +112,11 @@ export function ListRowTitle({ children }: { children: ReactNode }) {
 
 export function ListRowMeta({ children }: { children: ReactNode }) {
   return (
-    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, lineHeight: 1.4 }}>
+    <Typography
+      variant="body2"
+      color="text.secondary"
+      sx={{ mt: 0.25, lineHeight: 1.4, overflowWrap: 'anywhere' }}
+    >
       {children}
     </Typography>
   );

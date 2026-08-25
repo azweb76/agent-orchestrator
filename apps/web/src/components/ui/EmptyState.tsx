@@ -15,7 +15,7 @@ export function EmptyState({ icon, title, description, action, compact }: EmptyS
       sx={{
         textAlign: 'center',
         py: compact ? 4 : 6,
-        px: 3,
+        px: { xs: 2, sm: 3 },
         border: '1px dashed',
         borderColor: 'divider',
         borderRadius: 2,
