@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   CircularProgress,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -25,6 +24,7 @@ import { api } from '../api/client';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
 import { PageHeader } from '../components/ui/PageHeader';
+import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -131,7 +131,7 @@ export function WorkspacesPage() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter workspaces…"
-              sx={{ maxWidth: 360 }}
+              sx={{ maxWidth: 360, width: '100%' }}
               slotProps={{
                 input: {
                   startAdornment: (
@@ -174,7 +174,7 @@ export function WorkspacesPage() {
         </Stack>
       )}
 
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <ResponsiveDialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <DialogTitle>Add workspace</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -284,7 +284,7 @@ export function WorkspacesPage() {
             {createMutation.isPending ? 'Cloning…' : 'Create'}
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
     </Stack>
   );
 }

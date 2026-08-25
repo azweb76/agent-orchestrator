@@ -84,9 +84,9 @@ function MetricTile({
     <Box
       sx={{
         flex: 1,
-        minWidth: 110,
+        minWidth: { xs: 0, sm: 110 },
         py: 1.5,
-        px: 2,
+        px: { xs: 1.5, sm: 2 },
         borderLeft: '2px solid',
         borderColor: accent ?? 'secondary.main',
       }}
@@ -236,8 +236,8 @@ export function DashboardPage() {
           border: '1px solid',
           borderColor: 'divider',
           overflow: 'hidden',
-          px: { xs: 2.5, md: 3.5 },
-          py: { xs: 2.75, md: 3.5 },
+          px: { xs: 2, md: 3.5 },
+          py: { xs: 2.25, md: 3.5 },
           background:
             'radial-gradient(ellipse 80% 70% at 15% 20%, rgba(94,234,212,0.12), transparent 55%), radial-gradient(ellipse 60% 80% at 90% 10%, rgba(139,164,255,0.1), transparent 50%), linear-gradient(180deg, rgba(18,24,38,0.95), rgba(11,15,23,0.88))',
         }}
@@ -272,7 +272,7 @@ export function DashboardPage() {
             >
               {greetingForHour(now.getHours())}, Dan
             </Typography>
-            <Typography color="text.secondary" sx={{ maxWidth: 520, lineHeight: 1.5 }}>
+            <Typography color="text.secondary" sx={{ maxWidth: 520, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
               {systemsOk
                 ? 'All systems nominal. Jump into an agent or scan your PR inbox.'
                 : systemsPartial
@@ -355,18 +355,25 @@ export function DashboardPage() {
         </Stack>
       </Box>
 
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={0}
+      <Box
         sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 2,
           bgcolor: 'rgba(18,24,38,0.55)',
           overflow: 'hidden',
+          '& > *:nth-of-type(odd)': {
+            borderRight: { xs: '1px solid', md: 'none' },
+            borderColor: 'divider',
+          },
+          '& > *:nth-of-type(n + 3)': {
+            borderTop: { xs: '1px solid', md: 'none' },
+            borderColor: 'divider',
+          },
           '& > * + *': {
-            borderLeft: { sm: '1px solid' },
-            borderTop: { xs: '1px solid', sm: 'none' },
+            borderLeft: { md: '1px solid' },
             borderColor: 'divider',
           },
         }}
@@ -380,7 +387,7 @@ export function DashboardPage() {
           hint={status?.githubTokenConfigured ? 'Authored + reviews' : 'GitHub not connected'}
           accent="secondary.main"
         />
-      </Stack>
+      </Box>
 
       {(sidebarError as Error | undefined) && (
         <Alert severity="error">{(sidebarError as Error).message}</Alert>
@@ -507,6 +514,7 @@ export function DashboardPage() {
                       label={statusLabel(agent.status)}
                       color={statusColor(agent.status)}
                       variant="outlined"
+                      sx={{ flexShrink: 0 }}
                     />
                   </Stack>
                 </Box>

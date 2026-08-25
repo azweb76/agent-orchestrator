@@ -251,10 +251,11 @@ export function ChatComposer({
                 px: 1.5,
                 py: 0.85,
                 cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'baseline',
+              display: 'flex',
+                alignItems: { xs: 'flex-start', sm: 'baseline' },
+                flexDirection: { xs: 'column', sm: 'row' },
                 justifyContent: 'space-between',
-                gap: 2,
+                gap: { xs: 0.25, sm: 2 },
                 bgcolor: index === highlight ? 'rgba(94,234,212,0.1)' : 'transparent',
                 '&:hover': { bgcolor: 'rgba(94,234,212,0.1)' },
               }}
@@ -265,7 +266,7 @@ export function ChatComposer({
               >
                 {item.command}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap>
+              <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
                 {item.description}
               </Typography>
             </Box>
@@ -397,7 +398,12 @@ export function ChatComposer({
           direction="row"
           spacing={0.5}
           useFlexGap
-          sx={{ alignItems: 'center', flexWrap: 'wrap', pt: 0.25 }}
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            pt: 0.25,
+            rowGap: 0.5,
+          }}
         >
           <input
             ref={fileRef}
@@ -430,7 +436,7 @@ export function ChatComposer({
             disabled={archived}
             onChange={(e) => onModelChange(e.target.value)}
             inputProps={{ 'aria-label': 'Model' }}
-            sx={{ ...selectSx, minWidth: 108, ml: 0.25 }}
+            sx={{ ...selectSx, minWidth: { xs: 88, sm: 108 }, ml: 0.25 }}
           >
             {CLAUDE_MODELS.map((item) => (
               <MenuItem key={item.id} value={item.id}>
@@ -446,7 +452,7 @@ export function ChatComposer({
             disabled={archived}
             onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
             inputProps={{ 'aria-label': 'Permission mode' }}
-            sx={{ ...selectSx, minWidth: 118 }}
+            sx={{ ...selectSx, minWidth: { xs: 96, sm: 118 } }}
           >
             {PERMISSION_MODES.map((item) => (
               <MenuItem key={item.id} value={item.id}>
@@ -472,7 +478,7 @@ export function ChatComposer({
           </Tooltip>
 
           {isStreaming ? (
-            <>
+            <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', ml: 'auto' }}>
               <Tooltip title="Stop this reply">
                 <Button
                   size="small"
@@ -514,7 +520,7 @@ export function ChatComposer({
                   </Button>
                 </span>
               </Tooltip>
-            </>
+            </Stack>
           ) : (
             <Tooltip title="Send (Enter)">
               <span>

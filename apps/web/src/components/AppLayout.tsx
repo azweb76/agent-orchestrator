@@ -66,7 +66,7 @@ export function AppLayout() {
   }, [location.pathname]);
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
       <AppBar
         position="sticky"
         elevation={0}
@@ -76,9 +76,10 @@ export function AppLayout() {
           borderBottom: '1px solid',
           borderColor: 'divider',
           zIndex: (t) => t.zIndex.drawer + 1,
+          pt: 'env(safe-area-inset-top)',
         }}
       >
-        <Toolbar sx={{ gap: 1, minHeight: { xs: 56, sm: 64 } }}>
+        <Toolbar sx={{ gap: 1, minHeight: { xs: 56, sm: 64 }, px: { xs: 1, sm: 2 }, overflow: 'hidden' }}>
           {isMobile ? (
             <IconButton
               edge="start"
@@ -104,9 +105,15 @@ export function AppLayout() {
               mr: { xs: 1, md: 2 },
               fontSize: { xs: '1rem', sm: '1.15rem' },
               whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
             }}
           >
-            Agent Orchestrator
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              Agent{' '}
+            </Box>
+            Orchestrator
           </Typography>
 
           {!isMobile ? (
@@ -149,7 +156,7 @@ export function AppLayout() {
 
           <Box sx={{ flexGrow: 1 }} />
 
-          <Stack direction="row" spacing={0.75} sx={{ display: { xs: 'none', sm: 'flex' } }}>
+          <Stack direction="row" spacing={0.75} sx={{ display: { xs: 'none', sm: 'flex' }, flexShrink: 0 }}>
             <Tooltip title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}>
               <Chip
                 size="small"
@@ -176,7 +183,7 @@ export function AppLayout() {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, minWidth: 0 }}>
         {isMobile ? (
           <Drawer
             variant="temporary"
@@ -185,12 +192,18 @@ export function AppLayout() {
             ModalProps={{ keepMounted: true }}
             sx={{
               '& .MuiDrawer-paper': {
-                width: SIDEBAR_EXPANDED_WIDTH,
+                width: `min(${SIDEBAR_EXPANDED_WIDTH}px, 100vw)`,
                 boxSizing: 'border-box',
                 bgcolor: 'rgba(18,24,38,0.98)',
                 backgroundImage: 'none',
-                top: { xs: 56, sm: 64 },
-                height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' },
+                top: {
+                  xs: 'calc(56px + env(safe-area-inset-top, 0px))',
+                  sm: 'calc(64px + env(safe-area-inset-top, 0px))',
+                },
+                height: {
+                  xs: 'calc(100dvh - 56px - env(safe-area-inset-top, 0px))',
+                  sm: 'calc(100dvh - 64px - env(safe-area-inset-top, 0px))',
+                },
                 display: 'flex',
                 flexDirection: 'column',
               },
@@ -231,6 +244,20 @@ export function AppLayout() {
                   );
                 })}
               </Stack>
+              <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', mt: 1.25 }}>
+                <Chip
+                  size="small"
+                  label={status?.claudeInstalled ? 'Claude ready' : 'Claude missing'}
+                  color={status?.claudeInstalled ? 'success' : 'warning'}
+                  variant="outlined"
+                />
+                <Chip
+                  size="small"
+                  label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
+                  color={status?.githubTokenConfigured ? 'success' : 'default'}
+                  variant="outlined"
+                />
+              </Stack>
             </Box>
             <Box sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <WorkspaceSidebar
@@ -245,9 +272,9 @@ export function AppLayout() {
           <Box
             sx={{
               position: 'sticky',
-              top: 64,
+              top: 'calc(64px + env(safe-area-inset-top, 0px))',
               alignSelf: 'flex-start',
-              height: 'calc(100vh - 64px)',
+              height: 'calc(100dvh - 64px - env(safe-area-inset-top, 0px))',
               width: desktopSidebarWidth,
               flexShrink: 0,
               transition: (t) =>
@@ -264,15 +291,21 @@ export function AppLayout() {
         <Container
           maxWidth="xl"
           sx={{
-            py: onAgent ? 1.5 : { xs: 2, md: 3 },
-            px: { xs: 1.5, sm: 2, md: 3 },
+            pt: onAgent ? { xs: 1, md: 1.5 } : { xs: 2, md: 3 },
+            px: { xs: 1.25, sm: 2, md: 3 },
             flex: 1,
             minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
+            pb: onAgent
+              ? { xs: 'calc(8px + env(safe-area-inset-bottom, 0px))', sm: 1.5 }
+              : { xs: 'calc(16px + env(safe-area-inset-bottom, 0px))', md: 3 },
             ...(onAgent
               ? {
-                  height: { xs: 'calc(100vh - 56px)', sm: 'calc(100vh - 64px)' },
+                  height: {
+                    xs: 'calc(100dvh - 56px - env(safe-area-inset-top, 0px))',
+                    sm: 'calc(100dvh - 64px - env(safe-area-inset-top, 0px))',
+                  },
                   overflow: 'hidden',
                 }
               : {}),

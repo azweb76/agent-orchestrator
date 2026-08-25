@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Button,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -28,6 +27,7 @@ import {
   type EffortLevel,
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
 interface CreateWorktreeDialogProps {
   open: boolean;
@@ -155,10 +155,17 @@ export function CreateWorktreeDialog({
         : Boolean(ideaText.trim());
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create agent</DialogTitle>
       <DialogContent>
-        <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, value) => setTab(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{ mb: 2 }}
+        >
           <Tab value="idea" label="From idea" />
           <Tab value="branch" label="From branch" />
           <Tab value="pr" label="From PR" />
@@ -220,6 +227,10 @@ export function CreateWorktreeDialog({
                 row
                 value={branchMode}
                 onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new')}
+                sx={{
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  '& .MuiFormControlLabel-root': { mr: { xs: 0, sm: 2 } },
+                }}
               >
                 <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
                 <FormControlLabel value="new" control={<Radio />} label="New branch" />
@@ -311,6 +322,6 @@ export function CreateWorktreeDialog({
             : 'Create'}
         </Button>
       </DialogActions>
-    </Dialog>
+      </ResponsiveDialog>
   );
 }

@@ -48,7 +48,7 @@ function ActionButtons({
       spacing={0.15}
       className="chat-actions"
       sx={{
-        opacity: { xs: 1, md: 0 },
+        opacity: 0.75,
         transition: 'opacity 0.15s ease',
       }}
     >
@@ -88,8 +88,9 @@ function Attachments({ message }: { message: Message }) {
             src={attachment.url}
             alt={attachment.name}
             sx={{
-              maxWidth: 180,
+              maxWidth: { xs: '100%', sm: 180 },
               maxHeight: 120,
+              width: 'auto',
               borderRadius: 1.5,
               border: '1px solid',
               borderColor: 'divider',
@@ -140,21 +141,7 @@ export function ChatBubble({
           '&:hover .chat-actions, &:focus-within .chat-actions': { opacity: 1 },
         }}
       >
-        <Box sx={{ position: 'relative', maxWidth: { xs: '90%', sm: 440 } }}>
-          <Box
-            sx={{
-              position: 'absolute',
-              right: '100%',
-              top: 6,
-              mr: 0.25,
-            }}
-          >
-            <ActionButtons
-              copied={copied}
-              onCopy={onCopy ? handleCopy : undefined}
-              onRewind={onRewind}
-            />
-          </Box>
+        <Box sx={{ maxWidth: { xs: '100%', sm: 440 }, minWidth: 0, width: { xs: 'auto', sm: 'auto' } }}>
           <Box
             sx={{
               px: 1.75,
@@ -166,14 +153,23 @@ export function ChatBubble({
             }}
           >
             <Attachments message={message} />
-            <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{message.content}</Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', mt: 0.75, textAlign: 'right', opacity: 0.8 }}
-            >
-              {formatClock(message.createdAt)}
+            <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, overflowWrap: 'anywhere' }}>
+              {message.content}
             </Typography>
+            <Stack
+              direction="row"
+              spacing={0.5}
+              sx={{ alignItems: 'center', justifyContent: 'flex-end', mt: 0.75 }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.8 }}>
+                {formatClock(message.createdAt)}
+              </Typography>
+              <ActionButtons
+                copied={copied}
+                onCopy={onCopy ? handleCopy : undefined}
+                onRewind={onRewind}
+              />
+            </Stack>
           </Box>
         </Box>
       </Box>

@@ -26,16 +26,32 @@ export const theme = createTheme({
   components: {
     MuiCssBaseline: {
       styleOverrides: {
+        html: {
+          WebkitTextSizeAdjust: '100%',
+          textSizeAdjust: '100%',
+        },
         body: {
+          overflowX: 'hidden',
           backgroundImage:
             'radial-gradient(ellipse 70% 50% at 8% 0%, rgba(94,234,212,0.09), transparent 50%), radial-gradient(ellipse 55% 45% at 100% 0%, rgba(139,164,255,0.08), transparent 45%)',
         },
+        '#root': {
+          minHeight: '100dvh',
+          minWidth: 0,
+        },
+        img: {
+          maxWidth: '100%',
+          height: 'auto',
+        },
         pre: {
           fontFamily: '"IBM Plex Mono", monospace',
+          overflowX: 'auto',
+          maxWidth: '100%',
         },
         code: {
           fontFamily: '"IBM Plex Mono", monospace',
           fontSize: '0.9em',
+          overflowWrap: 'anywhere',
         },
         '::selection': {
           backgroundColor: 'rgba(94,234,212,0.28)',
@@ -68,6 +84,11 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           fontWeight: 600,
+          maxWidth: '100%',
+        },
+        label: {
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
         },
       },
     },
@@ -77,14 +98,46 @@ export const theme = createTheme({
           textTransform: 'none',
           fontWeight: 600,
           minHeight: 44,
+          minWidth: 0,
+        },
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          minWidth: 0,
         },
       },
     },
     MuiDialog: {
       styleOverrides: {
-        paper: {
+        paper: ({ theme }) => ({
           backgroundImage: 'none',
+          [theme.breakpoints.down('sm')]: {
+            margin: 16,
+            width: 'calc(100% - 32px)',
+            maxHeight: 'calc(100% - 32px)',
+          },
+        }),
+        paperFullScreen: {
+          margin: 0,
+          width: '100%',
+          maxHeight: '100%',
+          borderRadius: 0,
         },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          [theme.breakpoints.down('sm')]: {
+            position: 'sticky',
+            bottom: 0,
+            paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+            backgroundColor: theme.palette.background.paper,
+            borderTop: `1px solid ${theme.palette.divider}`,
+          },
+        }),
       },
     },
     MuiOutlinedInput: {

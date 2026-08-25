@@ -6,7 +6,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
@@ -27,6 +26,7 @@ import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
+import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
 
@@ -117,13 +117,15 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
   return (
     <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
-      <PageBreadcrumbs
-        items={[
-          { label: 'Workspaces', to: '/workspaces' },
-          { label: agent.workspace.name, to: `/workspaces/${agent.workspace.id}` },
-          { label: agent.name },
-        ]}
-      />
+      <Box sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 0 }}>
+        <PageBreadcrumbs
+          items={[
+            { label: 'Workspaces', to: '/workspaces' },
+            { label: agent.workspace.name, to: `/workspaces/${agent.workspace.id}` },
+            { label: agent.name },
+          ]}
+        />
+      </Box>
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}
@@ -156,6 +158,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 clickable
+                sx={{ maxWidth: { xs: '100%', sm: 360 } }}
               />
             )}
           </Stack>
@@ -225,7 +228,10 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         <Tabs
           value={tab}
           onChange={(_, value) => setTab(value)}
-          sx={{ px: 1.5, minHeight: 40, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={{ px: { xs: 0.5, sm: 1.5 }, minHeight: 40, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Diff" sx={{ minHeight: 40, py: 1 }} />
@@ -296,7 +302,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                     </Typography>
                     <Box
                       component="pre"
-                      sx={{ m: 0, mt: 0.5, fontSize: 12, whiteSpace: 'pre-wrap' }}
+                      sx={{ m: 0, mt: 0.5, fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
                     >
                       {JSON.stringify(event.data, null, 2)}
                     </Box>
@@ -308,7 +314,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         )}
       </Paper>
 
-      <Dialog open={prOpen} onClose={() => setPrOpen(false)} maxWidth="sm" fullWidth>
+      <ResponsiveDialog open={prOpen} onClose={() => setPrOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create pull request</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -348,7 +354,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             {createPrMutation.isPending ? 'Creating…' : 'Create PR'}
           </Button>
         </DialogActions>
-      </Dialog>
+      </ResponsiveDialog>
 
       <ConfirmDialog
         open={archiveOpen}
