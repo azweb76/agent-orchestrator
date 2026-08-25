@@ -5,7 +5,7 @@ import { Box, Link, Typography } from '@mui/material';
 
 const components: Components = {
   p: ({ children }) => (
-    <Typography component="p" sx={{ mb: 1, '&:last-child': { mb: 0 } }}>
+    <Typography component="p" sx={{ mb: 1, lineHeight: 1.65, '&:last-child': { mb: 0 } }}>
       {children}
     </Typography>
   ),
@@ -72,7 +72,7 @@ const components: Components = {
     </Box>
   ),
   li: ({ children }) => (
-    <Typography component="li" sx={{ mb: 0.5 }}>
+    <Typography component="li" sx={{ mb: 0.5, lineHeight: 1.55 }}>
       {children}
     </Typography>
   ),
@@ -106,14 +106,73 @@ const components: Components = {
       {children}
     </Box>
   ),
+  hr: () => (
+    <Box
+      component="hr"
+      sx={{
+        border: 0,
+        borderTop: '1px solid',
+        borderColor: 'divider',
+        my: 2,
+      }}
+    />
+  ),
+  table: ({ children }) => (
+    <Box sx={{ overflow: 'auto', my: 1.25 }}>
+      <Box
+        component="table"
+        sx={{
+          width: '100%',
+          borderCollapse: 'collapse',
+          fontSize: 13,
+          '& th, & td': {
+            border: '1px solid',
+            borderColor: 'divider',
+            px: 1.25,
+            py: 0.75,
+            textAlign: 'left',
+          },
+          '& th': {
+            bgcolor: 'rgba(255,255,255,0.04)',
+            fontWeight: 600,
+          },
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
+  ),
 };
 
-export function MarkdownContent({ content }: { content: string }) {
+export function MarkdownContent({ content, cursor }: { content: string; cursor?: boolean }) {
   return (
     <Box sx={{ '& > *:first-of-type': { mt: 0 } }}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
-      </ReactMarkdown>
+      {content ? (
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+          {content}
+        </ReactMarkdown>
+      ) : null}
+      {cursor ? (
+        <Box
+          component="span"
+          aria-hidden
+          sx={{
+            display: 'inline-block',
+            width: 7,
+            height: '1.05em',
+            ml: 0.35,
+            mb: '-0.2em',
+            borderRadius: 0.25,
+            bgcolor: 'secondary.main',
+            verticalAlign: 'text-bottom',
+            animation: 'ao-caret 1s steps(1) infinite',
+            '@keyframes ao-caret': {
+              '0%, 49%': { opacity: 1 },
+              '50%, 100%': { opacity: 0 },
+            },
+          }}
+        />
+      ) : null}
     </Box>
   );
 }
