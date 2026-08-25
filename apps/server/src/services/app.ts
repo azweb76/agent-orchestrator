@@ -246,6 +246,15 @@ export async function createWorktreeFromPr(
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
 
+  const existing = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, body.prNumber);
+  if (existing) {
+    let agent = ctx.repos.agents.getByWorktreeId(existing.id);
+    if (!agent) {
+      agent = await createAgentForWorktree(ctx, existing.id, `PR #${body.prNumber} agent`);
+    }
+    return { worktree: existing, agent };
+  }
+
   const pr = await ctx.github.getPullRequest(workspace.githubOwner, workspace.githubRepo, body.prNumber);
   const localBranch = `pr-${body.prNumber}`;
   const name = body.name ?? slugify(pr.headRef);
@@ -253,13 +262,20 @@ export async function createWorktreeFromPr(
   const id = uuidv4();
 
   await ctx.git.fetchPullRequest(workspace.repoPath, body.prNumber, localBranch);
-  await ctx.git.addWorktree(workspace.repoPath, worktreePath, localBranch);
+
+  // If a previous from-PR left the branch checked out (e.g. DB row removed but
+  // git worktree remained), adopt that path instead of failing on worktree add.
+  const existingGitPath = await ctx.git.getWorktreePathForBranch(workspace.repoPath, localBranch);
+  const resolvedPath = existingGitPath ?? worktreePath;
+  if (!existingGitPath) {
+    await ctx.git.addWorktree(workspace.repoPath, worktreePath, localBranch);
+  }
 
   const worktree = ctx.repos.worktrees.create({
     id,
     workspaceId,
-    name,
-    path: worktreePath,
+    name: existingGitPath ? path.basename(existingGitPath) : name,
+    path: resolvedPath,
     branch: localBranch,
     prNumber: pr.number,
     prTitle: pr.title,

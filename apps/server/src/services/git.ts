@@ -50,12 +50,48 @@ export class GitService {
     await execFileAsync('git', args, { maxBuffer: 10 * 1024 * 1024 });
   }
 
+  /**
+   * Fetch a GitHub PR head into a remote-tracking ref, then create/update
+   * `localBranch` to match — without fetching directly into a checked-out branch
+   * (which Git refuses when the branch is used by a worktree).
+   */
   async fetchPullRequest(mainRepoPath: string, prNumber: number, localBranch: string): Promise<void> {
+    const pullRef = `refs/remotes/pull/${prNumber}/head`;
     await execFileAsync(
       'git',
-      ['-C', mainRepoPath, 'fetch', 'origin', `pull/${prNumber}/head:${localBranch}`],
+      ['-C', mainRepoPath, 'fetch', 'origin', `+pull/${prNumber}/head:${pullRef}`],
       { maxBuffer: 10 * 1024 * 1024 },
     );
+
+    const checkedOutAt = await this.getWorktreePathForBranch(mainRepoPath, localBranch);
+    if (checkedOutAt) {
+      // Cannot move refs/heads/<branch> while it is checked out; caller should reuse
+      // the existing worktree. Leave the branch tip as-is.
+      return;
+    }
+
+    await execFileAsync('git', ['-C', mainRepoPath, 'branch', '-f', localBranch, pullRef], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  }
+
+  /** Return the worktree path that has `branch` checked out, if any. */
+  async getWorktreePathForBranch(mainRepoPath: string, branch: string): Promise<string | null> {
+    const { stdout } = await execFileAsync('git', ['-C', mainRepoPath, 'worktree', 'list', '--porcelain'], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    const want = `refs/heads/${branch}`;
+    let currentPath: string | null = null;
+    for (const line of stdout.split('\n')) {
+      if (line.startsWith('worktree ')) {
+        currentPath = line.slice('worktree '.length);
+      } else if (line.startsWith('branch ') && line.slice('branch '.length) === want) {
+        return currentPath;
+      } else if (line === '') {
+        currentPath = null;
+      }
+    }
+    return null;
   }
 
   async removeWorktree(mainRepoPath: string, worktreePath: string): Promise<void> {
