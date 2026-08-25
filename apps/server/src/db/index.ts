@@ -42,7 +42,6 @@ CREATE TABLE IF NOT EXISTS agents (
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'idle',
   model TEXT NOT NULL DEFAULT 'sonnet',
-  environment TEXT,
   permission_mode TEXT NOT NULL DEFAULT 'plan',
   claude_session_id TEXT,
   pid INTEGER,
@@ -241,8 +240,8 @@ export class AgentRepository {
   create(agent: Agent): Agent {
     this.db
       .prepare(
-        `INSERT INTO agents (id, worktree_id, name, status, model, environment, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
-         VALUES (@id, @worktreeId, @name, @status, @model, @environment, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
+        `INSERT INTO agents (id, worktree_id, name, status, model, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
+         VALUES (@id, @worktreeId, @name, @status, @model, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
       )
       .run({
         id: agent.id,
@@ -250,7 +249,6 @@ export class AgentRepository {
         name: agent.name,
         status: agent.status,
         model: agent.model,
-        environment: agent.environment,
         permissionMode: agent.permissionMode,
         claudeSessionId: agent.claudeSessionId,
         pid: agent.pid,
@@ -302,7 +300,7 @@ export class AgentRepository {
   update(agent: Agent): Agent {
     this.db
       .prepare(
-        `UPDATE agents SET name = @name, status = @status, model = @model, environment = @environment,
+        `UPDATE agents SET name = @name, status = @status, model = @model,
          permission_mode = @permissionMode, claude_session_id = @claudeSessionId, pid = @pid,
          run_log_path = @runLogPath, updated_at = @updatedAt, archived_at = @archivedAt
          WHERE id = @id`,
@@ -312,7 +310,6 @@ export class AgentRepository {
         name: agent.name,
         status: agent.status,
         model: agent.model,
-        environment: agent.environment,
         permissionMode: agent.permissionMode,
         claudeSessionId: agent.claudeSessionId,
         pid: agent.pid,
@@ -476,7 +473,6 @@ function rowToAgent(row: unknown): Agent {
     name: String(r.name),
     status: r.status as Agent['status'],
     model: String(r.model),
-    environment: r.environment == null ? null : String(r.environment),
     permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
     pid: r.pid == null ? null : Number(r.pid),

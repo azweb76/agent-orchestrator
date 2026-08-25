@@ -34,7 +34,6 @@ import {
   listWorktrees,
   rewindAgentChat,
   searchGitHubRepositories,
-  startAgent,
   stopAgent,
   streamAgentChat,
   suggestBranchNameForWorkspace,
@@ -234,20 +233,12 @@ export function createRouter(ctx: AppContext): express.Router {
         .object({
           name: z.string().optional(),
           model: z.string().optional(),
-          environment: z.string().nullable().optional(),
           permissionMode: z
             .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
             .optional(),
         })
         .parse(req.body);
       res.json(await updateAgent(ctx, param(req.params.agentId), body));
-    }),
-  );
-
-  router.post(
-    '/agents/:agentId/start',
-    asyncHandler(async (req, res) => {
-      res.json(await startAgent(ctx, param(req.params.agentId)));
     }),
   );
 

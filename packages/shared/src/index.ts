@@ -41,7 +41,6 @@ export interface Agent {
   name: string;
   status: AgentStatus;
   model: string;
-  environment: string | null;
   permissionMode: PermissionMode;
   claudeSessionId: string | null;
   /** OS pid of the active Claude run, if any. Survives app restarts while the process lives. */
@@ -186,7 +185,6 @@ export interface SuggestBranchNameResponse {
 export interface UpdateAgentRequest {
   name?: string;
   model?: string;
-  environment?: string | null;
   permissionMode?: PermissionMode;
 }
 
