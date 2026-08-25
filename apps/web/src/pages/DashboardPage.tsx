@@ -312,7 +312,7 @@ export function DashboardPage() {
             fullWidth
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Find an agent, workspace, or branch…"
+            placeholder="Find an agent or workspace…"
             slotProps={{
               input: {
                 startAdornment: (
