@@ -13,6 +13,7 @@ import type {
   GitHubRepository,
   Message,
   PullRequestInbox,
+  SidebarWorkspace,
   SuggestBranchNameResponse,
   UpdateAgentRequest,
   Worktree,
@@ -49,6 +50,7 @@ export interface SystemStatus {
 
 export const api = {
   getStatus: () => request<SystemStatus>('/status'),
+  listSidebar: () => request<SidebarWorkspace[]>('/sidebar'),
   listWorkspaces: () => request<WorkspaceWithCounts[]>('/workspaces'),
   createWorkspace: (body: CreateWorkspaceRequest) =>
     request<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(body) }),

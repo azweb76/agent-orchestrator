@@ -171,6 +171,16 @@ export interface AgentDetail extends Agent {
   workspace: Workspace;
 }
 
+/** Agent summary for sidebar navigation (includes worktree context). */
+export interface SidebarAgent extends Agent {
+  worktree: Pick<Worktree, 'id' | 'name' | 'branch' | 'prNumber'>;
+}
+
+/** Workspace with nested agents for the app sidebar tree. */
+export interface SidebarWorkspace extends Workspace {
+  agents: SidebarAgent[];
+}
+
 export const CLAUDE_MODELS = [
   { id: 'sonnet', label: 'Claude Sonnet' },
   { id: 'opus', label: 'Claude Opus' },

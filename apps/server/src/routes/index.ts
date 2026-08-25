@@ -19,6 +19,7 @@ import {
   getWorkspace,
   listGitHubBranches,
   listGitHubPullRequests,
+  listSidebarTree,
   listWorkspaces,
   listWorktrees,
   searchGitHubRepositories,
@@ -55,6 +56,13 @@ export function createRouter(ctx: AppContext): express.Router {
     '/workspaces',
     asyncHandler(async (_req, res) => {
       res.json(await listWorkspaces(ctx));
+    }),
+  );
+
+  router.get(
+    '/sidebar',
+    asyncHandler(async (_req, res) => {
+      res.json(await listSidebarTree(ctx));
     }),
   );
 

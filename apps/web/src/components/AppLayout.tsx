@@ -5,7 +5,6 @@ import {
   Button,
   Chip,
   Container,
-  Link,
   Stack,
   Toolbar,
   Typography,
@@ -15,9 +14,16 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import {
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_EXPANDED_WIDTH,
+  useSidebarCollapsed,
+  WorkspaceSidebar,
+} from './WorkspaceSidebar';
 
 export function AppLayout() {
   const location = useLocation();
+  const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
   const { data: status } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
@@ -26,6 +32,7 @@ export function AppLayout() {
 
   const onHome = location.pathname === '/';
   const onPulls = location.pathname.startsWith('/pull-requests');
+  const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -37,6 +44,7 @@ export function AppLayout() {
           backdropFilter: 'blur(12px)',
           borderBottom: '1px solid',
           borderColor: 'divider',
+          zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
         <Toolbar>
@@ -91,14 +99,41 @@ export function AppLayout() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="xl" sx={{ py: 3, flex: 1 }}>
-        {!onHome && !onPulls && (
-          <Link component={RouterLink} to="/" underline="hover" sx={{ display: 'inline-block', mb: 2 }}>
-            ← Back to workspaces
-          </Link>
-        )}
-        <Outlet />
-      </Container>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <Box
+          sx={{
+            position: 'sticky',
+            top: 64,
+            alignSelf: 'flex-start',
+            height: 'calc(100vh - 64px)',
+            width: sidebarWidth,
+            flexShrink: 0,
+            transition: (theme) =>
+              theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.shorter,
+              }),
+          }}
+        >
+          <WorkspaceSidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
+        </Box>
+
+        <Container
+          maxWidth="xl"
+          sx={{
+            py: 3,
+            flex: 1,
+            minWidth: 0,
+            transition: (theme) =>
+              theme.transitions.create('margin', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.shorter,
+              }),
+          }}
+        >
+          <Outlet />
+        </Container>
+      </Box>
     </Box>
   );
 }
