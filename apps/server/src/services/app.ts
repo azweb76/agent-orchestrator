@@ -43,7 +43,7 @@ import {
   appendStreamText,
   applyStreamEvent,
   extractPlanFromInput,
-  parseAskUserQuestions,
+  buildAskUserQuestionUpdatedInput,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
@@ -492,15 +492,12 @@ export async function answerAskUserQuestion(
     throw new Error('Permission request is not AskUserQuestion');
   }
 
-  const questions = parseAskUserQuestions(pending.input);
-  const updatedInput: Record<string, unknown> = {
-    ...pending.input,
-    questions: questions.length > 0 ? questions : pending.input.questions,
+  // Claude Code requires the original questions array plus answers (and optional
+  // freeform response). Re-normalizing questions can break tool validation.
+  const updatedInput = buildAskUserQuestionUpdatedInput(pending.input, {
     answers: body.answers,
-  };
-  if (body.response?.trim()) {
-    updatedInput.response = body.response.trim();
-  }
+    response: body.response,
+  });
 
   const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
     behavior: 'allow',

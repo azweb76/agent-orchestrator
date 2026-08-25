@@ -410,6 +410,7 @@ export {
 } from './stream-timeline.js';
 
 export {
+  buildAskUserQuestionUpdatedInput,
   extractPlanFromInput,
   parseAskUserQuestions,
 } from './permission-tools.js';

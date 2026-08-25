@@ -19,29 +19,36 @@ export function isControlRequestEvent(event: Record<string, unknown>): boolean {
   return type === 'control_request' || type === 'sdk_control_request';
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
 export function parsePermissionRequest(
   event: Record<string, unknown>,
 ): ParsedPermissionRequest | null {
   if (!isControlRequestEvent(event)) return null;
 
+  const request = asRecord(event.request) ?? asRecord(event.payload);
+  if (!request) return null;
+
   const requestId =
     (typeof event.request_id === 'string' && event.request_id) ||
-    (typeof (event.request as { request_id?: unknown } | undefined)?.request_id === 'string'
-      ? String((event.request as { request_id: string }).request_id)
-      : null);
+    (typeof request.request_id === 'string' && request.request_id) ||
+    (typeof event.requestId === 'string' && event.requestId) ||
+    null;
+  if (!requestId) return null;
 
-  const request = (event.request as Record<string, unknown> | undefined) ?? undefined;
-  if (!requestId || !request) return null;
-
-  const subtype = String(request.subtype ?? '');
+  const subtype = String(request.subtype ?? event.subtype ?? '');
   if (subtype !== 'can_use_tool' && subtype !== 'permission') return null;
 
   const toolName = String(request.tool_name ?? request.toolName ?? '');
   if (!toolName) return null;
 
   const input =
-    (request.input as Record<string, unknown> | undefined) ??
-    (request.tool_input as Record<string, unknown> | undefined) ??
+    asRecord(request.input) ??
+    asRecord(request.tool_input) ??
+    asRecord(request.toolInput) ??
     {};
 
   const toolUseId =
