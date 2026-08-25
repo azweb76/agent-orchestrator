@@ -25,7 +25,7 @@ import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
-import { ToolChip } from './ToolActivity';
+import { ToolProgressBar } from './ToolActivity';
 
 interface ChatPanelProps {
   agent: AgentDetail;
@@ -61,6 +61,13 @@ function setMessagesCache(
 function MessageTimeline({ message }: { message: Message }) {
   const parts = message.metadata?.timeline ?? [];
   const streaming = Boolean(message.metadata?.streaming);
+  const toolsRunning = parts.some(
+    (part) => part.type === 'tool' && part.status === 'running',
+  );
+  const lastPart = parts[parts.length - 1];
+  // Show a single progress bar during tool use — never per-tool chips.
+  const showToolProgress =
+    streaming && (toolsRunning || lastPart?.type === 'tool');
 
   if (parts.length === 0) {
     return (
@@ -75,18 +82,12 @@ function MessageTimeline({ message }: { message: Message }) {
   return (
     <Box sx={{ mb: 1.5 }}>
       {parts.map((part) => {
-        if (part.type === 'tool') {
-          return (
-            <Box key={part.id} sx={{ mb: 1 }}>
-              <ToolChip item={part} />
-            </Box>
-          );
-        }
+        if (part.type === 'tool') return null;
         if (!part.text) return null;
         return (
           <ChatBubble
             key={part.id}
-            streaming={streaming}
+            streaming={streaming && lastPart?.id === part.id && !showToolProgress}
             message={{
               id: `${message.id}-${part.id}`,
               agentId: message.agentId,
@@ -105,6 +106,7 @@ function MessageTimeline({ message }: { message: Message }) {
           />
         );
       })}
+      {showToolProgress && <ToolProgressBar />}
     </Box>
   );
 }
