@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link as RouterLink, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -39,11 +39,21 @@ export function AgentPage() {
 
 function AgentPageContent({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const locationState = location.state as { initialPrompt?: string } | null;
+  const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
   const [tab, setTab] = useState(0);
   const [prOpen, setPrOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
+
+  // Consume one-shot navigation state so refresh does not re-send the idea.
+  useEffect(() => {
+    if (!locationState?.initialPrompt) return;
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, locationState?.initialPrompt, navigate]);
 
   const agentQuery = useQuery({
     queryKey: ['agent', agentId],
@@ -224,7 +234,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
         {tab === 0 && (
           <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <ChatPanel agent={agent} archived={archived} />
+            <ChatPanel agent={agent} archived={archived} initialPrompt={initialPrompt} />
           </Box>
         )}
 

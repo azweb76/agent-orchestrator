@@ -12,6 +12,7 @@ import {
   applyStreamEvent,
   extractPlanFromInput,
   parseAskUserQuestions,
+  buildIdeaKickoffPrompt,
   type AgentDetail,
   type Message,
   type PermissionMode,
@@ -29,6 +30,8 @@ import { ToolChip } from './ToolActivity';
 interface ChatPanelProps {
   agent: AgentDetail;
   archived: boolean;
+  /** When set on a fresh agent (e.g. from-idea), send as the first plan-mode prompt. */
+  initialPrompt?: string;
 }
 
 function upsertMessage(messages: Message[] | undefined, message: Message): Message[] {
@@ -99,7 +102,7 @@ function MessageTimeline({ message }: { message: Message }) {
   );
 }
 
-export function ChatPanel({ agent, archived }: ChatPanelProps) {
+export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const agentId = agent.id;
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
@@ -118,6 +121,10 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const sendingRef = useRef(false);
   const queueRef = useRef<QueuedChatItem[]>([]);
   const mountedRef = useRef(true);
+  const autoStartedRef = useRef(false);
+  const runChatRef = useRef<(text: string, images: PendingImage[], force: boolean) => Promise<void>>(
+    async () => undefined,
+  );
 
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId],
@@ -347,6 +354,20 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       }
     }
   };
+
+  runChatRef.current = runChat;
+
+  // From-idea: auto-send the idea as the first plan-mode prompt once messages load empty.
+  useEffect(() => {
+    if (!initialPrompt || archived || autoStartedRef.current) return;
+    if (messagesQuery.isLoading) return;
+    if ((messagesQuery.data?.length ?? 0) > 0) {
+      autoStartedRef.current = true;
+      return;
+    }
+    autoStartedRef.current = true;
+    void runChatRef.current(buildIdeaKickoffPrompt(initialPrompt), [], false);
+  }, [initialPrompt, archived, messagesQuery.isLoading, messagesQuery.data]);
 
   const stopStreaming = async () => {
     abortRef.current?.abort();
