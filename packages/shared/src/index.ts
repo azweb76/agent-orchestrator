@@ -402,8 +402,10 @@ export const PROMPT_SLASH_COMMANDS: SlashCommand[] = CHAT_SLASH_COMMANDS.map((it
 }));
 
 export {
+  activeToolItem,
   appendStreamText,
   applyStreamEvent,
+  coalesceTimelineText,
   extractToolActivity,
   type StreamPart,
   type ToolActivityItem,
