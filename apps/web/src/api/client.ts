@@ -14,6 +14,7 @@ import type {
   Message,
   PullRequestInbox,
   SidebarWorkspace,
+  SlashCommand,
   SuggestBranchNameResponse,
   UpdateAgentRequest,
   Worktree,
@@ -101,6 +102,8 @@ export const api = {
     request<{ cleared: number }>(`/agents/${agentId}/messages`, { method: 'DELETE' }),
   getEvents: (agentId: string) => request<AgentEvent[]>(`/agents/${agentId}/events`),
   getDiff: (agentId: string) => request<AgentDiff>(`/agents/${agentId}/diff`),
+  listSlashCommands: (agentId: string) =>
+    request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),
   createPr: (agentId: string, body: CreatePrRequest) =>
     request<{ number: number; htmlUrl: string }>(`/agents/${agentId}/create-pr`, {
       method: 'POST',

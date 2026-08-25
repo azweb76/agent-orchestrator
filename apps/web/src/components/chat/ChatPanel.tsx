@@ -11,7 +11,12 @@ import type { AgentDetail, Message, PermissionMode } from '@agent-orchestrator/s
 import { api, streamChat } from '../../api/client';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
-import { extractToolActivity, ToolActivity, type ToolActivityItem } from './ToolActivity';
+import {
+  appendStreamText,
+  applyStreamEvent,
+  ToolChip,
+  type StreamPart,
+} from './ToolActivity';
 
 interface ChatPanelProps {
   agent: AgentDetail;
@@ -41,14 +46,53 @@ function makeLocalUserMessage(
   };
 }
 
+function StreamingTimeline({
+  agentId,
+  parts,
+}: {
+  agentId: string;
+  parts: StreamPart[];
+}) {
+  if (parts.length === 0) return null;
+
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      {parts.map((part) => {
+        if (part.type === 'tool') {
+          return (
+            <Box key={part.id} sx={{ mb: 1 }}>
+              <ToolChip item={part} />
+            </Box>
+          );
+        }
+        if (!part.text) return null;
+        return (
+          <ChatBubble
+            key={part.id}
+            streaming
+            message={{
+              id: part.id,
+              agentId,
+              role: 'assistant',
+              content: part.text,
+              attachments: [],
+              metadata: {},
+              createdAt: new Date().toISOString(),
+            }}
+          />
+        );
+      })}
+    </Box>
+  );
+}
+
 export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const agentId = agent.id;
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const [queue, setQueue] = useState<QueuedChatItem[]>([]);
   const [optimistic, setOptimistic] = useState<Message[]>([]);
-  const [streamingText, setStreamingText] = useState('');
-  const [toolActivity, setToolActivity] = useState<ToolActivityItem[]>([]);
+  const [streamParts, setStreamParts] = useState<StreamPart[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
@@ -77,8 +121,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       setOptimistic([]);
       setQueue([]);
       queueRef.current = [];
-      setStreamingText('');
-      setToolActivity([]);
+      setStreamParts([]);
       setChatError(null);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -108,7 +151,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messagesQuery.data, optimistic, streamingText, toolActivity]);
+  }, [messagesQuery.data, optimistic, streamParts]);
 
   const serverMessages = messagesQuery.data ?? [];
   const displayMessages = [
@@ -142,8 +185,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
 
     setChatError(null);
     setLastFailed(null);
-    setStreamingText('');
-    setToolActivity([]);
+    setStreamParts([]);
     setIsStreaming(true);
     streamingRef.current = true;
 
@@ -171,19 +213,23 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               message,
             ]);
           },
-          onToken: (token) => setStreamingText((prev) => prev + token),
+          onToken: (token) => setStreamParts((prev) => appendStreamText(prev, token)),
           onEvent: (event) => {
-            setToolActivity((prev) => extractToolActivity(event, prev));
+            setStreamParts((prev) => applyStreamEvent(prev, event));
           },
           onDone: (payload) => {
-            setStreamingText('');
-            setToolActivity((prev) =>
-              prev.map((item) => ({ ...item, status: 'done' as const })),
+            setStreamParts((prev) =>
+              prev.map((part) =>
+                part.type === 'tool' && part.status === 'running'
+                  ? { ...part, status: 'done' as const }
+                  : part,
+              ),
             );
             setOptimistic((prev) => [
               ...prev.filter((m) => m.id !== localUser.id && m.id !== payload.message.id),
               payload.message,
             ]);
+            setStreamParts([]);
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
@@ -192,7 +238,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onError: (err) => {
             setChatError(err);
             setLastFailed({ text, images });
-            setStreamingText('');
+            setStreamParts([]);
           },
         },
         abortRef.current.signal,
@@ -202,7 +248,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         setChatError((error as Error).message);
         setLastFailed({ text, images });
       }
-      setStreamingText('');
+      setStreamParts([]);
     } finally {
       setIsStreaming(false);
       streamingRef.current = false;
@@ -228,6 +274,12 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
   };
 
+  const requestClear = () => {
+    if (confirm('Clear chat history and reset the Claude session?')) {
+      clearMutation.mutate();
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -238,25 +290,21 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       }}
     >
       <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pt: 2, pb: 1 }}>
-        {displayMessages.length === 0 && !streamingText && (
+        {displayMessages.length === 0 && streamParts.length === 0 && (
           <Stack spacing={1.5} sx={{ py: 6, alignItems: 'center', textAlign: 'center' }}>
             <Typography variant="h6">Start a conversation</Typography>
             <Typography color="text.secondary" sx={{ maxWidth: 420 }}>
-              Ask the agent to explore the worktree, fix a bug, or draft a PR. Try{' '}
+              Ask the agent to explore the worktree, fix a bug, or draft a PR. Type{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                /diff
-              </Box>
-              ,{' '}
+                /
+              </Box>{' '}
+              for slash commands and skills, or try{' '}
               <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                /test
-              </Box>
-              , or{' '}
-              <Box component="span" sx={{ fontFamily: 'monospace' }}>
-                /pr
-              </Box>
-              .
+                /clear
+              </Box>{' '}
+              to reset the session.
             </Typography>
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
               <Button size="small" variant="outlined" onClick={() => setDraft('/diff')}>
                 /diff
               </Button>
@@ -265,6 +313,9 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
               </Button>
               <Button size="small" variant="outlined" onClick={() => setDraft('/pr')}>
                 /pr
+              </Button>
+              <Button size="small" variant="outlined" onClick={() => setDraft('/code-review')}>
+                /code-review
               </Button>
             </Stack>
           </Stack>
@@ -290,24 +341,8 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           />
         ))}
 
-        {(isStreaming || toolActivity.length > 0) && (
-          <Box sx={{ mb: 1.5 }}>
-            <ToolActivity items={toolActivity} />
-            {streamingText && (
-              <ChatBubble
-                streaming
-                message={{
-                  id: 'streaming',
-                  agentId,
-                  role: 'assistant',
-                  content: streamingText,
-                  attachments: [],
-                  metadata: {},
-                  createdAt: new Date().toISOString(),
-                }}
-              />
-            )}
-          </Box>
+        {(isStreaming || streamParts.length > 0) && (
+          <StreamingTimeline agentId={agentId} parts={streamParts} />
         )}
 
         <div ref={chatEndRef} />
@@ -342,6 +377,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         )}
 
         <ChatComposer
+          agentId={agentId}
           archived={archived}
           isStreaming={isStreaming || agent.status === 'running'}
           model={agent.model}
@@ -353,11 +389,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
           onSend={(text, images, force) => void runChat(text, images, force)}
           onStop={() => void stopStreaming()}
-          onClear={() => {
-            if (confirm('Clear chat history and reset the Claude session?')) {
-              clearMutation.mutate();
-            }
-          }}
+          onClear={requestClear}
           onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
         />
       </Box>

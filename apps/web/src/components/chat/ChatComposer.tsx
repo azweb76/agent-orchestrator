@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -21,11 +21,15 @@ import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CircularProgress from '@mui/material/CircularProgress';
 import {
-  CHAT_SLASH_COMMANDS,
   CLAUDE_MODELS,
+  LOCAL_SLASH_COMMANDS,
   PERMISSION_MODES,
+  PROMPT_SLASH_COMMANDS,
   type PermissionMode,
+  type SlashCommand,
 } from '@agent-orchestrator/shared';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../api/client';
 
 export interface PendingImage {
   id: string;
@@ -42,6 +46,7 @@ export interface QueuedChatItem {
 }
 
 interface ChatComposerProps {
+  agentId: string;
   archived: boolean;
   isStreaming: boolean;
   model: string;
@@ -74,7 +79,30 @@ async function fileToPendingImage(file: File): Promise<PendingImage> {
   };
 }
 
+function resolveSlashCommand(commands: SlashCommand[], text: string): SlashCommand | undefined {
+  const token = text.trim().split(/\s+/)[0]?.toLowerCase();
+  if (!token?.startsWith('/')) return undefined;
+  const exact = commands.find((item) => item.command.toLowerCase() === token);
+  if (exact) return exact;
+  return commands.find((item) => item.aliases?.some((alias) => alias.toLowerCase() === token));
+}
+
+function filterSlashCommands(commands: SlashCommand[], draft: string): SlashCommand[] {
+  const token = draft.trim().split(/\s+/)[0] ?? '';
+  if (!token.startsWith('/')) return [];
+  const needle = token.toLowerCase();
+  return commands
+    .filter((item) => {
+      if (item.command.toLowerCase().startsWith(needle)) return true;
+      return item.aliases?.some((alias) => alias.toLowerCase().startsWith(needle)) ?? false;
+    })
+    .slice(0, 12);
+}
+
+const FALLBACK_COMMANDS: SlashCommand[] = [...LOCAL_SLASH_COMMANDS, ...PROMPT_SLASH_COMMANDS];
+
 export function ChatComposer({
+  agentId,
   archived,
   isStreaming,
   model,
@@ -91,9 +119,18 @@ export function ChatComposer({
 }: ChatComposerProps) {
   const [images, setImages] = useState<PendingImage[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  const slashMatch = draft.trim().startsWith('/')
-    ? CHAT_SLASH_COMMANDS.filter((item) => item.command.startsWith(draft.trim().split(/\s/)[0] ?? ''))
-    : [];
+
+  const slashQuery = useQuery({
+    queryKey: ['slash-commands', agentId],
+    queryFn: () => api.listSlashCommands(agentId),
+    enabled: Boolean(agentId),
+    staleTime: 60_000,
+  });
+
+  const commands = slashQuery.data ?? FALLBACK_COMMANDS;
+  const slashMatch = useMemo(() => filterSlashCommands(commands, draft), [commands, draft]);
+  const showSlashMenu =
+    slashMatch.length > 0 && draft.trim().startsWith('/') && !draft.includes('\n');
 
   const addFiles = async (files: FileList | File[]) => {
     const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
@@ -111,10 +148,31 @@ export function ChatComposer({
     });
   };
 
+  const applySlashSelection = (item: SlashCommand) => {
+    if (item.kind === 'prompt' && item.prompt) {
+      onDraftChange(item.prompt);
+      return;
+    }
+    onDraftChange(`${item.command} `);
+  };
+
   const submit = (force: boolean) => {
-    let text = draft.trim();
-    const slash = CHAT_SLASH_COMMANDS.find((item) => item.command === text);
-    if (slash) text = slash.prompt;
+    const raw = draft.trim();
+    const slash = resolveSlashCommand(commands, raw);
+
+    if (slash?.kind === 'local' && slash.command === '/clear') {
+      onDraftChange('');
+      setImages([]);
+      onClear();
+      return;
+    }
+
+    let text = raw;
+    if (slash?.kind === 'prompt' && slash.prompt && raw === slash.command) {
+      text = slash.prompt;
+    }
+    // skill commands (and skill invocations with args) are sent through as-is
+
     if ((!text && images.length === 0) || archived) return;
     onSend(text, images, force);
     onDraftChange('');
@@ -176,7 +234,7 @@ export function ChatComposer({
 
         <Box sx={{ flex: 1 }} />
 
-        <Tooltip title="Clear chat history and reset session">
+        <Tooltip title="Clear chat history and reset session (/clear)">
           <span>
             <Button
               size="small"
@@ -227,17 +285,25 @@ export function ChatComposer({
         </Stack>
       )}
 
-      {slashMatch.length > 0 && draft.trim().length > 0 && draft.trim().length < 12 && (
-        <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {slashMatch.map((item) => (
-            <Chip
-              key={item.command}
-              size="small"
-              label={item.command}
-              onClick={() => onDraftChange(item.prompt)}
-              clickable
-            />
-          ))}
+      {showSlashMenu && (
+        <Stack spacing={0.75}>
+          <Typography variant="caption" color="text.secondary">
+            Slash commands & skills
+          </Typography>
+          <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            {slashMatch.map((item) => (
+              <Chip
+                key={`${item.command}-${item.source ?? 'app'}`}
+                size="small"
+                label={item.command}
+                title={item.description}
+                onClick={() => applySlashSelection(item)}
+                clickable
+                color={item.kind === 'local' ? 'warning' : item.kind === 'skill' ? 'secondary' : 'default'}
+                variant="outlined"
+              />
+            ))}
+          </Stack>
         </Stack>
       )}
 
@@ -266,7 +332,7 @@ export function ChatComposer({
           multiline
           minRows={2}
           maxRows={8}
-          placeholder="Message Claude… (Enter send, Shift+Enter newline, / for shortcuts, paste images)"
+          placeholder="Message Claude… (Enter send, Shift+Enter newline, / for commands & skills, paste images)"
           value={draft}
           disabled={archived}
           onChange={(e) => onDraftChange(e.target.value)}

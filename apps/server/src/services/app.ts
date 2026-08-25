@@ -29,6 +29,7 @@ import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
+import { discoverSlashCommands } from '../services/slash-commands.js';
 
 export interface AppContext {
   repos: AppRepositories;
@@ -405,6 +406,11 @@ export async function getAgentDiff(ctx: AppContext, agentId: string) {
   } catch {
     return await ctx.git.getDiff(detail.worktree.path);
   }
+}
+
+export async function listAgentSlashCommands(ctx: AppContext, agentId: string) {
+  const detail = await getAgentDetail(ctx, agentId);
+  return discoverSlashCommands(detail.worktree.path);
 }
 
 export async function createAgentPullRequest(
