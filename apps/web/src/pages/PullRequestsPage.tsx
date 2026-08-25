@@ -54,6 +54,7 @@ export function PullRequestsPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       navigate(`/agents/${result.agent.id}`);
     },
     onSettled: () => {

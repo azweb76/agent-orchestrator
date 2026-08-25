@@ -67,6 +67,7 @@ export function WorkspacesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       setOpen(false);
       setSelectedRepo(null);
       setRepoSearch('');
