@@ -4,8 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
   CircularProgress,
   Stack,
@@ -18,7 +16,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateWorktreeDialog } from '../components/CreateWorktreeDialog';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
+import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
+import { PageHeader } from '../components/ui/PageHeader';
 import { statusColor } from '../theme';
+import { statusLabel } from '../utils/format';
 
 export function WorkspaceDetailPage() {
   const { workspaceId = '' } = useParams();
@@ -58,7 +61,7 @@ export function WorkspaceDetailPage() {
       setDeleteWorkspaceOpen(false);
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      navigate('/');
+      navigate('/workspaces');
     },
   });
 
@@ -71,106 +74,132 @@ export function WorkspaceDetailPage() {
   }
 
   if (workspaceQuery.error || !workspace) {
-    return <Alert severity="error">{(workspaceQuery.error as Error)?.message ?? 'Workspace not found'}</Alert>;
+    return (
+      <Alert severity="error">
+        {(workspaceQuery.error as Error)?.message ?? 'Workspace not found'}
+      </Alert>
+    );
   }
 
   return (
-    <Stack spacing={3}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ justifyContent: 'space-between' }}
-      >
-        <Box>
-          <Typography variant="h4">{workspace.name}</Typography>
-          <Typography color="text.secondary">
-            {workspace.githubOwner}/{workspace.githubRepo} • default branch: {workspace.defaultBranch}
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-            New agent
-          </Button>
-          <Button
-            color="error"
-            variant="outlined"
-            startIcon={<DeleteOutlineOutlinedIcon />}
-            onClick={() => setDeleteWorkspaceOpen(true)}
-          >
-            Delete
-          </Button>
-        </Stack>
-      </Stack>
+    <Stack spacing={2.5}>
+      <PageHeader
+        breadcrumbs={
+          <PageBreadcrumbs
+            items={[
+              { label: 'Workspaces', to: '/workspaces' },
+              { label: workspace.name },
+            ]}
+          />
+        }
+        eyebrow="Workspace"
+        title={workspace.name}
+        description={`${workspace.githubOwner}/${workspace.githubRepo} · default branch ${workspace.defaultBranch}`}
+        actions={
+          <>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+              New agent
+            </Button>
+            <Button
+              color="error"
+              variant="outlined"
+              startIcon={<DeleteOutlineOutlinedIcon />}
+              onClick={() => setDeleteWorkspaceOpen(true)}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      />
 
-      {worktreesQuery.error && <Alert severity="error">{(worktreesQuery.error as Error).message}</Alert>}
+      {worktreesQuery.error && (
+        <Alert severity="error">{(worktreesQuery.error as Error).message}</Alert>
+      )}
 
-      {worktreesQuery.isLoading ? (
-        <CircularProgress />
-      ) : worktreesQuery.data?.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h6" gutterBottom>
-            No agents yet
-          </Typography>
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Create a worktree from a branch or pull request to spawn a Claude agent.
-          </Typography>
-          <Button variant="contained" onClick={() => setDialogOpen(true)}>
-            Create agent
-          </Button>
-        </Card>
-      ) : (
-        <Stack spacing={2}>
-          {worktreesQuery.data?.map((worktree) => (
-            <Card key={worktree.id}>
-              <CardContent>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={2}
-                  sx={{ justifyContent: 'space-between' }}
-                >
-                  <Box>
-                    <Stack direction="row" spacing={1} sx={{ mb: 0.5, alignItems: 'center' }}>
-                      <Typography variant="h6">{worktree.name}</Typography>
-                      {worktree.prNumber && (
-                        <Chip size="small" label={`PR #${worktree.prNumber}`} color="info" variant="outlined" />
-                      )}
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                      Branch: {worktree.branch}
-                      {worktree.prTitle ? ` • ${worktree.prTitle}` : ''}
-                    </Typography>
-                    {worktree.agent && (
-                      <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center' }}>
-                        <SmartToyOutlinedIcon fontSize="small" color="secondary" />
-                        <Typography variant="body2">{worktree.agent.name}</Typography>
-                        <Chip
-                          size="small"
-                          label={worktree.agent.status}
-                          color={statusColor(worktree.agent.status)}
-                        />
-                      </Stack>
-                    )}
-                  </Box>
-                  <Stack direction="row" spacing={1}>
-                    {worktree.agent && (
-                      <Button variant="contained" onClick={() => navigate(`/agents/${worktree.agent!.id}`)}>
+      <Box>
+        <Typography
+          variant="caption"
+          sx={{
+            fontFamily: '"IBM Plex Mono", monospace',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+            color: 'text.secondary',
+            display: 'block',
+            mb: 1,
+          }}
+        >
+          Agents
+        </Typography>
+
+        {worktreesQuery.isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : worktreesQuery.data?.length === 0 ? (
+          <EmptyState
+            icon={<SmartToyOutlinedIcon />}
+            title="No agents yet"
+            description="Create a worktree from a branch or pull request to spawn a Claude agent."
+            action={
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+                Create agent
+              </Button>
+            }
+          />
+        ) : (
+          <ListPanel>
+            {worktreesQuery.data?.map((worktree) => (
+              <ListRow
+                key={worktree.id}
+                secondaryAction={
+                  <>
+                    {worktree.agent ? (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={() => navigate(`/agents/${worktree.agent!.id}`)}
+                      >
                         Open agent
                       </Button>
-                    )}
+                    ) : null}
                     <Button
                       color="error"
                       variant="outlined"
+                      size="small"
                       onClick={() => setRemoveWorktreeId(worktree.id)}
                     >
                       Remove
                     </Button>
-                  </Stack>
+                  </>
+                }
+              >
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.25 }}>
+                  <ListRowTitle>{worktree.name}</ListRowTitle>
+                  {worktree.prNumber ? (
+                    <Chip size="small" label={`PR #${worktree.prNumber}`} color="info" variant="outlined" />
+                  ) : null}
                 </Stack>
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
-      )}
+                <ListRowMeta>
+                  Branch: {worktree.branch}
+                  {worktree.prTitle ? ` · ${worktree.prTitle}` : ''}
+                </ListRowMeta>
+                {worktree.agent ? (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'center' }}>
+                    <SmartToyOutlinedIcon fontSize="small" color="secondary" />
+                    <Typography variant="body2">{worktree.agent.name}</Typography>
+                    <Chip
+                      size="small"
+                      label={statusLabel(worktree.agent.status)}
+                      color={statusColor(worktree.agent.status)}
+                      variant="outlined"
+                    />
+                  </Stack>
+                ) : null}
+              </ListRow>
+            ))}
+          </ListPanel>
+        )}
+      </Box>
 
       <CreateWorktreeDialog
         open={dialogOpen}

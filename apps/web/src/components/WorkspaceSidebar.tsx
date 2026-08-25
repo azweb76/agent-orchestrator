@@ -110,9 +110,11 @@ function AgentStatusDot({
 interface WorkspaceSidebarProps {
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
+  /** When true, stretch to parent height (e.g. mobile drawer). */
+  fillHeight?: boolean;
 }
 
-export function WorkspaceSidebar({ collapsed, onCollapsedChange }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({ collapsed, onCollapsedChange, fillHeight }: WorkspaceSidebarProps) {
   const location = useLocation();
   const { workspaceId: routeWorkspaceId, agentId: routeAgentId } = useParams();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(loadExpandedWorkspaces);
@@ -204,7 +206,7 @@ export function WorkspaceSidebar({ collapsed, onCollapsedChange }: WorkspaceSide
         backdropFilter: 'blur(10px)',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        height: fillHeight ? '100%' : '100%',
         transition: (theme) =>
           theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
@@ -401,10 +403,26 @@ function ExpandedWorkspaceTree({
 
   if (tree.length === 0) {
     return (
-      <Box sx={{ px: 2, py: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          No workspaces yet. Create one from the home page.
+      <Box sx={{ px: 2, py: 2.5 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          No workspaces yet.
         </Typography>
+        <ListItemButton
+          component={RouterLink}
+          to="/workspaces"
+          sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', py: 1 }}
+        >
+          <ListItemIcon sx={{ minWidth: 32 }}>
+            <AddIcon fontSize="small" color="secondary" />
+          </ListItemIcon>
+          <ListItemText
+            primary={
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Add a workspace
+              </Typography>
+            }
+          />
+        </ListItemButton>
       </Box>
     );
   }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
   AppBar,
@@ -5,11 +6,17 @@ import {
   Button,
   Chip,
   Container,
+  Drawer,
+  IconButton,
   Stack,
   Toolbar,
+  Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import MenuIcon from '@mui/icons-material/Menu';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
@@ -22,21 +29,41 @@ import {
   WorkspaceSidebar,
 } from './WorkspaceSidebar';
 
+const NAV_ITEMS = [
+  { to: '/', label: 'Command', icon: <DashboardOutlinedIcon />, match: (path: string) => path === '/' },
+  {
+    to: '/workspaces',
+    label: 'Workspaces',
+    icon: <FolderOpenOutlinedIcon />,
+    match: (path: string) => path === '/workspaces' || path.startsWith('/workspaces/'),
+  },
+  {
+    to: '/pull-requests',
+    label: 'Pull requests',
+    icon: <MergeTypeIcon />,
+    match: (path: string) => path.startsWith('/pull-requests'),
+  },
+] as const;
+
 export function AppLayout() {
   const location = useLocation();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
   const { data: status } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
     refetchInterval: 30_000,
   });
 
-  const onHome = location.pathname === '/';
-  const onWorkspaces =
-    location.pathname === '/workspaces' || location.pathname.startsWith('/workspaces/');
-  const onPulls = location.pathname.startsWith('/pull-requests');
   const onAgent = location.pathname.startsWith('/agents/');
-  const sidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
+  const desktopSidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -44,117 +71,208 @@ export function AppLayout() {
         position="sticky"
         elevation={0}
         sx={{
-          bgcolor: 'rgba(11,15,23,0.85)',
-          backdropFilter: 'blur(12px)',
+          bgcolor: 'rgba(11,15,23,0.88)',
+          backdropFilter: 'blur(14px)',
           borderBottom: '1px solid',
           borderColor: 'divider',
-          zIndex: (theme) => theme.zIndex.drawer + 1,
+          zIndex: (t) => t.zIndex.drawer + 1,
         }}
       >
-        <Toolbar>
-          <SmartToyOutlinedIcon sx={{ mr: 1.5, color: 'secondary.main' }} />
+        <Toolbar sx={{ gap: 1, minHeight: { xs: 56, sm: 64 } }}>
+          {isMobile ? (
+            <IconButton
+              edge="start"
+              color="inherit"
+              aria-label="Open navigation"
+              onClick={() => setMobileNavOpen(true)}
+              sx={{ mr: 0.5 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          ) : null}
+
+          <SmartToyOutlinedIcon sx={{ color: 'secondary.main', display: { xs: 'none', sm: 'block' } }} />
           <Typography
             component={RouterLink}
             to="/"
             variant="h6"
-            sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 700, mr: 2 }}
+            sx={{
+              color: 'inherit',
+              textDecoration: 'none',
+              fontWeight: 700,
+              letterSpacing: '-0.02em',
+              mr: { xs: 1, md: 2 },
+              fontSize: { xs: '1rem', sm: '1.15rem' },
+              whiteSpace: 'nowrap',
+            }}
           >
             Agent Orchestrator
           </Typography>
 
-          <Stack direction="row" spacing={0.5} sx={{ mr: 2 }}>
-            <Button
-              component={RouterLink}
-              to="/"
-              size="small"
-              startIcon={<DashboardOutlinedIcon />}
-              color={onHome ? 'secondary' : 'inherit'}
-              sx={{ fontWeight: onHome ? 700 : 500 }}
-            >
-              Command
-            </Button>
-            <Button
-              component={RouterLink}
-              to="/workspaces"
-              size="small"
-              startIcon={<FolderOpenOutlinedIcon />}
-              color={onWorkspaces ? 'secondary' : 'inherit'}
-              sx={{ fontWeight: onWorkspaces ? 700 : 500 }}
-            >
-              Workspaces
-            </Button>
-            <Button
-              component={RouterLink}
-              to="/pull-requests"
-              size="small"
-              startIcon={<MergeTypeIcon />}
-              color={onPulls ? 'secondary' : 'inherit'}
-              sx={{ fontWeight: onPulls ? 700 : 500 }}
-            >
-              Pull requests
-            </Button>
-          </Stack>
+          {!isMobile ? (
+            <Stack direction="row" spacing={0.25} sx={{ mr: 2 }} role="navigation" aria-label="Primary">
+              {NAV_ITEMS.map((item) => {
+                const active = item.match(location.pathname);
+                return (
+                  <Button
+                    key={item.to}
+                    component={RouterLink}
+                    to={item.to}
+                    size="small"
+                    startIcon={item.icon}
+                    color={active ? 'secondary' : 'inherit'}
+                    aria-current={active ? 'page' : undefined}
+                    sx={{
+                      fontWeight: active ? 700 : 500,
+                      px: 1.5,
+                      position: 'relative',
+                      '&::after': active
+                        ? {
+                            content: '""',
+                            position: 'absolute',
+                            left: 12,
+                            right: 12,
+                            bottom: 4,
+                            height: 2,
+                            borderRadius: 1,
+                            bgcolor: 'secondary.main',
+                          }
+                        : undefined,
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                );
+              })}
+            </Stack>
+          ) : null}
 
           <Box sx={{ flexGrow: 1 }} />
-          <Stack direction="row" spacing={1}>
-            <Chip
-              size="small"
-              label={status?.claudeInstalled ? 'Claude Code ready' : 'Claude Code missing'}
-              color={status?.claudeInstalled ? 'success' : 'warning'}
-              variant="outlined"
-            />
-            <Chip
-              size="small"
-              label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
-              color={status?.githubTokenConfigured ? 'success' : 'default'}
-              variant="outlined"
-            />
+
+          <Stack direction="row" spacing={0.75} sx={{ display: { xs: 'none', sm: 'flex' } }}>
+            <Tooltip title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}>
+              <Chip
+                size="small"
+                label={status?.claudeInstalled ? 'Claude ready' : 'Claude missing'}
+                color={status?.claudeInstalled ? 'success' : 'warning'}
+                variant="outlined"
+              />
+            </Tooltip>
+            <Tooltip
+              title={
+                status?.githubTokenConfigured
+                  ? 'GitHub token configured'
+                  : 'Set GITHUB_TOKEN in your environment'
+              }
+            >
+              <Chip
+                size="small"
+                label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
+                color={status?.githubTokenConfigured ? 'success' : 'default'}
+                variant="outlined"
+              />
+            </Tooltip>
           </Stack>
         </Toolbar>
       </AppBar>
 
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <Box
-          sx={{
-            position: 'sticky',
-            top: 64,
-            alignSelf: 'flex-start',
-            height: 'calc(100vh - 64px)',
-            width: sidebarWidth,
-            flexShrink: 0,
-            transition: (theme) =>
-              theme.transitions.create('width', {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.shorter,
-              }),
-          }}
-        >
-          <WorkspaceSidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
-        </Box>
+        {isMobile ? (
+          <Drawer
+            variant="temporary"
+            open={mobileNavOpen}
+            onClose={() => setMobileNavOpen(false)}
+            ModalProps={{ keepMounted: true }}
+            sx={{
+              '& .MuiDrawer-paper': {
+                width: SIDEBAR_EXPANDED_WIDTH,
+                boxSizing: 'border-box',
+                bgcolor: 'rgba(18,24,38,0.98)',
+                backgroundImage: 'none',
+                top: 0,
+                height: '100%',
+              },
+            }}
+          >
+            <Box sx={{ pt: 1, px: 1.5, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                {NAV_ITEMS.map((item) => {
+                  const active = item.match(location.pathname);
+                  return (
+                    <Button
+                      key={item.to}
+                      component={RouterLink}
+                      to={item.to}
+                      size="small"
+                      startIcon={item.icon}
+                      color={active ? 'secondary' : 'inherit'}
+                      onClick={() => setMobileNavOpen(false)}
+                      sx={{ fontWeight: active ? 700 : 500 }}
+                    >
+                      {item.label}
+                    </Button>
+                  );
+                })}
+              </Stack>
+            </Box>
+            <Box sx={{ flex: 1, minHeight: 0, height: 'calc(100% - 56px)' }}>
+              <WorkspaceSidebar
+                collapsed={false}
+                onCollapsedChange={() => setMobileNavOpen(false)}
+                fillHeight
+              />
+            </Box>
+          </Drawer>
+        ) : (
+          <Box
+            sx={{
+              position: 'sticky',
+              top: 64,
+              alignSelf: 'flex-start',
+              height: 'calc(100vh - 64px)',
+              width: desktopSidebarWidth,
+              flexShrink: 0,
+              transition: (t) =>
+                t.transitions.create('width', {
+                  easing: t.transitions.easing.sharp,
+                  duration: t.transitions.duration.shorter,
+                }),
+            }}
+          >
+            <WorkspaceSidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
+          </Box>
+        )}
 
         <Container
           maxWidth="xl"
           sx={{
-            py: onAgent ? 1.5 : 3,
-            px: { xs: 1.5, sm: 2 },
+            py: onAgent ? 1.5 : { xs: 2, md: 3 },
+            px: { xs: 1.5, sm: 2, md: 3 },
             flex: 1,
             minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
             ...(onAgent
               ? {
-                  height: 'calc(100vh - 64px)',
+                  height: { xs: 'calc(100vh - 56px)', sm: 'calc(100vh - 64px)' },
                   overflow: 'hidden',
                 }
               : {}),
-            transition: (theme) =>
-              theme.transitions.create('margin', {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.shorter,
-              }),
           }}
         >
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'ao-page-in 0.35s ease-out',
+              '@keyframes ao-page-in': {
+                from: { opacity: 0, transform: 'translateY(6px)' },
+                to: { opacity: 1, transform: 'translateY(0)' },
+              },
+            }}
+          >
             <Outlet />
           </Box>
         </Container>

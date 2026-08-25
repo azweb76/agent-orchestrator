@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -28,12 +28,15 @@ import type { PermissionMode } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { EmptyState } from '../components/ui/EmptyState';
+import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { statusColor } from '../theme';
+import { statusLabel } from '../utils/format';
 
 export function AgentPage() {
   const { agentId = '' } = useParams();
-  // Remount when the route agent changes so header fields (tabs, dialogs, draft)
-  // reset. Chat history is loaded from the backend for each agent.
+  // Remount when the route agent changes so header/chat local state cannot leak
+  // across agents (React Router keeps the same route element instance otherwise).
   return <AgentPageContent key={agentId} agentId={agentId} />;
 }
 
@@ -140,7 +143,15 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       : null;
 
   return (
-    <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
+    <Stack spacing={1.25} sx={{ height: '100%', minHeight: 0 }}>
+      <PageBreadcrumbs
+        items={[
+          { label: 'Workspaces', to: '/workspaces' },
+          { label: agent.workspace.name, to: `/workspaces/${agent.workspace.id}` },
+          { label: agent.name },
+        ]}
+      />
+
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={1}
@@ -151,11 +162,20 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               {agent.name}
             </Typography>
-            <Chip size="small" label={agent.status} color={statusColor(agent.status)} />
+            <Chip
+              size="small"
+              label={statusLabel(agent.status)}
+              color={statusColor(agent.status)}
+              variant="outlined"
+            />
             {prNumber != null && (
               <Chip
                 size="small"
-                label={agent.worktree.prTitle ? `PR #${prNumber}: ${agent.worktree.prTitle}` : `PR #${prNumber}`}
+                label={
+                  agent.worktree.prTitle
+                    ? `PR #${prNumber}: ${agent.worktree.prTitle}`
+                    : `PR #${prNumber}`
+                }
                 color="info"
                 variant="outlined"
                 component="a"
@@ -167,8 +187,19 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             )}
           </Stack>
           <Typography variant="body2" color="text.secondary" noWrap>
-            {agent.workspace.githubOwner}/{agent.workspace.githubRepo} • {agent.worktree.name} •{' '}
-            {agent.worktree.branch}
+            <Box
+              component={RouterLink}
+              to={`/workspaces/${agent.workspace.id}`}
+              sx={{
+                color: 'inherit',
+                textDecoration: 'none',
+                '&:hover': { color: 'secondary.main' },
+              }}
+            >
+              {agent.workspace.githubOwner}/{agent.workspace.githubRepo}
+            </Box>
+            {' · '}
+            {agent.worktree.name} · {agent.worktree.branch}
           </Typography>
         </Box>
 
@@ -193,7 +224,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             size="small"
             variant="outlined"
             startIcon={<PlayArrowIcon />}
-            disabled={archived || startMutation.isPending}
+            disabled={archived || startMutation.isPending || agent.status === 'running'}
             onClick={() => startMutation.mutate()}
           >
             Start
@@ -203,7 +234,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             variant="outlined"
             color="warning"
             startIcon={<StopIcon />}
-            disabled={archived || stopMutation.isPending}
+            disabled={archived || stopMutation.isPending || agent.status !== 'running'}
             onClick={() => stopMutation.mutate()}
           >
             Stop
@@ -263,27 +294,30 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           <Tab label="Events" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            display: tab === 0 ? 'flex' : 'none',
-            flexDirection: 'column',
-          }}
-        >
-          <ChatPanel agent={agent} archived={archived} />
-        </Box>
+        {tab === 0 && (
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <ChatPanel agent={agent} archived={archived} />
+          </Box>
+        )}
 
         {tab === 1 && (
           <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'auto' }}>
             {diffQuery.isLoading ? (
-              <CircularProgress />
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={28} />
+              </Box>
             ) : diffQuery.error ? (
               <Alert severity="error">{(diffQuery.error as Error).message}</Alert>
+            ) : !diffQuery.data?.patch ? (
+              <EmptyState
+                compact
+                title="No changes"
+                description="The agent has not modified any files in this worktree yet."
+              />
             ) : (
               <Stack spacing={1.5}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  {diffQuery.data?.stat || 'No changes'}
+                  {diffQuery.data.stat || 'Changes'}
                 </Typography>
                 <Box
                   component="pre"
@@ -296,7 +330,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                     m: 0,
                   }}
                 >
-                  {diffQuery.data?.patch || 'No diff available'}
+                  {diffQuery.data.patch}
                 </Box>
               </Stack>
             )}
@@ -306,15 +340,21 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         {tab === 2 && (
           <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {eventsQuery.isLoading ? (
-              <CircularProgress />
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={28} />
+              </Box>
             ) : eventsQuery.data?.length === 0 ? (
-              <Typography color="text.secondary">No events yet.</Typography>
+              <EmptyState
+                compact
+                title="No events yet"
+                description="Lifecycle and stream events will appear here as the agent runs."
+              />
             ) : (
               <Stack spacing={1} divider={<Divider flexItem />}>
                 {eventsQuery.data?.map((event) => (
                   <Box key={event.id}>
                     <Typography variant="caption" color="text.secondary">
-                      {new Date(event.createdAt).toLocaleString()} • {event.type}
+                      {new Date(event.createdAt).toLocaleString()} · {event.type}
                     </Typography>
                     <Box
                       component="pre"
@@ -340,6 +380,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
               onChange={(e) => setPrTitle(e.target.value)}
               fullWidth
               required
+              autoFocus
             />
             <TextField
               label="Description"

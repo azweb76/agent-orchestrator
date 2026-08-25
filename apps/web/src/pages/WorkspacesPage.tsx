@@ -1,18 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Autocomplete,
   Box,
   Button,
-  Card,
-  CardActionArea,
-  CardContent,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Grid,
+  InputAdornment,
   Stack,
   TextField,
   Typography,
@@ -20,10 +17,14 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import SearchIcon from '@mui/icons-material/Search';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
 import type { GitHubRepository } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { EmptyState } from '../components/ui/EmptyState';
+import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
+import { PageHeader } from '../components/ui/PageHeader';
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -41,6 +42,7 @@ export function WorkspacesPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [repoSearch, setRepoSearch] = useState('');
+  const [filter, setFilter] = useState('');
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepository | null>(null);
   const debouncedSearch = useDebouncedValue(repoSearch, 300);
 
@@ -59,6 +61,15 @@ export function WorkspacesPage() {
     queryFn: () => api.searchRepositories(debouncedSearch),
     enabled: open && Boolean(status?.githubTokenConfigured),
   });
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q || !workspaces) return workspaces ?? [];
+    return workspaces.filter((ws) => {
+      const haystack = `${ws.name} ${ws.githubOwner}/${ws.githubRepo}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [workspaces, filter]);
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -83,24 +94,17 @@ export function WorkspacesPage() {
   };
 
   return (
-    <Stack spacing={3}>
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={2}
-        sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
-      >
-        <Box>
-          <Typography variant="h4" gutterBottom>
-            Workspaces
-          </Typography>
-          <Typography color="text.secondary">
-            Manage git repositories, worktrees, and Claude Code agents locally.
-          </Typography>
-        </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-          Add workspace
-        </Button>
-      </Stack>
+    <Stack spacing={2.5}>
+      <PageHeader
+        eyebrow="Repositories"
+        title="Workspaces"
+        description="Clone GitHub repos locally, then spin up worktrees and Claude agents from each one."
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+            Add workspace
+          </Button>
+        }
+      />
 
       {error && <Alert severity="error">{(error as Error).message}</Alert>}
 
@@ -109,46 +113,65 @@ export function WorkspacesPage() {
           <CircularProgress />
         </Box>
       ) : workspaces?.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
-          <FolderOpenOutlinedIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-          <Typography variant="h6" gutterBottom>
-            No workspaces yet
-          </Typography>
-          <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Clone a GitHub repository to create your first workspace.
-          </Typography>
-          <Button variant="contained" onClick={() => setOpen(true)}>
-            Add workspace
-          </Button>
-        </Card>
+        <EmptyState
+          icon={<FolderOpenOutlinedIcon />}
+          title="No workspaces yet"
+          description="Clone a GitHub repository to create your first workspace."
+          action={
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+              Add workspace
+            </Button>
+          }
+        />
       ) : (
-        <Grid container spacing={2}>
-          {workspaces?.map((workspace) => (
-            <Grid key={workspace.id} size={{ xs: 12, md: 6, lg: 4 }}>
-              <Card>
-                <CardActionArea component={RouterLink} to={`/workspaces/${workspace.id}`}>
-                  <CardContent>
-                    <Typography variant="h6">{workspace.name}</Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      {workspace.githubOwner}/{workspace.githubRepo}
-                    </Typography>
-                    <Stack direction="row" spacing={1}>
-                      <Typography variant="caption" color="text.secondary">
-                        {workspace.worktreeCount} worktrees
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        •
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {workspace.agentCount} agents
-                      </Typography>
-                    </Stack>
-                  </CardContent>
-                </CardActionArea>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+        <Stack spacing={1.5}>
+          {(workspaces?.length ?? 0) > 4 ? (
+            <TextField
+              size="small"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter workspaces…"
+              sx={{ maxWidth: 360 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  'aria-label': 'Filter workspaces',
+                },
+              }}
+            />
+          ) : null}
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              compact
+              title="No matches"
+              description="Try a different name or repository filter."
+            />
+          ) : (
+            <ListPanel>
+              {filtered.map((workspace) => (
+                <ListRow
+                  key={workspace.id}
+                  component={RouterLink}
+                  to={`/workspaces/${workspace.id}`}
+                >
+                  <ListRowTitle>{workspace.name}</ListRowTitle>
+                  <ListRowMeta>
+                    {workspace.githubOwner}/{workspace.githubRepo}
+                    {' · '}
+                    {workspace.worktreeCount} worktree{workspace.worktreeCount === 1 ? '' : 's'}
+                    {' · '}
+                    {workspace.agentCount} agent{workspace.agentCount === 1 ? '' : 's'}
+                  </ListRowMeta>
+                </ListRow>
+              ))}
+            </ListPanel>
+          )}
+        </Stack>
       )}
 
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -179,6 +202,7 @@ export function WorkspacesPage() {
                     {...params}
                     label="GitHub repository"
                     placeholder="Search your repositories…"
+                    autoFocus
                     slotProps={{
                       ...params.slotProps,
                       input: {
@@ -234,6 +258,7 @@ export function WorkspacesPage() {
                 }}
                 fullWidth
                 required
+                autoFocus
               />
             )}
 
@@ -242,6 +267,7 @@ export function WorkspacesPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               fullWidth
+              helperText="Defaults to the repository name"
             />
             {createMutation.error && (
               <Alert severity="error">{(createMutation.error as Error).message}</Alert>
