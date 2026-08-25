@@ -18,6 +18,7 @@ import {
   Tab,
   Tabs,
   TextField,
+  Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -37,8 +38,8 @@ export function CreateWorktreeDialog({
 }: CreateWorktreeDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'branch' | 'pr'>('branch');
-  const [branchMode, setBranchMode] = useState<'existing' | 'new' | 'idea'>('existing');
+  const [tab, setTab] = useState<'branch' | 'pr' | 'idea'>('branch');
+  const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
@@ -89,7 +90,7 @@ export function CreateWorktreeDialog({
 
   const createFromBranch = useMutation({
     mutationFn: () => {
-      if (branchMode === 'new' || branchMode === 'idea') {
+      if (branchMode === 'new') {
         return api.createWorktreeFromBranch(workspaceId, {
           branch: newBranchName,
           createNew: true,
@@ -114,17 +115,32 @@ export function CreateWorktreeDialog({
     },
   });
 
-  const suggestBranchName = useMutation({
-    mutationFn: () => api.suggestBranchName(workspaceId, ideaText),
+  const createFromIdea = useMutation({
+    mutationFn: () =>
+      api.createWorktreeFromIdea(workspaceId, {
+        idea: ideaText.trim(),
+        baseBranch: resolvedDefaultBranch || undefined,
+      }),
     onSuccess: (data) => {
-      setNewBranchName(data.branchName);
+      invalidateAfterCreate();
+      handleClose();
+      navigate(`/agents/${data.agent.id}`, {
+        state: { initialPrompt: data.idea },
+      });
     },
   });
 
-  const createPending = createFromBranch.isPending || createFromPr.isPending;
-  const createError = createFromBranch.error ?? createFromPr.error ?? suggestBranchName.error;
+  const createPending =
+    createFromBranch.isPending || createFromPr.isPending || createFromIdea.isPending;
+  const createError = createFromBranch.error ?? createFromPr.error ?? createFromIdea.error;
   const canCreateBranch =
     branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
+  const canCreate =
+    tab === 'branch'
+      ? canCreateBranch
+      : tab === 'pr'
+        ? selectedPr !== ''
+        : Boolean(ideaText.trim());
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -133,19 +149,19 @@ export function CreateWorktreeDialog({
         <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
           <Tab value="branch" label="From branch" />
           <Tab value="pr" label="From PR" />
+          <Tab value="idea" label="From idea" />
         </Tabs>
 
-        {tab === 'branch' ? (
+        {tab === 'branch' && (
           <Stack spacing={2}>
             <FormControl>
               <RadioGroup
                 row
                 value={branchMode}
-                onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new' | 'idea')}
+                onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new')}
               >
                 <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
                 <FormControlLabel value="new" control={<Radio />} label="New branch" />
-                <FormControlLabel value="idea" control={<Radio />} label="From idea" />
               </RadioGroup>
             </FormControl>
 
@@ -166,26 +182,6 @@ export function CreateWorktreeDialog({
               </FormControl>
             ) : (
               <>
-                {branchMode === 'idea' && (
-                  <>
-                    <TextField
-                      label="Describe your idea"
-                      value={ideaText}
-                      onChange={(e) => setIdeaText(e.target.value)}
-                      placeholder="Add a dark mode toggle to the settings page"
-                      fullWidth
-                      multiline
-                      minRows={3}
-                    />
-                    <Button
-                      variant="outlined"
-                      onClick={() => suggestBranchName.mutate()}
-                      disabled={!ideaText.trim() || suggestBranchName.isPending}
-                    >
-                      {suggestBranchName.isPending ? 'Suggesting…' : 'Suggest'}
-                    </Button>
-                  </>
-                )}
                 <TextField
                   label="New branch name"
                   value={newBranchName}
@@ -211,7 +207,9 @@ export function CreateWorktreeDialog({
               </>
             )}
           </Stack>
-        ) : (
+        )}
+
+        {tab === 'pr' && (
           <FormControl fullWidth>
             <InputLabel>Pull request</InputLabel>
             <Select
@@ -228,6 +226,25 @@ export function CreateWorktreeDialog({
           </FormControl>
         )}
 
+        {tab === 'idea' && (
+          <Stack spacing={1.5}>
+            <TextField
+              label="Describe your idea"
+              value={ideaText}
+              onChange={(e) => setIdeaText(e.target.value)}
+              placeholder="Add a dark mode toggle to the settings page"
+              fullWidth
+              multiline
+              minRows={4}
+              autoFocus
+            />
+            <Typography variant="body2" color="text.secondary">
+              A branch name is suggested automatically. The agent starts in plan mode with your idea
+              and will ask clarifying questions before drafting a plan.
+            </Typography>
+          </Stack>
+        )}
+
         {createError && (
           <Alert severity="error" sx={{ mt: 2 }}>
             {(createError as Error).message}
@@ -238,13 +255,18 @@ export function CreateWorktreeDialog({
         <Button onClick={handleClose}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={createPending || (tab === 'branch' ? !canCreateBranch : selectedPr === '')}
+          disabled={createPending || !canCreate}
           onClick={() => {
             if (tab === 'branch') createFromBranch.mutate();
-            else createFromPr.mutate();
+            else if (tab === 'pr') createFromPr.mutate();
+            else createFromIdea.mutate();
           }}
         >
-          {createPending ? 'Creating…' : 'Create'}
+          {createPending
+            ? tab === 'idea'
+              ? 'Suggesting & creating…'
+              : 'Creating…'
+            : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>

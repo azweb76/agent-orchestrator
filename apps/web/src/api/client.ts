@@ -9,6 +9,7 @@ import type {
   CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
+  CreateWorktreeFromIdeaRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   DenyPermissionRequest,
@@ -68,6 +69,11 @@ export const api = {
   createWorktreeFromBranch: (workspaceId: string, body: CreateWorktreeFromBranchRequest) =>
     request<{ worktree: WorktreeWithAgent; agent: Agent }>(
       `/workspaces/${workspaceId}/worktrees/from-branch`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  createWorktreeFromIdea: (workspaceId: string, body: CreateWorktreeFromIdeaRequest) =>
+    request<{ worktree: WorktreeWithAgent; agent: Agent; branchName: string; idea: string }>(
+      `/workspaces/${workspaceId}/worktrees/from-idea`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
   suggestBranchName: (workspaceId: string, idea: string) =>

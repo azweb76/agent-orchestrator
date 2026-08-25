@@ -167,6 +167,14 @@ export interface CreateWorktreeFromPrRequest {
   name?: string;
 }
 
+/** Create a new branch + agent from a free-form idea (branch name is suggested server-side). */
+export interface CreateWorktreeFromIdeaRequest {
+  idea: string;
+  name?: string;
+  /** Base ref to branch from (defaults to workspace default branch). */
+  baseBranch?: string;
+}
+
 export interface SuggestBranchNameRequest {
   idea: string;
 }
@@ -407,4 +415,6 @@ export {
   extractPlanFromInput,
   parseAskUserQuestions,
 } from './permission-tools.js';
+
+export { buildIdeaKickoffPrompt } from './idea-prompt.js';
 

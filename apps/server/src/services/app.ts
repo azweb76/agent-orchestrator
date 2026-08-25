@@ -16,6 +16,7 @@ import type {
   CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
+  CreateWorktreeFromIdeaRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   DenyPermissionRequest,
@@ -1333,6 +1334,29 @@ export async function suggestBranchNameForWorkspace(
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
   return ctx.anthropic.suggestBranchName(idea);
+}
+
+/**
+ * Suggest a branch name from the idea, create a new worktree + agent, and return both.
+ * The client should kick off chat with the idea as the first prompt (plan mode asks clarifying questions).
+ */
+export async function createWorktreeFromIdea(
+  ctx: AppContext,
+  workspaceId: string,
+  body: CreateWorktreeFromIdeaRequest,
+) {
+  const idea = body.idea.trim();
+  if (!idea) throw new Error('Idea is required');
+
+  const branchName = await suggestBranchNameForWorkspace(ctx, workspaceId, idea);
+  const { worktree, agent } = await createWorktreeFromBranch(ctx, workspaceId, {
+    branch: branchName,
+    createNew: true,
+    baseBranch: body.baseBranch,
+    name: body.name,
+  });
+
+  return { worktree, agent, branchName, idea };
 }
 
 export async function getSystemStatus(ctx: AppContext) {

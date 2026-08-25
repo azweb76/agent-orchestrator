@@ -11,6 +11,7 @@ import {
   createAgentFromPullRequest,
   createAgentPullRequest,
   createWorktreeFromBranch,
+  createWorktreeFromIdea,
   createWorktreeFromPr,
   createWorkspace,
   denyPermissionRequest,
@@ -136,6 +137,20 @@ export function createRouter(ctx: AppContext): express.Router {
         body.idea,
       );
       res.json({ branchName });
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/worktrees/from-idea',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          idea: z.string().min(1),
+          name: z.string().optional(),
+          baseBranch: z.string().optional(),
+        })
+        .parse(req.body);
+      res.status(201).json(await createWorktreeFromIdea(ctx, param(req.params.workspaceId), body));
     }),
   );
 
