@@ -9,6 +9,7 @@ import {
   ClaudeService,
   isPidAlive,
   killProcessTree,
+  slugify,
 } from './git.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -143,4 +144,9 @@ test('killProcessTree terminates process groups started detached', async () => {
   killProcessTree(child.pid);
   await new Promise((r) => setTimeout(r, 100));
   assert.equal(isPidAlive(child.pid), false);
+});
+
+test('slugify turns a PR head ref into a worktree-safe name', () => {
+  assert.equal(slugify('feature/dark-mode'), 'feature-dark-mode');
+  assert.equal(slugify('cursor/from-pr-worktree-branch-name-3bcb'), 'cursor-from-pr-worktree-branch-name-3bcb');
 });
