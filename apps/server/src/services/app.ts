@@ -14,18 +14,22 @@ import type {
   Message,
   PullRequestInbox,
   UpdateAgentRequest,
+  Workspace,
+  Worktree,
   WorktreeWithAgent,
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
+import { AnthropicService } from '../services/anthropic.js';
 
 export interface AppContext {
   repos: AppRepositories;
   git: GitService;
   github: GitHubService;
   claude: ClaudeService;
+  anthropic: AnthropicService;
   dataDir: string;
 }
 
@@ -113,9 +117,40 @@ export async function deleteWorkspace(ctx: AppContext, workspaceId: string) {
   ctx.repos.workspaces.delete(workspaceId);
 }
 
+// Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
+// Falls back to the worktree's existing (DB-stored) values when no GitHub token is
+// configured or when the lookup fails, so a transient GitHub API issue never breaks
+// the worktree list/detail response.
+async function overlayLivePullRequest(
+  ctx: AppContext,
+  workspace: Workspace,
+  worktree: Worktree,
+): Promise<Worktree> {
+  if (!process.env.GITHUB_TOKEN) {
+    return worktree;
+  }
+
+  try {
+    const pr = await ctx.github.getPullRequestForBranch(
+      workspace.githubOwner,
+      workspace.githubRepo,
+      worktree.branch,
+    );
+    return { ...worktree, prNumber: pr?.number ?? null, prTitle: pr?.title ?? null };
+  } catch {
+    return worktree;
+  }
+}
+
 export async function listWorktrees(ctx: AppContext, workspaceId: string): Promise<WorktreeWithAgent[]> {
   const worktrees = ctx.repos.worktrees.listByWorkspace(workspaceId);
-  return worktrees.map((worktree) => ({
+  const workspace = ctx.repos.workspaces.getById(workspaceId);
+
+  const withLivePr = workspace
+    ? await Promise.all(worktrees.map((worktree) => overlayLivePullRequest(ctx, workspace, worktree)))
+    : worktrees;
+
+  return withLivePr.map((worktree) => ({
     ...worktree,
     agent: ctx.repos.agents.getByWorktreeId(worktree.id),
   }));
@@ -220,7 +255,8 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
   const workspace = ctx.repos.workspaces.getById(worktree.workspaceId);
   if (!workspace) throw new Error('Workspace not found');
 
-  return { ...agent, worktree, workspace };
+  const liveWorktree = await overlayLivePullRequest(ctx, workspace, worktree);
+  return { ...agent, worktree: liveWorktree, workspace };
 }
 
 export async function updateAgent(ctx: AppContext, agentId: string, body: UpdateAgentRequest) {
@@ -529,6 +565,16 @@ export async function createAgentFromPullRequest(ctx: AppContext, body: CreateAg
     agent,
     created: true as const,
   };
+}
+
+export async function suggestBranchNameForWorkspace(
+  ctx: AppContext,
+  workspaceId: string,
+  idea: string,
+): Promise<string> {
+  const workspace = ctx.repos.workspaces.getById(workspaceId);
+  if (!workspace) throw new Error('Workspace not found');
+  return ctx.anthropic.suggestBranchName(idea);
 }
 
 export async function getSystemStatus(ctx: AppContext) {

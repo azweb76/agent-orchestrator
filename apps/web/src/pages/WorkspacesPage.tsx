@@ -179,6 +179,7 @@ export function WorkspacesPage() {
                     label="GitHub repository"
                     placeholder="Search your repositories…"
                     slotProps={{
+                      ...params.slotProps,
                       input: {
                         ...params.slotProps.input,
                         endAdornment: (

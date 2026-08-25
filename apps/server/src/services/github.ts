@@ -4,6 +4,31 @@ interface GitHubApiOptions {
   token?: string;
 }
 
+const REPO_CACHE_TTL_MS = 5 * 60 * 1000;
+const PR_BY_BRANCH_CACHE_TTL_MS = 60 * 1000;
+
+interface RawPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  draft: boolean;
+  html_url: string;
+  head: { ref: string };
+  base: { ref: string };
+}
+
+function mapPullRequest(pr: RawPullRequest): GitHubPullRequest {
+  return {
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    headRef: pr.head.ref,
+    baseRef: pr.base.ref,
+    htmlUrl: pr.html_url,
+    draft: pr.draft,
+  };
+}
+
 interface GitHubSearchIssue {
   number: number;
   title: string;
@@ -32,6 +57,8 @@ export class GitHubService {
   constructor(private options: GitHubApiOptions) {}
 
   private loginCache: string | null | undefined;
+  private repoCache: { repos: GitHubRepository[]; fetchedAt: number } | null = null;
+  private prByBranchCache = new Map<string, { pr: GitHubPullRequest | null; fetchedAt: number }>();
 
   private requireToken(): string {
     if (!this.options.token) {
@@ -140,49 +167,68 @@ export class GitHubService {
   }
 
   async listPullRequests(owner: string, repo: string, state: 'open' | 'closed' | 'all' = 'open'): Promise<GitHubPullRequest[]> {
-    const data = await this.request<
-      Array<{
-        number: number;
-        title: string;
-        state: string;
-        draft: boolean;
-        html_url: string;
-        head: { ref: string };
-        base: { ref: string };
-      }>
-    >(`https://api.github.com/repos/${owner}/${repo}/pulls?state=${state}&per_page=100`);
+    const data = await this.request<RawPullRequest[]>(
+      `https://api.github.com/repos/${owner}/${repo}/pulls?state=${state}&per_page=100`,
+    );
 
-    return data.map((pr) => ({
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      headRef: pr.head.ref,
-      baseRef: pr.base.ref,
-      htmlUrl: pr.html_url,
-      draft: pr.draft,
-    }));
+    return data.map(mapPullRequest);
   }
 
   async getPullRequest(owner: string, repo: string, prNumber: number): Promise<GitHubPullRequest> {
-    const pr = await this.request<{
-      number: number;
-      title: string;
-      state: string;
-      draft: boolean;
-      html_url: string;
-      head: { ref: string };
-      base: { ref: string };
-    }>(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`);
+    const pr = await this.request<RawPullRequest>(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`,
+    );
 
-    return {
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      headRef: pr.head.ref,
-      baseRef: pr.base.ref,
-      htmlUrl: pr.html_url,
-      draft: pr.draft,
-    };
+    return mapPullRequest(pr);
+  }
+
+  async getPullRequestForBranch(owner: string, repo: string, branch: string): Promise<GitHubPullRequest | null> {
+    const cacheKey = `${owner}/${repo}/${branch}`;
+    const cached = this.prByBranchCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < PR_BY_BRANCH_CACHE_TTL_MS) {
+      return cached.pr;
+    }
+
+    const data = await this.request<RawPullRequest[]>(
+      `https://api.github.com/repos/${owner}/${repo}/pulls?head=${owner}:${branch}&state=all`,
+    );
+
+    const pr = data.length > 0 ? mapPullRequest(data[0]) : null;
+    this.prByBranchCache.set(cacheKey, { pr, fetchedAt: Date.now() });
+    return pr;
+  }
+
+  private async getAllAccessibleRepos(): Promise<GitHubRepository[]> {
+    if (this.repoCache && Date.now() - this.repoCache.fetchedAt < REPO_CACHE_TTL_MS) {
+      return this.repoCache.repos;
+    }
+
+    const repos: GitHubRepository[] = [];
+    const maxPages = 5;
+
+    for (let page = 1; page <= maxPages; page++) {
+      const data = await this.request<
+        Array<{
+          owner: { login: string };
+          name: string;
+          full_name: string;
+          html_url: string;
+          description: string | null;
+          private: boolean;
+        }>
+      >(
+        `https://api.github.com/user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=100&page=${page}`,
+      );
+
+      repos.push(...data.map(mapRepository));
+
+      if (data.length < 100) {
+        break;
+      }
+    }
+
+    this.repoCache = { repos, fetchedAt: Date.now() };
+    return repos;
   }
 
   async searchRepositories(query: string): Promise<GitHubRepository[]> {
@@ -190,42 +236,25 @@ export class GitHubService {
       throw new Error('GitHub token is not configured');
     }
 
+    const allRepos = await this.getAllAccessibleRepos();
+
     const trimmed = query.trim();
-    let url: string;
-
-    if (trimmed) {
-      const searchQuery = encodeURIComponent(`${trimmed} in:name fork:true`);
-      url = `https://api.github.com/search/repositories?q=${searchQuery}&sort=updated&per_page=30`;
-    } else {
-      url =
-        'https://api.github.com/user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=30';
+    if (!trimmed) {
+      return allRepos.slice(0, 30);
     }
 
-    if (trimmed) {
-      const data = await this.request<{
-        items: Array<{
-          owner: { login: string };
-          name: string;
-          full_name: string;
-          html_url: string;
-          description: string | null;
-          private: boolean;
-        }>;
-      }>(url);
-      return data.items.map(mapRepository);
-    }
+    const normalized = trimmed.toLowerCase();
+    const matches = allRepos.filter((repo) => `${repo.owner}/${repo.name}`.toLowerCase().includes(normalized));
 
-    const data = await this.request<
-      Array<{
-        owner: { login: string };
-        name: string;
-        full_name: string;
-        html_url: string;
-        description: string | null;
-        private: boolean;
-      }>
-    >(url);
-    return data.map(mapRepository);
+    const isPrefixMatch = (repo: GitHubRepository) => {
+      const combined = `${repo.owner}/${repo.name}`.toLowerCase();
+      return combined.startsWith(normalized) || repo.name.toLowerCase().startsWith(normalized);
+    };
+
+    const prefixMatches = matches.filter(isPrefixMatch);
+    const substringMatches = matches.filter((repo) => !isPrefixMatch(repo));
+
+    return [...prefixMatches, ...substringMatches].slice(0, 30);
   }
 
   async createPullRequest(
