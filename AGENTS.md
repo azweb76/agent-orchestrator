@@ -44,7 +44,7 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`) are 
 ## Architecture
 
 - One worktree maps to one Claude Code agent. Chat is `claude` with `stream-json` I/O; follow-ups use `--resume <session_id>`.
-- Claude processes are **detached**. App shutdown must not kill in-flight runs (`releaseAll` drops handles only). Logs live under `data/runs/`; startup reattaches via `recoverRunningAgents`.
+- Claude processes are **detached**. App shutdown must not kill in-flight runs (`releaseAll` drops write handles only; a FIFO holder keeps stdin open). Logs live under `data/runs/`; startup reattaches via `recoverRunningAgents`. Do not kill a reattached run just because the log contains a historical `control_request`.
 - New sessions start in **plan** mode. `AskUserQuestion` and `ExitPlanMode` always prompt in the UI and must **never** appear in `--allowedTools` (that flag auto-approves). See `allowedToolsForPermissionMode` and `shouldAutoAllowToolPermission`.
 - Shared DTOs and stream/permission helpers belong in `packages/shared`. Keep `apps/web/src/api/client.ts` aligned with `apps/server/src/routes/index.ts`.
 - From-idea kickoff sends the raw idea (`buildIdeaKickoffPrompt`); do not append extra instructions there.

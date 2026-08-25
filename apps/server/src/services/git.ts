@@ -1,13 +1,17 @@
-import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import {
   closeSync,
+  createWriteStream,
+  existsSync,
   mkdirSync,
   openSync,
   readdirSync,
   readFileSync,
   statSync,
+  unlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -179,6 +183,11 @@ export interface ClaudePermissionRequest {
   toolUseId?: string;
 }
 
+export interface ClaudeEventMeta {
+  /** True while catching up on log bytes written before this monitor attached. */
+  replay: boolean;
+}
+
 export interface ClaudeRunOptions {
   cwd: string;
   prompt: string;
@@ -190,9 +199,11 @@ export interface ClaudeRunOptions {
   permissionMode?: ClaudePermissionMode;
   /** Absolute image paths to reference in the prompt for Claude's Read tool. */
   imagePaths?: string[];
-  onEvent?: (event: ClaudeStreamEvent) => void;
+  onEvent?: (event: ClaudeStreamEvent, meta?: ClaudeEventMeta) => void;
   /** Interactive tool permission / AskUserQuestion / ExitPlanMode requests. */
   onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+  /** Called after historical log lines have been replayed (reattach catch-up). */
+  onCatchUp?: () => void;
   /** Called once the detached process has been spawned (pid + log path). */
   onStarted?: (handle: ClaudeRunHandle) => void;
   /**
@@ -290,8 +301,11 @@ interface TrackedRun {
   pid: number;
   logPath: string;
   proc?: ChildProcess;
-  /** Kept open for control_response writes; null when re-attached after restart. */
+  /** Write end for control_response / user messages. Reopened after orchestrator restart. */
   stdin: NodeJS.WritableStream | null;
+  stdinFifoPath: string | null;
+  /** Detached process that keeps the stdin FIFO open across orchestrator restarts. */
+  holderPid: number | null;
   pendingPermissions: Map<string, ClaudePermissionRequest>;
   /** True when stdin is available for interactive permission replies. */
   canRespondToPermissions: boolean;
@@ -338,6 +352,143 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Sidecar FIFO + holder pid used so Claude stdin survives orchestrator restart. */
+export function stdinPathsForLog(logPath: string): { fifoPath: string; holderPidPath: string } {
+  const base = logPath.replace(/\.log$/, '');
+  return {
+    fifoPath: `${base}.stdin`,
+    holderPidPath: `${base}.holder.pid`,
+  };
+}
+
+/**
+ * Detached Node process that holds the stdin FIFO open (O_RDWR) so closing the
+ * orchestrator's write stream — or exiting the orchestrator — does not EOF Claude.
+ */
+const STDIN_HOLDER_SCRIPT = `
+const fs = require('fs');
+const fd = fs.openSync(process.argv[1], 'r+');
+setInterval(() => {}, 1 << 30);
+function shutdown() {
+  try { fs.closeSync(fd); } catch {}
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+`;
+
+function createStdinFifo(fifoPath: string): void {
+  try {
+    unlinkSync(fifoPath);
+  } catch {
+    // ignore
+  }
+  execFileSync('mkfifo', [fifoPath], { stdio: 'ignore' });
+}
+
+function spawnStdinHolder(fifoPath: string, holderPidPath: string): number {
+  const child = spawn(process.execPath, ['-e', STDIN_HOLDER_SCRIPT.trim(), fifoPath], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+  if (child.pid == null) {
+    throw new Error('Failed to start stdin holder');
+  }
+  writeFileSync(holderPidPath, String(child.pid), 'utf8');
+  return child.pid;
+}
+
+function readHolderPid(logPath: string): number | null {
+  try {
+    const raw = readFileSync(stdinPathsForLog(logPath).holderPidPath, 'utf8').trim();
+    const pid = Number(raw);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+function killStdinHolder(holderPid: number | null | undefined): void {
+  if (holderPid == null) return;
+  try {
+    process.kill(holderPid, 'SIGTERM');
+  } catch {
+    // already gone
+  }
+  scheduleForceKill(holderPid);
+}
+
+function cleanupStdinSidecars(logPath: string | null | undefined): void {
+  if (!logPath) return;
+  const { fifoPath, holderPidPath } = stdinPathsForLog(logPath);
+  try {
+    unlinkSync(fifoPath);
+  } catch {
+    // ignore
+  }
+  try {
+    unlinkSync(holderPidPath);
+  } catch {
+    // ignore
+  }
+}
+
+function openFifoWriteStream(fifoPath: string): NodeJS.WritableStream {
+  const fd = openSync(fifoPath, 'w');
+  const stream = createWriteStream(fifoPath, { fd, autoClose: true });
+  stream.on('error', () => {
+    // EPIPE if Claude already exited
+  });
+  return stream;
+}
+
+function reopenStdinFromLog(logPath: string): {
+  stdin: NodeJS.WritableStream | null;
+  holderPid: number | null;
+  fifoPath: string | null;
+  canRespond: boolean;
+} {
+  const { fifoPath } = stdinPathsForLog(logPath);
+  const holderPid = readHolderPid(logPath);
+  if (!existsSync(fifoPath)) {
+    return { stdin: null, holderPid, fifoPath: null, canRespond: false };
+  }
+  const holderAlive = holderPid != null && isPidAlive(holderPid);
+  if (!holderAlive) {
+    return { stdin: null, holderPid, fifoPath, canRespond: false };
+  }
+  try {
+    return {
+      stdin: openFifoWriteStream(fifoPath),
+      holderPid,
+      fifoPath,
+      canRespond: true,
+    };
+  } catch {
+    return { stdin: null, holderPid, fifoPath, canRespond: false };
+  }
+}
+
+/**
+ * Read complete JSON lines already in a run log. `position` is the byte offset
+ * to resume from (after the last newline), so a trailing partial line is not skipped.
+ */
+export async function readClaudeLogSnapshot(
+  logPath: string,
+): Promise<{ lines: string[]; position: number }> {
+  try {
+    const content = await fs.readFile(logPath, 'utf8');
+    const lastNewline = content.lastIndexOf('\n');
+    if (lastNewline < 0) return { lines: [], position: 0 };
+    const complete = content.slice(0, lastNewline + 1);
+    const lines = complete.split('\n').filter((line) => line.trim());
+    return { lines, position: complete.length };
+  } catch {
+    return { lines: [], position: 0 };
+  }
+}
+
 /**
  * Follow a Claude stream-json log until the process exits.
  */
@@ -345,10 +496,10 @@ export async function followClaudeLog(
   pid: number,
   logPath: string,
   onLine: (line: string) => void,
-  options: { pollMs?: number; signal?: AbortSignal } = {},
+  options: { pollMs?: number; signal?: AbortSignal; startPosition?: number } = {},
 ): Promise<void> {
   const pollMs = options.pollMs ?? 50;
-  let position = 0;
+  let position = options.startPosition ?? 0;
   let buffer = '';
 
   while (!options.signal?.aborted) {
@@ -423,17 +574,24 @@ export class ClaudeService {
    * Explicitly stop an agent's Claude process. App shutdown must NOT call this —
    * detached runs are meant to outlive the orchestrator process.
    */
-  stop(agentId: string, pidFallback?: number | null): boolean {
+  stop(
+    agentId: string,
+    pidFallback?: number | null,
+    logPathFallback?: string | null,
+  ): boolean {
     const tracked = this.running.get(agentId);
     const pid = tracked?.pid ?? pidFallback ?? null;
-    if (pid == null) return false;
+    const logPath = tracked?.logPath ?? logPathFallback ?? null;
     try {
       tracked?.stdin?.end();
     } catch {
       // ignore
     }
-    killProcessTree(pid);
+    killStdinHolder(tracked?.holderPid ?? (logPath ? readHolderPid(logPath) : null));
+    cleanupStdinSidecars(logPath);
     this.running.delete(agentId);
+    if (pid == null) return false;
+    killProcessTree(pid);
     scheduleForceKill(pid);
     return true;
   }
@@ -442,14 +600,30 @@ export class ClaudeService {
   releaseAll(): void {
     for (const tracked of this.running.values()) {
       try {
-        // Keep the OS process alive, but drop our stdin handle (EOF).
-        tracked.stdin = null;
-        tracked.canRespondToPermissions = false;
+        // Close our write stream only. The stdin holder keeps the FIFO open so
+        // Claude does not see EOF and can still receive permission replies after restart.
+        tracked.stdin?.end();
       } catch {
         // ignore
       }
+      tracked.stdin = null;
+      tracked.canRespondToPermissions = false;
     }
     this.running.clear();
+  }
+
+  private closeStdinForRun(agentId: string, handlePid: number): void {
+    const tracked = this.running.get(agentId);
+    if (!tracked || tracked.pid !== handlePid) return;
+    try {
+      tracked.stdin?.end();
+    } catch {
+      // ignore
+    }
+    tracked.stdin = null;
+    tracked.canRespondToPermissions = false;
+    killStdinHolder(tracked.holderPid);
+    tracked.holderPid = null;
   }
 
   /**
@@ -503,7 +677,22 @@ export class ClaudeService {
     });
 
     const logPath = path.join(this.runsDir, `${agentId}-${Date.now()}.log`);
+    const { fifoPath, holderPidPath } = stdinPathsForLog(logPath);
+    createStdinFifo(fifoPath);
+
+    // Keep the FIFO unblocked during setup (Linux O_RDWR does not wait for a peer).
+    const readyFd = openSync(fifoPath, 'r+');
+    let holderPid: number;
+    try {
+      holderPid = spawnStdinHolder(fifoPath, holderPidPath);
+    } catch (error) {
+      closeSync(readyFd);
+      cleanupStdinSidecars(logPath);
+      throw error;
+    }
+
     const outFd = openSync(logPath, 'w');
+    const stdinReadFd = openSync(fifoPath, 'r');
 
     let proc: ChildProcess;
     try {
@@ -511,36 +700,49 @@ export class ClaudeService {
         cwd: options.cwd,
         env: process.env,
         detached: true,
-        stdio: ['pipe', outFd, outFd],
+        stdio: [stdinReadFd, outFd, outFd],
       });
     } finally {
       closeSync(outFd);
+      closeSync(stdinReadFd);
     }
 
     if (proc.pid == null) {
+      closeSync(readyFd);
+      killStdinHolder(holderPid);
+      cleanupStdinSidecars(logPath);
       throw new Error('Failed to start Claude process');
     }
 
     // Allow the Node event loop to exit without waiting on this handle; the OS process keeps running.
     proc.unref();
 
-    if (!proc.stdin) {
-      killProcessTree(proc.pid);
-      throw new Error('Claude process stdin unavailable');
-    }
-
+    let stdin: NodeJS.WritableStream | undefined;
     try {
-      proc.stdin.write(buildStreamUserMessage(prompt));
+      stdin = openFifoWriteStream(fifoPath);
+      stdin.write(buildStreamUserMessage(prompt));
     } catch (error) {
+      closeSync(readyFd);
+      try {
+        stdin?.end();
+      } catch {
+        // ignore
+      }
       killProcessTree(proc.pid);
+      killStdinHolder(holderPid);
+      cleanupStdinSidecars(logPath);
       throw error instanceof Error ? error : new Error('Failed to write prompt to Claude stdin');
     }
+
+    closeSync(readyFd);
 
     const handle: ClaudeRunHandle = { pid: proc.pid, logPath };
     this.running.set(agentId, {
       ...handle,
       proc,
-      stdin: proc.stdin,
+      stdin,
+      stdinFifoPath: fifoPath,
+      holderPid,
       pendingPermissions: new Map(),
       canRespondToPermissions: true,
       permissionMode,
@@ -552,26 +754,31 @@ export class ClaudeService {
 
   /**
    * Re-attach to a Claude process that outlived a previous orchestrator instance.
-   * Stdin is not recoverable, so interactive permission prompts cannot be answered —
-   * those runs are stopped when a control_request is observed.
+   * Stdin is restored via the named FIFO + holder process so AskUserQuestion /
+   * permission prompts can still be answered after a backend restart.
    */
   async attachToRun(
     agentId: string,
     handle: ClaudeRunHandle,
     options: {
       sessionId?: string | null;
-      onEvent?: (event: ClaudeStreamEvent) => void;
+      permissionMode?: ClaudePermissionMode;
+      onEvent?: (event: ClaudeStreamEvent, meta?: ClaudeEventMeta) => void;
       onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+      onCatchUp?: () => void;
       signal?: AbortSignal;
     } = {},
   ): Promise<ClaudeRunResult> {
+    const reopened = reopenStdinFromLog(handle.logPath);
     this.running.set(agentId, {
       pid: handle.pid,
       logPath: handle.logPath,
-      stdin: null,
+      stdin: reopened.stdin,
+      stdinFifoPath: reopened.fifoPath,
+      holderPid: reopened.holderPid,
       pendingPermissions: new Map(),
-      canRespondToPermissions: false,
-      permissionMode: 'plan',
+      canRespondToPermissions: reopened.canRespond,
+      permissionMode: options.permissionMode ?? 'plan',
     });
     return this.monitorRun(agentId, handle, options.sessionId ?? null, options, options.signal);
   }
@@ -581,8 +788,9 @@ export class ClaudeService {
     handle: ClaudeRunHandle,
     initialSessionId: string | null,
     options: {
-      onEvent?: (event: ClaudeStreamEvent) => void;
+      onEvent?: (event: ClaudeStreamEvent, meta?: ClaudeEventMeta) => void;
       onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+      onCatchUp?: () => void;
     },
     signal?: AbortSignal,
   ): Promise<ClaudeRunResult> {
@@ -600,48 +808,56 @@ export class ClaudeService {
       handleAbort();
     }
 
-    try {
-      await followClaudeLog(handle.pid, handle.logPath, (line) => {
-        try {
-          const event = JSON.parse(line) as ClaudeStreamEvent;
-          events.push(event);
-          options.onEvent?.(event);
+    const processLine = (line: string, replay: boolean) => {
+      try {
+        const event = JSON.parse(line) as ClaudeStreamEvent;
+        events.push(event);
+        options.onEvent?.(event, { replay });
 
-          if (event.session_id) {
-            sessionId = event.session_id;
+        if (event.session_id) {
+          sessionId = event.session_id;
+        }
+
+        if (event.type === 'result') {
+          if (typeof event.result === 'string') {
+            result = event.result;
           }
-
-          if (event.type === 'result') {
-            if (typeof event.result === 'string') {
-              result = event.result;
-            }
+          const trackedForResult = this.running.get(agentId);
+          if (trackedForResult?.pid === handle.pid) {
+            trackedForResult.pendingPermissions.clear();
             // End stdin after the turn completes so the CLI can exit (stream-json keeps
             // the process open while stdin is still writable). Only touch this run —
             // Build may already have started a replacement process under the same agentId.
-            const trackedForResult = this.running.get(agentId);
-            if (trackedForResult?.pid === handle.pid) {
-              try {
-                trackedForResult.stdin?.end();
-              } catch {
-                // ignore
-              }
-            }
+            this.closeStdinForRun(agentId, handle.pid);
           }
-
-          this.handleControlEvent(agentId, event as Record<string, unknown>, options);
-        } catch {
-          // ignore malformed lines
         }
+
+        this.handleControlEvent(agentId, handle.pid, event as Record<string, unknown>, options, {
+          replay,
+        });
+      } catch {
+        // ignore malformed lines
+      }
+    };
+
+    try {
+      const snapshot = await readClaudeLogSnapshot(handle.logPath);
+      for (const line of snapshot.lines) {
+        processLine(line, true);
+      }
+      this.flushReplayedPermissions(agentId, handle.pid, options);
+      options.onCatchUp?.();
+
+      await followClaudeLog(handle.pid, handle.logPath, (line) => processLine(line, false), {
+        startPosition: snapshot.position,
+        signal,
       });
     } finally {
       signal?.removeEventListener('abort', handleAbort);
       const tracked = this.running.get(agentId);
       if (tracked?.pid === handle.pid) {
-        try {
-          tracked.stdin?.end();
-        } catch {
-          // ignore
-        }
+        this.closeStdinForRun(agentId, handle.pid);
+        cleanupStdinSidecars(handle.logPath);
         this.running.delete(agentId);
       }
     }
@@ -653,38 +869,15 @@ export class ClaudeService {
     return { result, sessionId, events, stopped };
   }
 
-  private handleControlEvent(
-    agentId: string,
-    event: Record<string, unknown>,
-    options: {
-      onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+  private stashPermissionRequest(
+    tracked: TrackedRun,
+    parsed: {
+      requestId: string;
+      toolName: string;
+      input: Record<string, unknown>;
+      toolUseId?: string;
     },
-  ): void {
-    const parsed = parsePermissionRequest(event);
-    if (!parsed) return;
-
-    const tracked = this.running.get(agentId);
-    if (!tracked) return;
-
-    if (!tracked.canRespondToPermissions) {
-      // Re-attached run: cannot answer interactive prompts — stop so the agent does not hang.
-      killProcessTree(tracked.pid);
-      return;
-    }
-
-    if (shouldAutoAllowToolPermission(parsed.toolName, tracked.permissionMode, parsed.input)) {
-      this.respondToPermission(
-        agentId,
-        parsed.requestId,
-        {
-          behavior: 'allow',
-          updatedInput: parsed.input,
-        },
-        { requirePending: false },
-      );
-      return;
-    }
-
+  ): ClaudePermissionRequest {
     const input = enrichPermissionInput(parsed.toolName, parsed.input, {
       logPath: tracked.logPath,
     });
@@ -694,8 +887,82 @@ export class ClaudeService {
       input,
       toolUseId: parsed.toolUseId,
     };
+    tracked.pendingPermissions.clear();
     tracked.pendingPermissions.set(parsed.requestId, request);
-    options.onPermissionRequest?.(request);
+    return request;
+  }
+
+  /**
+   * After log catch-up, emit still-pending prompts (or auto-allow ones that never
+   * got a response because the previous orchestrator process died).
+   */
+  private flushReplayedPermissions(
+    agentId: string,
+    handlePid: number,
+    options: {
+      onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+    },
+  ): void {
+    const tracked = this.running.get(agentId);
+    if (!tracked || tracked.pid !== handlePid) return;
+
+    for (const request of [...tracked.pendingPermissions.values()]) {
+      if (shouldAutoAllowToolPermission(request.toolName, tracked.permissionMode, request.input)) {
+        if (tracked.canRespondToPermissions) {
+          this.respondToPermission(
+            agentId,
+            request.requestId,
+            { behavior: 'allow', updatedInput: request.input },
+            { requirePending: false },
+          );
+        }
+        continue;
+      }
+      options.onPermissionRequest?.(request);
+    }
+  }
+
+  private handleControlEvent(
+    agentId: string,
+    handlePid: number,
+    event: Record<string, unknown>,
+    options: {
+      onPermissionRequest?: (request: ClaudePermissionRequest) => void;
+    },
+    meta: ClaudeEventMeta,
+  ): void {
+    const tracked = this.running.get(agentId);
+    if (!tracked || tracked.pid !== handlePid) return;
+
+    const parsed = parsePermissionRequest(event);
+    if (parsed) {
+      const request = this.stashPermissionRequest(tracked, parsed);
+      if (meta.replay) {
+        // Reconstruct pending state only — do not auto-respond or notify yet.
+        return;
+      }
+      if (shouldAutoAllowToolPermission(parsed.toolName, tracked.permissionMode, parsed.input)) {
+        if (tracked.canRespondToPermissions) {
+          this.respondToPermission(
+            agentId,
+            parsed.requestId,
+            {
+              behavior: 'allow',
+              updatedInput: parsed.input,
+            },
+            { requirePending: false },
+          );
+        }
+        return;
+      }
+      options.onPermissionRequest?.(request);
+      return;
+    }
+
+    // Claude continued past a permission prompt (it was answered). Drop it.
+    if (meta.replay && event.type !== 'stderr') {
+      tracked.pendingPermissions.clear();
+    }
   }
 }
 
