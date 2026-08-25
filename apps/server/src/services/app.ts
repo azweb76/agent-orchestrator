@@ -76,7 +76,6 @@ async function createAgentForWorktree(
     name,
     status: 'idle',
     model: 'sonnet',
-    environment: null,
     permissionMode: 'plan',
     claudeSessionId: null,
     pid: null,
@@ -330,7 +329,6 @@ export async function updateAgent(ctx: AppContext, agentId: string, body: Update
     ...agent,
     name: body.name ?? agent.name,
     model: body.model ?? agent.model,
-    environment: body.environment !== undefined ? body.environment : agent.environment,
     permissionMode: body.permissionMode ?? agent.permissionMode,
     updatedAt: nowIso(),
   };
@@ -1122,7 +1120,6 @@ export async function streamAgentChat(
       cwd: detail.worktree.path,
       prompt: userMessage.content,
       model: runningAgent.model,
-      environment: runningAgent.environment,
       permissionMode: runningAgent.permissionMode,
       sessionId: runningAgent.claudeSessionId,
       imagePaths: attachments.map((item) => item.path),

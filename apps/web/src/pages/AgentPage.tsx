@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -16,14 +16,12 @@ import {
   Tab,
   Tabs,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PermissionMode } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -46,7 +44,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
-  const [environment, setEnvironment] = useState('');
 
   const agentQuery = useQuery({
     queryKey: ['agent', agentId],
@@ -65,18 +62,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     queryKey: ['diff', agentId],
     queryFn: () => api.getDiff(agentId),
     enabled: Boolean(agentId) && tab === 1,
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (body: {
-      model?: string;
-      environment?: string | null;
-      permissionMode?: PermissionMode;
-    }) => api.updateAgent(agentId, body),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-    },
   });
 
   const archiveMutation = useMutation({
@@ -99,10 +84,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
-
-  useEffect(() => {
-    setEnvironment(agentQuery.data?.environment ?? '');
-  }, [agentQuery.data?.environment]);
 
   if (agentQuery.isLoading) {
     return (
@@ -186,25 +167,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         </Box>
 
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Tooltip
-            title="Optional Claude Code self-hosted environment ID (ccpool_…). When set, runs are dispatched to that remote environment instead of the local worktree."
-          >
-            <TextField
-              size="small"
-              label="Cloud env"
-              placeholder="ccpool_..."
-              value={environment}
-              disabled={archived}
-              onChange={(e) => setEnvironment(e.target.value)}
-              onBlur={() => {
-                const next = environment || null;
-                if (next !== (agent.environment ?? null)) {
-                  updateMutation.mutate({ environment: next });
-                }
-              }}
-              sx={{ width: { xs: '100%', sm: 160 } }}
-            />
-          </Tooltip>
           <Button
             size="small"
             variant="outlined"

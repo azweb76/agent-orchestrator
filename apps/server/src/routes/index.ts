@@ -218,7 +218,6 @@ export function createRouter(ctx: AppContext): express.Router {
         .object({
           name: z.string().optional(),
           model: z.string().optional(),
-          environment: z.string().nullable().optional(),
           permissionMode: z
             .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
             .optional(),
