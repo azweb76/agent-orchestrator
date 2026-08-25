@@ -2,6 +2,7 @@ import { Outlet, useLocation, Link as RouterLink } from 'react-router-dom';
 import {
   AppBar,
   Box,
+  Button,
   Chip,
   Container,
   Link,
@@ -10,6 +11,8 @@ import {
   Typography,
 } from '@mui/material';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import MergeTypeIcon from '@mui/icons-material/MergeType';
+import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 
@@ -20,6 +23,9 @@ export function AppLayout() {
     queryFn: api.getStatus,
     refetchInterval: 30_000,
   });
+
+  const onHome = location.pathname === '/';
+  const onPulls = location.pathname.startsWith('/pull-requests');
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -39,10 +45,34 @@ export function AppLayout() {
             component={RouterLink}
             to="/"
             variant="h6"
-            sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 700 }}
+            sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 700, mr: 2 }}
           >
             Agent Orchestrator
           </Typography>
+
+          <Stack direction="row" spacing={0.5} sx={{ mr: 2 }}>
+            <Button
+              component={RouterLink}
+              to="/"
+              size="small"
+              startIcon={<FolderOpenOutlinedIcon />}
+              color={onHome ? 'secondary' : 'inherit'}
+              sx={{ fontWeight: onHome ? 700 : 500 }}
+            >
+              Workspaces
+            </Button>
+            <Button
+              component={RouterLink}
+              to="/pull-requests"
+              size="small"
+              startIcon={<MergeTypeIcon />}
+              color={onPulls ? 'secondary' : 'inherit'}
+              sx={{ fontWeight: onPulls ? 700 : 500 }}
+            >
+              Pull requests
+            </Button>
+          </Stack>
+
           <Box sx={{ flexGrow: 1 }} />
           <Stack direction="row" spacing={1}>
             <Chip
@@ -62,7 +92,7 @@ export function AppLayout() {
       </AppBar>
 
       <Container maxWidth="xl" sx={{ py: 3, flex: 1 }}>
-        {location.pathname !== '/' && (
+        {!onHome && !onPulls && (
           <Link component={RouterLink} to="/" underline="hover" sx={{ display: 'inline-block', mb: 2 }}>
             ← Back to workspaces
           </Link>

@@ -5,6 +5,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
 ## Features
 
 - **Workspaces** — clone GitHub repos as managed workspaces
+- **Pull requests** — browse your open PRs and review requests, then create a workspace + agent from any PR
 - **Worktrees** — create worktrees from branches or existing pull requests
 - **Agents** — one Claude Code agent per worktree
 - **Chat** — streaming conversations with follow-up support via Claude session resume
@@ -54,6 +55,7 @@ pnpm dev
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GITHUB_TOKEN` | GitHub PAT for API access | — |
+| `GITHUB_LOGIN` | Optional GitHub username override for PR inbox searches | from token `/user` |
 | `CLAUDE_BIN` | Path to Claude Code binary | `claude` |
 | `DATA_DIR` | Directory for repos, worktrees, and SQLite DB | `./data` |
 | `PORT` | Server port | `3001` |

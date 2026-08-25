@@ -70,6 +70,36 @@ export interface GitHubPullRequest {
   draft: boolean;
 }
 
+export interface InboxPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  htmlUrl: string;
+  draft: boolean;
+  owner: string;
+  repo: string;
+  authorLogin: string;
+  updatedAt: string;
+  /** Category for this PR relative to the authenticated user. */
+  category: 'authored' | 'review_requested';
+  /** Existing local workspace for this repo, if any. */
+  workspaceId: string | null;
+  /** Existing local agent created from this PR, if any. */
+  agentId: string | null;
+}
+
+export interface PullRequestInbox {
+  authored: InboxPullRequest[];
+  reviewRequested: InboxPullRequest[];
+}
+
+export interface CreateAgentFromPrRequest {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  name?: string;
+}
+
 export interface GitHubRepository {
   owner: string;
   name: string;

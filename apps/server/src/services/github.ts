@@ -4,8 +4,41 @@ interface GitHubApiOptions {
   token?: string;
 }
 
+interface GitHubSearchIssue {
+  number: number;
+  title: string;
+  state: string;
+  draft?: boolean;
+  html_url: string;
+  updated_at: string;
+  user: { login: string };
+  repository_url: string;
+  pull_request?: { url: string };
+}
+
+export interface SearchedPullRequest {
+  number: number;
+  title: string;
+  state: string;
+  htmlUrl: string;
+  draft: boolean;
+  owner: string;
+  repo: string;
+  authorLogin: string;
+  updatedAt: string;
+}
+
 export class GitHubService {
   constructor(private options: GitHubApiOptions) {}
+
+  private loginCache: string | null | undefined;
+
+  private requireToken(): string {
+    if (!this.options.token) {
+      throw new Error('GitHub token is not configured');
+    }
+    return this.options.token;
+  }
 
   private async request<T>(url: string): Promise<T> {
     const headers: Record<string, string> = {
@@ -24,6 +57,75 @@ export class GitHubService {
       throw new Error(`GitHub API error ${response.status}: ${body}`);
     }
     return response.json() as Promise<T>;
+  }
+
+  /** Resolve the authenticated GitHub login for search queries (user PAT required). */
+  async getAuthenticatedLogin(): Promise<string> {
+    if (process.env.GITHUB_LOGIN?.trim()) {
+      return process.env.GITHUB_LOGIN.trim();
+    }
+
+    if (this.loginCache !== undefined) {
+      if (!this.loginCache) {
+        throw new Error(
+          'GITHUB_TOKEN must be a personal access token for a user account (not a GitHub App installation token). Optionally set GITHUB_LOGIN.',
+        );
+      }
+      return this.loginCache;
+    }
+
+    this.requireToken();
+    try {
+      const user = await this.request<{ login: string }>('https://api.github.com/user');
+      this.loginCache = user.login;
+      return user.login;
+    } catch (error) {
+      this.loginCache = null;
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('403') || message.includes('401')) {
+        throw new Error(
+          'GITHUB_TOKEN must be a personal access token for a user account (not a GitHub App installation token). Optionally set GITHUB_LOGIN.',
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async searchPullRequests(query: string): Promise<SearchedPullRequest[]> {
+    this.requireToken();
+    const encoded = encodeURIComponent(query);
+    const data = await this.request<{ items: GitHubSearchIssue[] }>(
+      `https://api.github.com/search/issues?q=${encoded}&sort=updated&order=desc&per_page=50`,
+    );
+
+    return data.items
+      .filter((item) => Boolean(item.pull_request))
+      .map((item) => {
+        const match = item.repository_url.match(/repos\/([^/]+)\/([^/]+)$/);
+        const owner = match?.[1] ?? '';
+        const repo = match?.[2] ?? '';
+        return {
+          number: item.number,
+          title: item.title,
+          state: item.state,
+          htmlUrl: item.html_url,
+          draft: Boolean(item.draft),
+          owner,
+          repo,
+          authorLogin: item.user.login,
+          updatedAt: item.updated_at,
+        };
+      });
+  }
+
+  async listAuthoredOpenPullRequests(): Promise<SearchedPullRequest[]> {
+    const login = await this.getAuthenticatedLogin();
+    return this.searchPullRequests(`is:pr is:open author:${login}`);
+  }
+
+  async listReviewRequestedPullRequests(): Promise<SearchedPullRequest[]> {
+    const login = await this.getAuthenticatedLogin();
+    return this.searchPullRequests(`is:pr is:open review-requested:${login}`);
   }
 
   async listBranches(owner: string, repo: string): Promise<GitHubBranch[]> {

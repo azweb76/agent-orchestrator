@@ -3,6 +3,7 @@ import type {
   AgentDetail,
   AgentDiff,
   AgentEvent,
+  CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromPrRequest,
@@ -11,7 +12,9 @@ import type {
   GitHubPullRequest,
   GitHubRepository,
   Message,
+  PullRequestInbox,
   UpdateAgentRequest,
+  Worktree,
   WorktreeWithAgent,
   Workspace,
   WorkspaceWithCounts,
@@ -70,6 +73,12 @@ export const api = {
     request<GitHubPullRequest[]>(`/workspaces/${workspaceId}/github/pulls`),
   searchRepositories: (query: string) =>
     request<GitHubRepository[]>(`/github/repos/search?q=${encodeURIComponent(query)}`),
+  getPullRequestInbox: () => request<PullRequestInbox>('/github/pulls/inbox'),
+  createAgentFromPr: (body: CreateAgentFromPrRequest) =>
+    request<{ workspace: Workspace; worktree: Worktree; agent: Agent; created: boolean }>(
+      '/github/pulls/create-agent',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
   updateAgent: (agentId: string, body: UpdateAgentRequest) =>
     request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),

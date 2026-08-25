@@ -120,6 +120,17 @@ export class WorkspaceRepository {
     return row ? rowToWorkspace(row) : null;
   }
 
+  getByOwnerRepo(owner: string, repo: string): Workspace | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM workspaces
+         WHERE lower(github_owner) = lower(?) AND lower(github_repo) = lower(?)
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(owner, repo);
+    return row ? rowToWorkspace(row) : null;
+  }
+
   delete(id: string): void {
     this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
   }
@@ -157,6 +168,17 @@ export class WorktreeRepository {
 
   getById(id: string): Worktree | null {
     const row = this.db.prepare('SELECT * FROM worktrees WHERE id = ?').get(id);
+    return row ? rowToWorktree(row) : null;
+  }
+
+  getByWorkspaceAndPr(workspaceId: string, prNumber: number): Worktree | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM worktrees
+         WHERE workspace_id = ? AND pr_number = ?
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(workspaceId, prNumber);
     return row ? rowToWorktree(row) : null;
   }
 
