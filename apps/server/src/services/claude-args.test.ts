@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildClaudeArgs, buildPromptWithImages, DEFAULT_ALLOWED_TOOLS } from './git.js';
+import {
+  buildClaudeArgs,
+  buildPromptWithImages,
+  buildStreamUserMessage,
+  DEFAULT_ALLOWED_TOOLS,
+} from './git.js';
 
 test('buildPromptWithImages appends image paths for the Read tool', () => {
   const prompt = buildPromptWithImages('Fix this UI', ['/tmp/a.png', '/tmp/b.jpg']);
@@ -12,10 +17,10 @@ test('buildPromptWithImages appends image paths for the Read tool', () => {
 
 test('buildClaudeArgs enables stdio permission prompts and interactive tools', () => {
   const args = buildClaudeArgs({
-    prompt: 'hi',
     permissionMode: 'plan',
     model: 'sonnet',
   });
+  assert.ok(!args.includes('-p'));
   assert.ok(args.includes('--permission-prompt-tool'));
   assert.equal(args[args.indexOf('--permission-prompt-tool') + 1], 'stdio');
   assert.ok(args.includes('--input-format'));
@@ -30,7 +35,6 @@ test('buildClaudeArgs enables stdio permission prompts and interactive tools', (
 
 test('buildClaudeArgs passes permission-mode for bypass without dangerously-skip', () => {
   const args = buildClaudeArgs({
-    prompt: 'hi',
     permissionMode: 'bypassPermissions',
     model: 'sonnet',
   });
@@ -45,13 +49,22 @@ test('buildClaudeArgs passes permission-mode for bypass without dangerously-skip
 
 test('buildClaudeArgs passes permission-mode for non-bypass modes', () => {
   const args = buildClaudeArgs({
-    prompt: 'plan this',
     permissionMode: 'plan',
-    imagePaths: ['/data/shot.png'],
   });
   assert.ok(!args.includes('--dangerously-skip-permissions'));
   const modeIdx = args.indexOf('--permission-mode');
   assert.ok(modeIdx >= 0);
   assert.equal(args[modeIdx + 1], 'plan');
-  assert.match(args[1]!, /\/data\/shot\.png/);
+});
+
+test('buildStreamUserMessage wraps the prompt for stream-json stdin', () => {
+  const line = buildStreamUserMessage('Hello');
+  assert.equal(line.endsWith('\n'), true);
+  const parsed = JSON.parse(line) as {
+    type: string;
+    message: { role: string; content: string };
+  };
+  assert.equal(parsed.type, 'user');
+  assert.equal(parsed.message.role, 'user');
+  assert.equal(parsed.message.content, 'Hello');
 });

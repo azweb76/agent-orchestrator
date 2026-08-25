@@ -150,20 +150,17 @@ export interface ClaudeRunOptions {
 }
 
 export function buildClaudeArgs(options: {
-  prompt: string;
   model?: string;
   environment?: string | null;
   sessionId?: string | null;
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
-  imagePaths?: string[];
   defaultAllowedTools?: string;
 }): string[] {
-  const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
   const permissionMode = options.permissionMode ?? 'plan';
+  // Stream-json stdin is required for --permission-prompt-tool stdio.
+  // Do not pass -p here: the prompt is written as a user message on stdin after spawn.
   const args = [
-    '-p',
-    prompt,
     '--output-format',
     'stream-json',
     '--input-format',
@@ -203,6 +200,17 @@ export function buildPromptWithImages(prompt: string, imagePaths: string[]): str
   if (imagePaths.length === 0) return prompt;
   const list = imagePaths.map((p) => `- ${p}`).join('\n');
   return `${prompt}\n\nAttached images (read these files with the Read tool):\n${list}`;
+}
+
+/** Initial user message written to Claude stdin in stream-json mode. */
+export function buildStreamUserMessage(prompt: string): string {
+  return `${JSON.stringify({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: prompt,
+    },
+  })}\n`;
 }
 
 export interface ClaudeRunHandle {
@@ -405,14 +413,13 @@ export class ClaudeService {
       throw new Error('Agent already has a running Claude process');
     }
 
+    const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
     const args = buildClaudeArgs({
-      prompt: options.prompt,
       model: options.model,
       environment: options.environment,
       sessionId: options.sessionId,
       allowedTools: options.allowedTools,
       permissionMode: options.permissionMode,
-      imagePaths: options.imagePaths,
       defaultAllowedTools: this.defaultAllowedTools,
     });
 
@@ -438,13 +445,25 @@ export class ClaudeService {
     // Allow the Node event loop to exit without waiting on this handle; the OS process keeps running.
     proc.unref();
 
+    if (!proc.stdin) {
+      killProcessTree(proc.pid);
+      throw new Error('Claude process stdin unavailable');
+    }
+
+    try {
+      proc.stdin.write(buildStreamUserMessage(prompt));
+    } catch (error) {
+      killProcessTree(proc.pid);
+      throw error instanceof Error ? error : new Error('Failed to write prompt to Claude stdin');
+    }
+
     const handle: ClaudeRunHandle = { pid: proc.pid, logPath };
     this.running.set(agentId, {
       ...handle,
       proc,
       stdin: proc.stdin,
       pendingPermissions: new Map(),
-      canRespondToPermissions: Boolean(proc.stdin),
+      canRespondToPermissions: true,
     });
     options.onStarted?.(handle);
 
@@ -511,8 +530,17 @@ export class ClaudeService {
             sessionId = event.session_id;
           }
 
-          if (event.type === 'result' && typeof event.result === 'string') {
-            result = event.result;
+          if (event.type === 'result') {
+            if (typeof event.result === 'string') {
+              result = event.result;
+            }
+            // End stdin after the turn completes so the CLI can exit (stream-json keeps
+            // the process open while stdin is still writable).
+            try {
+              this.running.get(agentId)?.stdin?.end();
+            } catch {
+              // ignore
+            }
           }
 
           this.handleControlEvent(agentId, event as Record<string, unknown>, options);
