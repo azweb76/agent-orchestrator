@@ -304,7 +304,7 @@ export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
 
   const agent = ctx.repos.agents.getByWorktreeId(worktreeId);
   if (agent) {
-    ctx.claude.stop(agent.id, agent.pid);
+    ctx.claude.stop(agent.id, agent.pid, agent.runLogPath);
   }
 
   await ctx.git.removeWorktree(workspace.repoPath, worktree.path);
@@ -347,7 +347,7 @@ export async function stopAgent(ctx: AppContext, agentId: string) {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
-  ctx.claude.stop(agentId, agent.pid);
+  ctx.claude.stop(agentId, agent.pid, agent.runLogPath);
   markStreamingAssistantStopped(ctx, agentId);
   // Return to idle so the next chat message can start a run without a manual Start.
   const updated: Agent = {
@@ -366,7 +366,7 @@ export async function archiveAgent(ctx: AppContext, agentId: string) {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
-  ctx.claude.stop(agentId, agent.pid);
+  ctx.claude.stop(agentId, agent.pid, agent.runLogPath);
   const updated: Agent = {
     ...agent,
     status: 'archived',
@@ -572,7 +572,7 @@ export async function denyPermissionRequest(
   // keep the Claude session so the user can continue planning with a follow-up.
   if (pending?.toolName === 'ExitPlanMode') {
     ctx.claude.dismissPermission(agentId, body.requestId);
-    await stopClaudeRun(ctx, agentId, agent.pid);
+    await stopClaudeRun(ctx, agentId, agent.pid, agent.runLogPath);
     markStreamingAssistantStopped(ctx, agentId);
     ctx.repos.events.create(
       makeEvent(agentId, 'permission_denied', {
@@ -662,7 +662,7 @@ export async function buildApprovedPlan(
   }
 
   // Stop any in-flight plan-mode run (avoids ExitPlanMode stdio hang on approve).
-  await stopClaudeRun(ctx, agentId, detail.pid);
+  await stopClaudeRun(ctx, agentId, detail.pid, detail.runLogPath);
 
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
@@ -816,7 +816,10 @@ function finalizeAgentRun(
     );
   }
 
-  const content = result.result || assistantText;
+  const content =
+    (typeof result.result === 'string' && result.result.trim() ? result.result : '') ||
+    assistantText.trim() ||
+    '';
   const metadata: MessageMetadata = {
     ...extras,
     streaming: false,
@@ -854,7 +857,8 @@ function finalizeAgentRun(
   const last = messages[messages.length - 1];
 
   // Prefer updating the in-progress assistant row written during the stream.
-  if (last?.role === 'assistant' && (last.metadata?.streaming || last.content === content)) {
+  // Always reuse the last assistant turn so recovery cannot append a duplicate.
+  if (last?.role === 'assistant') {
     const updated: Message = {
       ...last,
       content: content || (metadata.stopped ? '[stopped]' : last.content || '[no output]'),
@@ -980,8 +984,9 @@ async function stopClaudeRun(
   ctx: AppContext,
   agentId: string,
   pid: number | null | undefined,
+  runLogPath?: string | null,
 ): Promise<void> {
-  ctx.claude.stop(agentId, pid);
+  ctx.claude.stop(agentId, pid, runLogPath);
   if (pid == null) {
     const afterStop = ctx.repos.agents.getById(agentId);
     if (afterStop && (afterStop.status === 'running' || afterStop.pid != null)) {
@@ -1027,15 +1032,100 @@ async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
     return;
   }
 
+  const messages = ctx.repos.messages.listByAgent(agent.id);
+  let assistantMessage = messages[messages.length - 1];
+  if (assistantMessage?.role !== 'assistant') {
+    assistantMessage = {
+      id: uuidv4(),
+      agentId: agent.id,
+      role: 'assistant',
+      content: '',
+      attachments: [],
+      metadata: { streaming: true, timeline: [] },
+      createdAt: nowIso(),
+    };
+    ctx.repos.messages.create(assistantMessage);
+  }
+
+  // Rebuild from the run log rather than appending onto already-persisted content
+  // (reattach replays historical stream events).
+  let assistantText = '';
+  let timeline: StreamPart[] = [];
+  let lastPersistAt = 0;
+
+  const flushProgress = (forcePersist = false) => {
+    const now = Date.now();
+    if (!forcePersist && now - lastPersistAt < 300) return;
+    lastPersistAt = now;
+    if (!assistantMessage) return;
+    assistantMessage = persistAssistantProgress(ctx, assistantMessage, assistantText, timeline);
+  };
+
+  const onEvent = (
+    event: {
+      type: string;
+      event?: { delta?: { type?: string; text?: string } };
+    },
+    meta?: { replay?: boolean },
+  ) => {
+    if (
+      event.type === 'stream_event' &&
+      event.event?.delta?.type === 'text_delta' &&
+      event.event.delta.text
+    ) {
+      assistantText += event.event.delta.text;
+      timeline = appendStreamText(timeline, event.event.delta.text);
+      flushProgress();
+    } else if (event.type !== 'stderr') {
+      timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
+      flushProgress(true);
+      if (!meta?.replay) {
+        ctx.repos.events.create(makeEvent(agent.id, event.type, event as Record<string, unknown>));
+      }
+    }
+  };
+
+  const onPermissionRequest = (request: {
+    requestId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    toolUseId?: string;
+  }) => {
+    const payload = {
+      requestId: request.requestId,
+      toolName: request.toolName,
+      input: request.input,
+      toolUseId: request.toolUseId,
+      createdAt: nowIso(),
+    };
+    const already = ctx.repos.events.listByAgent(agent.id).some(
+      (item) =>
+        item.type === 'permission_request' &&
+        String(item.data.requestId ?? '') === request.requestId,
+    );
+    if (!already) {
+      ctx.repos.events.create(
+        makeEvent(agent.id, 'permission_request', payload as unknown as Record<string, unknown>),
+      );
+    }
+  };
+
   if (!isPidAlive(agent.pid)) {
-    // Process already finished — parse whatever is in the log and finalize.
     try {
       const result = await ctx.claude.attachToRun(
         agent.id,
         { pid: agent.pid, logPath: agent.runLogPath },
-        { sessionId: agent.claudeSessionId },
+        {
+          sessionId: agent.claudeSessionId,
+          permissionMode: agent.permissionMode,
+          onEvent,
+        },
       );
-      finalizeAgentRun(ctx, agent, result, '');
+      flushProgress(true);
+      finalizeAgentRun(ctx, agent, result, assistantText, { timeline }, {
+        assistantMessageId: assistantMessage.id,
+        runLogPath: agent.runLogPath,
+      });
     } catch {
       markStreamingAssistantStopped(ctx, agent.id);
       ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
@@ -1044,59 +1134,22 @@ async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
   }
 
   try {
-    let assistantText = '';
-    let timeline: StreamPart[] = [];
-    let lastPersistAt = 0;
-    const messages = ctx.repos.messages.listByAgent(agent.id);
-    let assistantMessage = messages[messages.length - 1];
-    if (assistantMessage?.role !== 'assistant' || !assistantMessage.metadata?.streaming) {
-      assistantMessage = {
-        id: uuidv4(),
-        agentId: agent.id,
-        role: 'assistant',
-        content: '',
-        attachments: [],
-        metadata: { streaming: true, timeline: [] },
-        createdAt: nowIso(),
-      };
-      ctx.repos.messages.create(assistantMessage);
-    } else {
-      assistantText = assistantMessage.content;
-      timeline = assistantMessage.metadata.timeline ?? [];
-    }
-
-    const flushProgress = (forcePersist = false) => {
-      const now = Date.now();
-      if (!forcePersist && now - lastPersistAt < 300) return;
-      lastPersistAt = now;
-      if (!assistantMessage) return;
-      assistantMessage = persistAssistantProgress(ctx, assistantMessage, assistantText, timeline);
-    };
-
     const result = await ctx.claude.attachToRun(
       agent.id,
       { pid: agent.pid, logPath: agent.runLogPath },
       {
         sessionId: agent.claudeSessionId,
-        onEvent: (event) => {
-          if (
-            event.type === 'stream_event' &&
-            event.event?.delta?.type === 'text_delta' &&
-            event.event.delta.text
-          ) {
-            assistantText += event.event.delta.text;
-            timeline = appendStreamText(timeline, event.event.delta.text);
-            flushProgress();
-          } else if (event.type !== 'stderr') {
-            timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
-            flushProgress(true);
-            ctx.repos.events.create(makeEvent(agent.id, event.type, event as Record<string, unknown>));
-          }
-        },
+        permissionMode: agent.permissionMode,
+        onEvent,
+        onPermissionRequest,
+        onCatchUp: () => flushProgress(true),
       },
     );
     flushProgress(true);
-    finalizeAgentRun(ctx, agent, result, assistantText, { timeline });
+    finalizeAgentRun(ctx, agent, result, assistantText, { timeline }, {
+      assistantMessageId: assistantMessage.id,
+      runLogPath: agent.runLogPath,
+    });
   } catch (error) {
     console.error(`Failed to recover agent ${agent.id}:`, error);
     markStreamingAssistantStopped(ctx, agent.id);
@@ -1125,7 +1178,7 @@ export async function streamAgentChat(
     if (!force) {
       throw new Error('Agent already has a running Claude process. Queue the message or force-send.');
     }
-    await stopClaudeRun(ctx, agentId, detail.pid);
+    await stopClaudeRun(ctx, agentId, detail.pid, detail.runLogPath);
     markStreamingAssistantStopped(ctx, agentId);
   }
 

@@ -88,4 +88,4 @@ data/       Cloned repos, worktrees, database (gitignored)
 
 Each worktree maps 1:1 to a Claude Code agent session. Chat uses `claude -p` with `stream-json` output; follow-ups resume via `--resume <session_id>`.
 
-Claude runs are **detached** from the orchestrator process: shutting down or restarting the app does not stop in-flight agents. Run output is written to log files under `data/runs/`; on startup the server re-attaches to any still-running agents and finalizes their results.
+Claude runs are **detached** from the orchestrator process: shutting down or restarting the app does not stop in-flight agents. Run output is written to log files under `data/runs/`; stdin uses a named pipe plus a small holder process so AskUserQuestion / permission prompts stay pending across restart. On startup the server re-attaches, rebuilds chat history from the log (without duplicating it), restores any unanswered prompts, and finalizes when the run completes.
