@@ -21,7 +21,7 @@ import type {
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
-import { ClaudeService, GitService, parseGitHubUrl, slugify } from '../services/git.js';
+import { ClaudeService, GitService, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
 
@@ -57,6 +57,8 @@ async function createAgentForWorktree(
     model: 'sonnet',
     environment: null,
     claudeSessionId: null,
+    pid: null,
+    runLogPath: null,
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
@@ -261,7 +263,7 @@ export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
 
   const agent = ctx.repos.agents.getByWorktreeId(worktreeId);
   if (agent) {
-    ctx.claude.stop(agent.id);
+    ctx.claude.stop(agent.id, agent.pid);
   }
 
   await ctx.git.removeWorktree(workspace.repoPath, worktree.path);
@@ -319,8 +321,14 @@ export async function stopAgent(ctx: AppContext, agentId: string) {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
-  ctx.claude.stop(agentId);
-  const updated: Agent = { ...agent, status: 'stopped', updatedAt: nowIso() };
+  ctx.claude.stop(agentId, agent.pid);
+  const updated: Agent = {
+    ...agent,
+    status: 'stopped',
+    pid: null,
+    runLogPath: null,
+    updatedAt: nowIso(),
+  };
   ctx.repos.agents.update(updated);
   ctx.repos.events.create(makeEvent(agentId, 'agent_stopped', {}));
   return updated;
@@ -330,10 +338,12 @@ export async function archiveAgent(ctx: AppContext, agentId: string) {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
-  ctx.claude.stop(agentId);
+  ctx.claude.stop(agentId, agent.pid);
   const updated: Agent = {
     ...agent,
     status: 'archived',
+    pid: null,
+    runLogPath: null,
     archivedAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -394,6 +404,107 @@ export async function createAgentPullRequest(
   return pr;
 }
 
+function clearAgentRunFields(agent: Agent, overrides: Partial<Agent> = {}): Agent {
+  return {
+    ...agent,
+    ...overrides,
+    pid: null,
+    runLogPath: null,
+    updatedAt: nowIso(),
+  };
+}
+
+function finalizeAgentRun(
+  ctx: AppContext,
+  agent: Agent,
+  result: { result: string; sessionId: string | null },
+  assistantText: string,
+): Message {
+  const status = agent.status === 'stopped' || agent.status === 'archived' ? agent.status : 'idle';
+  ctx.repos.agents.update(
+    clearAgentRunFields(agent, {
+      claudeSessionId: result.sessionId ?? agent.claudeSessionId,
+      status,
+    }),
+  );
+
+  const content = result.result || assistantText;
+  const messages = ctx.repos.messages.listByAgent(agent.id);
+  const last = messages[messages.length - 1];
+  if (last?.role === 'assistant' && last.content === content) {
+    return last;
+  }
+
+  const assistantMessage: Message = {
+    id: uuidv4(),
+    agentId: agent.id,
+    role: 'assistant',
+    content: content || '[no output]',
+    createdAt: nowIso(),
+  };
+  ctx.repos.messages.create(assistantMessage);
+  return assistantMessage;
+}
+
+/**
+ * Re-attach to Claude processes that outlived a previous orchestrator process.
+ * Completes message/session persistence when those runs finish.
+ */
+export function recoverRunningAgents(ctx: AppContext): void {
+  const running = ctx.repos.agents.listRunning();
+  for (const agent of running) {
+    void recoverOneAgent(ctx, agent);
+  }
+}
+
+async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
+  if (agent.pid == null || !agent.runLogPath) {
+    ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
+    return;
+  }
+
+  if (!isPidAlive(agent.pid)) {
+    // Process already finished — parse whatever is in the log and finalize.
+    try {
+      const result = await ctx.claude.attachToRun(
+        agent.id,
+        { pid: agent.pid, logPath: agent.runLogPath },
+        { sessionId: agent.claudeSessionId },
+      );
+      finalizeAgentRun(ctx, agent, result, '');
+    } catch {
+      ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
+    }
+    return;
+  }
+
+  try {
+    let assistantText = '';
+    const result = await ctx.claude.attachToRun(
+      agent.id,
+      { pid: agent.pid, logPath: agent.runLogPath },
+      {
+        sessionId: agent.claudeSessionId,
+        onEvent: (event) => {
+          if (
+            event.type === 'stream_event' &&
+            event.event?.delta?.type === 'text_delta' &&
+            event.event.delta.text
+          ) {
+            assistantText += event.event.delta.text;
+          } else if (event.type !== 'stderr') {
+            ctx.repos.events.create(makeEvent(agent.id, event.type, event as Record<string, unknown>));
+          }
+        },
+      },
+    );
+    finalizeAgentRun(ctx, agent, result, assistantText);
+  } catch (error) {
+    console.error(`Failed to recover agent ${agent.id}:`, error);
+    ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
+  }
+}
+
 export async function streamAgentChat(
   ctx: AppContext,
   agentId: string,
@@ -403,6 +514,9 @@ export async function streamAgentChat(
   const detail = await getAgentDetail(ctx, agentId);
   if (detail.archivedAt) {
     throw new Error('Cannot chat with archived agent');
+  }
+  if (detail.status === 'running' && detail.pid != null) {
+    throw new Error('Agent already has a running Claude process');
   }
 
   const userMessage: Message = {
@@ -419,17 +533,25 @@ export async function streamAgentChat(
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
+  // SSE disconnect / server shutdown must NOT kill the Claude process.
+  let clientOpen = true;
+  res.on('close', () => {
+    clientOpen = false;
+  });
+
   const send = (event: string, data: unknown) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (!clientOpen || res.writableEnded) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      clientOpen = false;
+    }
   };
 
   send('user_message', userMessage);
 
-  const runningAgent: Agent = { ...detail, status: 'running', updatedAt: nowIso() };
+  let runningAgent: Agent = { ...detail, status: 'running', updatedAt: nowIso() };
   ctx.repos.agents.update(runningAgent);
-
-  const abortController = new AbortController();
-  res.on('close', () => abortController.abort());
 
   let assistantText = '';
 
@@ -440,7 +562,15 @@ export async function streamAgentChat(
       model: detail.model,
       environment: detail.environment,
       sessionId: detail.claudeSessionId,
-      signal: abortController.signal,
+      onStarted: (handle) => {
+        runningAgent = {
+          ...runningAgent,
+          pid: handle.pid,
+          runLogPath: handle.logPath,
+          updatedAt: nowIso(),
+        };
+        ctx.repos.agents.update(runningAgent);
+      },
       onEvent: (event) => {
         if (
           event.type === 'stream_event' &&
@@ -456,32 +586,17 @@ export async function streamAgentChat(
       },
     });
 
-    if (result.sessionId) {
-      const withSession: Agent = {
-        ...runningAgent,
-        claudeSessionId: result.sessionId,
-        status: 'idle',
-        updatedAt: nowIso(),
-      };
-      ctx.repos.agents.update(withSession);
-    } else {
-      ctx.repos.agents.update({ ...runningAgent, status: 'idle', updatedAt: nowIso() });
-    }
-
-    const assistantMessage: Message = {
-      id: uuidv4(),
-      agentId,
-      role: 'assistant',
-      content: result.result || assistantText,
-      createdAt: nowIso(),
-    };
-    ctx.repos.messages.create(assistantMessage);
+    const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
+    const assistantMessage = finalizeAgentRun(ctx, current, result, assistantText);
     send('done', { message: assistantMessage, sessionId: result.sessionId });
   } catch (error) {
-    ctx.repos.agents.update({ ...runningAgent, status: 'idle', updatedAt: nowIso() });
+    const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
+    ctx.repos.agents.update(clearAgentRunFields(current, { status: 'idle' }));
     send('error', { message: error instanceof Error ? error.message : 'Unknown error' });
   } finally {
-    res.end();
+    if (clientOpen && !res.writableEnded) {
+      res.end();
+    }
   }
 }
 

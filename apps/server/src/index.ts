@@ -8,7 +8,7 @@ import { ClaudeService, GitService } from './services/git.js';
 import { GitHubService } from './services/github.js';
 import { AnthropicService } from './services/anthropic.js';
 import { createRouter, errorHandler } from './routes/index.js';
-import type { AppContext } from './services/app.js';
+import { recoverRunningAgents, type AppContext } from './services/app.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config();
@@ -26,7 +26,7 @@ const ctx: AppContext = {
   repos,
   git: new GitService(),
   github: new GitHubService({ token: process.env.GITHUB_TOKEN }),
-  claude: new ClaudeService(claudeBin),
+  claude: new ClaudeService(claudeBin, path.join(dataDir, 'runs')),
   anthropic: new AnthropicService(),
   dataDir,
 };
@@ -43,7 +43,44 @@ app.get('{*splat}', (_req, res) => {
   res.sendFile(path.join(webDist, 'index.html'));
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Agent Orchestrator running at http://localhost:${port}`);
   console.log(`Data directory: ${dataDir}`);
+  recoverRunningAgents(ctx);
 });
+
+let shuttingDown = false;
+
+function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}; shutting down without stopping agent processes`);
+
+  // Detached Claude runs keep going; drop local handles so we do not signal them.
+  ctx.claude.releaseAll();
+
+  server.close((err) => {
+    if (err) {
+      console.error('Error while closing HTTP server:', err);
+    }
+    try {
+      db.close();
+    } catch {
+      // already closed
+    }
+    process.exit(err ? 1 : 0);
+  });
+
+  // Do not wait forever on open SSE connections — agents are independent of the HTTP server.
+  setTimeout(() => {
+    try {
+      db.close();
+    } catch {
+      // already closed
+    }
+    process.exit(0);
+  }, 2_000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
