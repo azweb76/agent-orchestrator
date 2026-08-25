@@ -30,6 +30,7 @@ import {
   listSidebarTree,
   listWorkspaces,
   listWorktrees,
+  rewindAgentChat,
   searchGitHubRepositories,
   startAgent,
   stopAgent,
@@ -259,6 +260,14 @@ export function createRouter(ctx: AppContext): express.Router {
     '/agents/:agentId/messages',
     asyncHandler(async (req, res) => {
       res.json(await clearAgentChat(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/messages/rewind',
+    asyncHandler(async (req, res) => {
+      const body = z.object({ messageId: z.string().min(1) }).parse(req.body);
+      res.json(await rewindAgentChat(ctx, param(req.params.agentId), body));
     }),
   );
 

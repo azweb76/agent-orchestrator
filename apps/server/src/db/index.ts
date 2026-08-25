@@ -352,6 +352,32 @@ export class MessageRepository {
       .map(rowToMessage);
   }
 
+  getById(agentId: string, messageId: string): Message | null {
+    const row = this.db
+      .prepare('SELECT * FROM messages WHERE agent_id = ? AND id = ?')
+      .get(agentId, messageId);
+    return row ? rowToMessage(row) : null;
+  }
+
+  /**
+   * Delete the given message and every later message for the agent
+   * (ordered by created_at, then id).
+   */
+  deleteFrom(agentId: string, messageId: string): { removed: number; target: Message | null } {
+    const messages = this.listByAgent(agentId);
+    const index = messages.findIndex((item) => item.id === messageId);
+    if (index < 0) return { removed: 0, target: null };
+
+    const target = messages[index]!;
+    const toDelete = messages.slice(index);
+    const ids = toDelete.map((item) => item.id);
+    const placeholders = ids.map(() => '?').join(', ');
+    const result = this.db
+      .prepare(`DELETE FROM messages WHERE agent_id = ? AND id IN (${placeholders})`)
+      .run(agentId, ...ids);
+    return { removed: result.changes, target };
+  }
+
   deleteByAgent(agentId: string): number {
     const result = this.db.prepare('DELETE FROM messages WHERE agent_id = ?').run(agentId);
     return result.changes;

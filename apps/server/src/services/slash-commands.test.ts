@@ -39,14 +39,16 @@ Ship it.
     if (tmpRoot) await fs.rm(tmpRoot, { recursive: true, force: true });
   });
 
-  it('discovers project skills and commands plus local /clear', async () => {
+  it('discovers project skills and commands plus local /clear and /rewind', async () => {
     const commands = await discoverSlashCommands(tmpRoot);
     const names = commands.map((c) => c.command);
     assert.ok(names.includes('/clear'));
+    assert.ok(names.includes('/rewind'));
     assert.ok(names.includes('/deploy'));
     assert.ok(names.includes('/ship'));
     assert.ok(names.includes('/diff'));
     assert.equal(findSlashCommand(commands, '/clear')?.kind, 'local');
+    assert.equal(findSlashCommand(commands, '/rewind')?.kind, 'local');
     assert.equal(findSlashCommand(commands, '/deploy')?.kind, 'skill');
     assert.equal(findSlashCommand(commands, '/ship')?.source, 'project');
   });
@@ -55,6 +57,11 @@ Ship it.
     const commands = await discoverSlashCommands(tmpRoot);
     assert.equal(findSlashCommand(commands, '/reset')?.command, '/clear');
     assert.equal(findSlashCommand(commands, '/new')?.kind, 'local');
+  });
+
+  it('resolves /rewind aliases', async () => {
+    const commands = await discoverSlashCommands(tmpRoot);
+    assert.equal(findSlashCommand(commands, '/undo')?.command, '/rewind');
   });
 
   it('filters autocomplete by prefix including aliases', async () => {

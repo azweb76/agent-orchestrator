@@ -17,6 +17,7 @@ import type {
   Message,
   PermissionRequest,
   PullRequestInbox,
+  RewindChatResponse,
   SidebarWorkspace,
   SlashCommand,
   SuggestBranchNameResponse,
@@ -104,6 +105,11 @@ export const api = {
   getMessages: (agentId: string) => request<Message[]>(`/agents/${agentId}/messages`),
   clearMessages: (agentId: string) =>
     request<{ cleared: number }>(`/agents/${agentId}/messages`, { method: 'DELETE' }),
+  rewindMessages: (agentId: string, messageId: string) =>
+    request<RewindChatResponse>(`/agents/${agentId}/messages/rewind`, {
+      method: 'POST',
+      body: JSON.stringify({ messageId }),
+    }),
   getEvents: (agentId: string) => request<AgentEvent[]>(`/agents/${agentId}/events`),
   getDiff: (agentId: string) => request<AgentDiff>(`/agents/${agentId}/diff`),
   listSlashCommands: (agentId: string) =>

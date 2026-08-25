@@ -10,6 +10,8 @@ import type {
   BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
+  RewindChatRequest,
+  RewindChatResponse,
   CreateAgentFromPrRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
@@ -390,6 +392,71 @@ export async function clearAgentChat(ctx: AppContext, agentId: string): Promise<
   });
   ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared }));
   return { cleared };
+}
+
+/**
+ * Rewind conversation to a user message: drop that turn and everything after,
+ * reset the Claude session, and return the prompt for the composer draft.
+ * Earlier messages remain in the UI; the next send starts a fresh Claude session.
+ */
+export async function rewindAgentChat(
+  ctx: AppContext,
+  agentId: string,
+  body: RewindChatRequest,
+): Promise<RewindChatResponse> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+  if (agent.archivedAt) throw new Error('Cannot rewind chat for archived agent');
+  if (agent.status === 'running') {
+    throw new Error('Cannot rewind chat while the agent is running. Stop it first.');
+  }
+
+  const target = ctx.repos.messages.getById(agentId, body.messageId);
+  if (!target) throw new Error('Message not found');
+  if (target.role !== 'user') {
+    throw new Error('Rewind is only supported from a user message');
+  }
+
+  const all = ctx.repos.messages.listByAgent(agentId);
+  const index = all.findIndex((item) => item.id === body.messageId);
+  if (index < 0) throw new Error('Message not found');
+  const dropped = all.slice(index);
+
+  const { removed, target: deleted } = ctx.repos.messages.deleteFrom(agentId, body.messageId);
+  if (!deleted || removed === 0) throw new Error('Message not found');
+
+  await cleanupMessageAttachments(dropped);
+
+  ctx.repos.agents.update({
+    ...agent,
+    claudeSessionId: null,
+    updatedAt: nowIso(),
+  });
+  ctx.repos.events.create(
+    makeEvent(agentId, 'chat_rewound', {
+      messageId: body.messageId,
+      removed,
+    }),
+  );
+
+  return {
+    removed,
+    draft: deleted.content === '(image attachment)' ? '' : deleted.content,
+    messageId: body.messageId,
+  };
+}
+
+async function cleanupMessageAttachments(messages: Message[]): Promise<void> {
+  for (const message of messages) {
+    for (const attachment of message.attachments ?? []) {
+      if (!attachment.path) continue;
+      try {
+        await fs.unlink(attachment.path);
+      } catch {
+        // best-effort cleanup
+      }
+    }
+  }
 }
 
 export function listPendingPermissions(ctx: AppContext, agentId: string): PermissionRequest[] {
