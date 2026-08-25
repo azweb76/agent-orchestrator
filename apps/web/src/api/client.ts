@@ -16,14 +16,24 @@ import type {
   GitHubBranch,
   GitHubPullRequest,
   GitHubRepository,
+  MergePullRequestRequest,
+  MergePullRequestResponse,
   Message,
   PermissionRequest,
+  PullRequestChecks,
+  PullRequestComment,
+  PullRequestCommit,
+  PullRequestDetail,
+  PullRequestFiles,
   PullRequestInbox,
+  PullRequestReview,
   RewindChatResponse,
   SidebarWorkspace,
   SlashCommand,
   SuggestBranchNameResponse,
   UpdateAgentRequest,
+  UpdatePullRequestBranchRequest,
+  UpdatePullRequestBranchResponse,
   Worktree,
   WorktreeWithAgent,
   Workspace,
@@ -49,6 +59,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   return response.json() as Promise<T>;
 }
+
+const prBase = (owner: string, repo: string, prNumber: number) =>
+  `/github/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${prNumber}`;
 
 export interface SystemStatus {
   claudeInstalled: boolean;
@@ -100,6 +113,43 @@ export const api = {
       '/github/pulls/create-agent',
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  getPullRequest: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestDetail>(prBase(owner, repo, prNumber)),
+  getPullRequestChecks: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestChecks>(`${prBase(owner, repo, prNumber)}/checks`),
+  getPullRequestReviews: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestReview[]>(`${prBase(owner, repo, prNumber)}/reviews`),
+  getPullRequestFiles: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestFiles>(`${prBase(owner, repo, prNumber)}/files`),
+  getPullRequestCommits: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestCommit[]>(`${prBase(owner, repo, prNumber)}/commits`),
+  getPullRequestComments: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestComment[]>(`${prBase(owner, repo, prNumber)}/comments`),
+  mergePullRequest: (
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: MergePullRequestRequest,
+  ) =>
+    request<MergePullRequestResponse>(`${prBase(owner, repo, prNumber)}/merge`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updatePullRequestBranch: (
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: UpdatePullRequestBranchRequest,
+  ) =>
+    request<UpdatePullRequestBranchResponse>(`${prBase(owner, repo, prNumber)}/update-branch`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  setPullRequestState: (owner: string, repo: string, prNumber: number, state: 'open' | 'closed') =>
+    request<PullRequestDetail>(`${prBase(owner, repo, prNumber)}/state`, {
+      method: 'PATCH',
+      body: JSON.stringify({ state }),
+    }),
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
   updateAgent: (agentId: string, body: UpdateAgentRequest) =>
     request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),

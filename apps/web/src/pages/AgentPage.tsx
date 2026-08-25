@@ -19,7 +19,6 @@ import {
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
@@ -29,6 +28,7 @@ import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
+import { pullRequestPath } from '../utils/paths';
 
 export function AgentPage() {
   const { agentId = '' } = useParams();
@@ -190,14 +190,17 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           >
             Archive
           </Button>
-          {prUrl ? (
+          {prNumber != null ? (
             <Button
               size="small"
               variant="contained"
-              startIcon={<OpenInNewIcon />}
-              href={prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              component={RouterLink}
+              startIcon={<MergeTypeIcon />}
+              to={pullRequestPath(
+                agent.workspace.githubOwner,
+                agent.workspace.githubRepo,
+                prNumber,
+              )}
             >
               View PR #{prNumber}
             </Button>

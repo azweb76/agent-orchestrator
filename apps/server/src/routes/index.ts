@@ -2,6 +2,7 @@ import express from 'express';
 import fs from 'node:fs';
 import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
+import { GitHubApiError } from '../services/github.js';
 import {
   archiveAgent,
   allowPermissionRequest,
@@ -22,7 +23,13 @@ import {
   getAgentDiff,
   getAgentEvents,
   getAgentMessages,
+  getPullRequestChecks,
+  getPullRequestComments,
+  getPullRequestCommits,
+  getPullRequestDetail,
+  getPullRequestFiles,
   getPullRequestInbox,
+  getPullRequestReviews,
   getSystemStatus,
   getWorkspace,
   listAgentSlashCommands,
@@ -32,12 +39,15 @@ import {
   listSidebarTree,
   listWorkspaces,
   listWorktrees,
+  mergePullRequest,
   rewindAgentChat,
   searchGitHubRepositories,
+  setPullRequestState,
   stopAgent,
   streamAgentChat,
   suggestBranchNameForWorkspace,
   updateAgent,
+  updatePullRequestBranch,
 } from '../services/app.js';
 
 function param(value: string | string[]): string {
@@ -218,6 +228,110 @@ export function createRouter(ctx: AppContext): express.Router {
         .parse(req.body);
       const result = await createAgentFromPullRequest(ctx, body);
       res.status(result.created ? 201 : 200).json(result);
+    }),
+  );
+
+  // Repo-scoped PR routes. The `/github/pulls/*` routes above are user-scoped
+  // (no repo in the path), so these live under the `/github/repos` namespace.
+  const prPath = '/github/repos/:owner/:repo/pulls/:number';
+
+  function prRef(req: express.Request): { owner: string; repo: string; prNumber: number } {
+    const segment = z.string().min(1).max(100).regex(/^[A-Za-z0-9._-]+$/);
+    const parsed = z
+      .object({
+        owner: segment,
+        repo: segment,
+        number: z.coerce.number().int().positive(),
+      })
+      .parse({
+        owner: param(req.params.owner),
+        repo: param(req.params.repo),
+        number: param(req.params.number),
+      });
+    return { owner: parsed.owner, repo: parsed.repo, prNumber: parsed.number };
+  }
+
+  router.get(
+    prPath,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await getPullRequestDetail(ctx, owner, repo, prNumber));
+    }),
+  );
+
+  router.get(
+    `${prPath}/checks`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await getPullRequestChecks(ctx, owner, repo, prNumber));
+    }),
+  );
+
+  router.get(
+    `${prPath}/reviews`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await getPullRequestReviews(ctx, owner, repo, prNumber));
+    }),
+  );
+
+  router.get(
+    `${prPath}/files`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await getPullRequestFiles(ctx, owner, repo, prNumber));
+    }),
+  );
+
+  router.get(
+    `${prPath}/commits`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await getPullRequestCommits(ctx, owner, repo, prNumber));
+    }),
+  );
+
+  router.get(
+    `${prPath}/comments`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await getPullRequestComments(ctx, owner, repo, prNumber));
+    }),
+  );
+
+  router.post(
+    `${prPath}/merge`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      const body = z
+        .object({
+          method: z.enum(['merge', 'squash', 'rebase']),
+          commitTitle: z.string().max(300).optional(),
+          commitMessage: z.string().max(20000).optional(),
+          expectedHeadSha: z.string().regex(/^[0-9a-f]{7,40}$/).optional(),
+        })
+        .parse(req.body);
+      res.json(await mergePullRequest(ctx, owner, repo, prNumber, body));
+    }),
+  );
+
+  router.post(
+    `${prPath}/update-branch`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      const body = z
+        .object({ expectedHeadSha: z.string().regex(/^[0-9a-f]{7,40}$/).optional() })
+        .parse(req.body ?? {});
+      res.json(await updatePullRequestBranch(ctx, owner, repo, prNumber, body));
+    }),
+  );
+
+  router.patch(
+    `${prPath}/state`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      const body = z.object({ state: z.enum(['open', 'closed']) }).parse(req.body);
+      res.json(await setPullRequestState(ctx, owner, repo, prNumber, body));
     }),
   );
 
@@ -430,6 +544,14 @@ export function errorHandler(
 ) {
   if (err instanceof z.ZodError) {
     res.status(400).json({ error: 'Validation error', details: err.issues });
+    return;
+  }
+
+  // Must precede the message sniff below so GitHub's 405/409/422 merge errors
+  // arrive as readable client errors instead of a generic 500.
+  if (err instanceof GitHubApiError) {
+    const status = err.status >= 400 && err.status < 500 ? err.status : 502;
+    res.status(status).json({ error: err.message });
     return;
   }
 

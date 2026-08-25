@@ -22,12 +22,17 @@ import type {
   DenyPermissionRequest,
   EffortLevel,
   InboxPullRequest,
+  MergePullRequestRequest,
   Message,
   MessageAttachment,
   MessageMetadata,
   PermissionRequest,
+  PullRequestChecks,
+  PullRequestDetail,
   PullRequestInbox,
+  SetPullRequestStateRequest,
   UpdateAgentRequest,
+  UpdatePullRequestBranchRequest,
   SidebarWorkspace,
   Workspace,
   Worktree,
@@ -1337,15 +1342,7 @@ function enrichInboxPullRequest(
   pr: SearchedPullRequest,
   category: InboxPullRequest['category'],
 ): InboxPullRequest {
-  const workspace = ctx.repos.workspaces.getByOwnerRepo(pr.owner, pr.repo);
-  let agentId: string | null = null;
-
-  if (workspace) {
-    const worktree = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, pr.number);
-    if (worktree) {
-      agentId = ctx.repos.agents.getByWorktreeId(worktree.id)?.id ?? null;
-    }
-  }
+  const local = resolveLocalPrContext(ctx, pr.owner, pr.repo, pr.number);
 
   return {
     number: pr.number,
@@ -1358,8 +1355,8 @@ function enrichInboxPullRequest(
     authorLogin: pr.authorLogin,
     updatedAt: pr.updatedAt,
     category,
-    workspaceId: workspace?.id ?? null,
-    agentId,
+    workspaceId: local.workspaceId,
+    agentId: local.agentId,
   };
 }
 
@@ -1373,6 +1370,151 @@ export async function getPullRequestInbox(ctx: AppContext): Promise<PullRequestI
     authored: authored.map((pr) => enrichInboxPullRequest(ctx, pr, 'authored')),
     reviewRequested: reviewRequested.map((pr) => enrichInboxPullRequest(ctx, pr, 'review_requested')),
   };
+}
+
+/**
+ * Local workspace/agent overlay for a GitHub PR, if this app already tracks it.
+ * Shared by the inbox and the PR detail page so there is one lookup path.
+ */
+function resolveLocalPrContext(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): { workspaceId: string | null; agentId: string | null } {
+  const workspace = ctx.repos.workspaces.getByOwnerRepo(owner, repo);
+  if (!workspace) {
+    return { workspaceId: null, agentId: null };
+  }
+
+  const worktree = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, prNumber);
+  const agentId = worktree ? (ctx.repos.agents.getByWorktreeId(worktree.id)?.id ?? null) : null;
+  return { workspaceId: workspace.id, agentId };
+}
+
+/** Record a PR lifecycle event on the local agent for this PR, when there is one. */
+function recordPullRequestEvent(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  type: string,
+  data: Record<string, unknown>,
+): void {
+  const { agentId } = resolveLocalPrContext(ctx, owner, repo, prNumber);
+  if (!agentId) return;
+  ctx.repos.events.create(makeEvent(agentId, type, data));
+}
+
+export async function getPullRequestDetail(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<PullRequestDetail> {
+  const pr = await ctx.github.getPullRequestDetail(owner, repo, prNumber);
+  return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
+}
+
+export async function getPullRequestChecks(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<PullRequestChecks> {
+  // Resolve the head sha server-side so the client cannot ask for an arbitrary commit.
+  const pr = await ctx.github.getPullRequestDetail(owner, repo, prNumber);
+  return ctx.github.getPullRequestChecks(owner, repo, pr.headSha);
+}
+
+export async function getPullRequestReviews(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+) {
+  return ctx.github.listPullRequestReviews(owner, repo, prNumber);
+}
+
+export async function getPullRequestFiles(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+) {
+  return ctx.github.listPullRequestFiles(owner, repo, prNumber);
+}
+
+export async function getPullRequestCommits(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+) {
+  return ctx.github.listPullRequestCommits(owner, repo, prNumber);
+}
+
+export async function getPullRequestComments(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+) {
+  return ctx.github.listPullRequestComments(owner, repo, prNumber);
+}
+
+export async function mergePullRequest(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: MergePullRequestRequest,
+) {
+  // Always pin the merge to a head sha so a concurrent push 409s instead of
+  // merging commits nobody reviewed.
+  const expectedHeadSha =
+    body.expectedHeadSha ?? (await ctx.github.getPullRequestDetail(owner, repo, prNumber)).headSha;
+
+  const result = await ctx.github.mergePullRequest(owner, repo, prNumber, { ...body, expectedHeadSha });
+
+  recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_merged', {
+    number: prNumber,
+    method: body.method,
+    sha: result.sha,
+  });
+
+  return result;
+}
+
+export async function setPullRequestState(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: SetPullRequestStateRequest,
+): Promise<PullRequestDetail> {
+  const pr = await ctx.github.setPullRequestState(owner, repo, prNumber, body.state);
+
+  recordPullRequestEvent(
+    ctx,
+    owner,
+    repo,
+    prNumber,
+    body.state === 'closed' ? 'pr_closed' : 'pr_reopened',
+    { number: prNumber },
+  );
+
+  return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
+}
+
+export async function updatePullRequestBranch(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: UpdatePullRequestBranchRequest,
+) {
+  return ctx.github.updatePullRequestBranch(owner, repo, prNumber, body.expectedHeadSha);
 }
 
 export async function createAgentFromPullRequest(ctx: AppContext, body: CreateAgentFromPrRequest) {

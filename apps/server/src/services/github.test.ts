@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GitHubService } from './github.js';
+import { GitHubApiError, GitHubService } from './github.js';
 
 interface RawRepo {
   owner: { login: string };
@@ -217,4 +217,549 @@ test('getPullRequestForBranch refetches for a different branch (separate cache k
   await service.getPullRequestForBranch('azweb76', 'agent-orchestrator', 'feature/bar');
 
   assert.equal(fetchMock.mock.callCount(), 2);
+});
+
+function errorResponse(status: number, body: unknown): Response {
+  return {
+    ok: false,
+    status,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
+/** 202/204 responses from write endpoints can carry no body at all. */
+function emptyResponse(status: number): Response {
+  return {
+    ok: true,
+    status,
+    json: async () => {
+      throw new Error('no body');
+    },
+    text: async () => '',
+  } as unknown as Response;
+}
+
+function rawPrDetail(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    number: 42,
+    title: 'Add feature',
+    body: 'Body text',
+    state: 'open',
+    draft: false,
+    merged: false,
+    mergeable: true,
+    mergeable_state: 'clean',
+    rebaseable: true,
+    html_url: 'https://github.com/azweb76/agent-orchestrator/pull/42',
+    user: { login: 'dclayton', avatar_url: 'https://avatars/1', html_url: 'https://github.com/dclayton' },
+    head: { ref: 'feature/foo', sha: 'a'.repeat(40) },
+    base: { ref: 'main', sha: 'b'.repeat(40) },
+    additions: 12,
+    deletions: 3,
+    changed_files: 2,
+    commits: 4,
+    comments: 1,
+    review_comments: 5,
+    labels: [{ name: 'enhancement', color: 'a2eeef' }],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-02T00:00:00Z',
+    merged_at: null,
+    closed_at: null,
+    merge_commit_sha: 'c'.repeat(40),
+    ...overrides,
+  };
+}
+
+const REPO_SETTINGS = {
+  allow_merge_commit: true,
+  allow_squash_merge: true,
+  allow_rebase_merge: true,
+  delete_branch_on_merge: true,
+};
+
+/** Route mocked fetches by pathname so parallel detail+settings calls both resolve. */
+function routeFetch(
+  t: { mock: { method: typeof import('node:test').mock.method } },
+  handlers: Array<[RegExp, (url: string) => Response]>,
+) {
+  return t.mock.method(globalThis, 'fetch', async (url: string) => {
+    for (const [pattern, handler] of handlers) {
+      if (pattern.test(new URL(url).pathname)) return handler(url);
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
+test('getPullRequestDetail maps the full payload and repo merge settings', async (t) => {
+  routeFetch(t, [
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail())],
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(pr.body, 'Body text');
+  assert.equal(pr.author?.login, 'dclayton');
+  assert.equal(pr.mergeable, true);
+  assert.equal(pr.mergeableState, 'clean');
+  assert.equal(pr.headSha, 'a'.repeat(40));
+  assert.equal(pr.additions, 12);
+  assert.equal(pr.deletions, 3);
+  assert.equal(pr.changedFiles, 2);
+  assert.equal(pr.commitCount, 4);
+  assert.equal(pr.commentCount, 1);
+  assert.equal(pr.reviewCommentCount, 5);
+  assert.deepEqual(pr.labels, [{ name: 'enhancement', color: 'a2eeef' }]);
+  assert.deepEqual(pr.allowedMergeMethods, ['merge', 'squash', 'rebase']);
+  assert.equal(pr.deleteBranchOnMerge, true);
+});
+
+test('getPullRequestDetail derives allowedMergeMethods from repo settings', async (t) => {
+  routeFetch(t, [
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail())],
+    [
+      /^\/repos\/azweb76\/agent-orchestrator$/,
+      () => jsonResponse({ ...REPO_SETTINGS, allow_merge_commit: false, allow_rebase_merge: false }),
+    ],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+
+  assert.deepEqual(pr.allowedMergeMethods, ['squash']);
+});
+
+test('getPullRequestDetail retries while GitHub is still computing mergeability', async (t) => {
+  let prCalls = 0;
+  routeFetch(t, [
+    [
+      /\/pulls\/42$/,
+      () => {
+        prCalls++;
+        return jsonResponse(
+          prCalls === 1
+            ? rawPrDetail({ mergeable: null, mergeable_state: 'unknown' })
+            : rawPrDetail({ mergeable: true, mergeable_state: 'clean' }),
+        );
+      },
+    ],
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(prCalls, 2);
+  assert.equal(pr.mergeableState, 'clean');
+});
+
+test('getPullRequestDetail reports unknown honestly when mergeability never resolves', async (t) => {
+  let prCalls = 0;
+  routeFetch(t, [
+    [
+      /\/pulls\/42$/,
+      () => {
+        prCalls++;
+        return jsonResponse(rawPrDetail({ mergeable: null, mergeable_state: 'unknown' }));
+      },
+    ],
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+
+  // Initial request plus the two bounded retries.
+  assert.equal(prCalls, 3);
+  assert.equal(pr.mergeable, null);
+  assert.equal(pr.mergeableState, 'unknown');
+});
+
+test('getPullRequestDetail does not retry a merged or closed pull request', async (t) => {
+  let prCalls = 0;
+  routeFetch(t, [
+    [
+      /\/pulls\/42$/,
+      () => {
+        prCalls++;
+        return jsonResponse(
+          rawPrDetail({ state: 'closed', merged: true, mergeable: null, mergeable_state: 'unknown' }),
+        );
+      },
+    ],
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(prCalls, 1);
+  assert.equal(pr.merged, true);
+});
+
+test('getPullRequestChecks merges check runs with legacy commit statuses', async (t) => {
+  routeFetch(t, [
+    [
+      /\/check-runs$/,
+      () =>
+        jsonResponse({
+          total_count: 1,
+          check_runs: [
+            {
+              id: 1,
+              name: 'build',
+              status: 'completed',
+              conclusion: 'success',
+              output: { title: 'Build passed' },
+              details_url: 'https://ci/build',
+              started_at: '2026-01-01T00:00:00Z',
+              completed_at: '2026-01-01T00:05:00Z',
+            },
+          ],
+        }),
+    ],
+    [
+      /\/status$/,
+      () =>
+        jsonResponse({
+          statuses: [
+            {
+              id: 9,
+              context: 'legacy/lint',
+              state: 'success',
+              description: 'Lint clean',
+              target_url: 'https://ci/lint',
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:02:00Z',
+            },
+          ],
+        }),
+    ],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const checks = await service.getPullRequestChecks('azweb76', 'agent-orchestrator', 'a'.repeat(40));
+
+  assert.equal(checks.total, 2);
+  assert.equal(checks.passing, 2);
+  assert.equal(checks.rollup, 'success');
+  assert.equal(checks.truncated, false);
+  assert.deepEqual(
+    checks.checks.map((check) => [check.name, check.source, check.status, check.conclusion]),
+    [
+      ['build', 'check_run', 'completed', 'success'],
+      ['legacy/lint', 'status', 'completed', 'success'],
+    ],
+  );
+  assert.equal(checks.checks[1].detailsUrl, 'https://ci/lint');
+});
+
+test('getPullRequestChecks rolls up to failure when only a legacy status failed', async (t) => {
+  routeFetch(t, [
+    [
+      /\/check-runs$/,
+      () =>
+        jsonResponse({
+          total_count: 1,
+          check_runs: [{ id: 1, name: 'build', status: 'completed', conclusion: 'success' }],
+        }),
+    ],
+    [
+      /\/status$/,
+      () =>
+        jsonResponse({
+          statuses: [
+            { id: 9, context: 'legacy/lint', state: 'failure', description: null, target_url: null },
+          ],
+        }),
+    ],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const checks = await service.getPullRequestChecks('azweb76', 'agent-orchestrator', 'a'.repeat(40));
+
+  assert.equal(checks.rollup, 'failure');
+  assert.equal(checks.failing, 1);
+  assert.equal(checks.passing, 1);
+});
+
+test('getPullRequestChecks maps a pending legacy status to an in-progress check', async (t) => {
+  routeFetch(t, [
+    [/\/check-runs$/, () => jsonResponse({ total_count: 0, check_runs: [] })],
+    [
+      /\/status$/,
+      () =>
+        jsonResponse({
+          statuses: [
+            { id: 9, context: 'legacy/lint', state: 'pending', description: 'Running', target_url: null },
+          ],
+        }),
+    ],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const checks = await service.getPullRequestChecks('azweb76', 'agent-orchestrator', 'a'.repeat(40));
+
+  assert.equal(checks.checks[0].status, 'in_progress');
+  assert.equal(checks.checks[0].conclusion, null);
+  assert.equal(checks.pending, 1);
+  assert.equal(checks.rollup, 'pending');
+});
+
+test('getPullRequestChecks reports an empty rollup when there are no checks at all', async (t) => {
+  routeFetch(t, [
+    [/\/check-runs$/, () => jsonResponse({ total_count: 0, check_runs: [] })],
+    [/\/status$/, () => jsonResponse({ statuses: [] })],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const checks = await service.getPullRequestChecks('azweb76', 'agent-orchestrator', 'a'.repeat(40));
+
+  assert.equal(checks.total, 0);
+  assert.equal(checks.rollup, 'none');
+  assert.equal(checks.truncated, false);
+});
+
+test('getPullRequestChecks paginates check runs up to total_count', async (t) => {
+  const page = (start: number) =>
+    Array.from({ length: 100 }, (_, i) => ({
+      id: start + i,
+      name: `check-${start + i}`,
+      status: 'completed',
+      conclusion: 'success',
+    }));
+
+  const pages: string[] = [];
+  routeFetch(t, [
+    [
+      /\/check-runs$/,
+      (url) => {
+        const requested = Number(new URL(url).searchParams.get('page'));
+        pages.push(String(requested));
+        return jsonResponse({ total_count: 150, check_runs: requested === 1 ? page(0) : page(100).slice(0, 50) });
+      },
+    ],
+    [/\/status$/, () => jsonResponse({ statuses: [] })],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const checks = await service.getPullRequestChecks('azweb76', 'agent-orchestrator', 'a'.repeat(40));
+
+  assert.deepEqual(pages, ['1', '2']);
+  assert.equal(checks.total, 150);
+  assert.equal(checks.truncated, false);
+});
+
+test('getPullRequestChecks requests the head sha, not the test merge commit', async (t) => {
+  const requested: string[] = [];
+  routeFetch(t, [
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail())],
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+    [
+      /\/check-runs$/,
+      (url) => {
+        requested.push(new URL(url).pathname);
+        return jsonResponse({ total_count: 0, check_runs: [] });
+      },
+    ],
+    [/\/status$/, () => jsonResponse({ statuses: [] })],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+  await service.getPullRequestChecks('azweb76', 'agent-orchestrator', pr.headSha);
+
+  assert.equal(requested.length, 1);
+  assert.match(requested[0], new RegExp(`/commits/${'a'.repeat(40)}/check-runs$`));
+  assert.doesNotMatch(requested[0], /c{40}/);
+});
+
+test('mergePullRequest sends PUT with the merge method and expected head sha', async (t) => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    calls.push({ url, init });
+    return jsonResponse({ merged: true, message: 'Pull Request successfully merged', sha: 'd'.repeat(40) });
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const result = await service.mergePullRequest('azweb76', 'agent-orchestrator', 42, {
+    method: 'squash',
+    commitTitle: 'Add feature (#42)',
+    expectedHeadSha: 'a'.repeat(40),
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.method, 'PUT');
+  assert.match(new URL(calls[0].url).pathname, /\/pulls\/42\/merge$/);
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
+    merge_method: 'squash',
+    commit_title: 'Add feature (#42)',
+    sha: 'a'.repeat(40),
+  });
+  assert.equal(result.merged, true);
+  assert.equal(result.sha, 'd'.repeat(40));
+});
+
+test('mergePullRequest surfaces GitHub message and status on a 405', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () =>
+    errorResponse(405, { message: 'Pull Request is not mergeable' }),
+  );
+
+  const service = new GitHubService({ token: 'tok' });
+  await assert.rejects(
+    () => service.mergePullRequest('azweb76', 'agent-orchestrator', 42, { method: 'merge' }),
+    (error: unknown) => {
+      assert.ok(error instanceof GitHubApiError);
+      assert.equal(error.status, 405);
+      assert.equal(error.message, 'Pull Request is not mergeable');
+      return true;
+    },
+  );
+});
+
+test('mergePullRequest invalidates the branch→PR cache so agent pages refetch', async (t) => {
+  let prListCalls = 0;
+  routeFetch(t, [
+    [
+      /\/pulls$/,
+      () => {
+        prListCalls++;
+        return jsonResponse([rawPr(42, 'Add feature', 'open', 'feature/foo')]);
+      },
+    ],
+    [/\/pulls\/42\/merge$/, () => jsonResponse({ merged: true, message: 'merged', sha: 'd'.repeat(40) })],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  await service.getPullRequestForBranch('azweb76', 'agent-orchestrator', 'feature/foo');
+  await service.mergePullRequest('azweb76', 'agent-orchestrator', 42, { method: 'merge' });
+  await service.getPullRequestForBranch('azweb76', 'agent-orchestrator', 'feature/foo');
+
+  assert.equal(prListCalls, 2);
+});
+
+test('updatePullRequestBranch accepts a 202 with a message body', async (t) => {
+  const calls: RequestInit[] = [];
+  t.mock.method(globalThis, 'fetch', async (_url: string, init: RequestInit) => {
+    calls.push(init);
+    return jsonResponse({ message: 'Updating pull request branch.' });
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const result = await service.updatePullRequestBranch('azweb76', 'agent-orchestrator', 42, 'a'.repeat(40));
+
+  assert.equal(calls[0].method, 'PUT');
+  assert.deepEqual(JSON.parse(String(calls[0].body)), { expected_head_sha: 'a'.repeat(40) });
+  assert.equal(result.queued, true);
+  assert.equal(result.message, 'Updating pull request branch.');
+});
+
+test('updatePullRequestBranch tolerates a body-less 204', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => emptyResponse(204));
+
+  const service = new GitHubService({ token: 'tok' });
+  const result = await service.updatePullRequestBranch('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(result.queued, true);
+  assert.equal(result.message, 'Updating pull request branch.');
+});
+
+test('setPullRequestState sends PATCH with the new state', async (t) => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  routeFetch(t, [
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail({ state: 'closed', closed_at: '2026-01-03T00:00:00Z' }))],
+  ]);
+  const original = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    if (init?.method === 'PATCH') calls.push({ url, init });
+    return original(url as never, init as never);
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const pr = await service.setPullRequestState('azweb76', 'agent-orchestrator', 42, 'closed');
+
+  assert.equal(calls.length, 1);
+  assert.match(new URL(calls[0].url).pathname, /\/pulls\/42$/);
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)), { state: 'closed' });
+  assert.equal(pr.state, 'closed');
+});
+
+test('listPullRequestFiles tolerates a missing patch on binary files', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () =>
+    jsonResponse([
+      {
+        filename: 'logo.png',
+        status: 'added',
+        additions: 0,
+        deletions: 0,
+        changes: 0,
+        blob_url: 'https://github.com/blob/logo.png',
+      },
+      {
+        filename: 'src/index.ts',
+        previous_filename: 'src/old.ts',
+        status: 'renamed',
+        additions: 3,
+        deletions: 1,
+        changes: 4,
+        patch: '@@ -1 +1 @@',
+      },
+    ]),
+  );
+
+  const service = new GitHubService({ token: 'tok' });
+  const result = await service.listPullRequestFiles('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(result.truncated, false);
+  assert.equal(result.files[0].patch, null);
+  assert.equal(result.files[0].previousFilename, null);
+  assert.equal(result.files[1].patch, '@@ -1 +1 @@');
+  assert.equal(result.files[1].previousFilename, 'src/old.ts');
+});
+
+test('path segments are validated before any request is made', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => jsonResponse({}));
+
+  const service = new GitHubService({ token: 'tok' });
+  await assert.rejects(
+    () => service.getPullRequestDetail('..', 'agent-orchestrator', 42),
+    /Invalid owner/,
+  );
+  await assert.rejects(
+    () => service.getPullRequestChecks('azweb76', 'agent-orchestrator', '../../etc'),
+    /Invalid sha/,
+  );
+
+  assert.equal(fetchMock.mock.callCount(), 0);
+});
+
+test('createPullRequest still posts through the shared request helper', async (t) => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    calls.push({ url, init });
+    return jsonResponse({ number: 7, html_url: 'https://github.com/azweb76/agent-orchestrator/pull/7' });
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const result = await service.createPullRequest('azweb76', 'agent-orchestrator', {
+    title: 'Add feature',
+    head: 'feature/foo',
+    base: 'main',
+  });
+
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(
+    (calls[0].init.headers as Record<string, string>)['Content-Type'],
+    'application/json',
+  );
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
+    title: 'Add feature',
+    body: '',
+    head: 'feature/foo',
+    base: 'main',
+  });
+  assert.deepEqual(result, { number: 7, htmlUrl: 'https://github.com/azweb76/agent-orchestrator/pull/7' });
 });
