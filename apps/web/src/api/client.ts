@@ -144,6 +144,7 @@ export interface ChatStreamHandlers {
   onEvent: (event: Record<string, unknown>) => void;
   onPermissionRequest?: (request: PermissionRequest) => void;
   onUserMessage?: (message: Message) => void;
+  onAssistantMessage?: (message: Message) => void;
   onDone: (payload: { message: Message; sessionId: string | null }) => void;
   onError: (message: string) => void;
 }
@@ -199,6 +200,8 @@ async function consumeChatSse(
         handlers.onPermissionRequest?.(data as unknown as PermissionRequest);
       } else if (eventType === 'user_message') {
         handlers.onUserMessage?.(data as unknown as Message);
+      } else if (eventType === 'assistant_message') {
+        handlers.onAssistantMessage?.(data as unknown as Message);
       } else if (eventType === 'done') {
         handlers.onDone(data as { message: Message; sessionId: string | null });
       } else if (eventType === 'error') {

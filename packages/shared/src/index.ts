@@ -1,3 +1,5 @@
+import type { StreamPart } from './stream-timeline.js';
+
 export type AgentStatus = 'idle' | 'running' | 'stopped' | 'archived';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
@@ -67,6 +69,10 @@ export interface MessageMetadata {
   stopped?: boolean;
   error?: string;
   durationMs?: number;
+  /** True while Claude is still generating this assistant turn. */
+  streaming?: boolean;
+  /** Persisted interleaved text/tool timeline for display after remount. */
+  timeline?: StreamPart[];
 }
 
 export interface Message {

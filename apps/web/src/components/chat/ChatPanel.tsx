@@ -6,8 +6,10 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
+  appendStreamText,
+  applyStreamEvent,
   extractPlanFromInput,
   parseAskUserQuestions,
   type AgentDetail,
@@ -22,49 +24,43 @@ import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
-import {
-  appendStreamText,
-  applyStreamEvent,
-  ToolChip,
-  type StreamPart,
-} from './ToolActivity';
+import { ToolChip } from './ToolActivity';
 
 interface ChatPanelProps {
   agent: AgentDetail;
   archived: boolean;
 }
 
-function makeLocalUserMessage(
-  agentId: string,
-  text: string,
-  images: PendingImage[],
-): Message {
-  return {
-    id: `local-${Date.now()}`,
-    agentId,
-    role: 'user',
-    content: text || '(image attachment)',
-    attachments: images.map((image) => ({
-      id: image.id,
-      type: 'image',
-      mimeType: image.mimeType,
-      name: image.name,
-      path: '',
-      url: image.previewUrl,
-    })),
-    metadata: {},
-    createdAt: new Date().toISOString(),
-  };
+function upsertMessage(messages: Message[] | undefined, message: Message): Message[] {
+  if (!messages?.length) return [message];
+  const index = messages.findIndex((item) => item.id === message.id);
+  if (index < 0) return [...messages, message];
+  const next = [...messages];
+  next[index] = message;
+  return next;
 }
 
-function StreamingTimeline({
-  agentId,
-  parts,
-}: {
-  agentId: string;
-  parts: StreamPart[];
-}) {
-  if (parts.length === 0) return null;
+function setMessagesCache(
+  queryClient: QueryClient,
+  agentId: string,
+  updater: (prev: Message[] | undefined) => Message[],
+): void {
+  queryClient.setQueryData<Message[]>(['messages', agentId], (prev) => updater(prev));
+}
+
+function MessageTimeline({ message }: { message: Message }) {
+  const parts = message.metadata?.timeline ?? [];
+  const streaming = Boolean(message.metadata?.streaming);
+
+  if (parts.length === 0) {
+    return (
+      <ChatBubble
+        message={message}
+        streaming={streaming}
+        onCopy={() => void navigator.clipboard.writeText(message.content)}
+      />
+    );
+  }
 
   return (
     <Box sx={{ mb: 1.5 }}>
@@ -80,16 +76,22 @@ function StreamingTimeline({
         return (
           <ChatBubble
             key={part.id}
-            streaming
+            streaming={streaming}
             message={{
-              id: part.id,
-              agentId,
+              id: `${message.id}-${part.id}`,
+              agentId: message.agentId,
               role: 'assistant',
               content: part.text,
               attachments: [],
-              metadata: {},
-              createdAt: new Date().toISOString(),
+              metadata: {
+                costUsd: message.metadata?.costUsd,
+                durationMs: message.metadata?.durationMs,
+                stopped: message.metadata?.stopped,
+                error: message.metadata?.error,
+              },
+              createdAt: message.createdAt,
             }}
+            onCopy={() => void navigator.clipboard.writeText(part.text)}
           />
         );
       })}
@@ -102,9 +104,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const [queue, setQueue] = useState<QueuedChatItem[]>([]);
-  const [optimistic, setOptimistic] = useState<Message[]>([]);
-  const [streamParts, setStreamParts] = useState<StreamPart[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
@@ -115,14 +115,15 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   );
   const abortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const streamingRef = useRef(false);
+  const sendingRef = useRef(false);
   const queueRef = useRef<QueuedChatItem[]>([]);
   const mountedRef = useRef(true);
 
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId],
     queryFn: () => api.getMessages(agentId),
-    refetchInterval: () => (agent.status === 'running' || isStreaming ? 2000 : false),
+    // Backend is the source of truth — poll while a run is in progress.
+    refetchInterval: () => (agent.status === 'running' || isSending ? 1000 : false),
   });
 
   const updateMutation = useMutation({
@@ -135,10 +136,8 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     mutationFn: () => api.clearMessages(agentId),
     onSuccess: () => {
       setClearOpen(false);
-      setOptimistic([]);
       setQueue([]);
       queueRef.current = [];
-      setStreamParts([]);
       setPermissionRequests([]);
       setChatError(null);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
@@ -151,10 +150,8 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     mutationFn: (messageId: string) => api.rewindMessages(agentId, messageId),
     onSuccess: (result) => {
       setRewindTarget(null);
-      setOptimistic([]);
       setQueue([]);
       queueRef.current = [];
-      setStreamParts([]);
       setPermissionRequests([]);
       setChatError(null);
       setLastFailed(null);
@@ -165,11 +162,14 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     },
   });
 
+  const hasStreamingMessage = (messagesQuery.data ?? []).some((m) => m.metadata?.streaming);
+  const agentBusy = agent.status === 'running' || isSending || hasStreamingMessage;
+
   const pendingPermissionsQuery = useQuery({
     queryKey: ['permissions', agentId],
     queryFn: () => api.listPendingPermissions(agentId),
-    enabled: Boolean(agentId) && (agent.status === 'running' || isStreaming),
-    refetchInterval: () => (agent.status === 'running' || isStreaming ? 2000 : false),
+    enabled: Boolean(agentId) && agentBusy,
+    refetchInterval: () => (agentBusy ? 2000 : false),
   });
 
   useEffect(() => {
@@ -180,9 +180,10 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      // Aborting only drops the UI SSE subscription — the backend keeps the run
+      // and continues persisting chat history.
       abortRef.current?.abort();
-      streamingRef.current = false;
-      queueRef.current = [];
+      sendingRef.current = false;
     };
   }, []);
 
@@ -193,38 +194,32 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
   }, [pendingPermissionsQuery.data]);
 
   useEffect(() => {
-    const msgs = messagesQuery.data;
-    if (!msgs) return;
-    setOptimistic((prev) =>
-      prev.filter((m) => {
-        if (m.agentId !== agentId) return false;
-        if (msgs.some((s) => s.id === m.id)) return false;
-        if (m.id.startsWith('local-')) {
-          return !msgs.some(
-            (s) => s.role === 'user' && s.content === m.content && s.createdAt >= m.createdAt,
-          );
-        }
-        return true;
-      }),
-    );
-  }, [agentId, messagesQuery.data]);
-
-  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messagesQuery.data, optimistic, streamParts, permissionRequests]);
+  }, [messagesQuery.data, permissionRequests]);
 
-  const serverMessages = messagesQuery.data ?? [];
-  const displayMessages = [
-    ...serverMessages,
-    ...optimistic.filter(
-      (m) => m.agentId === agentId && !serverMessages.some((s) => s.id === m.id),
-    ),
-  ];
+  const displayMessages = messagesQuery.data ?? [];
+
+  const patchStreamingAssistant = (
+    mutate: (message: Message) => Message,
+  ) => {
+    setMessagesCache(queryClient, agentId, (prev) => {
+      if (!prev?.length) return prev ?? [];
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i -= 1) {
+        const item = next[i]!;
+        if (item.role === 'assistant' && item.metadata?.streaming) {
+          next[i] = mutate(item);
+          break;
+        }
+      }
+      return next;
+    });
+  };
 
   const runChat = async (text: string, images: PendingImage[], force: boolean) => {
     if (archived || !mountedRef.current) return;
 
-    if (streamingRef.current && !force) {
+    if (sendingRef.current && !force) {
       const item: QueuedChatItem = {
         id: `q-${Date.now()}-${Math.random()}`,
         text,
@@ -234,28 +229,22 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       return;
     }
 
-    if (streamingRef.current && force) {
+    if ((sendingRef.current || agent.status === 'running') && force) {
       abortRef.current?.abort();
       try {
         await api.stopAgent(agentId);
       } catch {
         // best-effort interrupt
       }
-      // allow previous stream finally to settle
       await new Promise((r) => setTimeout(r, 200));
       if (!mountedRef.current) return;
     }
 
     setChatError(null);
     setLastFailed(null);
-    setStreamParts([]);
     setPermissionRequests([]);
-    setIsStreaming(true);
-    streamingRef.current = true;
-
-    const localUser = makeLocalUserMessage(agentId, text, images);
-    setOptimistic((prev) => [...prev, localUser]);
-
+    setIsSending(true);
+    sendingRef.current = true;
     abortRef.current = new AbortController();
 
     try {
@@ -273,18 +262,34 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         {
           onUserMessage: (message) => {
             if (!mountedRef.current) return;
-            setOptimistic((prev) => [
-              ...prev.filter((m) => m.id !== localUser.id),
-              message,
-            ]);
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+          },
+          onAssistantMessage: (message) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
-            setStreamParts((prev) => appendStreamText(prev, token));
+            patchStreamingAssistant((message) => ({
+              ...message,
+              content: message.content + token,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: appendStreamText(message.metadata.timeline ?? [], token),
+              },
+            }));
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
-            setStreamParts((prev) => applyStreamEvent(prev, event));
+            patchStreamingAssistant((message) => ({
+              ...message,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
+              },
+            }));
           },
           onPermissionRequest: (request) => {
             if (!mountedRef.current) return;
@@ -295,18 +300,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           },
           onDone: (payload) => {
             if (!mountedRef.current) return;
-            setStreamParts((prev) =>
-              prev.map((part) =>
-                part.type === 'tool' && part.status === 'running'
-                  ? { ...part, status: 'done' as const }
-                  : part,
-              ),
-            );
-            setOptimistic((prev) => [
-              ...prev.filter((m) => m.id !== localUser.id && m.id !== payload.message.id),
-              payload.message,
-            ]);
-            setStreamParts([]);
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
             setPermissionRequests([]);
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -318,7 +312,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
             if (!mountedRef.current) return;
             setChatError(err);
             setLastFailed({ text, images });
-            setStreamParts([]);
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
           },
         },
         abortRef.current.signal,
@@ -328,17 +322,23 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         setChatError((error as Error).message);
         setLastFailed({ text, images });
       }
-      if (mountedRef.current) setStreamParts([]);
+      if (mountedRef.current) {
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      }
     } finally {
+      // Always refresh from the backend after the UI subscription ends so a
+      // remount / toggle-back sees persisted history.
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+
       if (!mountedRef.current) {
-        streamingRef.current = false;
+        sendingRef.current = false;
         abortRef.current = null;
         return;
       }
-      setIsStreaming(false);
-      streamingRef.current = false;
+      setIsSending(false);
+      sendingRef.current = false;
       abortRef.current = null;
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
 
       const next = queueRef.current[0];
       if (next) {
@@ -440,18 +440,15 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
     setPermissionBusy(true);
     setChatError(null);
 
-    // Abort the plan-mode SSE; Build starts a fresh auto-mode stream.
     abortRef.current?.abort();
     await new Promise((r) => setTimeout(r, 150));
     if (!mountedRef.current) return;
 
-    setOptimistic([]);
     setQueue([]);
     queueRef.current = [];
-    setStreamParts([]);
     setPermissionRequests([]);
-    setIsStreaming(true);
-    streamingRef.current = true;
+    setIsSending(true);
+    sendingRef.current = true;
     abortRef.current = new AbortController();
 
     const plan = extractPlanFromInput(request.input);
@@ -463,15 +460,34 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         {
           onUserMessage: (message) => {
             if (!mountedRef.current) return;
-            setOptimistic((prev) => [...prev.filter((m) => m.id !== message.id), message]);
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+          },
+          onAssistantMessage: (message) => {
+            if (!mountedRef.current) return;
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
-            setStreamParts((prev) => appendStreamText(prev, token));
+            patchStreamingAssistant((message) => ({
+              ...message,
+              content: message.content + token,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: appendStreamText(message.metadata.timeline ?? [], token),
+              },
+            }));
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
-            setStreamParts((prev) => applyStreamEvent(prev, event));
+            patchStreamingAssistant((message) => ({
+              ...message,
+              metadata: {
+                ...message.metadata,
+                streaming: true,
+                timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
+              },
+            }));
           },
           onPermissionRequest: (nextRequest) => {
             if (!mountedRef.current) return;
@@ -482,11 +498,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           },
           onDone: (payload) => {
             if (!mountedRef.current) return;
-            setOptimistic((prev) => [
-              ...prev.filter((m) => m.id !== payload.message.id),
-              payload.message,
-            ]);
-            setStreamParts([]);
+            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
             setPermissionRequests([]);
             queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -498,7 +510,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           onError: (err) => {
             if (!mountedRef.current) return;
             setChatError(err);
-            setStreamParts([]);
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
           },
         },
         abortRef.current.signal,
@@ -507,27 +519,25 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       if (mountedRef.current && (error as Error).name !== 'AbortError') {
         setChatError((error as Error).message);
       }
-      if (mountedRef.current) setStreamParts([]);
     } finally {
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       if (!mountedRef.current) {
-        streamingRef.current = false;
+        sendingRef.current = false;
         abortRef.current = null;
         return;
       }
-      setIsStreaming(false);
-      streamingRef.current = false;
+      setIsSending(false);
+      sendingRef.current = false;
       abortRef.current = null;
       setPermissionBusy(false);
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
     }
   };
 
   const requestClear = () => setClearOpen(true);
 
   const requestRewind = (message: Message) => {
-    if (archived || isStreaming || agent.status === 'running') return;
-    if (message.id.startsWith('local-')) return;
+    if (archived || agentBusy) return;
     setRewindTarget(message);
   };
 
@@ -551,7 +561,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
       }}
     >
       <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, pt: 1.5, pb: 1, minHeight: 0 }}>
-        {displayMessages.length === 0 && streamParts.length === 0 && (
+        {displayMessages.length === 0 && (
           <Stack spacing={1} sx={{ py: 3, alignItems: 'center', textAlign: 'center' }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               Start a conversation
@@ -589,27 +599,30 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
           </Stack>
         )}
 
-        {displayMessages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            onCopy={() => void navigator.clipboard.writeText(message.content)}
-            onRewind={
-              message.role === 'user' && !archived && !message.id.startsWith('local-')
-                ? () => requestRewind(message)
-                : undefined
-            }
-            onRetry={
-              message.metadata?.error && lastFailed
-                ? () => void runChat(lastFailed.text, lastFailed.images, true)
-                : undefined
-            }
-          />
-        ))}
-
-        {(isStreaming || streamParts.length > 0) && (
-          <StreamingTimeline agentId={agentId} parts={streamParts} />
-        )}
+        {displayMessages.map((message) => {
+          if (message.role === 'assistant') {
+            return (
+              <MessageTimeline key={message.id} message={message} />
+            );
+          }
+          return (
+            <ChatBubble
+              key={message.id}
+              message={message}
+              onCopy={() => void navigator.clipboard.writeText(message.content)}
+              onRewind={
+                !archived
+                  ? () => requestRewind(message)
+                  : undefined
+              }
+              onRetry={
+                message.metadata?.error && lastFailed
+                  ? () => void runChat(lastFailed.text, lastFailed.images, true)
+                  : undefined
+              }
+            />
+          );
+        })}
 
         {permissionRequests.map((request) => {
           if (request.toolName === 'AskUserQuestion') {
@@ -691,7 +704,7 @@ export function ChatPanel({ agent, archived }: ChatPanelProps) {
         <ChatComposer
           agentId={agentId}
           archived={archived}
-          isStreaming={isStreaming || agent.status === 'running'}
+          isStreaming={agentBusy}
           model={agent.model}
           permissionMode={agent.permissionMode ?? 'plan'}
           queue={queue}
