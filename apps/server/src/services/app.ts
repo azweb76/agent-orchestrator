@@ -396,8 +396,7 @@ export async function clearAgentChat(ctx: AppContext, agentId: string): Promise<
   ctx.repos.agents.update({
     ...agent,
     claudeSessionId: null,
-    // Every new session starts in plan mode.
-    permissionMode: 'plan',
+    // Keep the agent's permission mode; only the Claude session is reset.
     updatedAt: nowIso(),
   });
   ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared }));
@@ -1498,9 +1497,14 @@ export async function createWorktreeFromIdea(
     ...agent,
     model: body.model?.trim() || agent.model,
     effort: body.effort ?? agent.effort,
+    permissionMode: body.permissionMode ?? agent.permissionMode,
     updatedAt: nowIso(),
   };
-  if (configured.model !== agent.model || configured.effort !== agent.effort) {
+  if (
+    configured.model !== agent.model ||
+    configured.effort !== agent.effort ||
+    configured.permissionMode !== agent.permissionMode
+  ) {
     ctx.repos.agents.update(configured);
   }
 

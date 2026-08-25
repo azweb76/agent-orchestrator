@@ -24,7 +24,9 @@ import {
   CLAUDE_EFFORT_LEVELS,
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
+  PERMISSION_MODES,
   type EffortLevel,
+  type PermissionMode,
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
@@ -52,6 +54,7 @@ export function CreateWorktreeDialog({
   const [ideaText, setIdeaText] = useState('');
   const [ideaModel, setIdeaModel] = useState<string>(CLAUDE_MODELS[0].id);
   const [ideaEffort, setIdeaEffort] = useState<EffortLevel>(DEFAULT_EFFORT_LEVEL);
+  const [ideaPermissionMode, setIdeaPermissionMode] = useState<PermissionMode>('plan');
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
 
   const workspaceQuery = useQuery({
@@ -90,6 +93,7 @@ export function CreateWorktreeDialog({
     setIdeaText('');
     setIdeaModel(CLAUDE_MODELS[0].id);
     setIdeaEffort(DEFAULT_EFFORT_LEVEL);
+    setIdeaPermissionMode('plan');
     setSelectedPr('');
   };
 
@@ -132,6 +136,7 @@ export function CreateWorktreeDialog({
         baseBranch: resolvedDefaultBranch || undefined,
         model: ideaModel,
         effort: ideaEffort,
+        permissionMode: ideaPermissionMode,
       }),
     onSuccess: (data) => {
       invalidateAfterCreate();
@@ -142,6 +147,8 @@ export function CreateWorktreeDialog({
     },
   });
 
+  const ideaPermissionModeLabel =
+    PERMISSION_MODES.find((item) => item.id === ideaPermissionMode)?.label ?? ideaPermissionMode;
   const createPending =
     createFromBranch.isPending || createFromPr.isPending || createFromIdea.isPending;
   const createError = createFromBranch.error ?? createFromPr.error ?? createFromIdea.error;
@@ -212,10 +219,24 @@ export function CreateWorktreeDialog({
                   ))}
                 </Select>
               </FormControl>
+              <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
+                <InputLabel>Permissions</InputLabel>
+                <Select
+                  label="Permissions"
+                  value={ideaPermissionMode}
+                  onChange={(e) => setIdeaPermissionMode(e.target.value as PermissionMode)}
+                >
+                  {PERMISSION_MODES.map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Stack>
             <Typography variant="body2" color="text.secondary">
-              A branch name is suggested automatically. Your idea is sent as the first message in
-              plan mode.
+              A branch name is suggested automatically. Your idea is sent as the first message in{' '}
+              {ideaPermissionModeLabel} mode.
             </Typography>
           </Stack>
         )}

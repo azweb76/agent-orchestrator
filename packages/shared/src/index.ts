@@ -181,6 +181,8 @@ export interface CreateWorktreeFromIdeaRequest {
   model?: string;
   /** Claude Code effort level for runs. */
   effort?: EffortLevel;
+  /** Permission mode for the agent's kickoff run (defaults to plan). */
+  permissionMode?: PermissionMode;
 }
 
 export interface SuggestBranchNameRequest {
