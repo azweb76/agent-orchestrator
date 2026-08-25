@@ -16,7 +16,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
   - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that clears the session and implements in **auto** mode
   - Manual / plan modes prompt on the agent page for tool permissions; `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved via `--allowedTools`
   - Slash commands & skills autocomplete (project/personal/bundled)
-  - Image attachments (paste or upload), markdown replies, tool-use progress bar with event summaries
+  - Image attachments (paste or upload), markdown replies, compact tool-use progress bar (updates with the active tool)
 - **Diff & PRs** — view agent changes and open pull requests on GitHub
 - **Events** — inspect Claude stream events and agent lifecycle activity
 - **Sidebar** — browse workspaces/agents and create new agents in place

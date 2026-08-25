@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  activeToolItem,
   appendStreamText,
   applyStreamEvent,
+  coalesceTimelineText,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
@@ -60,5 +62,36 @@ describe('stream timeline ordering', () => {
       },
     });
     assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+  });
+
+  it('coalesces split text parts into one string', () => {
+    const parts: StreamPart[] = [
+      { type: 'text', id: 't1', text: 'to sc' },
+      { type: 'tool', id: 'tool_1', name: 'AskUserQuestion', status: 'done' },
+      { type: 'text', id: 't2', text: 'ope this properly.' },
+    ];
+    assert.equal(coalesceTimelineText(parts), 'to scope this properly.');
+  });
+
+  it('picks the running tool for the progress label', () => {
+    const parts: StreamPart[] = [
+      { type: 'tool', id: 'a', name: 'Read', detail: 'a.ts', status: 'done' },
+      { type: 'tool', id: 'b', name: 'Bash', detail: 'ls', status: 'running' },
+      { type: 'tool', id: 'c', name: 'Grep', detail: 'foo', status: 'done' },
+    ];
+    assert.deepEqual(activeToolItem(parts), {
+      id: 'b',
+      name: 'Bash',
+      detail: 'ls',
+      status: 'running',
+    });
+  });
+
+  it('falls back to the latest tool when none are running', () => {
+    const parts: StreamPart[] = [
+      { type: 'tool', id: 'a', name: 'Read', status: 'done' },
+      { type: 'tool', id: 'b', name: 'Bash', status: 'done' },
+    ];
+    assert.equal(activeToolItem(parts)?.id, 'b');
   });
 });

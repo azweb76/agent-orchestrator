@@ -139,6 +139,31 @@ export function applyStreamEvent(parts: StreamPart[], event: Record<string, unkn
   return next;
 }
 
+/** Join all timeline text parts into one string (single chat bubble). */
+export function coalesceTimelineText(parts: StreamPart[]): string {
+  return parts
+    .filter((part): part is Extract<StreamPart, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
+}
+
+/** Prefer a running tool; otherwise the most recent tool event. */
+export function activeToolItem(parts: StreamPart[]): ToolActivityItem | undefined {
+  const tools = parts.filter(
+    (part): part is Extract<StreamPart, { type: 'tool' }> => part.type === 'tool',
+  );
+  for (let i = tools.length - 1; i >= 0; i -= 1) {
+    const item = tools[i]!;
+    if (item.status === 'running') {
+      return { id: item.id, name: item.name, detail: item.detail, status: item.status };
+    }
+  }
+  const last = tools[tools.length - 1];
+  return last
+    ? { id: last.id, name: last.name, detail: last.detail, status: last.status }
+    : undefined;
+}
+
 /** Extract tool chips only (legacy helper). */
 export function extractToolActivity(
   event: Record<string, unknown>,

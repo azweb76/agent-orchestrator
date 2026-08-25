@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import {
   appendStreamText,
   applyStreamEvent,
+  coalesceTimelineText,
   extractPlanFromInput,
   parseAskUserQuestions,
   buildIdeaKickoffPrompt,
@@ -67,9 +68,14 @@ function MessageTimeline({ message }: { message: Message }) {
   );
   const toolsRunning = toolItems.some((part) => part.status === 'running');
   const lastPart = parts[parts.length - 1];
-  // Progress bar + every tool event summary while tools are in use (no chips).
+  // Single progress bar that updates with the active tool — never a tool list.
   const showToolProgress =
     streaming && (toolsRunning || lastPart?.type === 'tool');
+  // One bubble per assistant turn — never split text across tool boundaries.
+  const textContent = message.content.trim()
+    ? message.content
+    : coalesceTimelineText(parts);
+  const showBubble = Boolean(textContent) || (streaming && !showToolProgress);
 
   if (parts.length === 0) {
     return (
@@ -83,31 +89,22 @@ function MessageTimeline({ message }: { message: Message }) {
 
   return (
     <Box sx={{ mb: 1.5 }}>
-      {parts.map((part) => {
-        if (part.type === 'tool') return null;
-        if (!part.text) return null;
-        return (
-          <ChatBubble
-            key={part.id}
-            streaming={streaming && lastPart?.id === part.id && !showToolProgress}
-            message={{
-              id: `${message.id}-${part.id}`,
-              agentId: message.agentId,
-              role: 'assistant',
-              content: part.text,
-              attachments: [],
-              metadata: {
-                costUsd: message.metadata?.costUsd,
-                durationMs: message.metadata?.durationMs,
-                stopped: message.metadata?.stopped,
-                error: message.metadata?.error,
-              },
-              createdAt: message.createdAt,
-            }}
-            onCopy={() => void navigator.clipboard.writeText(part.text)}
-          />
-        );
-      })}
+      {showBubble && (
+        <ChatBubble
+          streaming={streaming && !showToolProgress}
+          message={{
+            ...message,
+            content: textContent,
+            metadata: {
+              costUsd: message.metadata?.costUsd,
+              durationMs: message.metadata?.durationMs,
+              stopped: message.metadata?.stopped,
+              error: message.metadata?.error,
+            },
+          }}
+          onCopy={() => void navigator.clipboard.writeText(textContent)}
+        />
+      )}
       {showToolProgress && <ToolProgressBar items={toolItems} />}
     </Box>
   );
