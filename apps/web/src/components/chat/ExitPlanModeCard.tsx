@@ -23,7 +23,7 @@ export function ExitPlanModeCard({
       accent="success"
       icon={<ConstructionIcon />}
       title="Ready to build?"
-      description="Review the plan below. Build clears this session and implements it in auto mode."
+      description="Review the plan below. Build clears this session and implements it in auto mode. Keep planning stops this prompt so you can refine it."
       actions={
         <>
           <Button

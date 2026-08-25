@@ -2,11 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildControlResponse,
+  isClaudePlanFileTool,
   isInteractivePermissionTool,
   parsePermissionRequest,
   shouldAutoAllowToolPermission,
 } from './permission-protocol.js';
-import { buildAskUserQuestionUpdatedInput, extractPlanFromInput, parseAskUserQuestions } from '@agent-orchestrator/shared';
+import {
+  buildAskUserQuestionUpdatedInput,
+  extractPlanFilePathsFromLog,
+  extractPlanFromInput,
+  isClaudePlansPath,
+  parseAskUserQuestions,
+} from '@agent-orchestrator/shared';
 
 test('parsePermissionRequest handles can_use_tool control_request', () => {
   const parsed = parsePermissionRequest({
@@ -66,17 +73,76 @@ test('parsePermissionRequest handles ExitPlanMode with plan', () => {
   assert.equal(extractPlanFromInput(parsed.input), '# Plan\n\nDo the thing.');
 });
 
+test('parsePermissionRequest handles ExitPlanMode with empty V2 input', () => {
+  const parsed = parsePermissionRequest({
+    type: 'control_request',
+    request_id: '733fbf9e',
+    request: {
+      subtype: 'can_use_tool',
+      tool_name: 'ExitPlanMode',
+      input: {},
+    },
+  });
+  assert.ok(parsed);
+  assert.equal(parsed.toolName, 'ExitPlanMode');
+  assert.equal(extractPlanFromInput(parsed.input), '');
+});
+
 test('isInteractivePermissionTool only flags AskUserQuestion and ExitPlanMode', () => {
   assert.equal(isInteractivePermissionTool('AskUserQuestion'), true);
   assert.equal(isInteractivePermissionTool('ExitPlanMode'), true);
   assert.equal(isInteractivePermissionTool('Bash'), false);
 });
 
-test('shouldAutoAllowToolPermission never auto-allows interactive tools', () => {
-  assert.equal(shouldAutoAllowToolPermission('AskUserQuestion', 'auto'), false);
-  assert.equal(shouldAutoAllowToolPermission('ExitPlanMode', 'plan'), false);
-  assert.equal(shouldAutoAllowToolPermission('Bash', 'default'), false);
-  assert.equal(shouldAutoAllowToolPermission('Bash', 'auto'), true);
+test('shouldAutoAllowToolPermission auto-allows writes to Claude plan files', () => {
+  assert.equal(
+    shouldAutoAllowToolPermission('Write', 'plan', {
+      file_path: '/home/user/.claude/plans/bold-eagle.md',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldAutoAllowToolPermission('Edit', 'plan', {
+      file_path: '/home/user/.claude/plans/bold-eagle.md',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldAutoAllowToolPermission('Write', 'plan', { file_path: '/workspace/src/app.ts' }),
+    false,
+  );
+  assert.equal(isClaudePlanFileTool('Write', { file_path: '/tmp/notes.md' }), false);
+  assert.equal(isClaudePlansPath('/home/user/.claude/plans/bold-eagle.md'), true);
+});
+
+test('extractPlanFilePathsFromLog finds Write targets under .claude/plans', () => {
+  const log = [
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            name: 'Write',
+            input: { file_path: '/home/user/.claude/plans/swift-river.md', content: '# Plan' },
+          },
+        ],
+      },
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            name: 'Write',
+            input: { file_path: '/workspace/README.md', content: 'nope' },
+          },
+        ],
+      },
+    }),
+  ].join('\n');
+  assert.deepEqual(extractPlanFilePathsFromLog(log), ['/home/user/.claude/plans/swift-river.md']);
 });
 
 test('buildControlResponse allow includes updatedInput', () => {

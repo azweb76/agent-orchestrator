@@ -1,8 +1,20 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
-import { openSync, closeSync, mkdirSync, readFileSync } from 'node:fs';
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import {
+  extractPlanFilePath,
+  extractPlanFilePathsFromLog,
+} from '@agent-orchestrator/shared';
 import {
   allowedToolsForPermissionMode,
   buildControlResponse,
@@ -296,17 +308,30 @@ export function isPidAlive(pid: number): boolean {
   }
 }
 
-/** Kill a detached Claude process group (falls back to the single pid). */
-export function killProcessTree(pid: number): void {
+function signalProcessTree(pid: number, signal: NodeJS.Signals): void {
   try {
-    process.kill(-pid, 'SIGTERM');
+    process.kill(-pid, signal);
   } catch {
     try {
-      process.kill(pid, 'SIGTERM');
+      process.kill(pid, signal);
     } catch {
       // Process already exited
     }
   }
+}
+
+/** Kill a detached Claude process group (falls back to the single pid). */
+export function killProcessTree(pid: number, signal: NodeJS.Signals = 'SIGTERM'): void {
+  signalProcessTree(pid, signal);
+}
+
+/** If SIGTERM did not reap the process, SIGKILL after a short delay. */
+function scheduleForceKill(pid: number, waitMs = 1000): void {
+  const timer = setTimeout(() => {
+    if (!isPidAlive(pid)) return;
+    signalProcessTree(pid, 'SIGKILL');
+  }, waitMs);
+  timer.unref();
 }
 
 function sleep(ms: number): Promise<void> {
@@ -409,6 +434,7 @@ export class ClaudeService {
     }
     killProcessTree(pid);
     this.running.delete(agentId);
+    scheduleForceKill(pid);
     return true;
   }
 
@@ -590,11 +616,15 @@ export class ClaudeService {
               result = event.result;
             }
             // End stdin after the turn completes so the CLI can exit (stream-json keeps
-            // the process open while stdin is still writable).
-            try {
-              this.running.get(agentId)?.stdin?.end();
-            } catch {
-              // ignore
+            // the process open while stdin is still writable). Only touch this run —
+            // Build may already have started a replacement process under the same agentId.
+            const trackedForResult = this.running.get(agentId);
+            if (trackedForResult?.pid === handle.pid) {
+              try {
+                trackedForResult.stdin?.end();
+              } catch {
+                // ignore
+              }
             }
           }
 
@@ -606,12 +636,14 @@ export class ClaudeService {
     } finally {
       signal?.removeEventListener('abort', handleAbort);
       const tracked = this.running.get(agentId);
-      try {
-        tracked?.stdin?.end();
-      } catch {
-        // ignore
+      if (tracked?.pid === handle.pid) {
+        try {
+          tracked.stdin?.end();
+        } catch {
+          // ignore
+        }
+        this.running.delete(agentId);
       }
-      this.running.delete(agentId);
     }
 
     if (stopped && !result) {
@@ -640,7 +672,7 @@ export class ClaudeService {
       return;
     }
 
-    if (shouldAutoAllowToolPermission(parsed.toolName, tracked.permissionMode)) {
+    if (shouldAutoAllowToolPermission(parsed.toolName, tracked.permissionMode, parsed.input)) {
       this.respondToPermission(
         agentId,
         parsed.requestId,
@@ -653,7 +685,9 @@ export class ClaudeService {
       return;
     }
 
-    const input = enrichPermissionInput(parsed.toolName, parsed.input);
+    const input = enrichPermissionInput(parsed.toolName, parsed.input, {
+      logPath: tracked.logPath,
+    });
     const request: ClaudePermissionRequest = {
       requestId: parsed.requestId,
       toolName: parsed.toolName,
@@ -665,25 +699,67 @@ export class ClaudeService {
   }
 }
 
-/** Load ExitPlanMode plan text from planFilePath when the CLI omits inline plan. */
-function enrichPermissionInput(
+/** Load ExitPlanMode plan text from disk when the CLI omits inline plan. */
+export function enrichPermissionInput(
   toolName: string,
   input: Record<string, unknown>,
+  options: { logPath?: string; plansDir?: string } = {},
 ): Record<string, unknown> {
   if (toolName !== 'ExitPlanMode') return input;
-  if (typeof input.plan === 'string' && input.plan.trim()) return input;
-
-  const planFilePath =
-    typeof input.planFilePath === 'string' ? input.planFilePath : null;
-  if (!planFilePath) return input;
-
-  try {
-    const text = readFileSync(planFilePath, 'utf8');
-    if (text.trim()) return { ...input, plan: text.trim() };
-  } catch {
-    // fall through — Build can still resolve from messages
+  if (typeof input.plan === 'string' && input.plan.trim()) {
+    return input;
   }
+
+  const candidates: string[] = [];
+  const inlinePath = extractPlanFilePath(input);
+  if (inlinePath) candidates.push(inlinePath);
+
+  if (options.logPath) {
+    try {
+      candidates.push(...extractPlanFilePathsFromLog(readFileSync(options.logPath, 'utf8')));
+    } catch {
+      // log may not exist yet
+    }
+  }
+
+  for (const filePath of listRecentClaudePlanFiles(options.plansDir)) {
+    if (!candidates.includes(filePath)) candidates.push(filePath);
+  }
+
+  for (const filePath of candidates) {
+    try {
+      const text = readFileSync(filePath, 'utf8');
+      if (text.trim()) {
+        return { ...input, plan: text.trim(), planFilePath: filePath };
+      }
+    } catch {
+      // try the next candidate
+    }
+  }
+
   return input;
+}
+
+export function claudePlansDirectory(): string {
+  return path.join(os.homedir(), '.claude', 'plans');
+}
+
+function listRecentClaudePlanFiles(plansDir?: string): string[] {
+  const dir = plansDir ?? claudePlansDirectory();
+  try {
+    const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.md') && !entry.name.includes('-agent-'))
+      .map((entry) => {
+        const filePath = path.join(dir, entry.name);
+        return { filePath, mtime: statSync(filePath).mtimeMs };
+      })
+      .filter((entry) => entry.mtime >= cutoff)
+      .sort((a, b) => b.mtime - a.mtime)
+      .map((entry) => entry.filePath);
+  } catch {
+    return [];
+  }
 }
 
 export function parseGitHubUrl(repoUrl: string): { owner: string; repo: string } {
