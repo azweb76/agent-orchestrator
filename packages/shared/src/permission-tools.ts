@@ -7,6 +7,42 @@ export function extractPlanFromInput(input: Record<string, unknown>): string {
   return '';
 }
 
+export function extractPlanFilePath(input: Record<string, unknown>): string | null {
+  if (typeof input.planFilePath === 'string' && input.planFilePath.trim()) {
+    return input.planFilePath.trim();
+  }
+  return null;
+}
+
+/** Claude Code V2 writes plans under `~/.claude/plans/<slug>.md`. */
+export function isClaudePlansPath(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, '/');
+  return normalized.includes('/.claude/plans/') && /\.md$/i.test(normalized);
+}
+
+/**
+ * Pull `file_path` values that point at Claude plan files from a stream-json log.
+ * ExitPlanMode V2 often sends `input: {}` on the permission prompt; the plan
+ * lives on disk and is referenced by earlier Write tool calls.
+ */
+export function extractPlanFilePathsFromLog(logText: string): string[] {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+  const re = /"file_path"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(logText))) {
+    const decoded = match[1]!
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
+    if (!isClaudePlansPath(decoded) || seen.has(decoded)) continue;
+    seen.add(decoded);
+    paths.push(decoded);
+  }
+  return paths;
+}
+
 type ParsedOption = { label: string; description: string; preview?: string };
 type ParsedQuestion = {
   question: string;

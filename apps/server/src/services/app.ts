@@ -36,7 +36,7 @@ import type {
 } from '@agent-orchestrator/shared';
 import { DEFAULT_EFFORT_LEVEL } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
-import { ClaudeService, GitService, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
+import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
@@ -562,7 +562,28 @@ export async function denyPermissionRequest(
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
+  const pending = ctx.claude
+    .listPendingPermissions(agentId)
+    .find((item) => item.requestId === body.requestId);
+
   const message = body.message?.trim() || 'User declined this request. Continue planning.';
+
+  // ExitPlanMode deny via stdio hangs (deferred tool). Stop the run instead and
+  // keep the Claude session so the user can continue planning with a follow-up.
+  if (pending?.toolName === 'ExitPlanMode') {
+    ctx.claude.dismissPermission(agentId, body.requestId);
+    await stopClaudeRun(ctx, agentId, agent.pid);
+    markStreamingAssistantStopped(ctx, agentId);
+    ctx.repos.events.create(
+      makeEvent(agentId, 'permission_denied', {
+        requestId: body.requestId,
+        message,
+        toolName: pending.toolName,
+      }),
+    );
+    return { ok: true };
+  }
+
   const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
     behavior: 'deny',
     message,
@@ -590,11 +611,14 @@ async function resolvePlanText(
       .listPendingPermissions(agentId)
       .find((item) => item.requestId === body.requestId);
     if (pending) {
-      const fromInput = extractPlanFromInput(pending.input);
+      const enriched = enrichPermissionInput('ExitPlanMode', pending.input, {
+        logPath: ctx.claude.getRunningProcess(agentId)?.logPath,
+      });
+      const fromInput = extractPlanFromInput(enriched);
       if (fromInput) return fromInput;
 
       const planFilePath =
-        typeof pending.input.planFilePath === 'string' ? pending.input.planFilePath : null;
+        typeof enriched.planFilePath === 'string' ? enriched.planFilePath : null;
       if (planFilePath) {
         try {
           const text = await fs.readFile(planFilePath, 'utf8');
@@ -638,19 +662,7 @@ export async function buildApprovedPlan(
   }
 
   // Stop any in-flight plan-mode run (avoids ExitPlanMode stdio hang on approve).
-  if (detail.status === 'running' && detail.pid != null) {
-    const pid = detail.pid;
-    ctx.claude.stop(agentId, pid);
-    const deadline = Date.now() + 5_000;
-    while (isPidAlive(pid) && Date.now() < deadline) {
-      await sleep(100);
-    }
-    await sleep(150);
-    const afterStop = ctx.repos.agents.getById(agentId) ?? detail;
-    if (afterStop.status === 'running' || afterStop.pid != null) {
-      ctx.repos.agents.update(clearAgentRunFields(afterStop, { status: 'idle' }));
-    }
-  }
+  await stopClaudeRun(ctx, agentId, detail.pid);
 
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
@@ -784,16 +796,25 @@ function finalizeAgentRun(
   result: { result: string; sessionId: string | null; events?: Array<{ total_cost_usd?: number }>; stopped?: boolean },
   assistantText: string,
   extras: MessageMetadata = {},
+  options: { assistantMessageId?: string; runLogPath?: string | null } = {},
 ): Message {
-  // Runs auto-start on chat send and auto-stop when the process ends.
-  // Preserve archived; otherwise always return to idle (including user interrupts).
-  const status = agent.status === 'archived' ? agent.status : 'idle';
-  ctx.repos.agents.update(
-    clearAgentRunFields(agent, {
-      claudeSessionId: result.sessionId ?? agent.claudeSessionId,
-      status,
-    }),
-  );
+  const latest = ctx.repos.agents.getById(agent.id) ?? agent;
+  const runLogPath = options.runLogPath ?? agent.runLogPath;
+  const sameRun =
+    (Boolean(runLogPath) && latest.runLogPath === runLogPath) ||
+    (agent.pid != null && latest.pid === agent.pid);
+
+  // Build / Keep planning may have already started a replacement run. Never
+  // restore the old session id or clear the new pid.
+  if (sameRun) {
+    const status = latest.status === 'archived' ? latest.status : 'idle';
+    ctx.repos.agents.update(
+      clearAgentRunFields(latest, {
+        claudeSessionId: result.sessionId ?? latest.claudeSessionId,
+        status,
+      }),
+    );
+  }
 
   const content = result.result || assistantText;
   const metadata: MessageMetadata = {
@@ -802,6 +823,32 @@ function finalizeAgentRun(
     costUsd: extras.costUsd ?? extractCostUsd(result.events ?? []),
     stopped: extras.stopped ?? result.stopped,
   };
+
+  const assistantMessageId = options.assistantMessageId;
+  if (assistantMessageId) {
+    const existing = ctx.repos.messages.getById(agent.id, assistantMessageId);
+    if (!existing) {
+      return {
+        id: assistantMessageId,
+        agentId: agent.id,
+        role: 'assistant',
+        content: content || (metadata.stopped ? '[stopped]' : '[no output]'),
+        attachments: [],
+        metadata,
+        createdAt: nowIso(),
+      };
+    }
+    return ctx.repos.messages.update({
+      ...existing,
+      content: content || (metadata.stopped ? '[stopped]' : existing.content || '[no output]'),
+      metadata: {
+        ...existing.metadata,
+        ...metadata,
+        timeline: metadata.timeline ?? existing.metadata.timeline,
+        streaming: false,
+      },
+    });
+  }
 
   const messages = ctx.repos.messages.listByAgent(agent.id);
   const last = messages[messages.length - 1];
@@ -852,6 +899,9 @@ function persistAssistantProgress(
   content: string,
   timeline: StreamPart[],
 ): Message {
+  if (!ctx.repos.messages.getById(message.agentId, message.id)) {
+    return message;
+  }
   const next: Message = {
     ...message,
     content,
@@ -920,6 +970,43 @@ async function saveChatImages(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Stop a Claude run and wait until the OS process is gone.
+ * Used by Build / Keep planning so a hung ExitPlanMode stdio wait cannot leak.
+ */
+async function stopClaudeRun(
+  ctx: AppContext,
+  agentId: string,
+  pid: number | null | undefined,
+): Promise<void> {
+  ctx.claude.stop(agentId, pid);
+  if (pid == null) {
+    const afterStop = ctx.repos.agents.getById(agentId);
+    if (afterStop && (afterStop.status === 'running' || afterStop.pid != null)) {
+      ctx.repos.agents.update(
+        clearAgentRunFields(afterStop, {
+          status: afterStop.archivedAt ? 'archived' : 'idle',
+        }),
+      );
+    }
+    return;
+  }
+
+  const deadline = Date.now() + 5_000;
+  while (isPidAlive(pid) && Date.now() < deadline) {
+    await sleep(100);
+  }
+  await sleep(150);
+  const afterStop = ctx.repos.agents.getById(agentId);
+  if (afterStop && (afterStop.status === 'running' || afterStop.pid != null)) {
+    ctx.repos.agents.update(
+      clearAgentRunFields(afterStop, {
+        status: afterStop.archivedAt ? 'archived' : 'idle',
+      }),
+    );
+  }
 }
 
 /**
@@ -1038,17 +1125,7 @@ export async function streamAgentChat(
     if (!force) {
       throw new Error('Agent already has a running Claude process. Queue the message or force-send.');
     }
-    const pid = detail.pid;
-    ctx.claude.stop(agentId, pid);
-    const deadline = Date.now() + 5_000;
-    while (isPidAlive(pid) && Date.now() < deadline) {
-      await sleep(100);
-    }
-    await sleep(150);
-    const afterStop = ctx.repos.agents.getById(agentId) ?? detail;
-    if (afterStop.status === 'running' || afterStop.pid != null) {
-      ctx.repos.agents.update(clearAgentRunFields(afterStop, { status: 'idle' }));
-    }
+    await stopClaudeRun(ctx, agentId, detail.pid);
     markStreamingAssistantStopped(ctx, agentId);
   }
 
@@ -1169,12 +1246,21 @@ export async function streamAgentChat(
     });
 
     flushProgress(true);
-    const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
-    const finalized = finalizeAgentRun(ctx, current, result, assistantText, {
-      durationMs: Date.now() - startedAt,
-      stopped: result.stopped,
-      timeline,
-    });
+    const finalized = finalizeAgentRun(
+      ctx,
+      runningAgent,
+      result,
+      assistantText,
+      {
+        durationMs: Date.now() - startedAt,
+        stopped: result.stopped,
+        timeline,
+      },
+      {
+        assistantMessageId: assistantMessage.id,
+        runLogPath: runningAgent.runLogPath,
+      },
+    );
     send('done', { message: finalized, sessionId: result.sessionId });
   } catch (error) {
     const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
@@ -1184,8 +1270,8 @@ export async function streamAgentChat(
     if (assistantText.trim() || timeline.length > 0) {
       const partial = finalizeAgentRun(
         ctx,
-        current,
-        { result: assistantText, sessionId: current.claudeSessionId, stopped: true },
+        runningAgent,
+        { result: assistantText, sessionId: runningAgent.claudeSessionId, stopped: true },
         assistantText,
         {
           error: errMessage,
@@ -1193,12 +1279,24 @@ export async function streamAgentChat(
           durationMs: Date.now() - startedAt,
           timeline,
         },
+        {
+          assistantMessageId: assistantMessage.id,
+          runLogPath: runningAgent.runLogPath,
+        },
       );
       send('done', { message: partial, sessionId: current.claudeSessionId });
     } else {
       // Remove empty placeholder assistant row on hard failure before any output.
-      ctx.repos.messages.deleteFrom(agentId, assistantMessage.id);
-      ctx.repos.agents.update(clearAgentRunFields(current, { status: 'idle' }));
+      // Skip if Build already cleared this turn — deleteFrom would also drop later messages.
+      if (ctx.repos.messages.getById(agentId, assistantMessage.id)) {
+        ctx.repos.messages.deleteFrom(agentId, assistantMessage.id);
+      }
+      if (
+        current.runLogPath === runningAgent.runLogPath ||
+        (runningAgent.pid != null && current.pid === runningAgent.pid)
+      ) {
+        ctx.repos.agents.update(clearAgentRunFields(current, { status: 'idle' }));
+      }
       send('error', { message: errMessage });
     }
   } finally {

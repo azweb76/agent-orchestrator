@@ -481,6 +481,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const keepPlanning = async (request: PermissionRequest) => {
     setPermissionBusy(true);
     setChatError(null);
+    // Drop the UI SSE subscription; the backend stops the hung ExitPlanMode run.
+    abortRef.current?.abort();
     try {
       await api.denyPermission(agentId, {
         requestId: request.requestId,
@@ -488,6 +490,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       });
       removePermission(request.requestId);
       queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
     } catch (error) {
       setChatError((error as Error).message);
     } finally {

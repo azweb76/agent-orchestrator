@@ -3,6 +3,8 @@
  * Wire formats vary slightly across CLI versions; parsers accept the common shapes.
  */
 
+import { isClaudePlansPath } from '@agent-orchestrator/shared';
+
 export interface ParsedPermissionRequest {
   requestId: string;
   toolName: string;
@@ -64,6 +66,18 @@ export function isInteractivePermissionTool(toolName: string): boolean {
   return toolName === 'AskUserQuestion' || toolName === 'ExitPlanMode';
 }
 
+const PLAN_FILE_WRITE_TOOLS = new Set(['Write', 'Edit']);
+
+/** Write/Edit targeting Claude's plan directory should not block ExitPlanMode. */
+export function isClaudePlanFileTool(
+  toolName: string,
+  input: Record<string, unknown> | undefined,
+): boolean {
+  if (!PLAN_FILE_WRITE_TOOLS.has(toolName) || !input) return false;
+  const filePath = String(input.file_path ?? input.path ?? '');
+  return isClaudePlansPath(filePath);
+}
+
 /**
  * Whether a non-interactive tool permission can be auto-allowed without UI.
  * AskUserQuestion / ExitPlanMode are never auto-allowed.
@@ -75,8 +89,11 @@ export function isInteractivePermissionTool(toolName: string): boolean {
 export function shouldAutoAllowToolPermission(
   toolName: string,
   permissionMode: string | null | undefined,
+  input?: Record<string, unknown>,
 ): boolean {
   if (isInteractivePermissionTool(toolName)) return false;
+  // Plan mode still needs to write ~/.claude/plans/*.md before ExitPlanMode.
+  if (isClaudePlanFileTool(toolName, input)) return true;
   const mode = permissionMode ?? 'plan';
   return mode === 'auto' || mode === 'dontAsk' || mode === 'bypassPermissions';
 }

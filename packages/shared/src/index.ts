@@ -433,7 +433,10 @@ export {
 
 export {
   buildAskUserQuestionUpdatedInput,
+  extractPlanFilePath,
+  extractPlanFilePathsFromLog,
   extractPlanFromInput,
+  isClaudePlansPath,
   parseAskUserQuestions,
 } from './permission-tools.js';
 
