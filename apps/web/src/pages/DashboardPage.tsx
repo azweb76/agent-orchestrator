@@ -13,12 +13,14 @@ import {
   Typography,
 } from '@mui/material';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import SearchIcon from '@mui/icons-material/Search';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
@@ -144,8 +146,10 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [now, setNow] = useState(() => new Date());
   const [query, setQuery] = useState('');
+  const [pruneOpen, setPruneOpen] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -156,6 +160,17 @@ export function DashboardPage() {
     queryKey: ['status'],
     queryFn: api.getStatus,
     refetchInterval: 30_000,
+  });
+
+  const pruneMutation = useMutation({
+    mutationFn: () => api.pruneArchivedAgents(),
+    onSuccess: () => {
+      setPruneOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['status'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['worktrees'] });
+    },
   });
 
   const {
@@ -214,6 +229,7 @@ export function DashboardPage() {
     ...(inboxQuery.data?.authored ?? []).slice(0, 3),
     ...(inboxQuery.data?.reviewRequested ?? []).slice(0, 2),
   ].slice(0, 5);
+  const archivedCount = status?.archivedAgentCount ?? 0;
 
   const clock = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateLabel = now.toLocaleDateString([], {
@@ -353,6 +369,20 @@ export function DashboardPage() {
           >
             Pull requests
           </Button>
+          {archivedCount > 0 ? (
+            <Button
+              variant="outlined"
+              color="warning"
+              startIcon={<DeleteSweepOutlinedIcon />}
+              size="small"
+              onClick={() => {
+                pruneMutation.reset();
+                setPruneOpen(true);
+              }}
+            >
+              Prune archived ({archivedCount})
+            </Button>
+          ) : null}
         </Stack>
       </Box>
 
@@ -560,6 +590,22 @@ export function DashboardPage() {
                   variant="outlined"
                 />
               </Stack>
+              {archivedCount > 0 ? (
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">Archived</Typography>
+                  <Chip
+                    size="small"
+                    label={`${archivedCount} to prune`}
+                    color="warning"
+                    variant="outlined"
+                    onClick={() => {
+                      pruneMutation.reset();
+                      setPruneOpen(true);
+                    }}
+                    sx={{ cursor: 'pointer' }}
+                  />
+                </Stack>
+              ) : null}
             </Stack>
           </HudPanel>
 
@@ -680,6 +726,24 @@ export function DashboardPage() {
           </HudPanel>
         </Stack>
       </Stack>
+
+      <ConfirmDialog
+        open={pruneOpen}
+        title="Prune archived agents?"
+        description={
+          archivedCount === 1
+            ? 'This permanently deletes 1 archived agent and removes any worktrees that are no longer in use. Active agents are not affected.'
+            : `This permanently deletes ${archivedCount} archived agents and removes any worktrees that are no longer in use. Active agents are not affected.`
+        }
+        confirmLabel="Prune archived"
+        confirmColor="warning"
+        loading={pruneMutation.isPending}
+        onCancel={() => {
+          setPruneOpen(false);
+          pruneMutation.reset();
+        }}
+        onConfirm={() => pruneMutation.mutate()}
+      />
     </Stack>
   );
 }
