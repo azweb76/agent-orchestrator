@@ -13,12 +13,6 @@ import {
   Paper,
   Stack,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tabs,
   TextField,
   ToggleButton,
@@ -30,8 +24,9 @@ import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentDiffScope, AgentEvent } from '@agent-orchestrator/shared';
+import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { ChangesDiffView } from '../components/changes/ChangesDiffView';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -60,7 +55,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
-  const [selectedEvent, setSelectedEvent] = useState<AgentEvent | null>(null);
 
   // Consume one-shot navigation state so refresh does not re-send the idea.
   useEffect(() => {
@@ -73,12 +67,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     queryFn: () => api.getAgent(agentId),
     enabled: Boolean(agentId),
     refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
-  });
-
-  const eventsQuery = useQuery({
-    queryKey: ['events', agentId],
-    queryFn: () => api.getEvents(agentId),
-    enabled: Boolean(agentId) && tab === 2,
   });
 
   const diffQuery = useQuery({
@@ -103,7 +91,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       setPrTitle('');
       setPrBody('');
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
     },
   });
@@ -251,7 +239,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Changes" sx={{ minHeight: 40, py: 1 }} />
-          <Tab label="Events" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
         {tab === 0 && (
@@ -261,7 +248,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         )}
 
         {tab === 1 && (
-          <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
@@ -328,68 +315,9 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                   }
                 />
               ) : (
-                <Stack spacing={1.5} sx={{ minHeight: 0, flex: 1 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    {diffQuery.data.stat || 'Changes'}
-                  </Typography>
-                  <Box
-                    component="pre"
-                    sx={{
-                      p: 1.5,
-                      bgcolor: 'rgba(0,0,0,0.35)',
-                      borderRadius: 2,
-                      overflow: 'auto',
-                      fontSize: 13,
-                      m: 0,
-                      flex: 1,
-                    }}
-                  >
-                    {diffQuery.data.patch}
-                  </Box>
-                </Stack>
+                <ChangesDiffView patch={diffQuery.data.patch} />
               )}
             </Stack>
-          </Box>
-        )}
-
-        {tab === 2 && (
-          <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            {eventsQuery.isLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress size={28} />
-              </Box>
-            ) : eventsQuery.data?.length === 0 ? (
-              <EmptyState
-                compact
-                title="No events yet"
-                description="Lifecycle and stream events will appear here as the agent runs."
-              />
-            ) : (
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Time</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {eventsQuery.data?.map((event) => (
-                      <TableRow key={event.id}>
-                        <TableCell>{new Date(event.createdAt).toLocaleString()}</TableCell>
-                        <TableCell>{event.type}</TableCell>
-                        <TableCell align="right">
-                          <Button size="small" onClick={() => setSelectedEvent(event)}>
-                            Details
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
           </Box>
         )}
       </Paper>
@@ -433,24 +361,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           >
             {createPrMutation.isPending ? 'Creating…' : 'Create PR'}
           </Button>
-        </DialogActions>
-      </ResponsiveDialog>
-
-      <ResponsiveDialog open={Boolean(selectedEvent)} onClose={() => setSelectedEvent(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>{selectedEvent?.type}</DialogTitle>
-        <DialogContent>
-          <Typography variant="caption" color="text.secondary">
-            {selectedEvent && new Date(selectedEvent.createdAt).toLocaleString()}
-          </Typography>
-          <Box
-            component="pre"
-            sx={{ m: 0, mt: 0.5, fontSize: 12, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-          >
-            {JSON.stringify(selectedEvent?.data, null, 2)}
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedEvent(null)}>Close</Button>
         </DialogActions>
       </ResponsiveDialog>
 
