@@ -15,44 +15,8 @@ permissions:
   actions: write
 
 jobs:
-  typecheck:
-    name: Typecheck
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Setup
-        uses: ./.github/actions/setup
-        with:
-          build-shared: 'true'
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Setup
-        uses: ./.github/actions/setup
-        with:
-          build-shared: 'true'
-
-      - name: Test
-        run: pnpm --filter @agent-orchestrator/server test
-
-  build:
-    name: Build
+  ci:
+    name: CI
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -64,20 +28,11 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm --filter @agent-orchestrator/server test
+
       - name: Build
         run: pnpm build
-
-  ci:
-    name: CI
-    if: ${{ always() && !cancelled() }}
-    needs: [typecheck, test, build]
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - name: Require all jobs to succeed
-        env:
-          TYPECHECK: ${{ needs.typecheck.result }}
-          TEST: ${{ needs.test.result }}
-          BUILD: ${{ needs.build.result }}
-        run: |
-          [[ "$TYPECHECK" == success && "$TEST" == success && "$BUILD" == success ]]
