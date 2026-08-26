@@ -135,6 +135,43 @@ describe('session grading and instruction files', () => {
             '---\nname: retry-tests\ndescription: Always run tests after retries\n---\n# Retry tests\n',
           rationale: 'The assistant skipped tests.',
         }),
+        analyzeSessionGrade: async (input) => ({
+          score: 2,
+          summary: 'The assistant skipped tests and reread files.',
+          findings: [
+            {
+              category: 'excessive_turns',
+              severity: 'warning',
+              title: 'Could be shorter',
+              detail: 'The same request was restated.',
+            },
+            {
+              category: 'wasted_tokens',
+              severity: 'issue',
+              title: 'Skipped tests',
+              detail: 'Work shipped without running tests.',
+            },
+            {
+              category: 'bloated_context',
+              severity: 'ok',
+              title: 'Context is fine',
+              detail: 'Instruction files are small.',
+            },
+            {
+              category: 'instruction_files',
+              severity: 'warning',
+              title: 'Missing AGENTS.md',
+              detail: 'No AGENTS.md is present.',
+            },
+            {
+              category: 'skills',
+              severity: 'issue',
+              title: 'Add a retry-tests skill',
+              detail: input.notes || 'A skill would prevent skipped tests.',
+            },
+          ],
+          stats: input.stats,
+        }),
       } as unknown as AnthropicService,
       dataDir,
     };
@@ -147,19 +184,22 @@ describe('session grading and instruction files', () => {
   it('rejects grading an empty session', async () => {
     seed();
     await assert.rejects(
-      () => gradeAgentSession(ctx, 'ag-1', 'sess-2', { score: 3 }),
+      () => gradeAgentSession(ctx, 'ag-1', 'sess-2', {}),
       /empty session/,
     );
   });
 
-  it('persists a grade on the session and keeps it after unrelated updates', async () => {
+  it('uses AI analysis to persist a grade with findings', async () => {
     seed();
-    const graded = await gradeAgentSession(ctx, 'ag-1', 'sess-1', {
-      score: 2,
-      comment: 'Skipped tests',
-    });
+    const graded = await gradeAgentSession(ctx, 'ag-1', 'sess-1', { notes: 'Please be strict' });
     assert.equal(graded.grade?.score, 2);
-    assert.equal(graded.grade?.comment, 'Skipped tests');
+    assert.match(graded.grade?.comment ?? '', /skipped tests/i);
+    assert.equal(graded.grade?.analysis?.findings.length, 5);
+    assert.equal(
+      graded.grade?.analysis?.findings.find((item) => item.category === 'skills')?.detail,
+      'Please be strict',
+    );
+    assert.equal(graded.grade?.analysis?.stats.userTurns, 1);
     assert.match(ctx.repos.sessions.getGradeTranscript('sess-1'), /Add retry logic/);
 
     await updateAgentSession(ctx, 'ag-1', 'sess-1', { title: 'Retries' });
@@ -167,12 +207,13 @@ describe('session grading and instruction files', () => {
     const session = detail.sessions.find((item) => item.id === 'sess-1');
     assert.equal(session?.title, 'Retries');
     assert.equal(session?.grade?.score, 2);
+    assert.equal(session?.grade?.analysis?.findings[0]?.category, 'excessive_turns');
     assert.equal(detail.sessions.find((item) => item.id === 'sess-2')?.grade, null);
   });
 
   it('generates a draft from the graded transcript and writes a skill file', async () => {
     seed();
-    await gradeAgentSession(ctx, 'ag-1', 'sess-1', { score: 2, comment: 'Skipped tests' });
+    await gradeAgentSession(ctx, 'ag-1', 'sess-1');
     const draft = await generateAgentInstructionDraft(ctx, 'ag-1', 'sess-1', { kind: 'skill' });
     assert.equal(draft.relativePath, '.claude/skills/retry-tests/SKILL.md');
 

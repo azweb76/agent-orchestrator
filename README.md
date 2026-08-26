@@ -18,7 +18,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
   - Manual / plan modes prompt on the agent page for tool permissions; `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved via `--allowedTools`
   - Slash commands & skills autocomplete (project/personal/bundled)
   - Image attachments (paste or upload), markdown replies, compact tool-use progress bar (updates with the active tool)
-  - Grade a session (1–5 stars + notes) and generate a skill, CLAUDE.md, or AGENTS.md draft from the transcript
+  - Analyze a session with AI (turns, tokens, context, instruction files, skills) and generate a skill, CLAUDE.md, or AGENTS.md draft from the transcript
 - **Diff & PRs** — view agent changes and open pull requests on GitHub
 - **Events** — inspect Claude stream events and agent lifecycle activity
 - **Sidebar** — browse workspaces/agents and create new agents in place

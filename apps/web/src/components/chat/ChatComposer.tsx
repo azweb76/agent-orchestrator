@@ -483,7 +483,7 @@ export function ChatComposer({
               title={
                 grade
                   ? `Graded ${grade.score}/5 · ${SESSION_GRADE_LABELS[grade.score]}`
-                  : 'Grade this session'
+                  : 'Analyze this session'
               }
             >
               <span>
@@ -492,7 +492,7 @@ export function ChatComposer({
                   color={grade ? 'secondary' : 'inherit'}
                   disabled={!canGrade}
                   onClick={onGrade}
-                  aria-label="Grade this session"
+                  aria-label="Analyze this session"
                 >
                   {grade ? <StarIcon fontSize="small" /> : <StarOutlinedIcon fontSize="small" />}
                 </IconButton>
