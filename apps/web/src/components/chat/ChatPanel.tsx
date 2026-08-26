@@ -33,7 +33,6 @@ import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
-import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -149,7 +148,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const sessionIdRef = useRef(activeSessionId);
   const [creatingSession, setCreatingSession] = useState(false);
   const [gradeOpen, setGradeOpen] = useState(false);
-  const [improveOpen, setImproveOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const runChatRef = useRef<
     (text: string, images: PendingImage[], force: boolean, sessionId?: string) => Promise<void>
   >(async () => undefined);
@@ -217,6 +216,31 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       setLastFailed(null);
       setDraft(result.draft);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+    },
+  });
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: (target: ChatSession) => api.deleteSession(agentId, target.id),
+    onSuccess: (detail, target) => {
+      abortBySessionRef.current.get(target.id)?.abort();
+      abortBySessionRef.current.delete(target.id);
+      endSending(target.id);
+      const nextQueues = { ...queueRef.current };
+      delete nextQueues[target.id];
+      queueRef.current = nextQueues;
+      setQueues(nextQueues);
+      setDeleteTarget(null);
+      setPermissionRequests([]);
+      setChatError(null);
+      setLastFailed(null);
+      const nextId = detail.activeSessionId ?? detail.sessions[0]?.id ?? '';
+      sessionIdRef.current = nextId;
+      setSessionId(nextId);
+      queryClient.setQueryData(['agent', agentId], detail);
+      queryClient.removeQueries({ queryKey: ['messages', agentId, target.id] });
+      queryClient.removeQueries({ queryKey: ['permissions', agentId, target.id] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
     },
@@ -854,6 +878,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         creating={creatingSession}
         onSelect={(id) => void selectSession(id)}
         onCreate={(template) => void createSessionFromTemplate(template)}
+        onDelete={archived ? undefined : (target) => setDeleteTarget(target)}
       />
       <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <Box
@@ -1030,6 +1055,12 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             </Alert>
           )}
 
+          {deleteSessionMutation.error && (
+            <Alert severity="error" sx={{ mb: 1 }} onClose={() => deleteSessionMutation.reset()}>
+              {(deleteSessionMutation.error as Error).message}
+            </Alert>
+          )}
+
           <ChatComposer
             agentId={agentId}
             archived={archived}
@@ -1047,7 +1078,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             onRewind={requestRewindLast}
             grade={session?.grade}
             canGrade={displayMessages.length > 0 || Boolean(session?.grade)}
-            canImprove={displayMessages.length > 0 || Boolean(session?.grade)}
             onGrade={() => {
               gradeMutation.reset();
               setGradeOpen(true);
@@ -1055,7 +1085,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
                 gradeMutation.mutate({});
               }
             }}
-            onImprove={() => setImproveOpen(true)}
             onRemoveQueued={(id) => {
               const sid = activeSessionId;
               const next = (queueRef.current[sid] ?? []).filter((item) => item.id !== id);
@@ -1089,6 +1118,30 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         }}
       />
 
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title={deleteTarget ? `Delete ${deleteTarget.title}?` : 'Delete session?'}
+        description={
+          deleteTarget && sessions.length <= 1
+            ? `This deletes ${deleteTarget.title} and its messages. A new empty chat session will be created.${
+                deleteTarget.status === 'running' ? ' The running reply will be stopped.' : ''
+              }`
+            : `This deletes this session and its messages. It cannot be undone.${
+                deleteTarget?.status === 'running' ? ' The running reply will be stopped.' : ''
+              } Other sessions are left as they are.`
+        }
+        confirmLabel="Delete"
+        loading={deleteSessionMutation.isPending}
+        onCancel={() => {
+          if (deleteSessionMutation.isPending) return;
+          setDeleteTarget(null);
+          deleteSessionMutation.reset();
+        }}
+        onConfirm={() => {
+          if (deleteTarget) deleteSessionMutation.mutate(deleteTarget);
+        }}
+      />
+
       <GradeSessionDialog
         open={gradeOpen}
         sessionTitle={session?.title ?? 'this session'}
@@ -1101,18 +1154,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           gradeMutation.reset();
         }}
         onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
-      />
-
-      <ImproveInstructionsDialog
-        open={improveOpen}
-        agentId={agentId}
-        sessionId={activeSessionId}
-        onClose={() => setImproveOpen(false)}
-        onApplied={() => {
-          queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
-          queryClient.invalidateQueries({ queryKey: ['slash-commands', agentId] });
-          queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
-        }}
       />
     </Box>
   );

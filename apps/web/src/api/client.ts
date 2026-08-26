@@ -186,6 +186,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  deleteSession: (agentId: string, sessionId: string) =>
+    request<AgentDetail>(`/agents/${agentId}/sessions/${sessionId}`, { method: 'DELETE' }),
   activateSession: (agentId: string, sessionId: string) =>
     request<AgentDetail>(`/agents/${agentId}/sessions/${sessionId}/activate`, { method: 'POST' }),
   stopSession: (agentId: string, sessionId: string) =>

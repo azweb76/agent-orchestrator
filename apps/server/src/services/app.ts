@@ -675,6 +675,45 @@ export async function updateAgentSession(
   return updated;
 }
 
+export async function deleteAgentSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+): Promise<AgentDetail> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot delete a session on an archived agent');
+  const session = requireSession(ctx, agentId, sessionId);
+
+  if (session.status === 'running' || session.pid != null) {
+    ctx.claude.stop(session.id, session.pid, session.runLogPath);
+  }
+
+  const messages = ctx.repos.messages.listBySession(session.id);
+  await cleanupMessageAttachments(messages);
+  ctx.repos.messages.deleteBySession(session.id);
+  ctx.repos.sessions.delete(session.id);
+
+  const remaining = ctx.repos.sessions.listByAgent(agentId);
+  if (remaining.length === 0) {
+    createSessionForAgent(ctx, requireAgent(ctx, agentId), { activate: true });
+  } else if (agent.activeSessionId === session.id) {
+    ctx.repos.agents.update({
+      ...requireAgent(ctx, agentId),
+      activeSessionId: remaining[0]!.id,
+      updatedAt: nowIso(),
+    });
+  }
+
+  syncAgentFromSessions(ctx, agentId);
+  ctx.repos.events.create(
+    makeEvent(agentId, 'session_deleted', {
+      sessionId: session.id,
+      title: session.title,
+    }),
+  );
+  return getAgentDetail(ctx, agentId);
+}
+
 function instructionRoots(ctx: AppContext, agentId: string): InstructionFileRoots {
   const agent = requireAgent(ctx, agentId);
   const worktree = ctx.repos.worktrees.getById(agent.worktreeId);

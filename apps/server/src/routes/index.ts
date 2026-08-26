@@ -18,6 +18,7 @@ import {
   createWorktreeFromPr,
   createWorkspace,
   denyPermissionRequest,
+  deleteAgentSession,
   deleteWorktree,
   deleteWorkspace,
   getAgentAttachment,
@@ -435,6 +436,19 @@ export function createRouter(ctx: AppContext): express.Router {
           param(req.params.agentId),
           param(req.params.sessionId),
           body,
+        ),
+      );
+    }),
+  );
+
+  router.delete(
+    '/agents/:agentId/sessions/:sessionId',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await deleteAgentSession(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
         ),
       );
     }),

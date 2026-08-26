@@ -13,6 +13,7 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
@@ -26,6 +27,7 @@ interface ChatSessionBarProps {
   creating?: boolean;
   onSelect: (sessionId: string) => void;
   onCreate: (template: ChatSessionTemplate) => void;
+  onDelete?: (session: ChatSession) => void;
 }
 
 function templateIcon(id: string) {
@@ -41,8 +43,10 @@ export function ChatSessionBar({
   creating,
   onSelect,
   onCreate,
+  onDelete,
 }: ChatSessionBarProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const canDelete = Boolean(onDelete) && !disabled;
 
   return (
     <Stack
@@ -102,10 +106,20 @@ export function ChatSessionBar({
               variant={selected ? 'filled' : 'outlined'}
               color={selected ? 'primary' : 'default'}
               onClick={() => onSelect(session.id)}
+              onDelete={canDelete ? () => onDelete?.(session) : undefined}
+              deleteIcon={
+                <CloseIcon fontSize="small" aria-label={`Delete ${session.title} session`} />
+              }
               disabled={disabled}
               sx={{
                 flexShrink: 0,
                 '& .MuiChip-label': { px: 1 },
+                '& .MuiChip-deleteIcon': {
+                  fontSize: 16,
+                  color: selected ? 'inherit' : 'text.secondary',
+                  opacity: 0.72,
+                  '&:hover': { opacity: 1, color: 'error.main' },
+                },
               }}
             />
           );
