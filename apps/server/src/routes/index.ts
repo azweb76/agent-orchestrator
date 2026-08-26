@@ -209,7 +209,8 @@ export function createRouter(ctx: AppContext): express.Router {
   router.get(
     '/workspaces/:workspaceId/github/pulls',
     asyncHandler(async (req, res) => {
-      res.json(await listGitHubPullRequests(ctx, param(req.params.workspaceId)));
+      const query = typeof req.query.q === 'string' ? req.query.q : '';
+      res.json(await listGitHubPullRequests(ctx, param(req.params.workspaceId), query));
     }),
   );
 

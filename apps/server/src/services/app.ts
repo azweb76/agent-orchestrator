@@ -1898,10 +1898,26 @@ export async function listGitHubBranches(ctx: AppContext, workspaceId: string) {
   return ctx.github.listBranches(workspace.githubOwner, workspace.githubRepo);
 }
 
-export async function listGitHubPullRequests(ctx: AppContext, workspaceId: string) {
+export async function listGitHubPullRequests(ctx: AppContext, workspaceId: string, query = '') {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
-  return ctx.github.listPullRequests(workspace.githubOwner, workspace.githubRepo);
+
+  let viewerLogin: string | null = null;
+  try {
+    viewerLogin = await ctx.github.getAuthenticatedLogin();
+  } catch {
+    viewerLogin = null;
+  }
+
+  const pullRequests = query.trim()
+    ? await ctx.github.searchRepositoryPullRequests(
+        workspace.githubOwner,
+        workspace.githubRepo,
+        query.trim(),
+      )
+    : await ctx.github.listPullRequests(workspace.githubOwner, workspace.githubRepo);
+
+  return { viewerLogin, pullRequests };
 }
 
 export async function searchGitHubRepositories(ctx: AppContext, query: string) {

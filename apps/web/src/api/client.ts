@@ -22,8 +22,8 @@ import type {
   ApplyInstructionFileResponse,
   GradeChatSessionRequest,
   GitHubBranch,
-  GitHubPullRequest,
   GitHubRepository,
+  WorkspacePullRequestList,
   InstructionDraft,
   InstructionFile,
   MergePullRequestRequest,
@@ -116,8 +116,10 @@ export const api = {
     request<void>(`/worktrees/${worktreeId}`, { method: 'DELETE' }),
   listBranches: (workspaceId: string) =>
     request<GitHubBranch[]>(`/workspaces/${workspaceId}/github/branches`),
-  listPullRequests: (workspaceId: string) =>
-    request<GitHubPullRequest[]>(`/workspaces/${workspaceId}/github/pulls`),
+  listPullRequests: (workspaceId: string, query = '') => {
+    const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
+    return request<WorkspacePullRequestList>(`/workspaces/${workspaceId}/github/pulls${suffix}`);
+  },
   searchRepositories: (query: string) =>
     request<GitHubRepository[]>(`/github/repos/search?q=${encodeURIComponent(query)}`),
   getPullRequestInbox: () => request<PullRequestInbox>('/github/pulls/inbox'),

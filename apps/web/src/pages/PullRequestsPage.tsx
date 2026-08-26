@@ -6,17 +6,20 @@ import {
   Button,
   Chip,
   CircularProgress,
+  InputAdornment,
   Link,
   Stack,
   Tab,
   Tabs,
+  TextField,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
+import SearchIcon from '@mui/icons-material/Search';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { InboxPullRequest } from '@agent-orchestrator/shared';
+import { pullRequestMatchesQuery, type InboxPullRequest } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
@@ -31,6 +34,7 @@ export function PullRequestsPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<InboxTab>('authored');
   const [creatingKey, setCreatingKey] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const { data: status } = useQuery({
     queryKey: ['status'],
@@ -66,8 +70,10 @@ export function PullRequestsPage() {
 
   const authoredCount = inboxQuery.data?.authored.length ?? 0;
   const reviewCount = inboxQuery.data?.reviewRequested.length ?? 0;
-  const items =
+  const tabItems =
     tab === 'authored' ? (inboxQuery.data?.authored ?? []) : (inboxQuery.data?.reviewRequested ?? []);
+  const items = tabItems.filter((pr) => pullRequestMatchesQuery(pr, search));
+  const searching = Boolean(search.trim());
 
   return (
     <Stack spacing={2.5}>
@@ -111,6 +117,26 @@ export function PullRequestsPage() {
         />
       </Tabs>
 
+      {status?.githubTokenConfigured && !inboxQuery.isLoading && !inboxQuery.error ? (
+        <TextField
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by title, number, repo, or author"
+          fullWidth
+          size="small"
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            },
+            htmlInput: { 'aria-label': 'Search pull requests' },
+          }}
+        />
+      ) : null}
+
       {status?.githubTokenConfigured && inboxQuery.isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
@@ -126,11 +152,19 @@ export function PullRequestsPage() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={tab === 'authored' ? <MergeTypeIcon /> : <RateReviewOutlinedIcon />}
-          title={tab === 'authored' ? 'No open pull requests' : 'No review requests'}
+          title={
+            searching
+              ? 'No matching pull requests'
+              : tab === 'authored'
+                ? 'No open pull requests'
+                : 'No review requests'
+          }
           description={
-            tab === 'authored'
-              ? 'Pull requests you author will show up here.'
-              : 'PRs that request your review will show up here.'
+            searching
+              ? 'Try a different title, number, repository, or author.'
+              : tab === 'authored'
+                ? 'Pull requests you author will show up here.'
+                : 'PRs that request your review will show up here.'
           }
         />
       ) : (

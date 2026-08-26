@@ -30,6 +30,7 @@ import {
   type PermissionMode,
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { PullRequestPicker } from './pr/PullRequestPicker';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
 interface CreateWorktreeDialogProps {
@@ -62,19 +63,13 @@ export function CreateWorktreeDialog({
   const workspaceQuery = useQuery({
     queryKey: ['workspace', workspaceId],
     queryFn: () => api.getWorkspace(workspaceId),
-    enabled: open && Boolean(workspaceId) && !defaultBranch,
+    enabled: open && Boolean(workspaceId),
   });
 
   const branchesQuery = useQuery({
     queryKey: ['branches', workspaceId],
     queryFn: () => api.listBranches(workspaceId),
     enabled: open && tab === 'branch',
-  });
-
-  const pullsQuery = useQuery({
-    queryKey: ['pulls', workspaceId],
-    queryFn: () => api.listPullRequests(workspaceId),
-    enabled: open && tab === 'pr',
   });
 
   const resolvedDefaultBranch =
@@ -162,7 +157,7 @@ export function CreateWorktreeDialog({
         : Boolean(ideaText.trim());
 
   return (
-    <ResponsiveDialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <ResponsiveDialog open={open} onClose={handleClose} maxWidth={tab === 'pr' ? 'md' : 'sm'} fullWidth>
       <DialogTitle>Create agent</DialogTitle>
       <DialogContent>
         <Tabs
@@ -303,20 +298,14 @@ export function CreateWorktreeDialog({
         )}
 
         {tab === 'pr' && (
-          <FormControl fullWidth>
-            <InputLabel>Pull request</InputLabel>
-            <Select
-              label="Pull request"
-              value={selectedPr}
-              onChange={(e) => setSelectedPr(e.target.value as number | '')}
-            >
-              {pullsQuery.data?.map((pr) => (
-                <MenuItem key={pr.number} value={pr.number}>
-                  #{pr.number} {pr.title}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <PullRequestPicker
+            workspaceId={workspaceId}
+            owner={workspaceQuery.data?.githubOwner ?? ''}
+            repo={workspaceQuery.data?.githubRepo ?? ''}
+            selectedPr={selectedPr}
+            onSelect={setSelectedPr}
+            onView={handleClose}
+          />
         )}
 
         {createError && (
