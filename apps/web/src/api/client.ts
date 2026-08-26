@@ -17,9 +17,15 @@ import type {
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   DenyPermissionRequest,
+  GenerateInstructionDraftRequest,
+  ApplyInstructionFileRequest,
+  ApplyInstructionFileResponse,
+  GradeChatSessionRequest,
   GitHubBranch,
   GitHubPullRequest,
   GitHubRepository,
+  InstructionDraft,
+  InstructionFile,
   MergePullRequestRequest,
   MergePullRequestResponse,
   Message,
@@ -184,6 +190,27 @@ export const api = {
     request<AgentDetail>(`/agents/${agentId}/sessions/${sessionId}/activate`, { method: 'POST' }),
   stopSession: (agentId: string, sessionId: string) =>
     request<Agent>(`/agents/${agentId}/sessions/${sessionId}/stop`, { method: 'POST' }),
+  gradeSession: (agentId: string, sessionId: string, body: GradeChatSessionRequest) =>
+    request<ChatSession>(`/agents/${agentId}/sessions/${sessionId}/grade`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  listInstructionFiles: (agentId: string) =>
+    request<InstructionFile[]>(`/agents/${agentId}/instruction-files`),
+  generateInstructionDraft: (
+    agentId: string,
+    sessionId: string,
+    body: GenerateInstructionDraftRequest,
+  ) =>
+    request<InstructionDraft>(`/agents/${agentId}/sessions/${sessionId}/instruction-drafts`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  applyInstructionFile: (agentId: string, body: ApplyInstructionFileRequest) =>
+    request<ApplyInstructionFileResponse>(`/agents/${agentId}/instruction-files`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   getMessages: (agentId: string, sessionId: string) =>
     request<Message[]>(`/agents/${agentId}/sessions/${sessionId}/messages`),
   clearMessages: (agentId: string, sessionId: string) =>

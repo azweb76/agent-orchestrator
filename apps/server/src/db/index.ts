@@ -11,6 +11,8 @@ import type {
   MessageAttachment,
   MessageMetadata,
   PermissionMode,
+  SessionGrade,
+  SessionGradeScore,
   Worktree,
   Workspace,
 } from '@agent-orchestrator/shared';
@@ -70,7 +72,11 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   pid INTEGER,
   run_log_path TEXT,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  grade_score INTEGER,
+  grade_comment TEXT,
+  grade_transcript TEXT,
+  graded_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -193,6 +199,10 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
   migrateChatSessions(db);
+  ensureColumn(db, 'chat_sessions', 'grade_score', 'INTEGER');
+  ensureColumn(db, 'chat_sessions', 'grade_comment', 'TEXT');
+  ensureColumn(db, 'chat_sessions', 'grade_transcript', 'TEXT');
+  ensureColumn(db, 'chat_sessions', 'graded_at', 'TEXT');
 }
 
 export function initDatabase(dataDir: string): Database.Database {
@@ -538,6 +548,35 @@ export class ChatSessionRepository {
   delete(id: string): void {
     this.db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(id);
   }
+
+  setGrade(sessionId: string, grade: SessionGrade, transcript: string): ChatSession {
+    const result = this.db
+      .prepare(
+        `UPDATE chat_sessions
+         SET grade_score = @score, grade_comment = @comment, grade_transcript = @transcript,
+             graded_at = @gradedAt, updated_at = @updatedAt
+         WHERE id = @id`,
+      )
+      .run({
+        id: sessionId,
+        score: grade.score,
+        comment: grade.comment,
+        transcript,
+        gradedAt: grade.gradedAt,
+        updatedAt: grade.gradedAt,
+      });
+    if (result.changes === 0) throw new Error('Session not found');
+    const updated = this.getById(sessionId);
+    if (!updated) throw new Error('Session not found');
+    return updated;
+  }
+
+  getGradeTranscript(sessionId: string): string {
+    const row = this.db
+      .prepare('SELECT grade_transcript FROM chat_sessions WHERE id = ?')
+      .get(sessionId) as { grade_transcript?: unknown } | undefined;
+    return row?.grade_transcript == null ? '' : String(row.grade_transcript);
+  }
 }
 
 export class MessageRepository {
@@ -740,6 +779,22 @@ function parseSessionTemplate(value: unknown): ChatSessionTemplateId {
     : 'chat';
 }
 
+function parseGradeScore(value: unknown): SessionGradeScore | null {
+  const score = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(score) || score < 1 || score > 5) return null;
+  return score as SessionGradeScore;
+}
+
+function rowToGrade(row: Record<string, unknown>): SessionGrade | null {
+  const score = parseGradeScore(row.grade_score);
+  if (score == null || row.graded_at == null) return null;
+  return {
+    score,
+    comment: row.grade_comment == null ? '' : String(row.grade_comment),
+    gradedAt: String(row.graded_at),
+  };
+}
+
 function rowToChatSession(row: unknown): ChatSession {
   const r = row as Record<string, unknown>;
   return {
@@ -756,6 +811,7 @@ function rowToChatSession(row: unknown): ChatSession {
     runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
+    grade: rowToGrade(r),
   };
 }
 

@@ -650,12 +650,27 @@ export {
   chatSessionTemplateById,
   CHAT_SESSION_TEMPLATES,
   LISTED_CHAT_SESSION_TEMPLATES,
+  SESSION_GRADE_LABELS,
+  SESSION_GRADE_SCORES,
   type ChatSession,
   type ChatSessionTemplate,
   type ChatSessionTemplateId,
   type CreateChatSessionRequest,
+  type GradeChatSessionRequest,
+  type SessionGrade,
+  type SessionGradeScore,
   type UpdateChatSessionRequest,
 } from './chat-session.js';
+
+export type {
+  ApplyInstructionFileRequest,
+  ApplyInstructionFileResponse,
+  GenerateInstructionDraftRequest,
+  InstructionDraft,
+  InstructionFile,
+  InstructionFileKind,
+  InstructionFileScope,
+} from './instruction-files.js';
 
 export {
   evaluateMergeReadiness,

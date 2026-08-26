@@ -34,6 +34,10 @@ import {
   getPullRequestReviews,
   getSystemStatus,
   getWorkspace,
+  gradeAgentSession,
+  generateAgentInstructionDraft,
+  applyAgentInstructionFile,
+  listAgentInstructionFiles,
   listAgentSessions,
   listAgentSlashCommands,
   listGitHubBranches,
@@ -433,6 +437,72 @@ export function createRouter(ctx: AppContext): express.Router {
           body,
         ),
       );
+    }),
+  );
+
+  router.put(
+    '/agents/:agentId/sessions/:sessionId/grade',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          score: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+          comment: z.string().max(4000).optional(),
+        })
+        .parse(req.body);
+      res.json(
+        await gradeAgentSession(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+          body,
+        ),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/instruction-drafts',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          kind: z.enum(['skill', 'claude_md', 'agents_md']),
+          scope: z.enum(['project', 'personal']).optional(),
+          relativePath: z.string().min(1).max(240).optional(),
+          name: z.string().max(80).optional(),
+          extraNotes: z.string().max(4000).optional(),
+        })
+        .parse(req.body);
+      res.json(
+        await generateAgentInstructionDraft(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+          body,
+        ),
+      );
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/instruction-files',
+    asyncHandler(async (req, res) => {
+      res.json(await listAgentInstructionFiles(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/instruction-files',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          kind: z.enum(['skill', 'claude_md', 'agents_md']),
+          scope: z.enum(['project', 'personal']),
+          content: z.string().min(1).max(200_000),
+          name: z.string().max(80).optional(),
+          relativePath: z.string().min(1).max(240).optional(),
+        })
+        .parse(req.body);
+      res.json(await applyAgentInstructionFile(ctx, param(req.params.agentId), body));
     }),
   );
 

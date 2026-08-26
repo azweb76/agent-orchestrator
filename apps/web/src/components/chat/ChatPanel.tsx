@@ -24,6 +24,7 @@ import {
   type Message,
   type PermissionMode,
   type PermissionRequest,
+  type SessionGradeScore,
 } from '@agent-orchestrator/shared';
 import { api, streamBuildPlan, streamChat } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -32,6 +33,8 @@ import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ChatSessionBar } from './ChatSessionBar';
+import { GradeSessionDialog } from './GradeSessionDialog';
+import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -146,6 +149,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const autoStartedRef = useRef(false);
   const sessionIdRef = useRef(activeSessionId);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [gradeOpen, setGradeOpen] = useState(false);
+  const [improveOpen, setImproveOpen] = useState(false);
   const runChatRef = useRef<
     (text: string, images: PendingImage[], force: boolean, sessionId?: string) => Promise<void>
   >(async () => undefined);
@@ -215,6 +220,15 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+    },
+  });
+
+  const gradeMutation = useMutation({
+    mutationFn: (body: { score: SessionGradeScore; comment: string }) =>
+      api.gradeSession(agentId, activeSessionId, body),
+    onSuccess: () => {
+      setGradeOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     },
   });
 
@@ -1034,6 +1048,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             onStop={() => void stopStreaming()}
             onClear={requestClear}
             onRewind={requestRewindLast}
+            grade={session?.grade}
+            canGrade={displayMessages.length > 0 || Boolean(session?.grade)}
+            canImprove={displayMessages.length > 0 || Boolean(session?.grade)}
+            onGrade={() => {
+              gradeMutation.reset();
+              setGradeOpen(true);
+            }}
+            onImprove={() => setImproveOpen(true)}
             onRemoveQueued={(id) => {
               const sid = activeSessionId;
               const next = (queueRef.current[sid] ?? []).filter((item) => item.id !== id);
@@ -1064,6 +1086,31 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         onCancel={() => setRewindTarget(null)}
         onConfirm={() => {
           if (rewindTarget) rewindMutation.mutate(rewindTarget.id);
+        }}
+      />
+
+      <GradeSessionDialog
+        open={gradeOpen}
+        sessionTitle={session?.title ?? 'this session'}
+        current={session?.grade}
+        loading={gradeMutation.isPending}
+        error={gradeMutation.error ? (gradeMutation.error as Error).message : null}
+        onClose={() => {
+          setGradeOpen(false);
+          gradeMutation.reset();
+        }}
+        onSave={(score, comment) => gradeMutation.mutate({ score, comment })}
+      />
+
+      <ImproveInstructionsDialog
+        open={improveOpen}
+        agentId={agentId}
+        sessionId={activeSessionId}
+        onClose={() => setImproveOpen(false)}
+        onApplied={() => {
+          queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
+          queryClient.invalidateQueries({ queryKey: ['slash-commands', agentId] });
+          queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
         }}
       />
     </Box>
