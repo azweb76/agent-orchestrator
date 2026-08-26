@@ -1,4 +1,5 @@
 import type { StreamPart } from './stream-timeline.js';
+import type { ChatSession } from './chat-session.js';
 
 export type AgentStatus = 'idle' | 'running' | 'stopped' | 'archived';
 
@@ -52,6 +53,8 @@ export interface Agent {
   pid: number | null;
   /** Stream-json log path for the active Claude run (used to resume after app restart). */
   runLogPath: string | null;
+  /** Currently selected chat session. Runtime (pid / Claude session) lives on that session. */
+  activeSessionId: string | null;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -82,6 +85,7 @@ export interface MessageMetadata {
 export interface Message {
   id: string;
   agentId: string;
+  sessionId: string;
   role: MessageRole;
   content: string;
   attachments: MessageAttachment[];
@@ -510,6 +514,7 @@ export interface WorktreeWithAgent extends Worktree {
 export interface AgentDetail extends Agent {
   worktree: Worktree;
   workspace: Workspace;
+  sessions: ChatSession[];
 }
 
 /** Agent summary for sidebar navigation (includes worktree context). */
@@ -639,6 +644,18 @@ export {
 } from './permission-tools.js';
 
 export { buildIdeaKickoffPrompt } from './idea-prompt.js';
+
+export {
+  buildImplementPlanPrompt,
+  chatSessionTemplateById,
+  CHAT_SESSION_TEMPLATES,
+  LISTED_CHAT_SESSION_TEMPLATES,
+  type ChatSession,
+  type ChatSessionTemplate,
+  type ChatSessionTemplateId,
+  type CreateChatSessionRequest,
+  type UpdateChatSessionRequest,
+} from './chat-session.js';
 
 export {
   evaluateMergeReadiness,

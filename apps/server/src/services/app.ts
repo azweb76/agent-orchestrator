@@ -14,6 +14,9 @@ import type {
   BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
+  ChatSession,
+  ChatSessionTemplateId,
+  CreateChatSessionRequest,
   RewindChatRequest,
   RewindChatResponse,
   CreateAgentFromPrRequest,
@@ -37,6 +40,7 @@ import type {
   PullRequestInbox,
   SetPullRequestStateRequest,
   UpdateAgentRequest,
+  UpdateChatSessionRequest,
   UpdatePullRequestBranchRequest,
   SidebarWorkspace,
   Workspace,
@@ -44,7 +48,12 @@ import type {
   WorktreeWithAgent,
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
-import { DEFAULT_EFFORT_LEVEL, DEFAULT_PERMISSION_MODE } from '@agent-orchestrator/shared';
+import {
+  DEFAULT_EFFORT_LEVEL,
+  DEFAULT_PERMISSION_MODE,
+  buildImplementPlanPrompt,
+  chatSessionTemplateById,
+} from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
@@ -95,13 +104,124 @@ async function createAgentForWorktree(
     claudeSessionId: null,
     pid: null,
     runLogPath: null,
+    activeSessionId: null,
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
   };
 
   ctx.repos.agents.create(agent);
+  const session = createSessionForAgent(ctx, agent, {
+    template: 'chat',
+    permissionMode: agent.permissionMode,
+  });
+  return { ...agent, activeSessionId: session.id };
+}
+
+function uniqueSessionTitle(existing: ChatSession[], base: string): string {
+  const titles = new Set(existing.map((item) => item.title));
+  if (!titles.has(base)) return base;
+  let n = 2;
+  while (titles.has(`${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
+
+function createSessionForAgent(
+  ctx: AppContext,
+  agent: Agent,
+  options: {
+    title?: string;
+    template?: ChatSessionTemplateId;
+    permissionMode?: PermissionMode;
+    activate?: boolean;
+  } = {},
+): ChatSession {
+  const template = chatSessionTemplateById(options.template ?? 'chat');
+  const timestamp = nowIso();
+  const existing = ctx.repos.sessions.listByAgent(agent.id);
+  const title = options.title?.trim() || uniqueSessionTitle(existing, template?.title ?? 'Chat');
+  const session: ChatSession = {
+    id: uuidv4(),
+    agentId: agent.id,
+    title,
+    template: template?.id ?? 'chat',
+    status: 'idle',
+    model: agent.model,
+    effort: agent.effort,
+    permissionMode: options.permissionMode ?? template?.permissionMode ?? DEFAULT_PERMISSION_MODE,
+    claudeSessionId: null,
+    pid: null,
+    runLogPath: null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  ctx.repos.sessions.create(session);
+  if (options.activate !== false) {
+    ctx.repos.agents.update({
+      ...ctx.repos.agents.getById(agent.id)!,
+      activeSessionId: session.id,
+      permissionMode: session.permissionMode,
+      updatedAt: timestamp,
+    });
+  }
+  return session;
+}
+
+function requireAgent(ctx: AppContext, agentId: string): Agent {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
   return agent;
+}
+
+function requireSession(ctx: AppContext, agentId: string, sessionId?: string | null): ChatSession {
+  const agent = requireAgent(ctx, agentId);
+  let id = sessionId || agent.activeSessionId;
+  if (!id) {
+    const existing = ctx.repos.sessions.listByAgent(agentId);
+    if (existing[0]) {
+      id = existing[0].id;
+      ctx.repos.agents.update({ ...agent, activeSessionId: id, updatedAt: nowIso() });
+    } else {
+      return createSessionForAgent(ctx, agent);
+    }
+  }
+  const session = ctx.repos.sessions.getById(id);
+  if (!session || session.agentId !== agentId) throw new Error('Session not found');
+  return session;
+}
+
+/** Roll up session run state onto the agent (status, active-session snapshot). */
+function syncAgentFromSessions(ctx: AppContext, agentId: string): Agent {
+  const agent = requireAgent(ctx, agentId);
+  const sessions = ctx.repos.sessions.listByAgent(agentId);
+  const anyRunning = sessions.some((item) => item.status === 'running');
+  const active =
+    sessions.find((item) => item.id === agent.activeSessionId) ?? sessions[0] ?? null;
+  return ctx.repos.agents.update({
+    ...agent,
+    status: agent.archivedAt ? 'archived' : anyRunning ? 'running' : 'idle',
+    pid: active?.pid ?? null,
+    runLogPath: active?.runLogPath ?? null,
+    claudeSessionId: active?.claudeSessionId ?? null,
+    permissionMode: active?.permissionMode ?? agent.permissionMode,
+    model: active?.model ?? agent.model,
+    effort: active?.effort ?? agent.effort,
+    activeSessionId: active?.id ?? agent.activeSessionId,
+    updatedAt: nowIso(),
+  });
+}
+
+function clearSessionRunFields(
+  session: ChatSession,
+  overrides: Partial<ChatSession> = {},
+): ChatSession {
+  return {
+    ...session,
+    ...overrides,
+    pid: null,
+    runLogPath: null,
+    updatedAt: nowIso(),
+  };
 }
 
 export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCounts[]> {
@@ -313,7 +433,7 @@ export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
   if (!workspace) throw new Error('Workspace not found');
 
   for (const agent of ctx.repos.agents.listByWorktreeId(worktreeId)) {
-    ctx.claude.stop(agent.id, agent.pid, agent.runLogPath);
+    await stopAllSessions(ctx, agent);
   }
 
   await ctx.git.removeWorktree(workspace.repoPath, worktree.path);
@@ -331,7 +451,23 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
   if (!workspace) throw new Error('Workspace not found');
 
   const liveWorktree = await overlayLivePullRequest(ctx, workspace, worktree);
-  return { ...agent, worktree: liveWorktree, workspace };
+  const sessions = ctx.repos.sessions.listByAgent(agentId);
+  let activeSessionId = agent.activeSessionId;
+  if (!activeSessionId || !sessions.some((item) => item.id === activeSessionId)) {
+    const session = sessions[0] ?? createSessionForAgent(ctx, agent);
+    activeSessionId = session.id;
+    if (!sessions.some((item) => item.id === session.id)) {
+      sessions.push(session);
+    }
+    ctx.repos.agents.update({ ...agent, activeSessionId, updatedAt: nowIso() });
+  }
+  return {
+    ...agent,
+    activeSessionId,
+    worktree: liveWorktree,
+    workspace,
+    sessions: ctx.repos.sessions.listByAgent(agentId),
+  };
 }
 
 export async function updateAgent(ctx: AppContext, agentId: string, body: UpdateAgentRequest) {
@@ -349,25 +485,59 @@ export async function updateAgent(ctx: AppContext, agentId: string, body: Update
   };
 
   ctx.repos.agents.update(updated);
+
+  // Composer model / permission changes apply to the active session.
+  if (body.model || body.effort || body.permissionMode) {
+    const session = requireSession(ctx, agentId);
+    ctx.repos.sessions.update({
+      ...session,
+      model: body.model ?? session.model,
+      effort: body.effort ?? session.effort,
+      permissionMode: body.permissionMode ?? session.permissionMode,
+      updatedAt: nowIso(),
+    });
+    return syncAgentFromSessions(ctx, agentId);
+  }
+
   return updated;
+}
+
+async function stopAllSessions(ctx: AppContext, agent: Agent): Promise<void> {
+  const sessions = ctx.repos.sessions.listByAgent(agent.id);
+  for (const session of sessions) {
+    if (session.status === 'running' || session.pid != null) {
+      ctx.claude.stop(session.id, session.pid, session.runLogPath);
+      ctx.repos.sessions.update(
+        clearSessionRunFields(session, {
+          status: session.status === 'running' ? 'idle' : session.status,
+        }),
+      );
+      markStreamingAssistantStopped(ctx, agent.id, session.id);
+    }
+  }
 }
 
 export async function stopAgent(ctx: AppContext, agentId: string) {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
-  ctx.claude.stop(agentId, agent.pid, agent.runLogPath);
-  markStreamingAssistantStopped(ctx, agentId);
-  // Return to idle so the next chat message can start a run without a manual Start.
-  const updated: Agent = {
-    ...agent,
-    status: agent.archivedAt ? 'archived' : 'idle',
-    pid: null,
-    runLogPath: null,
-    updatedAt: nowIso(),
-  };
-  ctx.repos.agents.update(updated);
+  await stopAllSessions(ctx, agent);
+  const updated = syncAgentFromSessions(ctx, agentId);
   ctx.repos.events.create(makeEvent(agentId, 'agent_stopped', {}));
+  return updated;
+}
+
+export async function stopAgentSession(ctx: AppContext, agentId: string, sessionId: string) {
+  const session = requireSession(ctx, agentId, sessionId);
+  ctx.claude.stop(session.id, session.pid, session.runLogPath);
+  markStreamingAssistantStopped(ctx, agentId, session.id);
+  ctx.repos.sessions.update(
+    clearSessionRunFields(session, {
+      status: 'idle',
+    }),
+  );
+  const updated = syncAgentFromSessions(ctx, agentId);
+  ctx.repos.events.create(makeEvent(agentId, 'session_stopped', { sessionId }));
   return updated;
 }
 
@@ -379,15 +549,14 @@ export async function archiveAgent(
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
-  ctx.claude.stop(agentId, agent.pid, agent.runLogPath);
+  await stopAllSessions(ctx, agent);
 
   if (body.deleteWorktree) {
     await deleteWorktree(ctx, agent.worktreeId);
     return { agent: null, deletedWorktree: true };
   }
-
   const updated: Agent = {
-    ...agent,
+    ...syncAgentFromSessions(ctx, agentId),
     status: 'archived',
     pid: null,
     runLogPath: null,
@@ -412,7 +581,7 @@ export async function pruneArchivedAgents(ctx: AppContext): Promise<PruneArchive
   for (const worktreeId of worktreeIds) {
     const archivedOnTree = archived.filter((agent) => agent.worktreeId === worktreeId);
     for (const agent of archivedOnTree) {
-      ctx.claude.stop(agent.id, agent.pid, agent.runLogPath);
+      await stopAllSessions(ctx, agent);
     }
 
     const active = ctx.repos.agents.getByWorktreeId(worktreeId);
@@ -440,27 +609,105 @@ export async function pruneArchivedAgents(ctx: AppContext): Promise<PruneArchive
   return { prunedAgents, deletedWorktrees };
 }
 
-export function getAgentMessages(ctx: AppContext, agentId: string): Message[] {
-  return ctx.repos.messages.listByAgent(agentId);
+export function listAgentSessions(ctx: AppContext, agentId: string): ChatSession[] {
+  requireAgent(ctx, agentId);
+  return ctx.repos.sessions.listByAgent(agentId);
 }
 
-export async function clearAgentChat(ctx: AppContext, agentId: string): Promise<{ cleared: number }> {
+export async function createAgentSession(
+  ctx: AppContext,
+  agentId: string,
+  body: CreateChatSessionRequest = {},
+): Promise<{ session: ChatSession; kickoffPrompt: string | null }> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot create a session on an archived agent');
+
+  const template = chatSessionTemplateById(body.template ?? 'chat');
+  if (body.template && !template) throw new Error('Unknown session template');
+
+  const session = createSessionForAgent(ctx, agent, {
+    template: template?.id ?? 'chat',
+    title: body.title,
+    permissionMode: template?.permissionMode,
+    activate: true,
+  });
+  ctx.repos.events.create(
+    makeEvent(agentId, 'session_created', {
+      sessionId: session.id,
+      template: session.template,
+    }),
+  );
+  return { session, kickoffPrompt: template?.prompt ?? null };
+}
+
+export async function updateAgentSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+  body: UpdateChatSessionRequest,
+): Promise<ChatSession> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot update a session on an archived agent');
+  const session = requireSession(ctx, agentId, sessionId);
+  const updated = ctx.repos.sessions.update({
+    ...session,
+    title: body.title?.trim() || session.title,
+    model: body.model ?? session.model,
+    effort: body.effort ?? session.effort,
+    permissionMode: body.permissionMode ?? session.permissionMode,
+    updatedAt: nowIso(),
+  });
+  syncAgentFromSessions(ctx, agentId);
+  return updated;
+}
+
+export async function activateAgentSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+): Promise<AgentDetail> {
+  requireSession(ctx, agentId, sessionId);
+  const agent = requireAgent(ctx, agentId);
+  ctx.repos.agents.update({
+    ...agent,
+    activeSessionId: sessionId,
+    updatedAt: nowIso(),
+  });
+  syncAgentFromSessions(ctx, agentId);
+  return getAgentDetail(ctx, agentId);
+}
+
+export function getAgentMessages(
+  ctx: AppContext,
+  agentId: string,
+  sessionId?: string,
+): Message[] {
+  const session = requireSession(ctx, agentId, sessionId);
+  return ctx.repos.messages.listBySession(session.id);
+}
+
+export async function clearAgentChat(
+  ctx: AppContext,
+  agentId: string,
+  sessionId?: string,
+): Promise<{ cleared: number }> {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
   if (agent.archivedAt) throw new Error('Cannot clear chat for archived agent');
-  if (agent.status === 'running') {
-    throw new Error('Cannot clear chat while the agent is running. Stop it first.');
+  const session = requireSession(ctx, agentId, sessionId);
+  if (session.status === 'running') {
+    throw new Error('Cannot clear chat while the session is running. Stop it first.');
   }
 
-  const cleared = ctx.repos.messages.deleteByAgent(agentId);
-  ctx.repos.agents.update({
-    ...agent,
+  const cleared = ctx.repos.messages.deleteBySession(session.id);
+  ctx.repos.sessions.update({
+    ...session,
     claudeSessionId: null,
-    // Every new session starts in plan mode.
     permissionMode: 'plan',
     updatedAt: nowIso(),
   });
-  ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared }));
+  syncAgentFromSessions(ctx, agentId);
+  ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared, sessionId: session.id }));
   return { cleared };
 }
 
@@ -473,13 +720,11 @@ export async function rewindAgentChat(
   ctx: AppContext,
   agentId: string,
   body: RewindChatRequest,
+  sessionId?: string,
 ): Promise<RewindChatResponse> {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
   if (agent.archivedAt) throw new Error('Cannot rewind chat for archived agent');
-  if (agent.status === 'running') {
-    throw new Error('Cannot rewind chat while the agent is running. Stop it first.');
-  }
 
   const target = ctx.repos.messages.getById(agentId, body.messageId);
   if (!target) throw new Error('Message not found');
@@ -487,7 +732,12 @@ export async function rewindAgentChat(
     throw new Error('Rewind is only supported from a user message');
   }
 
-  const all = ctx.repos.messages.listByAgent(agentId);
+  const session = requireSession(ctx, agentId, sessionId ?? target.sessionId);
+  if (session.status === 'running') {
+    throw new Error('Cannot rewind chat while the session is running. Stop it first.');
+  }
+
+  const all = ctx.repos.messages.listBySession(session.id);
   const index = all.findIndex((item) => item.id === body.messageId);
   if (index < 0) throw new Error('Message not found');
   const dropped = all.slice(index);
@@ -497,15 +747,17 @@ export async function rewindAgentChat(
 
   await cleanupMessageAttachments(dropped);
 
-  ctx.repos.agents.update({
-    ...agent,
+  ctx.repos.sessions.update({
+    ...session,
     claudeSessionId: null,
     updatedAt: nowIso(),
   });
+  syncAgentFromSessions(ctx, agentId);
   ctx.repos.events.create(
     makeEvent(agentId, 'chat_rewound', {
       messageId: body.messageId,
       removed,
+      sessionId: session.id,
     }),
   );
 
@@ -529,10 +781,31 @@ async function cleanupMessageAttachments(messages: Message[]): Promise<void> {
   }
 }
 
-export function listPendingPermissions(ctx: AppContext, agentId: string): PermissionRequest[] {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
-  return ctx.claude.listPendingPermissions(agentId).map((item) => ({
+function resolvePermissionSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string | undefined,
+  requestId?: string,
+): ChatSession {
+  if (sessionId) return requireSession(ctx, agentId, sessionId);
+  if (requestId) {
+    for (const session of ctx.repos.sessions.listByAgent(agentId)) {
+      if (ctx.claude.listPendingPermissions(session.id).some((item) => item.requestId === requestId)) {
+        return session;
+      }
+    }
+  }
+  return requireSession(ctx, agentId);
+}
+
+export function listPendingPermissions(
+  ctx: AppContext,
+  agentId: string,
+  sessionId?: string,
+): PermissionRequest[] {
+  requireAgent(ctx, agentId);
+  const session = requireSession(ctx, agentId, sessionId);
+  return ctx.claude.listPendingPermissions(session.id).map((item) => ({
     requestId: item.requestId,
     toolName: item.toolName,
     input: item.input,
@@ -545,12 +818,13 @@ export async function answerAskUserQuestion(
   ctx: AppContext,
   agentId: string,
   body: AnswerAskUserQuestionRequest,
+  sessionId?: string,
 ): Promise<{ ok: true }> {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
+  requireAgent(ctx, agentId);
+  const session = resolvePermissionSession(ctx, agentId, sessionId, body.requestId);
 
   const pending = ctx.claude
-    .listPendingPermissions(agentId)
+    .listPendingPermissions(session.id)
     .find((item) => item.requestId === body.requestId);
   if (!pending) throw new Error('Permission request not found');
   if (pending.toolName !== 'AskUserQuestion') {
@@ -564,7 +838,7 @@ export async function answerAskUserQuestion(
     response: body.response,
   });
 
-  const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
+  const ok = ctx.claude.respondToPermission(session.id, body.requestId, {
     behavior: 'allow',
     updatedInput,
   });
@@ -575,6 +849,7 @@ export async function answerAskUserQuestion(
       requestId: body.requestId,
       answers: body.answers,
       response: body.response ?? null,
+      sessionId: session.id,
     }),
   );
   return { ok: true };
@@ -584,12 +859,13 @@ export async function allowPermissionRequest(
   ctx: AppContext,
   agentId: string,
   body: AllowPermissionRequest,
+  sessionId?: string,
 ): Promise<{ ok: true }> {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
+  requireAgent(ctx, agentId);
+  const session = resolvePermissionSession(ctx, agentId, sessionId, body.requestId);
 
   const pending = ctx.claude
-    .listPendingPermissions(agentId)
+    .listPendingPermissions(session.id)
     .find((item) => item.requestId === body.requestId);
   if (!pending) throw new Error('Permission request not found');
   if (pending.toolName === 'AskUserQuestion') {
@@ -599,7 +875,7 @@ export async function allowPermissionRequest(
     throw new Error('Use Build to approve ExitPlanMode (avoids CLI stdio hang)');
   }
 
-  const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
+  const ok = ctx.claude.respondToPermission(session.id, body.requestId, {
     behavior: 'allow',
     updatedInput: body.updatedInput ?? pending.input,
   });
@@ -609,6 +885,7 @@ export async function allowPermissionRequest(
     makeEvent(agentId, 'permission_allowed', {
       requestId: body.requestId,
       toolName: pending.toolName,
+      sessionId: session.id,
     }),
   );
   return { ok: true };
@@ -618,12 +895,13 @@ export async function denyPermissionRequest(
   ctx: AppContext,
   agentId: string,
   body: DenyPermissionRequest,
+  sessionId?: string,
 ): Promise<{ ok: true }> {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
+  requireAgent(ctx, agentId);
+  const session = resolvePermissionSession(ctx, agentId, sessionId, body.requestId);
 
   const pending = ctx.claude
-    .listPendingPermissions(agentId)
+    .listPendingPermissions(session.id)
     .find((item) => item.requestId === body.requestId);
 
   const message = body.message?.trim() || 'User declined this request. Continue planning.';
@@ -631,20 +909,21 @@ export async function denyPermissionRequest(
   // ExitPlanMode deny via stdio hangs (deferred tool). Stop the run instead and
   // keep the Claude session so the user can continue planning with a follow-up.
   if (pending?.toolName === 'ExitPlanMode') {
-    ctx.claude.dismissPermission(agentId, body.requestId);
-    await stopClaudeRun(ctx, agentId, agent.pid, agent.runLogPath);
-    markStreamingAssistantStopped(ctx, agentId);
+    ctx.claude.dismissPermission(session.id, body.requestId);
+    await stopClaudeRun(ctx, session);
+    markStreamingAssistantStopped(ctx, agentId, session.id);
     ctx.repos.events.create(
       makeEvent(agentId, 'permission_denied', {
         requestId: body.requestId,
         message,
         toolName: pending.toolName,
+        sessionId: session.id,
       }),
     );
     return { ok: true };
   }
 
-  const ok = ctx.claude.respondToPermission(agentId, body.requestId, {
+  const ok = ctx.claude.respondToPermission(session.id, body.requestId, {
     behavior: 'deny',
     message,
   });
@@ -654,6 +933,7 @@ export async function denyPermissionRequest(
     makeEvent(agentId, 'permission_denied', {
       requestId: body.requestId,
       message,
+      sessionId: session.id,
     }),
   );
   return { ok: true };
@@ -662,17 +942,18 @@ export async function denyPermissionRequest(
 async function resolvePlanText(
   ctx: AppContext,
   agentId: string,
+  session: ChatSession,
   body: BuildPlanRequest,
 ): Promise<string> {
   if (body.plan?.trim()) return body.plan.trim();
 
   if (body.requestId) {
     const pending = ctx.claude
-      .listPendingPermissions(agentId)
+      .listPendingPermissions(session.id)
       .find((item) => item.requestId === body.requestId);
     if (pending) {
       const enriched = enrichPermissionInput('ExitPlanMode', pending.input, {
-        logPath: ctx.claude.getRunningProcess(agentId)?.logPath,
+        logPath: ctx.claude.getRunningProcess(session.id)?.logPath ?? session.runLogPath ?? undefined,
       });
       const fromInput = extractPlanFromInput(enriched);
       if (fromInput) return fromInput;
@@ -690,8 +971,7 @@ async function resolvePlanText(
     }
   }
 
-  // Last resort: use the most recent assistant message as the plan body.
-  const messages = ctx.repos.messages.listByAgent(agentId);
+  const messages = ctx.repos.messages.listBySession(session.id);
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message?.role === 'assistant' && message.content.trim()) {
@@ -703,61 +983,53 @@ async function resolvePlanText(
 }
 
 /**
- * Exit plan mode via Build: stop the current run, clear the session, switch to auto,
- * and start implementing the approved plan.
+ * Exit plan mode via Build: stash the current session, create a new auto-mode
+ * session, and start implementing the approved plan there.
  */
 export async function buildApprovedPlan(
   ctx: AppContext,
   agentId: string,
   body: BuildPlanRequest,
   res: Response,
+  sessionId?: string,
 ): Promise<void> {
   const detail = await getAgentDetail(ctx, agentId);
   if (detail.archivedAt) throw new Error('Cannot build with archived agent');
 
-  const plan = await resolvePlanText(ctx, agentId, body);
+  const planSession = resolvePermissionSession(ctx, agentId, sessionId, body.requestId);
+  const plan = await resolvePlanText(ctx, agentId, planSession, body);
 
   if (body.requestId) {
-    ctx.claude.dismissPermission(agentId, body.requestId);
+    ctx.claude.dismissPermission(planSession.id, body.requestId);
   }
 
-  // Stop any in-flight plan-mode run (avoids ExitPlanMode stdio hang on approve).
-  await stopClaudeRun(ctx, agentId, detail.pid, detail.runLogPath);
+  // Stop the in-flight plan-mode run (avoids ExitPlanMode stdio hang on approve)
+  // but keep its messages and Claude session so the user can return to it.
+  await stopClaudeRun(ctx, planSession);
 
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
-
-  ctx.repos.messages.deleteByAgent(agentId);
-  ctx.repos.agents.update({
-    ...agent,
-    claudeSessionId: null,
+  const agent = requireAgent(ctx, agentId);
+  const buildSession = createSessionForAgent(ctx, agent, {
+    template: 'build',
     permissionMode: 'auto',
-    status: 'idle',
-    pid: null,
-    runLogPath: null,
-    updatedAt: nowIso(),
+    activate: true,
   });
+
   ctx.repos.events.create(
     makeEvent(agentId, 'plan_build_started', {
       requestId: body.requestId ?? null,
       planLength: plan.length,
+      stashedSessionId: planSession.id,
+      sessionId: buildSession.id,
     }),
   );
-
-  const implementPrompt = [
-    'The user approved the following plan. Implement it now in auto mode.',
-    'Do not ask clarifying questions unless blocked. Prefer making progress with sensible defaults.',
-    '',
-    '## Approved plan',
-    '',
-    plan,
-  ].join('\n');
 
   await streamAgentChat(
     ctx,
     agentId,
-    { message: implementPrompt, force: true },
+    { message: buildImplementPlanPrompt(plan), force: true },
     res,
+    buildSession.id,
+    { createdSession: buildSession },
   );
 }
 
@@ -850,16 +1122,6 @@ export async function createAgentPullRequest(
   return pr;
 }
 
-function clearAgentRunFields(agent: Agent, overrides: Partial<Agent> = {}): Agent {
-  return {
-    ...agent,
-    ...overrides,
-    pid: null,
-    runLogPath: null,
-    updatedAt: nowIso(),
-  };
-}
-
 function extractCostUsd(events: Array<{ total_cost_usd?: number; type?: string }>): number | undefined {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const cost = events[i]?.total_cost_usd;
@@ -868,30 +1130,28 @@ function extractCostUsd(events: Array<{ total_cost_usd?: number; type?: string }
   return undefined;
 }
 
-function finalizeAgentRun(
+function finalizeSessionRun(
   ctx: AppContext,
-  agent: Agent,
+  session: ChatSession,
   result: { result: string; sessionId: string | null; events?: Array<{ total_cost_usd?: number }>; stopped?: boolean },
   assistantText: string,
   extras: MessageMetadata = {},
   options: { assistantMessageId?: string; runLogPath?: string | null } = {},
 ): Message {
-  const latest = ctx.repos.agents.getById(agent.id) ?? agent;
-  const runLogPath = options.runLogPath ?? agent.runLogPath;
+  const latest = ctx.repos.sessions.getById(session.id) ?? session;
+  const runLogPath = options.runLogPath ?? session.runLogPath;
   const sameRun =
     (Boolean(runLogPath) && latest.runLogPath === runLogPath) ||
-    (agent.pid != null && latest.pid === agent.pid);
+    (session.pid != null && latest.pid === session.pid);
 
-  // Build / Keep planning may have already started a replacement run. Never
-  // restore the old session id or clear the new pid.
   if (sameRun) {
-    const status = latest.status === 'archived' ? latest.status : 'idle';
-    ctx.repos.agents.update(
-      clearAgentRunFields(latest, {
+    ctx.repos.sessions.update(
+      clearSessionRunFields(latest, {
         claudeSessionId: result.sessionId ?? latest.claudeSessionId,
-        status,
+        status: 'idle',
       }),
     );
+    syncAgentFromSessions(ctx, session.agentId);
   }
 
   const content =
@@ -907,11 +1167,12 @@ function finalizeAgentRun(
 
   const assistantMessageId = options.assistantMessageId;
   if (assistantMessageId) {
-    const existing = ctx.repos.messages.getById(agent.id, assistantMessageId);
+    const existing = ctx.repos.messages.getById(session.agentId, assistantMessageId);
     if (!existing) {
       return {
         id: assistantMessageId,
-        agentId: agent.id,
+        agentId: session.agentId,
+        sessionId: session.id,
         role: 'assistant',
         content: content || (metadata.stopped ? '[stopped]' : '[no output]'),
         attachments: [],
@@ -931,11 +1192,9 @@ function finalizeAgentRun(
     });
   }
 
-  const messages = ctx.repos.messages.listByAgent(agent.id);
+  const messages = ctx.repos.messages.listBySession(session.id);
   const last = messages[messages.length - 1];
 
-  // Prefer updating the in-progress assistant row written during the stream.
-  // Always reuse the last assistant turn so recovery cannot append a duplicate.
   if (last?.role === 'assistant') {
     const updated: Message = {
       ...last,
@@ -952,7 +1211,8 @@ function finalizeAgentRun(
 
   const assistantMessage: Message = {
     id: uuidv4(),
-    agentId: agent.id,
+    agentId: session.agentId,
+    sessionId: session.id,
     role: 'assistant',
     content: content || (metadata.stopped ? '[stopped]' : '[no output]'),
     attachments: [],
@@ -963,8 +1223,14 @@ function finalizeAgentRun(
   return assistantMessage;
 }
 
-function markStreamingAssistantStopped(ctx: AppContext, agentId: string): void {
-  const messages = ctx.repos.messages.listByAgent(agentId);
+function markStreamingAssistantStopped(
+  ctx: AppContext,
+  agentId: string,
+  sessionId?: string,
+): void {
+  const messages = sessionId
+    ? ctx.repos.messages.listBySession(sessionId)
+    : ctx.repos.messages.listByAgent(agentId);
   const last = messages[messages.length - 1];
   if (last?.role !== 'assistant' || !last.metadata?.streaming) return;
   ctx.repos.messages.update({
@@ -1058,21 +1324,14 @@ function sleep(ms: number): Promise<void> {
  * Stop a Claude run and wait until the OS process is gone.
  * Used by Build / Keep planning so a hung ExitPlanMode stdio wait cannot leak.
  */
-async function stopClaudeRun(
-  ctx: AppContext,
-  agentId: string,
-  pid: number | null | undefined,
-  runLogPath?: string | null,
-): Promise<void> {
-  ctx.claude.stop(agentId, pid, runLogPath);
+async function stopClaudeRun(ctx: AppContext, session: ChatSession): Promise<void> {
+  ctx.claude.stop(session.id, session.pid, session.runLogPath);
+  const pid = session.pid;
   if (pid == null) {
-    const afterStop = ctx.repos.agents.getById(agentId);
+    const afterStop = ctx.repos.sessions.getById(session.id);
     if (afterStop && (afterStop.status === 'running' || afterStop.pid != null)) {
-      ctx.repos.agents.update(
-        clearAgentRunFields(afterStop, {
-          status: afterStop.archivedAt ? 'archived' : 'idle',
-        }),
-      );
+      ctx.repos.sessions.update(clearSessionRunFields(afterStop, { status: 'idle' }));
+      syncAgentFromSessions(ctx, session.agentId);
     }
     return;
   }
@@ -1082,13 +1341,10 @@ async function stopClaudeRun(
     await sleep(100);
   }
   await sleep(150);
-  const afterStop = ctx.repos.agents.getById(agentId);
+  const afterStop = ctx.repos.sessions.getById(session.id);
   if (afterStop && (afterStop.status === 'running' || afterStop.pid != null)) {
-    ctx.repos.agents.update(
-      clearAgentRunFields(afterStop, {
-        status: afterStop.archivedAt ? 'archived' : 'idle',
-      }),
-    );
+    ctx.repos.sessions.update(clearSessionRunFields(afterStop, { status: 'idle' }));
+    syncAgentFromSessions(ctx, session.agentId);
   }
 }
 
@@ -1097,25 +1353,27 @@ async function stopClaudeRun(
  * Completes message/session persistence when those runs finish.
  */
 export function recoverRunningAgents(ctx: AppContext): void {
-  const running = ctx.repos.agents.listRunning();
-  for (const agent of running) {
-    void recoverOneAgent(ctx, agent);
+  const running = ctx.repos.sessions.listRunning();
+  for (const session of running) {
+    void recoverOneSession(ctx, session);
   }
 }
 
-async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
-  if (agent.pid == null || !agent.runLogPath) {
-    markStreamingAssistantStopped(ctx, agent.id);
-    ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
+async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise<void> {
+  if (session.pid == null || !session.runLogPath) {
+    markStreamingAssistantStopped(ctx, session.agentId, session.id);
+    ctx.repos.sessions.update(clearSessionRunFields(session, { status: 'idle' }));
+    syncAgentFromSessions(ctx, session.agentId);
     return;
   }
 
-  const messages = ctx.repos.messages.listByAgent(agent.id);
+  const messages = ctx.repos.messages.listBySession(session.id);
   let assistantMessage = messages[messages.length - 1];
   if (assistantMessage?.role !== 'assistant') {
     assistantMessage = {
       id: uuidv4(),
-      agentId: agent.id,
+      agentId: session.agentId,
+      sessionId: session.id,
       role: 'assistant',
       content: '',
       attachments: [],
@@ -1125,8 +1383,6 @@ async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
     ctx.repos.messages.create(assistantMessage);
   }
 
-  // Rebuild from the run log rather than appending onto already-persisted content
-  // (reattach replays historical stream events).
   let assistantText = '';
   let timeline: StreamPart[] = [];
   let lastPersistAt = 0;
@@ -1158,7 +1414,9 @@ async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
       timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
       flushProgress(true);
       if (!meta?.replay) {
-        ctx.repos.events.create(makeEvent(agent.id, event.type, event as Record<string, unknown>));
+        ctx.repos.events.create(
+          makeEvent(session.agentId, event.type, event as Record<string, unknown>),
+        );
       }
     }
   };
@@ -1176,62 +1434,64 @@ async function recoverOneAgent(ctx: AppContext, agent: Agent): Promise<void> {
       toolUseId: request.toolUseId,
       createdAt: nowIso(),
     };
-    const already = ctx.repos.events.listByAgent(agent.id).some(
+    const already = ctx.repos.events.listByAgent(session.agentId).some(
       (item) =>
         item.type === 'permission_request' &&
         String(item.data.requestId ?? '') === request.requestId,
     );
     if (!already) {
       ctx.repos.events.create(
-        makeEvent(agent.id, 'permission_request', payload as unknown as Record<string, unknown>),
+        makeEvent(session.agentId, 'permission_request', payload as unknown as Record<string, unknown>),
       );
     }
   };
 
-  if (!isPidAlive(agent.pid)) {
+  if (!isPidAlive(session.pid)) {
     try {
       const result = await ctx.claude.attachToRun(
-        agent.id,
-        { pid: agent.pid, logPath: agent.runLogPath },
+        session.id,
+        { pid: session.pid, logPath: session.runLogPath },
         {
-          sessionId: agent.claudeSessionId,
-          permissionMode: agent.permissionMode,
+          sessionId: session.claudeSessionId,
+          permissionMode: session.permissionMode,
           onEvent,
         },
       );
       flushProgress(true);
-      finalizeAgentRun(ctx, agent, result, assistantText, { timeline }, {
+      finalizeSessionRun(ctx, session, result, assistantText, { timeline }, {
         assistantMessageId: assistantMessage.id,
-        runLogPath: agent.runLogPath,
+        runLogPath: session.runLogPath,
       });
     } catch {
-      markStreamingAssistantStopped(ctx, agent.id);
-      ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
+      markStreamingAssistantStopped(ctx, session.agentId, session.id);
+      ctx.repos.sessions.update(clearSessionRunFields(session, { status: 'idle' }));
+      syncAgentFromSessions(ctx, session.agentId);
     }
     return;
   }
 
   try {
     const result = await ctx.claude.attachToRun(
-      agent.id,
-      { pid: agent.pid, logPath: agent.runLogPath },
+      session.id,
+      { pid: session.pid, logPath: session.runLogPath },
       {
-        sessionId: agent.claudeSessionId,
-        permissionMode: agent.permissionMode,
+        sessionId: session.claudeSessionId,
+        permissionMode: session.permissionMode,
         onEvent,
         onPermissionRequest,
         onCatchUp: () => flushProgress(true),
       },
     );
     flushProgress(true);
-    finalizeAgentRun(ctx, agent, result, assistantText, { timeline }, {
+    finalizeSessionRun(ctx, session, result, assistantText, { timeline }, {
       assistantMessageId: assistantMessage.id,
-      runLogPath: agent.runLogPath,
+      runLogPath: session.runLogPath,
     });
   } catch (error) {
-    console.error(`Failed to recover agent ${agent.id}:`, error);
-    markStreamingAssistantStopped(ctx, agent.id);
-    ctx.repos.agents.update(clearAgentRunFields(agent, { status: 'idle' }));
+    console.error(`Failed to recover session ${session.id}:`, error);
+    markStreamingAssistantStopped(ctx, session.agentId, session.id);
+    ctx.repos.sessions.update(clearSessionRunFields(session, { status: 'idle' }));
+    syncAgentFromSessions(ctx, session.agentId);
   }
 }
 
@@ -1240,11 +1500,15 @@ export async function streamAgentChat(
   agentId: string,
   body: ChatRequest,
   res: Response,
+  sessionId?: string,
+  options: { createdSession?: ChatSession } = {},
 ) {
   const detail = await getAgentDetail(ctx, agentId);
   if (detail.archivedAt) {
     throw new Error('Cannot chat with archived agent');
   }
+
+  const session = options.createdSession ?? requireSession(ctx, agentId, sessionId);
 
   const force = Boolean(body.force);
   const message = body.message.trim();
@@ -1252,12 +1516,12 @@ export async function streamAgentChat(
     throw new Error('Message or image attachment required');
   }
 
-  if (detail.status === 'running' && detail.pid != null) {
+  if (session.status === 'running' && session.pid != null) {
     if (!force) {
-      throw new Error('Agent already has a running Claude process. Queue the message or force-send.');
+      throw new Error('Session already has a running Claude process. Queue the message or force-send.');
     }
-    await stopClaudeRun(ctx, agentId, detail.pid, detail.runLogPath);
-    markStreamingAssistantStopped(ctx, agentId);
+    await stopClaudeRun(ctx, session);
+    markStreamingAssistantStopped(ctx, agentId, session.id);
   }
 
   const attachments = await saveChatImages(ctx, agentId, body.images);
@@ -1265,6 +1529,7 @@ export async function streamAgentChat(
   const userMessage: Message = {
     id: uuidv4(),
     agentId,
+    sessionId: session.id,
     role: 'user',
     content: message || '(image attachment)',
     attachments,
@@ -1276,6 +1541,7 @@ export async function streamAgentChat(
   let assistantMessage: Message = {
     id: uuidv4(),
     agentId,
+    sessionId: session.id,
     role: 'assistant',
     content: '',
     attachments: [],
@@ -1289,7 +1555,6 @@ export async function streamAgentChat(
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  // SSE disconnect / server shutdown must NOT kill the Claude process.
   let clientOpen = true;
   res.on('close', () => {
     clientOpen = false;
@@ -1304,15 +1569,17 @@ export async function streamAgentChat(
     }
   };
 
+  send('session', session);
   send('user_message', userMessage);
   send('assistant_message', assistantMessage);
 
-  let runningAgent: Agent = {
-    ...(ctx.repos.agents.getById(agentId) ?? detail),
+  let runningSession: ChatSession = {
+    ...(ctx.repos.sessions.getById(session.id) ?? session),
     status: 'running',
     updatedAt: nowIso(),
   };
-  ctx.repos.agents.update(runningAgent);
+  ctx.repos.sessions.update(runningSession);
+  syncAgentFromSessions(ctx, agentId);
 
   let assistantText = '';
   let timeline: StreamPart[] = [];
@@ -1327,22 +1594,23 @@ export async function streamAgentChat(
   };
 
   try {
-    const result = await ctx.claude.runStreaming(agentId, {
+    const result = await ctx.claude.runStreaming(runningSession.id, {
       cwd: detail.worktree.path,
       prompt: userMessage.content,
-      model: runningAgent.model,
-      effort: runningAgent.effort,
-      permissionMode: runningAgent.permissionMode,
-      sessionId: runningAgent.claudeSessionId,
+      model: runningSession.model,
+      effort: runningSession.effort,
+      permissionMode: runningSession.permissionMode,
+      sessionId: runningSession.claudeSessionId,
       imagePaths: attachments.map((item) => item.path),
       onStarted: (handle) => {
-        runningAgent = {
-          ...runningAgent,
+        runningSession = {
+          ...runningSession,
           pid: handle.pid,
           runLogPath: handle.logPath,
           updatedAt: nowIso(),
         };
-        ctx.repos.agents.update(runningAgent);
+        ctx.repos.sessions.update(runningSession);
+        syncAgentFromSessions(ctx, agentId);
       },
       onPermissionRequest: (request) => {
         const payload: PermissionRequest = {
@@ -1353,7 +1621,10 @@ export async function streamAgentChat(
           createdAt: nowIso(),
         };
         ctx.repos.events.create(
-          makeEvent(agentId, 'permission_request', payload as unknown as Record<string, unknown>),
+          makeEvent(agentId, 'permission_request', {
+            ...payload,
+            sessionId: runningSession.id,
+          } as unknown as Record<string, unknown>),
         );
         send('permission_request', payload);
       },
@@ -1377,9 +1648,9 @@ export async function streamAgentChat(
     });
 
     flushProgress(true);
-    const finalized = finalizeAgentRun(
+    const finalized = finalizeSessionRun(
       ctx,
-      runningAgent,
+      runningSession,
       result,
       assistantText,
       {
@@ -1389,20 +1660,20 @@ export async function streamAgentChat(
       },
       {
         assistantMessageId: assistantMessage.id,
-        runLogPath: runningAgent.runLogPath,
+        runLogPath: runningSession.runLogPath,
       },
     );
-    send('done', { message: finalized, sessionId: result.sessionId });
+    send('done', { message: finalized, sessionId: result.sessionId, chatSessionId: runningSession.id });
   } catch (error) {
-    const current = ctx.repos.agents.getById(agentId) ?? runningAgent;
+    const current = ctx.repos.sessions.getById(runningSession.id) ?? runningSession;
     const errMessage = error instanceof Error ? error.message : 'Unknown error';
     flushProgress(true);
 
     if (assistantText.trim() || timeline.length > 0) {
-      const partial = finalizeAgentRun(
+      const partial = finalizeSessionRun(
         ctx,
-        runningAgent,
-        { result: assistantText, sessionId: runningAgent.claudeSessionId, stopped: true },
+        runningSession,
+        { result: assistantText, sessionId: runningSession.claudeSessionId, stopped: true },
         assistantText,
         {
           error: errMessage,
@@ -1412,21 +1683,24 @@ export async function streamAgentChat(
         },
         {
           assistantMessageId: assistantMessage.id,
-          runLogPath: runningAgent.runLogPath,
+          runLogPath: runningSession.runLogPath,
         },
       );
-      send('done', { message: partial, sessionId: current.claudeSessionId });
+      send('done', {
+        message: partial,
+        sessionId: current.claudeSessionId,
+        chatSessionId: runningSession.id,
+      });
     } else {
-      // Remove empty placeholder assistant row on hard failure before any output.
-      // Skip if Build already cleared this turn — deleteFrom would also drop later messages.
       if (ctx.repos.messages.getById(agentId, assistantMessage.id)) {
         ctx.repos.messages.deleteFrom(agentId, assistantMessage.id);
       }
       if (
-        current.runLogPath === runningAgent.runLogPath ||
-        (runningAgent.pid != null && current.pid === runningAgent.pid)
+        current.runLogPath === runningSession.runLogPath ||
+        (runningSession.pid != null && current.pid === runningSession.pid)
       ) {
-        ctx.repos.agents.update(clearAgentRunFields(current, { status: 'idle' }));
+        ctx.repos.sessions.update(clearSessionRunFields(current, { status: 'idle' }));
+        syncAgentFromSessions(ctx, agentId);
       }
       send('error', { message: errMessage });
     }

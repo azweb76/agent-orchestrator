@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import type {
   Agent,
   AgentEvent,
+  ChatSession,
+  ChatSessionTemplateId,
   EffortLevel,
   Message,
   MessageAttachment,
@@ -51,12 +53,30 @@ CREATE TABLE IF NOT EXISTS agents (
   run_log_path TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  archived_at TEXT
+  archived_at TEXT,
+  active_session_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  template TEXT NOT NULL DEFAULT 'chat',
+  status TEXT NOT NULL DEFAULT 'idle',
+  model TEXT NOT NULL DEFAULT 'sonnet',
+  effort TEXT NOT NULL DEFAULT 'high',
+  permission_mode TEXT NOT NULL DEFAULT 'plan',
+  claude_session_id TEXT,
+  pid INTEGER,
+  run_log_path TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  session_id TEXT,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
   attachments TEXT NOT NULL DEFAULT '[]',
@@ -74,7 +94,9 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agents_worktree ON agents(worktree_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 `;
 
@@ -90,6 +112,79 @@ function ensureColumn(
   }
 }
 
+function migrateChatSessions(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      template TEXT NOT NULL DEFAULT 'chat',
+      status TEXT NOT NULL DEFAULT 'idle',
+      model TEXT NOT NULL DEFAULT 'sonnet',
+      effort TEXT NOT NULL DEFAULT 'high',
+      permission_mode TEXT NOT NULL DEFAULT 'plan',
+      claude_session_id TEXT,
+      pid INTEGER,
+      run_log_path TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+  `);
+  ensureColumn(db, 'agents', 'active_session_id', 'TEXT');
+  ensureColumn(db, 'messages', 'session_id', 'TEXT');
+
+  const agents = db.prepare('SELECT * FROM agents').all() as Array<Record<string, unknown>>;
+  const sessionCount = db.prepare('SELECT COUNT(*) AS n FROM chat_sessions WHERE agent_id = ?');
+  const insertSession = db.prepare(
+    `INSERT INTO chat_sessions (
+       id, agent_id, title, template, status, model, effort, permission_mode,
+       claude_session_id, pid, run_log_path, created_at, updated_at
+     ) VALUES (
+       @id, @agentId, @title, @template, @status, @model, @effort, @permissionMode,
+       @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt
+     )`,
+  );
+  const setActive = db.prepare('UPDATE agents SET active_session_id = ? WHERE id = ?');
+  const backfillMessages = db.prepare(
+    `UPDATE messages SET session_id = ?
+     WHERE agent_id = ? AND (session_id IS NULL OR session_id = '')`,
+  );
+
+  for (const agent of agents) {
+    const agentId = String(agent.id);
+    const existing = sessionCount.get(agentId) as { n: number };
+    if (existing.n > 0) {
+      const activeId =
+        agent.active_session_id == null ? null : String(agent.active_session_id);
+      if (activeId) backfillMessages.run(activeId, agentId);
+      continue;
+    }
+
+    const sessionId = crypto.randomUUID();
+    const createdAt = String(agent.created_at ?? new Date().toISOString());
+    const updatedAt = String(agent.updated_at ?? createdAt);
+    insertSession.run({
+      id: sessionId,
+      agentId,
+      title: 'Chat',
+      template: 'chat',
+      status: String(agent.status ?? 'idle'),
+      model: String(agent.model ?? 'sonnet'),
+      effort: String(agent.effort ?? 'high'),
+      permissionMode: String(agent.permission_mode ?? 'plan'),
+      claudeSessionId: agent.claude_session_id == null ? null : String(agent.claude_session_id),
+      pid: agent.pid == null ? null : Number(agent.pid),
+      runLogPath: agent.run_log_path == null ? null : String(agent.run_log_path),
+      createdAt,
+      updatedAt,
+    });
+    setActive.run(sessionId, agentId);
+    backfillMessages.run(sessionId, agentId);
+  }
+}
+
 function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'pid', 'INTEGER');
   ensureColumn(db, 'agents', 'run_log_path', 'TEXT');
@@ -97,6 +192,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'effort', "TEXT NOT NULL DEFAULT 'high'");
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
+  migrateChatSessions(db);
 }
 
 export function initDatabase(dataDir: string): Database.Database {
@@ -244,8 +340,8 @@ export class AgentRepository {
   create(agent: Agent): Agent {
     this.db
       .prepare(
-        `INSERT INTO agents (id, worktree_id, name, status, model, effort, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at)
-         VALUES (@id, @worktreeId, @name, @status, @model, @effort, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt)`,
+        `INSERT INTO agents (id, worktree_id, name, status, model, effort, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at, active_session_id)
+         VALUES (@id, @worktreeId, @name, @status, @model, @effort, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt, @activeSessionId)`,
       )
       .run({
         id: agent.id,
@@ -261,6 +357,7 @@ export class AgentRepository {
         createdAt: agent.createdAt,
         updatedAt: agent.updatedAt,
         archivedAt: agent.archivedAt,
+        activeSessionId: agent.activeSessionId,
       });
     return agent;
   }
@@ -336,7 +433,8 @@ export class AgentRepository {
       .prepare(
         `UPDATE agents SET name = @name, status = @status, model = @model, effort = @effort,
          permission_mode = @permissionMode, claude_session_id = @claudeSessionId, pid = @pid,
-         run_log_path = @runLogPath, updated_at = @updatedAt, archived_at = @archivedAt
+         run_log_path = @runLogPath, updated_at = @updatedAt, archived_at = @archivedAt,
+         active_session_id = @activeSessionId
          WHERE id = @id`,
       )
       .run({
@@ -351,8 +449,94 @@ export class AgentRepository {
         runLogPath: agent.runLogPath,
         updatedAt: agent.updatedAt,
         archivedAt: agent.archivedAt,
+        activeSessionId: agent.activeSessionId,
       });
     return agent;
+  }
+}
+
+export class ChatSessionRepository {
+  constructor(private db: Database.Database) {}
+
+  create(session: ChatSession): ChatSession {
+    this.db
+      .prepare(
+        `INSERT INTO chat_sessions (
+           id, agent_id, title, template, status, model, effort, permission_mode,
+           claude_session_id, pid, run_log_path, created_at, updated_at
+         ) VALUES (
+           @id, @agentId, @title, @template, @status, @model, @effort, @permissionMode,
+           @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt
+         )`,
+      )
+      .run({
+        id: session.id,
+        agentId: session.agentId,
+        title: session.title,
+        template: session.template,
+        status: session.status,
+        model: session.model,
+        effort: session.effort,
+        permissionMode: session.permissionMode,
+        claudeSessionId: session.claudeSessionId,
+        pid: session.pid,
+        runLogPath: session.runLogPath,
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      });
+    return session;
+  }
+
+  getById(id: string): ChatSession | null {
+    const row = this.db.prepare('SELECT * FROM chat_sessions WHERE id = ?').get(id);
+    return row ? rowToChatSession(row) : null;
+  }
+
+  listByAgent(agentId: string): ChatSession[] {
+    return this.db
+      .prepare('SELECT * FROM chat_sessions WHERE agent_id = ? ORDER BY created_at ASC')
+      .all(agentId)
+      .map(rowToChatSession);
+  }
+
+  listRunning(): ChatSession[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM chat_sessions
+         WHERE status = 'running'
+         ORDER BY updated_at ASC`,
+      )
+      .all()
+      .map(rowToChatSession);
+  }
+
+  update(session: ChatSession): ChatSession {
+    this.db
+      .prepare(
+        `UPDATE chat_sessions SET title = @title, template = @template, status = @status,
+         model = @model, effort = @effort, permission_mode = @permissionMode,
+         claude_session_id = @claudeSessionId, pid = @pid, run_log_path = @runLogPath,
+         updated_at = @updatedAt
+         WHERE id = @id`,
+      )
+      .run({
+        id: session.id,
+        title: session.title,
+        template: session.template,
+        status: session.status,
+        model: session.model,
+        effort: session.effort,
+        permissionMode: session.permissionMode,
+        claudeSessionId: session.claudeSessionId,
+        pid: session.pid,
+        runLogPath: session.runLogPath,
+        updatedAt: session.updatedAt,
+      });
+    return session;
+  }
+
+  delete(id: string): void {
+    this.db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(id);
   }
 }
 
@@ -362,12 +546,13 @@ export class MessageRepository {
   create(message: Message): Message {
     this.db
       .prepare(
-        `INSERT INTO messages (id, agent_id, role, content, attachments, metadata, created_at)
-         VALUES (@id, @agentId, @role, @content, @attachments, @metadata, @createdAt)`,
+        `INSERT INTO messages (id, agent_id, session_id, role, content, attachments, metadata, created_at)
+         VALUES (@id, @agentId, @sessionId, @role, @content, @attachments, @metadata, @createdAt)`,
       )
       .run({
         id: message.id,
         agentId: message.agentId,
+        sessionId: message.sessionId,
         role: message.role,
         content: message.content,
         attachments: JSON.stringify(message.attachments ?? []),
@@ -400,6 +585,13 @@ export class MessageRepository {
       .map(rowToMessage);
   }
 
+  listBySession(sessionId: string): Message[] {
+    return this.db
+      .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC')
+      .all(sessionId)
+      .map(rowToMessage);
+  }
+
   getById(agentId: string, messageId: string): Message | null {
     const row = this.db
       .prepare('SELECT * FROM messages WHERE agent_id = ? AND id = ?')
@@ -408,15 +600,17 @@ export class MessageRepository {
   }
 
   /**
-   * Delete the given message and every later message for the agent
+   * Delete the given message and every later message in the same session
    * (ordered by created_at, then id).
    */
   deleteFrom(agentId: string, messageId: string): { removed: number; target: Message | null } {
-    const messages = this.listByAgent(agentId);
+    const target = this.getById(agentId, messageId);
+    if (!target) return { removed: 0, target: null };
+
+    const messages = this.listBySession(target.sessionId);
     const index = messages.findIndex((item) => item.id === messageId);
     if (index < 0) return { removed: 0, target: null };
 
-    const target = messages[index]!;
     const toDelete = messages.slice(index);
     const ids = toDelete.map((item) => item.id);
     const placeholders = ids.map(() => '?').join(', ');
@@ -428,6 +622,11 @@ export class MessageRepository {
 
   deleteByAgent(agentId: string): number {
     const result = this.db.prepare('DELETE FROM messages WHERE agent_id = ?').run(agentId);
+    return result.changes;
+  }
+
+  deleteBySession(sessionId: string): number {
+    const result = this.db.prepare('DELETE FROM messages WHERE session_id = ?').run(sessionId);
     return result.changes;
   }
 
@@ -520,9 +719,43 @@ function rowToAgent(row: unknown): Agent {
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
     pid: r.pid == null ? null : Number(r.pid),
     runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
+    activeSessionId: r.active_session_id == null ? null : String(r.active_session_id),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
     archivedAt: r.archived_at == null ? null : String(r.archived_at),
+  };
+}
+
+const SESSION_TEMPLATES = new Set<ChatSessionTemplateId>([
+  'chat',
+  'build',
+  'create-draft-pr',
+  'review',
+]);
+
+function parseSessionTemplate(value: unknown): ChatSessionTemplateId {
+  const raw = typeof value === 'string' ? value : '';
+  return SESSION_TEMPLATES.has(raw as ChatSessionTemplateId)
+    ? (raw as ChatSessionTemplateId)
+    : 'chat';
+}
+
+function rowToChatSession(row: unknown): ChatSession {
+  const r = row as Record<string, unknown>;
+  return {
+    id: String(r.id),
+    agentId: String(r.agent_id),
+    title: String(r.title),
+    template: parseSessionTemplate(r.template),
+    status: r.status as ChatSession['status'],
+    model: String(r.model),
+    effort: parseEffort(r.effort),
+    permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
+    claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
+    pid: r.pid == null ? null : Number(r.pid),
+    runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
   };
 }
 
@@ -542,6 +775,7 @@ function rowToMessage(row: unknown): Message {
   return {
     id: String(r.id),
     agentId,
+    sessionId: r.session_id == null ? '' : String(r.session_id),
     role: r.role as Message['role'],
     content: String(r.content),
     attachments,
@@ -565,6 +799,7 @@ export type AppRepositories = {
   workspaces: WorkspaceRepository;
   worktrees: WorktreeRepository;
   agents: AgentRepository;
+  sessions: ChatSessionRepository;
   messages: MessageRepository;
   events: EventRepository;
 };
@@ -574,6 +809,7 @@ export function createRepositories(db: Database.Database): AppRepositories {
     workspaces: new WorkspaceRepository(db),
     worktrees: new WorktreeRepository(db),
     agents: new AgentRepository(db),
+    sessions: new ChatSessionRepository(db),
     messages: new MessageRepository(db),
     events: new EventRepository(db),
   };

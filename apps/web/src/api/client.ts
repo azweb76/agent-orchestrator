@@ -8,7 +8,9 @@ import type {
   ArchiveAgentRequest,
   ArchiveAgentResponse,
   BuildPlanRequest,
+  ChatSession,
   CreateAgentFromPrRequest,
+  CreateChatSessionRequest,
   CreatePrRequest,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromIdeaRequest,
@@ -35,6 +37,7 @@ import type {
   SlashCommand,
   SuggestBranchNameResponse,
   UpdateAgentRequest,
+  UpdateChatSessionRequest,
   UpdatePullRequestBranchRequest,
   UpdatePullRequestBranchResponse,
   Worktree,
@@ -166,11 +169,29 @@ export const api = {
     }),
   pruneArchivedAgents: () =>
     request<PruneArchivedAgentsResponse>('/agents/prune-archived', { method: 'POST' }),
-  getMessages: (agentId: string) => request<Message[]>(`/agents/${agentId}/messages`),
-  clearMessages: (agentId: string) =>
-    request<{ cleared: number }>(`/agents/${agentId}/messages`, { method: 'DELETE' }),
-  rewindMessages: (agentId: string, messageId: string) =>
-    request<RewindChatResponse>(`/agents/${agentId}/messages/rewind`, {
+  listSessions: (agentId: string) => request<ChatSession[]>(`/agents/${agentId}/sessions`),
+  createSession: (agentId: string, body: CreateChatSessionRequest = {}) =>
+    request<{ session: ChatSession; kickoffPrompt: string | null }>(
+      `/agents/${agentId}/sessions`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  updateSession: (agentId: string, sessionId: string, body: UpdateChatSessionRequest) =>
+    request<ChatSession>(`/agents/${agentId}/sessions/${sessionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  activateSession: (agentId: string, sessionId: string) =>
+    request<AgentDetail>(`/agents/${agentId}/sessions/${sessionId}/activate`, { method: 'POST' }),
+  stopSession: (agentId: string, sessionId: string) =>
+    request<Agent>(`/agents/${agentId}/sessions/${sessionId}/stop`, { method: 'POST' }),
+  getMessages: (agentId: string, sessionId: string) =>
+    request<Message[]>(`/agents/${agentId}/sessions/${sessionId}/messages`),
+  clearMessages: (agentId: string, sessionId: string) =>
+    request<{ cleared: number }>(`/agents/${agentId}/sessions/${sessionId}/messages`, {
+      method: 'DELETE',
+    }),
+  rewindMessages: (agentId: string, sessionId: string, messageId: string) =>
+    request<RewindChatResponse>(`/agents/${agentId}/sessions/${sessionId}/messages/rewind`, {
       method: 'POST',
       body: JSON.stringify({ messageId }),
     }),
@@ -179,20 +200,20 @@ export const api = {
     request<AgentDiff>(`/agents/${agentId}/diff?scope=${encodeURIComponent(scope)}`),
   listSlashCommands: (agentId: string) =>
     request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),
-  listPendingPermissions: (agentId: string) =>
-    request<PermissionRequest[]>(`/agents/${agentId}/permissions`),
-  answerPermission: (agentId: string, body: AnswerAskUserQuestionRequest) =>
-    request<{ ok: true }>(`/agents/${agentId}/permissions/answer`, {
+  listPendingPermissions: (agentId: string, sessionId: string) =>
+    request<PermissionRequest[]>(`/agents/${agentId}/sessions/${sessionId}/permissions`),
+  answerPermission: (agentId: string, sessionId: string, body: AnswerAskUserQuestionRequest) =>
+    request<{ ok: true }>(`/agents/${agentId}/sessions/${sessionId}/permissions/answer`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  allowPermission: (agentId: string, body: AllowPermissionRequest) =>
-    request<{ ok: true }>(`/agents/${agentId}/permissions/allow`, {
+  allowPermission: (agentId: string, sessionId: string, body: AllowPermissionRequest) =>
+    request<{ ok: true }>(`/agents/${agentId}/sessions/${sessionId}/permissions/allow`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  denyPermission: (agentId: string, body: DenyPermissionRequest) =>
-    request<{ ok: true }>(`/agents/${agentId}/permissions/deny`, {
+  denyPermission: (agentId: string, sessionId: string, body: DenyPermissionRequest) =>
+    request<{ ok: true }>(`/agents/${agentId}/sessions/${sessionId}/permissions/deny`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),
@@ -209,7 +230,8 @@ export interface ChatStreamHandlers {
   onPermissionRequest?: (request: PermissionRequest) => void;
   onUserMessage?: (message: Message) => void;
   onAssistantMessage?: (message: Message) => void;
-  onDone: (payload: { message: Message; sessionId: string | null }) => void;
+  onSession?: (session: ChatSession) => void;
+  onDone: (payload: { message: Message; sessionId: string | null; chatSessionId?: string }) => void;
   onError: (message: string) => void;
 }
 
@@ -266,8 +288,10 @@ async function consumeChatSse(
         handlers.onUserMessage?.(data as unknown as Message);
       } else if (eventType === 'assistant_message') {
         handlers.onAssistantMessage?.(data as unknown as Message);
+      } else if (eventType === 'session') {
+        handlers.onSession?.(data as unknown as ChatSession);
       } else if (eventType === 'done') {
-        handlers.onDone(data as { message: Message; sessionId: string | null });
+        handlers.onDone(data as { message: Message; sessionId: string | null; chatSessionId?: string });
       } else if (eventType === 'error') {
         handlers.onError(String(data.message ?? 'Unknown error'));
       }
@@ -277,11 +301,12 @@ async function consumeChatSse(
 
 export async function streamChat(
   agentId: string,
+  sessionId: string,
   options: StreamChatOptions,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/agents/${agentId}/chat`, {
+  const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -295,19 +320,23 @@ export async function streamChat(
   await consumeChatSse(response, handlers);
 }
 
-/** Clear session, switch to auto, and stream implementation of an approved plan. */
+/** Stash the plan session, create a Build session, and stream implementation. */
 export async function streamBuildPlan(
   agentId: string,
+  sessionId: string,
   body: BuildPlanRequest,
   handlers: ChatStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/agents/${agentId}/permissions/build`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  });
+  const response = await fetch(
+    `${API_BASE}/agents/${agentId}/sessions/${sessionId}/permissions/build`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
 
   await consumeChatSse(response, handlers);
 }

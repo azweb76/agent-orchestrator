@@ -405,6 +405,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function waitForSpawn(proc: ChildProcess): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const swallowLaterErrors = () => {
+      proc.on('error', () => {
+        // Detached stdio errors must not crash the orchestrator.
+      });
+    };
+    const onError = (error: Error) => {
+      proc.off('spawn', onSpawn);
+      swallowLaterErrors();
+      reject(error);
+    };
+    const onSpawn = () => {
+      proc.off('error', onError);
+      swallowLaterErrors();
+      resolve();
+    };
+    proc.once('error', onError);
+    proc.once('spawn', onSpawn);
+  });
+}
+
 /** Sidecar FIFO + holder pid used so Claude stdin survives orchestrator restart. */
 export function stdinPathsForLog(logPath: string): { fifoPath: string; holderPidPath: string } {
   const base = logPath.replace(/\.log$/, '');
@@ -716,7 +738,7 @@ export class ClaudeService {
 
   async runStreaming(agentId: string, options: ClaudeRunOptions): Promise<ClaudeRunResult> {
     if (this.running.has(agentId)) {
-      throw new Error('Agent already has a running Claude process');
+      throw new Error('This chat session already has a running Claude process');
     }
 
     const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
@@ -760,15 +782,35 @@ export class ClaudeService {
       closeSync(stdinReadFd);
     }
 
-    if (proc.pid == null) {
+    // Listen before the next tick so a missing binary cannot become an uncaughtException.
+    const spawned = waitForSpawn(proc);
+    proc.unref();
+
+    const failToStart = (error?: unknown): never => {
       closeSync(readyFd);
+      if (proc.pid != null) {
+        try {
+          killProcessTree(proc.pid);
+        } catch {
+          // ignore
+        }
+      }
       killStdinHolder(holderPid);
       cleanupStdinSidecars(logPath);
-      throw new Error('Failed to start Claude process');
-    }
+      const detail = error instanceof Error ? error.message : 'unknown spawn error';
+      throw new Error(`Failed to start Claude process: ${detail}`);
+    };
 
-    // Allow the Node event loop to exit without waiting on this handle; the OS process keeps running.
-    proc.unref();
+    const spawnedPid = proc.pid;
+    if (spawnedPid == null) {
+      try {
+        await spawned;
+      } catch (error) {
+        failToStart(error);
+      }
+      failToStart();
+    }
+    const pid: number = spawnedPid as number;
 
     let stdin: NodeJS.WritableStream | undefined;
     try {
@@ -781,7 +823,7 @@ export class ClaudeService {
       } catch {
         // ignore
       }
-      killProcessTree(proc.pid);
+      killProcessTree(pid);
       killStdinHolder(holderPid);
       cleanupStdinSidecars(logPath);
       throw error instanceof Error ? error : new Error('Failed to write prompt to Claude stdin');
@@ -789,7 +831,7 @@ export class ClaudeService {
 
     closeSync(readyFd);
 
-    const handle: ClaudeRunHandle = { pid: proc.pid, logPath };
+    const handle: ClaudeRunHandle = { pid, logPath };
     this.running.set(agentId, {
       ...handle,
       proc,
@@ -801,6 +843,26 @@ export class ClaudeService {
       permissionMode,
     });
     options.onStarted?.(handle);
+
+    try {
+      await spawned;
+    } catch (error) {
+      try {
+        stdin.end();
+      } catch {
+        // ignore
+      }
+      this.running.delete(agentId);
+      try {
+        killProcessTree(pid);
+      } catch {
+        // ignore
+      }
+      killStdinHolder(holderPid);
+      cleanupStdinSidecars(logPath);
+      const detail = error instanceof Error ? error.message : 'unknown spawn error';
+      throw new Error(`Failed to start Claude process: ${detail}`);
+    }
 
     return this.monitorRun(agentId, handle, options.sessionId ?? null, options, options.signal);
   }
