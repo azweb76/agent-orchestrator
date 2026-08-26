@@ -41,6 +41,7 @@ import type {
   PullRequestChecks,
   PullRequestDetail,
   PullRequestInbox,
+  SessionContextUsage,
   SetPullRequestStateRequest,
   UpdateAgentRequest,
   UpdateChatSessionRequest,
@@ -55,6 +56,7 @@ import {
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
   buildImplementPlanPrompt,
+  buildSessionContextUsage,
   chatSessionTemplateById,
   uniqueSessionTitle,
 } from '@agent-orchestrator/shared';
@@ -73,7 +75,7 @@ import {
   type InstructionFileRoots,
 } from '../services/instruction-files.js';
 import { buildSessionGradeContext } from '../services/session-grade.js';
-import { resolveClaudeSessionFilePath, readClaudeSessionFile } from '../services/claude-session-file.js';
+import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionContext } from '../services/claude-session-file.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -951,6 +953,36 @@ export function getAgentMessages(
 ): Message[] {
   const session = requireSession(ctx, agentId, sessionId);
   return ctx.repos.messages.listBySession(session.id);
+}
+
+export async function getAgentSessionContext(
+  ctx: AppContext,
+  agentId: string,
+  sessionId?: string,
+): Promise<SessionContextUsage> {
+  const session = requireSession(ctx, agentId, sessionId);
+  const roots = instructionRoots(ctx, agentId);
+  const sessionFilePath = resolveClaudeSessionFilePath({
+    cwd: roots.worktreePath,
+    sessionId: session.claudeSessionId,
+    runLogPath: session.runLogPath,
+  });
+  if (!sessionFilePath) {
+    return buildSessionContextUsage({
+      fallbackModel: session.model,
+      history: [],
+      sessionFilePath: null,
+    });
+  }
+  const parsed = await readClaudeSessionContext(sessionFilePath);
+  return buildSessionContextUsage({
+    model: parsed.model,
+    fallbackModel: session.model,
+    history: parsed.history,
+    billed: parsed.billed,
+    costUsd: parsed.costUsd,
+    sessionFilePath,
+  });
 }
 
 export async function clearAgentChat(

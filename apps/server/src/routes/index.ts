@@ -26,6 +26,7 @@ import {
   getAgentDiff,
   getAgentEvents,
   getAgentMessages,
+  getAgentSessionContext,
   getPullRequestChecks,
   getPullRequestComments,
   getPullRequestCommits,
@@ -540,6 +541,19 @@ export function createRouter(ctx: AppContext): express.Router {
     '/agents/:agentId/sessions/:sessionId/messages',
     asyncHandler(async (req, res) => {
       res.json(getAgentMessages(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/sessions/:sessionId/context',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await getAgentSessionContext(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+        ),
+      );
     }),
   );
 

@@ -1133,6 +1133,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
 
           <ChatComposer
             agentId={agentId}
+            sessionId={activeSessionId}
             archived={archived}
             isStreaming={sessionBusy}
             model={session?.model ?? agent.model}

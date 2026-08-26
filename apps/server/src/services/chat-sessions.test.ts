@@ -17,6 +17,7 @@ import {
   deleteAgentSession,
   getAgentDetail,
   getAgentMessages,
+  getAgentSessionContext,
   streamAgentChat,
   type AppContext,
 } from './app.js';
@@ -552,6 +553,63 @@ rl.on('line', (line) => {
     );
     assert.equal(explore?.type === 'tool' && explore.status, 'done');
     assert.match((explore && explore.type === 'tool' && explore.detail) || '', /No nested guidance|Conflicts are in src\/merge/);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('getAgentSessionContext returns empty usage when no session file exists', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-ctx-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('plan-sess')!,
+      claudeSessionId: `missing-${Date.now()}`,
+    });
+    const usage = await getAgentSessionContext(ctx, agent.id, 'plan-sess');
+    assert.equal(usage.currentContextTokens, 0);
+    assert.equal(usage.history.length, 0);
+    assert.equal(usage.contextWindowTokens, 200_000);
+    assert.equal(usage.sessionFilePath, null);
+    assert.equal(usage.model, 'sonnet');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('getAgentSessionContext reads occupancy from the Claude session file', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-ctx-file-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const session = ctx.repos.sessions.getById('plan-sess')!;
+    const sessionFile = path.join(tmp, 'runs', 'claude-plan.jsonl');
+    await fs.mkdir(path.dirname(sessionFile), { recursive: true });
+    await fs.writeFile(
+      sessionFile,
+      `${JSON.stringify({
+        type: 'assistant',
+        message: {
+          model: 'claude-sonnet-4-20250514',
+          content: [{ type: 'text', text: 'Working' }],
+          usage: {
+            input_tokens: 80,
+            output_tokens: 12,
+            cache_read_input_tokens: 1500,
+          },
+        },
+      })}\n`,
+    );
+    ctx.repos.sessions.update({
+      ...session,
+      claudeSessionId: `ao-test-${Date.now()}`,
+      runLogPath: sessionFile,
+    });
+
+    const usage = await getAgentSessionContext(ctx, agent.id, 'plan-sess');
+    assert.equal(usage.currentContextTokens, 1580);
+    assert.equal(usage.history.length, 1);
+    assert.equal(usage.usage?.cacheReadInputTokens, 1500);
+    assert.equal(usage.sessionFilePath, sessionFile);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

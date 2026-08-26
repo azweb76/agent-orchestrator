@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
+import { buildSessionContextUsage } from '@agent-orchestrator/shared';
 import {
   encodeClaudeProjectDir,
+  parseClaudeSessionContext,
   parseClaudeSessionFile,
   resolveClaudeSessionFilePath,
 } from './claude-session-file.js';
@@ -200,5 +202,133 @@ describe('parseClaudeSessionFile', () => {
     );
     assert.equal(parsed.messages.length, 1);
     assert.equal(parsed.messages[0]?.content, 'Done');
+  });
+});
+
+describe('parseClaudeSessionContext', () => {
+  it('tracks per-turn context size, cache buckets, compact, and skips nested subagents', () => {
+    const parsed = parseClaudeSessionContext(
+      [
+        JSON.stringify({
+          type: 'system',
+          subtype: 'init',
+          model: 'claude-sonnet-4-20250514',
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: '2026-08-26T12:00:00.000Z',
+          message: {
+            model: 'claude-sonnet-4-20250514',
+            content: [
+              { type: 'text', text: 'Reading files' },
+              { type: 'tool_use', id: '1', name: 'Read', input: { file_path: 'src/a.ts' } },
+            ],
+            usage: {
+              input_tokens: 1200,
+              output_tokens: 80,
+              cache_creation_input_tokens: 8000,
+              cache_read_input_tokens: 20000,
+            },
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          parent_tool_use_id: 'nested-1',
+          message: {
+            content: [{ type: 'text', text: 'subagent' }],
+            usage: { input_tokens: 500, output_tokens: 40 },
+          },
+        }),
+        JSON.stringify({ type: 'system', subtype: 'compact_boundary' }),
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: 1756202400,
+          message: {
+            content: [{ type: 'text', text: 'After compact' }],
+            usage: {
+              input_tokens: 400,
+              output_tokens: 60,
+              cache_read_input_tokens: 9000,
+            },
+          },
+        }),
+        JSON.stringify({ type: 'result', total_cost_usd: 0.42 }),
+        '',
+      ].join('\n'),
+    );
+
+    assert.equal(parsed.model, 'claude-sonnet-4-20250514');
+    assert.equal(parsed.costUsd, 0.42);
+    assert.equal(parsed.history.length, 2);
+    assert.equal(parsed.history[0]?.contextTokens, 29200);
+    assert.equal(parsed.history[0]?.compacted, false);
+    assert.deepEqual(parsed.history[0]?.tools, ['Read']);
+    assert.equal(parsed.history[1]?.contextTokens, 9400);
+    assert.equal(parsed.history[1]?.compacted, true);
+    assert.equal(parsed.billed.inputTokens, 1600);
+    assert.equal(parsed.billed.cacheReadInputTokens, 29000);
+    assert.equal(parsed.billed.outputTokens, 140);
+  });
+
+  it('uses result usage when assistant messages have none', () => {
+    const parsed = parseClaudeSessionContext(
+      JSON.stringify({
+        type: 'result',
+        total_cost_usd: 0.1,
+        usage: { input_tokens: 50, output_tokens: 10, cache_read_input_tokens: 200 },
+      }),
+    );
+    assert.equal(parsed.history.length, 1);
+    assert.equal(parsed.history[0]?.contextTokens, 250);
+    assert.equal(parsed.billed.outputTokens, 10);
+  });
+});
+
+describe('buildSessionContextUsage', () => {
+  it('uses a 200k window for sonnet aliases and a 1M window past 200k occupancy', () => {
+    const small = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: [
+        {
+          turn: 1,
+          createdAt: null,
+          model: 'sonnet',
+          usage: {
+            inputTokens: 100,
+            outputTokens: 10,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 1200,
+          },
+          contextTokens: 1300,
+          compacted: false,
+          tools: [],
+        },
+      ],
+    });
+    assert.equal(small.contextWindowTokens, 200_000);
+    assert.equal(small.currentContextTokens, 1300);
+    assert.ok(small.percent != null && small.percent < 1);
+
+    const large = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: [
+        {
+          turn: 1,
+          createdAt: null,
+          model: 'sonnet',
+          usage: {
+            inputTokens: 1000,
+            outputTokens: 20,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 250_000,
+          },
+          contextTokens: 251_000,
+          compacted: false,
+          tools: [],
+        },
+      ],
+    });
+    assert.equal(large.contextWindowTokens, 1_000_000);
+    assert.ok(large.percent != null && large.percent > 20 && large.percent < 30);
   });
 });

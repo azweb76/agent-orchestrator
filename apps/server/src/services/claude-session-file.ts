@@ -2,7 +2,17 @@ import { existsSync, readdirSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { Message, StreamPart } from '@agent-orchestrator/shared';
+import {
+  addTokenUsage,
+  contextTokensFromUsage,
+  emptyTokenUsage,
+  isNestedSubagentEvent,
+  totalTokensFromUsage,
+  type Message,
+  type SessionContextTurn,
+  type StreamPart,
+  type TokenUsageBreakdown,
+} from '@agent-orchestrator/shared';
 
 /** Claude Code stores transcripts under `<configDir>/projects/<encoded-cwd>/<sessionId>.jsonl`. */
 export function encodeClaudeProjectDir(cwd: string): string {
@@ -141,21 +151,68 @@ function timelineFromContent(content: unknown): StreamPart[] {
   return parts;
 }
 
+function positiveNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function parseTokenUsage(value: unknown): TokenUsageBreakdown | null {
+  const usage = asRecord(value);
+  if (!usage) return null;
+  const parsed: TokenUsageBreakdown = {
+    inputTokens: positiveNumber(usage.input_tokens) || positiveNumber(usage.inputTokens),
+    outputTokens: positiveNumber(usage.output_tokens) || positiveNumber(usage.outputTokens),
+    cacheCreationInputTokens:
+      positiveNumber(usage.cache_creation_input_tokens) ||
+      positiveNumber(usage.cacheCreationInputTokens),
+    cacheReadInputTokens:
+      positiveNumber(usage.cache_read_input_tokens) || positiveNumber(usage.cacheReadInputTokens),
+  };
+  if (totalTokensFromUsage(parsed) <= 0) return null;
+  return parsed;
+}
+
 function usageTokensFromMessage(message: Record<string, unknown> | null): number {
-  const usage = asRecord(message?.usage);
-  if (!usage) return 0;
-  const keys = [
-    'input_tokens',
-    'output_tokens',
-    'cache_creation_input_tokens',
-    'cache_read_input_tokens',
-  ];
-  let total = 0;
-  for (const key of keys) {
-    const value = usage[key];
-    if (typeof value === 'number' && Number.isFinite(value) && value > 0) total += value;
+  const usage = parseTokenUsage(message?.usage);
+  return usage ? totalTokensFromUsage(usage) : 0;
+}
+
+function eventTimestamp(event: Record<string, unknown>): string | null {
+  const raw = event.timestamp;
+  if (typeof raw === 'string' && raw.trim()) {
+    const date = new Date(raw);
+    return Number.isNaN(date.getTime()) ? raw.trim() : date.toISOString();
   }
-  return total;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    const ms = raw < 1e12 ? raw * 1000 : raw;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  return null;
+}
+
+function eventModel(
+  event: Record<string, unknown>,
+  message: Record<string, unknown> | null,
+): string | null {
+  if (typeof message?.model === 'string' && message.model.trim()) return message.model.trim();
+  if (typeof event.model === 'string' && event.model.trim()) return event.model.trim();
+  return null;
+}
+
+function isCompactEvent(event: Record<string, unknown>): boolean {
+  const type = String(event.type ?? '').toLowerCase();
+  const subtype = String(event.subtype ?? '').toLowerCase();
+  return type.includes('compact') || subtype.includes('compact');
+}
+
+function toolNamesFromContent(content: unknown): string[] {
+  const names: string[] = [];
+  for (const block of contentBlocks(content)) {
+    if (block.type !== 'tool_use') continue;
+    const name = String(block.name ?? '').trim();
+    if (name) names.push(name);
+  }
+  return names;
 }
 
 function fingerprint(content: unknown): string {
@@ -252,4 +309,105 @@ export function parseClaudeSessionFile(contents: string): ParsedClaudeSessionFil
 export async function readClaudeSessionFile(filePath: string): Promise<ParsedClaudeSessionFile> {
   const contents = await fs.readFile(filePath, 'utf8');
   return parseClaudeSessionFile(contents);
+}
+
+export interface ParsedClaudeSessionContext {
+  model: string | null;
+  costUsd: number | null;
+  billed: TokenUsageBreakdown;
+  history: SessionContextTurn[];
+}
+
+/** Extract per-turn context occupancy from a Claude JSONL / stream-json session file. */
+export function parseClaudeSessionContext(contents: string): ParsedClaudeSessionContext {
+  const history: SessionContextTurn[] = [];
+  let billed = emptyTokenUsage();
+  let model: string | null = null;
+  let costUsd = 0;
+  let hasCost = false;
+  let pendingCompact = false;
+  let lastAssistantFp = '';
+
+  for (const line of contents.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const event = asRecord(parsed);
+    if (!event) continue;
+    if (isNestedSubagentEvent(event)) continue;
+
+    if (isCompactEvent(event)) {
+      pendingCompact = true;
+      continue;
+    }
+
+    const type = String(event.type ?? '');
+    if (type === 'system' && typeof event.model === 'string' && event.model.trim()) {
+      model = event.model.trim();
+    }
+
+    if (type === 'result') {
+      const cost = event.total_cost_usd;
+      if (typeof cost === 'number' && Number.isFinite(cost)) {
+        costUsd += cost;
+        hasCost = true;
+      }
+      const resultUsage = parseTokenUsage(event.usage);
+      if (resultUsage && history.length === 0) {
+        billed = resultUsage;
+        history.push({
+          turn: 1,
+          createdAt: eventTimestamp(event),
+          model: eventModel(event, null),
+          usage: resultUsage,
+          contextTokens: contextTokensFromUsage(resultUsage),
+          compacted: pendingCompact,
+          tools: [],
+        });
+        pendingCompact = false;
+      }
+      continue;
+    }
+
+    if (type !== 'assistant') continue;
+    const message = asRecord(event.message);
+    const content = message?.content ?? event.content;
+    const fp = fingerprint(content);
+    if (fp && fp === lastAssistantFp) continue;
+    lastAssistantFp = fp;
+
+    const usage = parseTokenUsage(message?.usage ?? event.usage);
+    if (!usage) continue;
+
+    const turnModel = eventModel(event, message);
+    if (turnModel) model = turnModel;
+    billed = addTokenUsage(billed, usage);
+    history.push({
+      turn: history.length + 1,
+      createdAt: eventTimestamp(event),
+      model: turnModel,
+      usage,
+      contextTokens: contextTokensFromUsage(usage),
+      compacted: pendingCompact,
+      tools: toolNamesFromContent(content),
+    });
+    pendingCompact = false;
+  }
+
+  return {
+    model,
+    costUsd: hasCost ? Number(costUsd.toFixed(4)) : null,
+    billed,
+    history,
+  };
+}
+
+export async function readClaudeSessionContext(filePath: string): Promise<ParsedClaudeSessionContext> {
+  const contents = await fs.readFile(filePath, 'utf8');
+  return parseClaudeSessionContext(contents);
 }
