@@ -72,6 +72,7 @@ import {
   type InstructionFileRoots,
 } from '../services/instruction-files.js';
 import { buildSessionGradeContext } from '../services/session-grade.js';
+import { resolveClaudeSessionFilePath, readClaudeSessionFile } from '../services/claude-session-file.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -687,28 +688,53 @@ export async function gradeAgentSession(
   body: GradeChatSessionRequest = {},
 ): Promise<ChatSession> {
   const session = requireSession(ctx, agentId, sessionId);
-  const messages = ctx.repos.messages.listBySession(session.id);
-  const liveTranscript = buildSessionTranscript(messages);
-  const storedTranscript = ctx.repos.sessions.getGradeTranscript(session.id);
-  const transcript = liveTranscript || storedTranscript;
-  if (!transcript) {
-    throw new Error('Cannot grade an empty session. Send a message first.');
+  const dbMessages = ctx.repos.messages.listBySession(session.id);
+  const roots = instructionRoots(ctx, agentId);
+  const sessionFilePath = resolveClaudeSessionFilePath({
+    cwd: roots.worktreePath,
+    sessionId: session.claudeSessionId,
+    runLogPath: session.runLogPath,
+  });
+
+  let sourceMessages = dbMessages;
+  let usageTokens: number | null = null;
+  let fileCostUsd: number | null = null;
+  if (sessionFilePath) {
+    const parsed = await readClaudeSessionFile(sessionFilePath);
+    sourceMessages = parsed.messages;
+    usageTokens = parsed.usageTokens;
+    fileCostUsd = parsed.costUsd;
   }
 
-  const roots = instructionRoots(ctx, agentId);
+  const liveTranscript = buildSessionTranscript(sourceMessages);
+  const storedTranscript = sessionFilePath
+    ? ''
+    : ctx.repos.sessions.getGradeTranscript(session.id);
+  const transcript = liveTranscript || storedTranscript;
+  if (!transcript) {
+    throw new Error(
+      sessionFilePath
+        ? 'Cannot grade an empty session file.'
+        : 'Cannot grade an empty session. Send a message first.',
+    );
+  }
+
   const [instructionFiles, skills] = await Promise.all([
     loadInstructionFileExcerpts(roots),
     discoverSlashCommands(roots.worktreePath),
   ]);
 
   const context = buildSessionGradeContext({
-    messages,
+    messages: sourceMessages,
     instructionFiles,
     skills,
     sessionTitle: session.title,
     model: session.model,
     permissionMode: session.permissionMode,
     notes: body.notes,
+    sessionFilePath,
+    usageTokens,
+    costUsd: fileCostUsd,
   });
   if (!context.transcript) {
     context.transcript = storedTranscript;
@@ -725,6 +751,7 @@ export async function gradeAgentSession(
         summary: result.summary,
         findings: result.findings,
         stats: result.stats,
+        ...(sessionFilePath ? { sessionFilePath } : {}),
       },
     },
     context.transcript || transcript,

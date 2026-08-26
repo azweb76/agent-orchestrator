@@ -1092,6 +1092,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       <GradeSessionDialog
         open={gradeOpen}
         sessionTitle={session?.title ?? 'this session'}
+        sessionFilePath={session?.grade?.analysis?.sessionFilePath ?? session?.runLogPath}
         current={session?.grade}
         loading={gradeMutation.isPending}
         error={gradeMutation.error ? (gradeMutation.error as Error).message : null}

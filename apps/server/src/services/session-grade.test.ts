@@ -16,10 +16,12 @@ import {
 import type { AnthropicService } from './anthropic.js';
 import type { ClaudeService, GitService } from './git.js';
 import type { SessionGradeContext } from './session-grade.js';
+import { encodeClaudeProjectDir } from './claude-session-file.js';
 
 describe('session grading and instruction files', () => {
   let dataDir: string;
   let ctx: AppContext;
+  let lastGradeContext: SessionGradeContext | undefined;
 
   function seed(): { agent: Agent } {
     const workspace: Workspace = {
@@ -118,6 +120,7 @@ describe('session grading and instruction files', () => {
   }
 
   beforeEach(() => {
+    lastGradeContext = undefined;
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-grade-'));
     ctx = {
       repos: createRepositories(initDatabase(dataDir)),
@@ -136,7 +139,9 @@ describe('session grading and instruction files', () => {
             '---\nname: retry-tests\ndescription: Always run tests after retries\n---\n# Retry tests\n',
           rationale: 'The assistant skipped tests.',
         }),
-        analyzeSessionGrade: async (input: SessionGradeContext) => ({
+        analyzeSessionGrade: async (input: SessionGradeContext) => {
+          lastGradeContext = input;
+          return {
           score: 2,
           summary: 'The assistant skipped tests and reread files.',
           findings: [
@@ -172,7 +177,8 @@ describe('session grading and instruction files', () => {
             },
           ],
           stats: input.stats,
-        }),
+          };
+        },
       } as unknown as AnthropicService,
       dataDir,
     };
@@ -210,6 +216,145 @@ describe('session grading and instruction files', () => {
     assert.equal(session?.grade?.score, 2);
     assert.equal(session?.grade?.analysis?.findings[0]?.category, 'excessive_turns');
     assert.equal(detail.sessions.find((item) => item.id === 'sess-2')?.grade, null);
+  });
+
+  it('grades the Claude session file instead of the database transcript', async () => {
+    seed();
+    const worktree = ctx.repos.worktrees.getById('wt-1')!;
+    const claudeSessionId = 'claude-sess-path';
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      claudeSessionId,
+    });
+
+    const configDir = path.join(dataDir, 'claude-config');
+    const sessionFile = path.join(
+      configDir,
+      'projects',
+      encodeClaudeProjectDir(worktree.path),
+      `${claudeSessionId}.jsonl`,
+    );
+    fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+    fs.writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'SESSION_FILE_ONLY_PROMPT fix retries from disk' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: 'SESSION_FILE_ONLY_REPLY reading src/retry.ts' },
+              {
+                type: 'tool_use',
+                id: 't1',
+                name: 'Read',
+                input: { file_path: 'src/retry.ts' },
+              },
+              {
+                type: 'tool_use',
+                id: 't2',
+                name: 'Skill',
+                input: { skill: 'retry-tests' },
+              },
+            ],
+            usage: { input_tokens: 400, output_tokens: 50 },
+          },
+        }),
+        JSON.stringify({ type: 'result', total_cost_usd: 0.37 }),
+        '',
+      ].join('\n'),
+    );
+
+    const previous = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = configDir;
+    try {
+      const graded = await gradeAgentSession(ctx, 'ag-1', 'sess-1');
+      assert.equal(graded.grade?.analysis?.sessionFilePath, sessionFile);
+      assert.match(lastGradeContext?.transcript ?? '', /SESSION_FILE_ONLY_PROMPT/);
+      assert.match(lastGradeContext?.transcript ?? '', /SESSION_FILE_ONLY_REPLY/);
+      assert.doesNotMatch(lastGradeContext?.transcript ?? '', /Add retry logic/);
+      assert.equal(lastGradeContext?.sessionFilePath, sessionFile);
+      assert.equal(lastGradeContext?.stats.toolCalls, 2);
+      assert.equal(lastGradeContext?.stats.estimatedTokens, 450);
+      assert.equal(lastGradeContext?.stats.costUsd, 0.37);
+      assert.deepEqual(lastGradeContext?.usedSkills, ['retry-tests']);
+      assert.match(ctx.repos.sessions.getGradeTranscript('sess-1'), /SESSION_FILE_ONLY_PROMPT/);
+    } finally {
+      if (previous == null) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = previous;
+    }
+  });
+
+  it('does not fall back to database messages when the session file is empty', async () => {
+    seed();
+    const worktree = ctx.repos.worktrees.getById('wt-1')!;
+    const claudeSessionId = 'claude-empty';
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      claudeSessionId,
+    });
+    const configDir = path.join(dataDir, 'claude-empty');
+    const sessionFile = path.join(
+      configDir,
+      'projects',
+      encodeClaudeProjectDir(worktree.path),
+      `${claudeSessionId}.jsonl`,
+    );
+    fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+    fs.writeFileSync(sessionFile, '{"type":"system","subtype":"init"}\n');
+
+    const previous = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = configDir;
+    try {
+      await assert.rejects(
+        () => gradeAgentSession(ctx, 'ag-1', 'sess-1'),
+        /empty session file/,
+      );
+    } finally {
+      if (previous == null) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = previous;
+    }
+  });
+
+  it('falls back to the run log path when the Claude JSONL is missing', async () => {
+    seed();
+    const runLog = path.join(dataDir, 'runs', 'sess-1-1.log');
+    fs.mkdirSync(path.dirname(runLog), { recursive: true });
+    fs.writeFileSync(
+      runLog,
+      [
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'RUN_LOG_ONLY_PROMPT from the orchestrator log' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'RUN_LOG_ONLY_REPLY' }] },
+        }),
+        '',
+      ].join('\n'),
+    );
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      claudeSessionId: 'missing-jsonl',
+      runLogPath: runLog,
+    });
+
+    const previous = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = path.join(dataDir, 'empty-claude');
+    try {
+      const graded = await gradeAgentSession(ctx, 'ag-1', 'sess-1');
+      assert.equal(graded.grade?.analysis?.sessionFilePath, runLog);
+      assert.match(lastGradeContext?.transcript ?? '', /RUN_LOG_ONLY_PROMPT/);
+      assert.doesNotMatch(lastGradeContext?.transcript ?? '', /Add retry logic/);
+    } finally {
+      if (previous == null) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = previous;
+    }
   });
 
   it('generates a draft from the graded transcript and writes a skill file', async () => {
