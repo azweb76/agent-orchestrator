@@ -157,15 +157,17 @@ function FileRow({
         pr: 1,
         py: 0.4,
         border: 0,
-        bgcolor: selected ? 'rgba(94,234,212,0.10)' : 'transparent',
-        color: 'text.primary',
+        borderLeft: '2px solid',
+        borderColor: selected ? 'secondary.main' : 'transparent',
+        bgcolor: selected ? 'rgba(94,234,212,0.16)' : 'transparent',
+        color: selected ? 'secondary.light' : 'text.primary',
         cursor: 'pointer',
         textAlign: 'left',
         borderRadius: 1,
-        '&:hover': { bgcolor: selected ? 'rgba(94,234,212,0.12)' : 'rgba(255,255,255,0.04)' },
+        '&:hover': { bgcolor: selected ? 'rgba(94,234,212,0.18)' : 'rgba(255,255,255,0.04)' },
       }}
     >
-      <InsertDriveFileOutlinedIcon sx={{ fontSize: 14, opacity: 0.65, flexShrink: 0 }} />
+      <InsertDriveFileOutlinedIcon sx={{ fontSize: 14, opacity: selected ? 0.9 : 0.65, flexShrink: 0 }} />
       <Typography
         variant="body2"
         noWrap
@@ -174,6 +176,7 @@ function FileRow({
           flex: 1,
           minWidth: 0,
           fontSize: 12.5,
+          fontWeight: selected ? 600 : 400,
           fontFamily: '"IBM Plex Mono", monospace',
         }}
       >
@@ -192,11 +195,10 @@ function FileRow({
 
 export interface ChangesDiffViewProps {
   patch: string;
-  stat?: string;
 }
 
 /** File-tree + per-file diff viewer for an agent worktree patch. */
-export function ChangesDiffView({ patch, stat }: ChangesDiffViewProps) {
+export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
   const files = useMemo(() => parseUnifiedDiff(patch), [patch]);
   const tree = useMemo(() => buildFileTree(files), [files]);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -208,6 +210,8 @@ export function ChangesDiffView({ patch, stat }: ChangesDiffViewProps) {
   }, [files, tree]);
 
   const selected = files.find((file) => file.path === selectedPath) ?? null;
+  const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
+  const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
 
   const toggleDir = (path: string) => {
     setExpanded((prev) => {
@@ -230,11 +234,17 @@ export function ChangesDiffView({ patch, stat }: ChangesDiffViewProps) {
 
   return (
     <Stack spacing={1} sx={{ flex: 1, minHeight: 0 }}>
-      {stat ? (
-        <Typography variant="subtitle2" color="text.secondary" sx={{ flexShrink: 0 }}>
-          {stat}
-        </Typography>
-      ) : null}
+      <Typography variant="subtitle2" color="text.secondary" sx={{ flexShrink: 0 }}>
+        {files.length} {files.length === 1 ? 'file' : 'files'}
+        {' · '}
+        <Box component="span" sx={{ color: 'success.light' }}>
+          +{totalAdditions}
+        </Box>
+        {' '}
+        <Box component="span" sx={{ color: 'error.light' }}>
+          −{totalDeletions}
+        </Box>
+      </Typography>
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}

@@ -315,7 +315,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                   }
                 />
               ) : (
-                <ChangesDiffView patch={diffQuery.data.patch} stat={diffQuery.data.stat} />
+                <ChangesDiffView patch={diffQuery.data.patch} />
               )}
             </Stack>
           </Box>
