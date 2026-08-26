@@ -8,12 +8,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   LinearProgress,
   Rating,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   SESSION_GRADE_FINDING_CATEGORIES,
   SESSION_GRADE_FINDING_LABELS,
@@ -27,6 +30,8 @@ import { ResponsiveDialog } from '../ui/ResponsiveDialog';
 interface GradeSessionDialogProps {
   open: boolean;
   sessionTitle: string;
+  /** Absolute path of the session file being graded, when known. */
+  sessionFilePath?: string | null;
   current?: SessionGrade | null;
   loading?: boolean;
   error?: string | null;
@@ -82,9 +87,50 @@ function formatTokens(value: number): string {
   return String(value);
 }
 
+function SessionFilePath({ filePath }: { filePath: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+        Session file
+      </Typography>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            fontSize: 12,
+            wordBreak: 'break-all',
+            minWidth: 0,
+            flex: 1,
+            pt: 0.35,
+          }}
+        >
+          {filePath}
+        </Typography>
+        <Tooltip title={copied ? 'Copied' : 'Copy path'}>
+          <IconButton
+            size="small"
+            aria-label="Copy session file path"
+            onClick={() => {
+              void navigator.clipboard.writeText(filePath);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1500);
+            }}
+          >
+            <ContentCopyIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    </Box>
+  );
+}
+
 export function GradeSessionDialog({
   open,
   sessionTitle,
+  sessionFilePath,
   current,
   loading,
   error,
@@ -93,6 +139,7 @@ export function GradeSessionDialog({
 }: GradeSessionDialogProps) {
   const [notes, setNotes] = useState('');
   const analysis = current?.analysis;
+  const filePath = analysis?.sessionFilePath || sessionFilePath || null;
 
   useEffect(() => {
     if (!open) setNotes('');
@@ -108,12 +155,15 @@ export function GradeSessionDialog({
             AI analyzes <strong>{sessionTitle}</strong> for excessive turns, wasted tokens, bloated
             context, instruction-file problems, and missing or weak skills.
           </Typography>
+          {filePath ? <SessionFilePath filePath={filePath} /> : null}
 
           {loading && !analysis ? (
             <Stack spacing={1.25} sx={{ alignItems: 'center', py: 3 }}>
               <CircularProgress size={28} />
               <Typography variant="body2" color="text.secondary">
-                Reading the transcript, instruction files, and skills…
+                {filePath
+                  ? 'Reading the session file, instruction files, and skills…'
+                  : 'Reading the transcript, instruction files, and skills…'}
               </Typography>
             </Stack>
           ) : null}

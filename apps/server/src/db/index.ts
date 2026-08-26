@@ -848,7 +848,11 @@ function parseGradeAnalysis(value: unknown): SessionGradeAnalysis | null {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const row = parsed as Record<string, unknown>;
     if (typeof row.summary !== 'string' || !Array.isArray(row.findings) || !row.stats) return null;
-    return parsed as SessionGradeAnalysis;
+    const sessionFilePath =
+      typeof row.sessionFilePath === 'string' && row.sessionFilePath.trim()
+        ? row.sessionFilePath
+        : null;
+    return { ...(parsed as SessionGradeAnalysis), sessionFilePath };
   } catch {
     return null;
   }

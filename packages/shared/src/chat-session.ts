@@ -55,6 +55,8 @@ export interface SessionGradeAnalysis {
   summary: string;
   findings: SessionGradeFinding[];
   stats: SessionGradeStats;
+  /** Absolute path of the Claude session JSONL (or run log) that was graded. */
+  sessionFilePath?: string | null;
 }
 
 /** Quality grade for a chat session, produced by AI analysis. */

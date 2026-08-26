@@ -16,6 +16,7 @@ import {
 import type { AnthropicService } from './anthropic.js';
 import type { ClaudeService, GitService } from './git.js';
 import type { SessionGradeContext } from './session-grade.js';
+import { encodeClaudeProjectDir } from './claude-session-file.js';
 
 describe('session grading and instruction files', () => {
   let dataDir: string;
@@ -210,6 +211,63 @@ describe('session grading and instruction files', () => {
     assert.equal(session?.grade?.score, 2);
     assert.equal(session?.grade?.analysis?.findings[0]?.category, 'excessive_turns');
     assert.equal(detail.sessions.find((item) => item.id === 'sess-2')?.grade, null);
+  });
+
+  it('persists the analyzed Claude session file path', async () => {
+    seed();
+    const worktree = ctx.repos.worktrees.getById('wt-1')!;
+    const claudeSessionId = 'claude-sess-path';
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      claudeSessionId,
+    });
+
+    const configDir = path.join(dataDir, 'claude-config');
+    const sessionFile = path.join(
+      configDir,
+      'projects',
+      encodeClaudeProjectDir(worktree.path),
+      `${claudeSessionId}.jsonl`,
+    );
+    fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+    fs.writeFileSync(sessionFile, '{"type":"user"}\n');
+
+    const previous = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = configDir;
+    try {
+      const graded = await gradeAgentSession(ctx, 'ag-1', 'sess-1');
+      assert.equal(graded.grade?.analysis?.sessionFilePath, sessionFile);
+      const detail = await getAgentDetail(ctx, 'ag-1');
+      assert.equal(
+        detail.sessions.find((item) => item.id === 'sess-1')?.grade?.analysis?.sessionFilePath,
+        sessionFile,
+      );
+    } finally {
+      if (previous == null) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = previous;
+    }
+  });
+
+  it('falls back to the run log path when the Claude JSONL is missing', async () => {
+    seed();
+    const runLog = path.join(dataDir, 'runs', 'sess-1-1.log');
+    fs.mkdirSync(path.dirname(runLog), { recursive: true });
+    fs.writeFileSync(runLog, '{}\n');
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      claudeSessionId: 'missing-jsonl',
+      runLogPath: runLog,
+    });
+
+    const previous = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = path.join(dataDir, 'empty-claude');
+    try {
+      const graded = await gradeAgentSession(ctx, 'ag-1', 'sess-1');
+      assert.equal(graded.grade?.analysis?.sessionFilePath, runLog);
+    } finally {
+      if (previous == null) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = previous;
+    }
   });
 
   it('generates a draft from the graded transcript and writes a skill file', async () => {

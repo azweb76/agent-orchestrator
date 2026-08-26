@@ -29,6 +29,7 @@ export interface SessionGradeContext {
   sessionTitle: string;
   model: string;
   permissionMode: string;
+  sessionFilePath?: string | null;
 }
 
 export function estimateTokensFromChars(chars: number): number {
@@ -129,6 +130,7 @@ export function buildSessionGradeContext(input: {
   model: string;
   permissionMode: string;
   notes?: string;
+  sessionFilePath?: string | null;
 }): SessionGradeContext {
   const skillCommands = input.skills.filter((item) => item.kind === 'skill');
   return {
@@ -146,6 +148,7 @@ export function buildSessionGradeContext(input: {
     sessionTitle: input.sessionTitle,
     model: input.model,
     permissionMode: input.permissionMode,
+    sessionFilePath: input.sessionFilePath?.trim() || undefined,
   };
 }
 
@@ -179,6 +182,7 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     `Session: ${context.sessionTitle}`,
     `Model: ${context.model}`,
     `Permission mode: ${context.permissionMode}`,
+    context.sessionFilePath ? `Session file: ${context.sessionFilePath}` : '',
     context.notes ? `Operator notes:\n${context.notes}` : '',
     'Measured stats (JSON):',
     JSON.stringify(

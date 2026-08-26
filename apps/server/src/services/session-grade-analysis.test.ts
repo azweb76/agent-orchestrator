@@ -129,6 +129,20 @@ describe('session grade analysis', () => {
     assert.match(system, /submit_session_grade/);
   });
 
+  it('includes the session file path in the grader prompt', () => {
+    const context = buildSessionGradeContext({
+      messages: [msg('user', 'Add retry logic'), msg('assistant', 'Done.')],
+      instructionFiles: files,
+      skills,
+      sessionTitle: 'Retries',
+      model: 'sonnet',
+      permissionMode: 'auto',
+      sessionFilePath: '/home/dan/.claude/projects/-data-wt/sess-1.jsonl',
+    });
+    const { user } = buildSessionGradePrompt(context);
+    assert.match(user, /Session file: \/home\/dan\/\.claude\/projects\/-data-wt\/sess-1\.jsonl/);
+  });
+
   it('parses fenced JSON and fills missing finding categories', () => {
     const raw = `\`\`\`json
 {

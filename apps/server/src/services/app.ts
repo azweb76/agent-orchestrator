@@ -72,6 +72,7 @@ import {
   type InstructionFileRoots,
 } from '../services/instruction-files.js';
 import { buildSessionGradeContext } from '../services/session-grade.js';
+import { resolveClaudeSessionFilePath } from '../services/claude-session-file.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -696,6 +697,11 @@ export async function gradeAgentSession(
   }
 
   const roots = instructionRoots(ctx, agentId);
+  const sessionFilePath = resolveClaudeSessionFilePath({
+    cwd: roots.worktreePath,
+    sessionId: session.claudeSessionId,
+    runLogPath: session.runLogPath,
+  });
   const [instructionFiles, skills] = await Promise.all([
     loadInstructionFileExcerpts(roots),
     discoverSlashCommands(roots.worktreePath),
@@ -709,6 +715,7 @@ export async function gradeAgentSession(
     model: session.model,
     permissionMode: session.permissionMode,
     notes: body.notes,
+    sessionFilePath,
   });
   if (!context.transcript) {
     context.transcript = storedTranscript;
@@ -725,6 +732,7 @@ export async function gradeAgentSession(
         summary: result.summary,
         findings: result.findings,
         stats: result.stats,
+        ...(sessionFilePath ? { sessionFilePath } : {}),
       },
     },
     context.transcript || transcript,
