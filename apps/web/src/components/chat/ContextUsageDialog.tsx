@@ -182,12 +182,12 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Chip
               size="small"
-              label={`Session ${formatTokenCount(
+              label={`${formatTokenCount(
                 data.billed.inputTokens +
                   data.billed.outputTokens +
                   data.billed.cacheCreationInputTokens +
                   data.billed.cacheReadInputTokens,
-              )} billed tokens`}
+              )} tokens across calls`}
             />
             {data.costUsd != null ? (
               <Chip size="small" label={`$${data.costUsd.toFixed(data.costUsd < 0.1 ? 4 : 2)}`} />
