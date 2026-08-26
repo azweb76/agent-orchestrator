@@ -411,7 +411,7 @@ export function createRouter(ctx: AppContext): express.Router {
       const body = z
         .object({
           template: sessionTemplate.optional(),
-          title: z.string().optional(),
+          title: z.string().trim().min(1).max(80).optional(),
         })
         .parse(req.body ?? {});
       res.status(201).json(await createAgentSession(ctx, param(req.params.agentId), body));
@@ -423,7 +423,7 @@ export function createRouter(ctx: AppContext): express.Router {
     asyncHandler(async (req, res) => {
       const body = z
         .object({
-          title: z.string().optional(),
+          title: z.string().trim().min(1).max(80).optional(),
           model: z.string().optional(),
           effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
           permissionMode: z
