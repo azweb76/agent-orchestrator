@@ -18,7 +18,8 @@ import path from 'node:path';
 import {
   extractPlanFilePath,
   extractPlanFilePathsFromLog,
-  isNestedSubagentEvent,
+  adoptParentClaudeSessionId,
+  claudeResultErrorMessage,
   isTopLevelClaudeResult,
 } from '@agent-orchestrator/shared';
 import {
@@ -368,6 +369,8 @@ export interface ClaudeRunResult {
   sessionId: string | null;
   events: ClaudeStreamEvent[];
   stopped: boolean;
+  /** Set when the parent `result` event reports an error subtype. */
+  error?: string;
 }
 
 interface TrackedRun {
@@ -946,6 +949,7 @@ export class ClaudeService {
   ): Promise<ClaudeRunResult> {
     const events: ClaudeStreamEvent[] = [];
     let result = '';
+    let resultError: string | undefined;
     let sessionId: string | null = initialSessionId;
     let stopped = false;
 
@@ -964,14 +968,13 @@ export class ClaudeService {
         events.push(event);
         options.onEvent?.(event, { replay });
 
-        if (event.session_id && !isNestedSubagentEvent(event)) {
-          sessionId = event.session_id;
-        }
+        sessionId = adoptParentClaudeSessionId(sessionId, event as Record<string, unknown>);
 
-        if (isTopLevelClaudeResult(event)) {
+        if (isTopLevelClaudeResult(event, sessionId)) {
           if (typeof event.result === 'string') {
             result = event.result;
           }
+          resultError = claudeResultErrorMessage(event as Record<string, unknown>) ?? resultError;
           const trackedForResult = this.running.get(agentId);
           if (trackedForResult?.pid === handle.pid) {
             trackedForResult.pendingPermissions.clear();
@@ -1014,10 +1017,10 @@ export class ClaudeService {
     }
 
     if (stopped && !result) {
-      return { result: '[stopped]', sessionId, events, stopped: true };
+      return { result: '[stopped]', sessionId, events, stopped: true, error: resultError };
     }
 
-    return { result, sessionId, events, stopped };
+    return { result, sessionId, events, stopped, error: resultError };
   }
 
   private stashPermissionRequest(
