@@ -152,7 +152,8 @@ export function GradeSessionDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            AI analyzes <strong>{sessionTitle}</strong> for excessive turns, wasted tokens, bloated
+            AI analyzes <strong>{sessionTitle}</strong>
+            {filePath ? ' from the session file' : ''} for excessive turns, wasted tokens, bloated
             context, instruction-file problems, and missing or weak skills.
           </Typography>
           {filePath ? <SessionFilePath filePath={filePath} /> : null}

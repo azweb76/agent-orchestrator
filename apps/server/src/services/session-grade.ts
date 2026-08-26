@@ -131,11 +131,20 @@ export function buildSessionGradeContext(input: {
   permissionMode: string;
   notes?: string;
   sessionFilePath?: string | null;
+  usageTokens?: number | null;
+  costUsd?: number | null;
 }): SessionGradeContext {
   const skillCommands = input.skills.filter((item) => item.kind === 'skill');
+  const stats = buildSessionGradeStats(input.messages, input.instructionFiles, skillCommands.length);
+  if (typeof input.usageTokens === 'number' && input.usageTokens > 0) {
+    stats.estimatedTokens = input.usageTokens;
+  }
+  if (typeof input.costUsd === 'number' && Number.isFinite(input.costUsd)) {
+    stats.costUsd = input.costUsd;
+  }
   return {
     transcript: buildSessionTranscript(input.messages),
-    stats: buildSessionGradeStats(input.messages, input.instructionFiles, skillCommands.length),
+    stats,
     tools: collectToolCounts(input.messages),
     usedSkills: collectUsedSkills(input.messages, skillCommands),
     availableSkills: skillCommands.map((item) => ({
@@ -166,7 +175,7 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     'category must be one of: excessive_turns, wasted_tokens, bloated_context, instruction_files, skills.',
     'severity must be ok, warning, or issue.',
     'Include exactly one finding for each of those five categories. Use ok when that area looks healthy.',
-    'Ground every finding in the supplied stats, transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
+    'Ground every finding in the supplied stats, session-file transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
     'Score: 5 efficient, 4 good, 3 mixed, 2 wasteful, 1 poor.',
   ].join(' ');
 
@@ -182,7 +191,9 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     `Session: ${context.sessionTitle}`,
     `Model: ${context.model}`,
     `Permission mode: ${context.permissionMode}`,
-    context.sessionFilePath ? `Session file: ${context.sessionFilePath}` : '',
+    context.sessionFilePath
+      ? `Session file (source of this analysis): ${context.sessionFilePath}`
+      : '',
     context.notes ? `Operator notes:\n${context.notes}` : '',
     'Measured stats (JSON):',
     JSON.stringify(
@@ -196,7 +207,7 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
       null,
       2,
     ),
-    'Chat transcript:',
+    context.sessionFilePath ? 'Transcript extracted from the session file:' : 'Chat transcript:',
     context.transcript || '(empty transcript)',
   ]
     .filter(Boolean)

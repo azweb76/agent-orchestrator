@@ -140,7 +140,8 @@ describe('session grade analysis', () => {
       sessionFilePath: '/home/dan/.claude/projects/-data-wt/sess-1.jsonl',
     });
     const { user } = buildSessionGradePrompt(context);
-    assert.match(user, /Session file: \/home\/dan\/\.claude\/projects\/-data-wt\/sess-1\.jsonl/);
+    assert.match(user, /Session file \(source of this analysis\): \/home\/dan\/\.claude\/projects\/-data-wt\/sess-1\.jsonl/);
+    assert.match(user, /Transcript extracted from the session file/);
   });
 
   it('parses fenced JSON and fills missing finding categories', () => {

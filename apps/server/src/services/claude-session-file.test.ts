@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import {
   encodeClaudeProjectDir,
+  parseClaudeSessionFile,
   resolveClaudeSessionFilePath,
 } from './claude-session-file.js';
 
@@ -135,5 +136,69 @@ describe('claude session file path', () => {
       }),
       null,
     );
+  });
+});
+
+describe('parseClaudeSessionFile', () => {
+  it('extracts turns, tools, skills, usage, and cost from a Claude JSONL file', () => {
+    const parsed = parseClaudeSessionFile(
+      [
+        JSON.stringify({ type: 'system', subtype: 'init' }),
+        JSON.stringify({
+          type: 'user',
+          message: { role: 'user', content: 'Fix the flaky retries' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: 'Reading the test file' },
+              { type: 'tool_use', id: '1', name: 'Read', input: { file_path: 'src/retry.ts' } },
+              { type: 'tool_use', id: '2', name: 'Skill', input: { skill: 'retry-tests' } },
+            ],
+            usage: { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 5 },
+          },
+        }),
+        JSON.stringify({
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: '1', content: 'ok' }] },
+        }),
+        JSON.stringify({ type: 'result', total_cost_usd: 0.25 }),
+        '',
+      ].join('\n'),
+    );
+
+    assert.equal(parsed.messages.length, 2);
+    assert.equal(parsed.messages[0]?.role, 'user');
+    assert.equal(parsed.messages[0]?.content, 'Fix the flaky retries');
+    assert.equal(parsed.messages[1]?.role, 'assistant');
+    assert.match(parsed.messages[1]?.content ?? '', /Reading the test file/);
+    assert.equal(parsed.usageTokens, 125);
+    assert.equal(parsed.costUsd, 0.25);
+    const tools = parsed.messages[1]?.metadata?.timeline?.filter((part) => part.type === 'tool');
+    assert.deepEqual(
+      tools?.map((part) => (part.type === 'tool' ? { name: part.name, detail: part.detail } : null)),
+      [
+        { name: 'Read', detail: 'src/retry.ts' },
+        { name: 'Skill', detail: 'retry-tests' },
+      ],
+    );
+  });
+
+  it('skips stream_event snapshots and duplicate assistant payloads', () => {
+    const assistant = {
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'Done' }] },
+    };
+    const parsed = parseClaudeSessionFile(
+      [
+        JSON.stringify({ type: 'stream_event', event: { type: 'text_delta', delta: { text: 'Do' } } }),
+        JSON.stringify(assistant),
+        JSON.stringify(assistant),
+        '',
+      ].join('\n'),
+    );
+    assert.equal(parsed.messages.length, 1);
+    assert.equal(parsed.messages[0]?.content, 'Done');
   });
 });
