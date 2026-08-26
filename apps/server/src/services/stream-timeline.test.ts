@@ -5,12 +5,16 @@ import {
   appendStreamText,
   applyStreamEvent,
   assistantTextDelta,
+  adoptParentClaudeSessionId,
+  claudeResultErrorMessage,
   coalesceTimelineText,
+  completeRunningTools,
   isNestedSubagentEvent,
   isSubagentItem,
   isTopLevelClaudeResult,
   parentStreamTextDelta,
   runningSubagentItems,
+  visibleAssistantContent,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
@@ -174,6 +178,106 @@ describe('nested subagent event helpers', () => {
       type: 'stream_event',
       event: { delta: { type: 'text_delta', text: 'parent' } },
     }), 'parent');
+  });
+
+  it('treats a result with a different session_id as nested even without parent_tool_use_id', () => {
+    const parentId = 'sess-parent';
+    const nestedResult = {
+      type: 'result',
+      session_id: 'sess-explore',
+      result: '',
+      total_cost_usd: 0,
+    };
+    assert.equal(isNestedSubagentEvent(nestedResult, parentId), true);
+    assert.equal(isTopLevelClaudeResult(nestedResult, parentId), false);
+    assert.equal(
+      isTopLevelClaudeResult({ type: 'result', session_id: parentId, result: 'done' }, parentId),
+      true,
+    );
+  });
+
+  it('does not adopt a nested result session id as the parent', () => {
+    let parentId = adoptParentClaudeSessionId(null, {
+      type: 'system',
+      session_id: 'sess-parent',
+    });
+    assert.equal(parentId, 'sess-parent');
+    parentId = adoptParentClaudeSessionId(parentId, {
+      type: 'result',
+      session_id: 'sess-explore',
+      result: '',
+    });
+    assert.equal(parentId, 'sess-parent');
+    parentId = adoptParentClaudeSessionId(parentId, {
+      type: 'assistant',
+      session_id: 'sess-explore',
+      message: { content: [{ type: 'text', text: 'nested' }] },
+    });
+    assert.equal(parentId, 'sess-parent');
+  });
+
+  it('does not complete sibling tools on a foreign-session result', () => {
+    let parts: StreamPart[] = [
+      { type: 'tool', id: 'task_1', name: 'Task', status: 'running' },
+      { type: 'tool', id: 'task_2', name: 'Task', status: 'running' },
+    ];
+    parts = applyStreamEvent(
+      parts,
+      { type: 'result', session_id: 'sess-explore', result: '' },
+      'sess-parent',
+    );
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
+    assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
+  });
+
+  it('does not revive a completed tool from later task_progress', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 't1',
+      tool_use_id: 'toolu_1',
+      description: 'Explore',
+    });
+    parts = applyStreamEvent(parts, { type: 'result', result: 'done' });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 't1',
+      tool_use_id: 'toolu_1',
+      description: 'Still reading',
+      last_tool_name: 'Read',
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    assert.equal(parts[0]?.type === 'tool' && parts[0].detail, 'Still reading');
+  });
+
+  it('hides synthetic assistant placeholders', () => {
+    assert.equal(visibleAssistantContent('[no output]'), '');
+    assert.equal(visibleAssistantContent('[stopped]'), '');
+    assert.equal(visibleAssistantContent(''), '');
+    assert.equal(visibleAssistantContent('Here is the plan.'), 'Here is the plan.');
+    const finished = completeRunningTools([
+      { type: 'tool', id: 'task_1', name: 'Task', status: 'running' },
+    ]);
+    assert.equal(finished[0]?.type === 'tool' && finished[0].status, 'done');
+  });
+
+  it('reads error text from failed Claude result events', () => {
+    assert.equal(claudeResultErrorMessage({ type: 'result', result: 'ok' }), undefined);
+    assert.equal(
+      claudeResultErrorMessage({
+        type: 'result',
+        is_error: true,
+        result: 'Session not found',
+      }),
+      'Session not found',
+    );
+    assert.equal(
+      claudeResultErrorMessage({ type: 'result', subtype: 'error_during_execution', result: '' }),
+      'Claude ended this turn (error_during_execution).',
+    );
   });
 });
 

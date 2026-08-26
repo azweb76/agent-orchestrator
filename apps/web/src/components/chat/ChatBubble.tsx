@@ -177,6 +177,7 @@ export function ChatBubble({
   }
 
   const showBody = !hideBody || Boolean(message.metadata?.error);
+  const bodyText = message.content.trim();
 
   return (
     <Box
@@ -239,11 +240,15 @@ export function ChatBubble({
       {showBody ? (
         <>
           <Attachments message={message} />
-          {hideBody ? null : (
+          {hideBody ? null : bodyText ? (
             <MarkdownContent
               content={message.content || ''}
               cursor={cursor ?? Boolean(streaming && message.content)}
             />
+          ) : streaming || message.metadata?.error ? null : (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              {message.metadata?.stopped ? 'Stopped before a reply.' : 'No reply'}
+            </Typography>
           )}
 
           {metaBits.length > 0 ? (

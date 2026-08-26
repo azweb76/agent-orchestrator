@@ -79,9 +79,12 @@ import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionC
 import {
   appendStreamText,
   applyStreamEvent,
+  adoptParentClaudeSessionId,
   coalesceTimelineText,
+  completeRunningTools,
   extractPlanFromInput,
   buildAskUserQuestionUpdatedInput,
+  isTopLevelClaudeResult,
   parentStreamTextDelta,
   type StreamPart,
 } from '@agent-orchestrator/shared';
@@ -1421,18 +1424,34 @@ export async function createAgentPullRequest(
   return pr;
 }
 
-function extractCostUsd(events: Array<{ total_cost_usd?: number; type?: string }>): number | undefined {
+function extractCostUsd(
+  events: Array<Record<string, unknown>>,
+  parentSessionId?: string | null,
+): number | undefined {
   for (let i = events.length - 1; i >= 0; i -= 1) {
-    const cost = events[i]?.total_cost_usd;
+    const event = events[i];
+    if (!event || !isTopLevelClaudeResult(event, parentSessionId)) continue;
+    const cost = event.total_cost_usd;
     if (typeof cost === 'number') return cost;
   }
   return undefined;
 }
 
+function placeholderAssistantContent(stopped: boolean | undefined, existing?: string): string {
+  if (existing?.trim() && existing !== '[no output]') return existing;
+  return stopped ? '[stopped]' : '';
+}
+
 function finalizeSessionRun(
   ctx: AppContext,
   session: ChatSession,
-  result: { result: string; sessionId: string | null; events?: Array<{ total_cost_usd?: number }>; stopped?: boolean },
+  result: {
+    result: string;
+    sessionId: string | null;
+    events?: Array<Record<string, unknown>>;
+    stopped?: boolean;
+    error?: string;
+  },
   assistantText: string,
   extras: MessageMetadata = {},
   options: { assistantMessageId?: string; runLogPath?: string | null } = {},
@@ -1453,17 +1472,24 @@ function finalizeSessionRun(
     syncAgentFromSessions(ctx, session.agentId);
   }
 
+  const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;
   const content =
-    (typeof result.result === 'string' && result.result.trim() ? result.result : '') ||
+    (typeof result.result === 'string' && result.result.trim() && result.result !== '[stopped]'
+      ? result.result
+      : '') ||
     assistantText.trim() ||
-    coalesceTimelineText(extras.timeline ?? []) ||
+    coalesceTimelineText(timeline ?? []) ||
     '';
   const metadata: MessageMetadata = {
     ...extras,
+    timeline,
     streaming: false,
-    costUsd: extras.costUsd ?? extractCostUsd(result.events ?? []),
+    costUsd: extras.costUsd ?? extractCostUsd(result.events ?? [], result.sessionId),
     stopped: extras.stopped ?? result.stopped,
+    error: extras.error ?? result.error,
   };
+
+  const storedContent = content || placeholderAssistantContent(metadata.stopped);
 
   const assistantMessageId = options.assistantMessageId;
   if (assistantMessageId) {
@@ -1474,7 +1500,7 @@ function finalizeSessionRun(
         agentId: session.agentId,
         sessionId: session.id,
         role: 'assistant',
-        content: content || (metadata.stopped ? '[stopped]' : '[no output]'),
+        content: storedContent,
         attachments: [],
         metadata,
         createdAt: nowIso(),
@@ -1482,7 +1508,7 @@ function finalizeSessionRun(
     }
     return ctx.repos.messages.update({
       ...existing,
-      content: content || (metadata.stopped ? '[stopped]' : existing.content || '[no output]'),
+      content: content || placeholderAssistantContent(metadata.stopped, existing.content),
       metadata: {
         ...existing.metadata,
         ...metadata,
@@ -1498,7 +1524,7 @@ function finalizeSessionRun(
   if (last?.role === 'assistant') {
     const updated: Message = {
       ...last,
-      content: content || (metadata.stopped ? '[stopped]' : last.content || '[no output]'),
+      content: content || placeholderAssistantContent(metadata.stopped, last.content),
       metadata: {
         ...last.metadata,
         ...metadata,
@@ -1514,7 +1540,7 @@ function finalizeSessionRun(
     agentId: session.agentId,
     sessionId: session.id,
     role: 'assistant',
-    content: content || (metadata.stopped ? '[stopped]' : '[no output]'),
+    content: storedContent,
     attachments: [],
     metadata,
     createdAt: nowIso(),
@@ -1686,6 +1712,7 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
   let assistantText = '';
   let timeline: StreamPart[] = [];
   let lastPersistAt = 0;
+  let parentClaudeSessionId: string | null = session.claudeSessionId;
 
   const flushProgress = (forcePersist = false) => {
     const now = Date.now();
@@ -1702,17 +1729,19 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
     },
     meta?: { replay?: boolean },
   ) => {
-    const token = parentStreamTextDelta(event as Record<string, unknown>);
+    const record = event as Record<string, unknown>;
+    parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, record);
+    const token = parentStreamTextDelta(record, parentClaudeSessionId);
     if (token) {
       assistantText += token;
       timeline = appendStreamText(timeline, token);
       flushProgress();
     } else if (event.type !== 'stderr') {
-      timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
+      timeline = applyStreamEvent(timeline, record, parentClaudeSessionId);
       flushProgress(true);
       if (!meta?.replay) {
         ctx.repos.events.create(
-          makeEvent(session.agentId, event.type, event as Record<string, unknown>),
+          makeEvent(session.agentId, event.type, record),
         );
       }
     }
@@ -1891,6 +1920,7 @@ export async function streamAgentChat(
   let timeline: StreamPart[] = [];
   let lastPersistAt = 0;
   const startedAt = Date.now();
+  let parentClaudeSessionId: string | null = runningSession.claudeSessionId;
 
   const flushProgress = (forcePersist = false) => {
     const now = Date.now();
@@ -1934,16 +1964,18 @@ export async function streamAgentChat(
         send('permission_request', payload);
       },
       onEvent: (event) => {
-        const token = parentStreamTextDelta(event as Record<string, unknown>);
+        const record = event as Record<string, unknown>;
+        parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, record);
+        const token = parentStreamTextDelta(record, parentClaudeSessionId);
         if (token) {
           assistantText += token;
           timeline = appendStreamText(timeline, token);
           flushProgress();
           send('token', { text: token });
         } else if (event.type !== 'stderr') {
-          timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
+          timeline = applyStreamEvent(timeline, record, parentClaudeSessionId);
           flushProgress(true);
-          ctx.repos.events.create(makeEvent(agentId, event.type, event as Record<string, unknown>));
+          ctx.repos.events.create(makeEvent(agentId, event.type, record));
           send('event', event);
         }
       },

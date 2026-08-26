@@ -13,13 +13,16 @@ import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
+  adoptParentClaudeSessionId,
   appendStreamText,
   applyStreamEvent,
   coalesceTimelineText,
+  completeRunningTools,
   extractPlanFromInput,
   isSubagentItem,
   isTopLevelClaudeResult,
   parseAskUserQuestions,
+  visibleAssistantContent,
   type AgentDetail,
   type ChatSession,
   type ChatSessionTemplate,
@@ -94,8 +97,10 @@ function upsertAgentSession(
 }
 
 function MessageTimeline({ message }: { message: Message }) {
-  const parts = message.metadata?.timeline ?? [];
   const streaming = Boolean(message.metadata?.streaming);
+  const parts = streaming
+    ? (message.metadata?.timeline ?? [])
+    : completeRunningTools(message.metadata?.timeline ?? []);
   const toolItems = parts.filter(
     (part): part is Extract<(typeof parts)[number], { type: 'tool' }> =>
       part.type === 'tool',
@@ -111,9 +116,8 @@ function MessageTimeline({ message }: { message: Message }) {
     otherTools.length > 0 &&
     (otherRunning || (lastPart?.type === 'tool' && !isSubagentItem(lastPart)));
   // One bubble per assistant turn — never split text across tool boundaries.
-  const textContent = message.content.trim()
-    ? message.content
-    : coalesceTimelineText(parts);
+  const rawContent = visibleAssistantContent(message.content);
+  const textContent = rawContent || coalesceTimelineText(parts);
   const showText = Boolean(textContent);
   const showThinking = streaming && !showText && !showToolProgress && !showSubagents;
 
@@ -167,6 +171,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     null,
   );
   const abortBySessionRef = useRef(new Map<string, AbortController>());
+  const parentClaudeBySessionRef = useRef<Record<string, string>>({});
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -436,6 +441,16 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
 
   const viewed = (sid: string) => sid === sessionIdRef.current;
 
+  const parentSessionForEvent = (chatSessionId: string, event: Record<string, unknown>): string | null => {
+    const stored =
+      parentClaudeBySessionRef.current[chatSessionId] ??
+      sessions.find((item) => item.id === chatSessionId)?.claudeSessionId ??
+      null;
+    const next = adoptParentClaudeSessionId(stored, event);
+    if (next) parentClaudeBySessionRef.current[chatSessionId] = next;
+    return next;
+  };
+
   const runChat = async (
     text: string,
     images: PendingImage[],
@@ -542,12 +557,13 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
+            const parentSessionId = parentSessionForEvent(stream.sessionId, event);
             patchStreamingAssistant(stream.sessionId, (message) => ({
               ...message,
               metadata: {
                 ...message.metadata,
-                streaming: !isTopLevelClaudeResult(event),
-                timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
+                streaming: !isTopLevelClaudeResult(event, parentSessionId),
+                timeline: applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId),
               },
             }));
           },
@@ -819,12 +835,13 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
+            const parentSessionId = parentSessionForEvent(stream.sessionId, event);
             patchStreamingAssistant(stream.sessionId, (message) => ({
               ...message,
               metadata: {
                 ...message.metadata,
-                streaming: !isTopLevelClaudeResult(event),
-                timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
+                streaming: !isTopLevelClaudeResult(event, parentSessionId),
+                timeline: applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId),
               },
             }));
           },

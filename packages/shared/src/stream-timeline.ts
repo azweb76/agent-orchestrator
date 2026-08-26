@@ -58,23 +58,77 @@ export function parentToolUseId(
   return stringField(event?.parent_tool_use_id);
 }
 
-/** True when this stream-json event belongs to a nested Task/Agent subagent. */
-export function isNestedSubagentEvent(event: Record<string, unknown> | null | undefined): boolean {
-  return Boolean(parentToolUseId(event));
+/**
+ * True when this stream-json event belongs to a nested Task/Agent subagent.
+ * Prefer `parent_tool_use_id`; some CLI versions omit it on the nested session's
+ * own `result`, so a different `session_id` than the parent is also nested.
+ */
+export function isNestedSubagentEvent(
+  event: Record<string, unknown> | null | undefined,
+  parentSessionId?: string | null,
+): boolean {
+  if (parentToolUseId(event)) return true;
+  const sid = stringField(event?.session_id);
+  return Boolean(parentSessionId && sid && sid !== parentSessionId);
 }
 
 /** True when Claude finished the parent turn (not a nested Explore/Task result). */
-export function isTopLevelClaudeResult(event: Record<string, unknown> | null | undefined): boolean {
-  return String(event?.type ?? '') === 'result' && !isNestedSubagentEvent(event);
+export function isTopLevelClaudeResult(
+  event: Record<string, unknown> | null | undefined,
+  parentSessionId?: string | null,
+): boolean {
+  return String(event?.type ?? '') === 'result' && !isNestedSubagentEvent(event, parentSessionId);
 }
 
-export function parentStreamTextDelta(event: Record<string, unknown>): string | undefined {
-  if (isNestedSubagentEvent(event)) return undefined;
+/**
+ * Keep the parent Claude session id. Nested Explore/Task results often have
+ * their own `session_id` and must not replace it (resume would follow the child).
+ */
+export function adoptParentClaudeSessionId(
+  current: string | null | undefined,
+  event: Record<string, unknown> | null | undefined,
+): string | null {
+  if (!event) return current ?? null;
+  if (parentToolUseId(event)) return current ?? null;
+  if (String(event.type ?? '') === 'result') return current ?? null;
+  const sid = stringField(event.session_id);
+  if (!sid) return current ?? null;
+  if (!current || sid === current) return sid;
+  // A later `system` init can rotate the parent id; nested traffic is not `system`.
+  if (String(event.type ?? '') === 'system') return sid;
+  return current;
+}
+
+/** Error text from a Claude `result` event, if the turn failed. */
+export function claudeResultErrorMessage(
+  event: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!event) return undefined;
+  const subtype = stringField(event.subtype);
+  const isError = event.is_error === true || Boolean(subtype && subtype.startsWith('error'));
+  if (!isError) return undefined;
+  if (typeof event.result === 'string' && event.result.trim()) return event.result.trim();
+  if (subtype) return `Claude ended this turn (${subtype}).`;
+  return 'Claude ended this turn with an error.';
+}
+
+export function parentStreamTextDelta(
+  event: Record<string, unknown>,
+  parentSessionId?: string | null,
+): string | undefined {
+  if (isNestedSubagentEvent(event, parentSessionId)) return undefined;
   if (String(event.type ?? '') !== 'stream_event') return undefined;
   const nested = recordField(event.event);
   const delta = recordField(nested?.delta);
   if (delta?.type === 'text_delta') return stringField(delta.text);
   return undefined;
+}
+
+/** Hide synthetic placeholders so they never look like Claude's reply. */
+export function visibleAssistantContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed || trimmed === '[no output]' || trimmed === '[stopped]') return '';
+  return content;
 }
 
 export const assistantTextDelta = parentStreamTextDelta;
@@ -156,6 +210,11 @@ function completeTools(parts: StreamPart[]): StreamPart[] {
   return parts.map((part) =>
     part.type === 'tool' && part.status === 'running' ? { ...part, status: 'done' as const } : part,
   );
+}
+
+/** Mark every still-running tool done when the parent turn is over. */
+export function completeRunningTools(parts: StreamPart[]): StreamPart[] {
+  return completeTools(parts);
 }
 
 function completeToolIds(parts: StreamPart[], ids: string[]): StreamPart[] {
@@ -409,7 +468,13 @@ function applyTaskEvent(parts: StreamPart[], event: Record<string, unknown>, kin
       ...usage,
     };
     if (index >= 0) {
-      return patchTool(parts, index, { detail: description, status: 'running', task });
+      const prev = parts[index];
+      const alreadyDone = prev?.type === 'tool' && prev.status === 'done';
+      return patchTool(parts, index, {
+        detail: description,
+        status: alreadyDone ? 'done' : 'running',
+        task,
+      });
     }
     return pushTool(parts, taskName(taskType), description, toolUseId ?? taskId, {
       ...task,
@@ -488,7 +553,11 @@ export function appendStreamText(parts: StreamPart[], token: string): StreamPart
 }
 
 /** Apply a Claude stream-json event into the ordered timeline. */
-export function applyStreamEvent(parts: StreamPart[], event: Record<string, unknown>): StreamPart[] {
+export function applyStreamEvent(
+  parts: StreamPart[],
+  event: Record<string, unknown>,
+  parentSessionId?: string | null,
+): StreamPart[] {
   const type = String(event.type ?? '');
   const nested = recordField(event.event);
   const content =
@@ -502,6 +571,11 @@ export function applyStreamEvent(parts: StreamPart[], event: Record<string, unkn
   const parentId = parentToolUseId(event);
   if (parentId) {
     return applyNestedSubagentEvent(parts, event, parentId);
+  }
+
+  if (isNestedSubagentEvent(event, parentSessionId)) {
+    // Nested session result/text without parent_tool_use_id — do not end sibling tools.
+    return parts;
   }
 
   let next = [...parts];
@@ -551,7 +625,7 @@ export function applyStreamEvent(parts: StreamPart[], event: Record<string, unkn
     next = completeToolIds(next, resultIds);
   }
 
-  if (type === 'result') {
+  if (isTopLevelClaudeResult(event, parentSessionId)) {
     next = completeTools(next);
   }
 
