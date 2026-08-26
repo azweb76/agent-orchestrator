@@ -18,6 +18,8 @@ import path from 'node:path';
 import {
   extractPlanFilePath,
   extractPlanFilePathsFromLog,
+  isNestedSubagentEvent,
+  isTopLevelClaudeResult,
 } from '@agent-orchestrator/shared';
 import {
   allowedToolsForPermissionMode,
@@ -962,11 +964,11 @@ export class ClaudeService {
         events.push(event);
         options.onEvent?.(event, { replay });
 
-        if (event.session_id) {
+        if (event.session_id && !isNestedSubagentEvent(event)) {
           sessionId = event.session_id;
         }
 
-        if (event.type === 'result' && !event.parent_tool_use_id) {
+        if (isTopLevelClaudeResult(event)) {
           if (typeof event.result === 'string') {
             result = event.result;
           }

@@ -438,6 +438,73 @@ setInterval(() => {}, 1000);
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('runStreaming ignores nested Explore results until the parent turn result', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-nested-result-'));
+  const binPath = path.join(tmp, 'fake-claude');
+  const runsDir = path.join(tmp, 'runs');
+  await writeFakeClaude(
+    binPath,
+    `#!/usr/bin/env node
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.type !== 'user') return;
+  process.stdout.write(JSON.stringify({ type: 'system', session_id: 'sess-parent' }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'stream_event',
+    event: { delta: { type: 'text_delta', text: 'Waiting on the Explore agent.' } },
+    session_id: 'sess-parent',
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'assistant',
+    parent_tool_use_id: 'tool_explore',
+    session_id: 'sess-explore',
+    message: { content: [{ type: 'text', text: 'No nested guidance for release-manager/.' }] },
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    parent_tool_use_id: 'tool_explore',
+    result: 'Conflicts are in src/merge.ts',
+    session_id: 'sess-explore',
+  }) + '\\n');
+  setTimeout(() => {
+    process.stdout.write(JSON.stringify({
+      type: 'stream_event',
+      event: { delta: { type: 'text_delta', text: ' Here is the plan.' } },
+      session_id: 'sess-parent',
+    }) + '\\n');
+    process.stdout.write(JSON.stringify({
+      type: 'result',
+      result: 'Waiting on the Explore agent. Here is the plan.',
+      session_id: 'sess-parent',
+    }) + '\\n');
+    process.exit(0);
+  }, 1800);
+});
+`,
+  );
+
+  const service = new ClaudeService(binPath, runsDir);
+  let pid: number | null = null;
+  const result = await service.runStreaming('sess-nested', {
+    cwd: tmp,
+    prompt: 'plan the merge',
+    onStarted: (handle) => {
+      pid = handle.pid;
+    },
+  });
+
+  assert.equal(result.result, 'Waiting on the Explore agent. Here is the plan.');
+  assert.equal(result.sessionId, 'sess-parent');
+  assert.equal(result.stopped, false);
+  assert.ok(pid);
+  assert.equal(isPidAlive(pid), false);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test('killProcessTree terminates process groups started detached', async () => {
   const child = spawn(
     process.execPath,
