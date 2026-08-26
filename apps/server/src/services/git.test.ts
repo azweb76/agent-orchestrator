@@ -438,6 +438,73 @@ setInterval(() => {}, 1000);
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('runStreaming ignores nested Explore results until the parent turn result', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-nested-result-'));
+  const binPath = path.join(tmp, 'fake-claude');
+  const runsDir = path.join(tmp, 'runs');
+  await writeFakeClaude(
+    binPath,
+    `#!/usr/bin/env node
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.type !== 'user') return;
+  process.stdout.write(JSON.stringify({ type: 'system', session_id: 'sess-parent' }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'stream_event',
+    event: { delta: { type: 'text_delta', text: 'Waiting on the Explore agent.' } },
+    session_id: 'sess-parent',
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'assistant',
+    parent_tool_use_id: 'tool_explore',
+    session_id: 'sess-explore',
+    message: { content: [{ type: 'text', text: 'No nested guidance for release-manager/.' }] },
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    parent_tool_use_id: 'tool_explore',
+    result: 'Conflicts are in src/merge.ts',
+    session_id: 'sess-explore',
+  }) + '\\n');
+  setTimeout(() => {
+    process.stdout.write(JSON.stringify({
+      type: 'stream_event',
+      event: { delta: { type: 'text_delta', text: ' Here is the plan.' } },
+      session_id: 'sess-parent',
+    }) + '\\n');
+    process.stdout.write(JSON.stringify({
+      type: 'result',
+      result: 'Waiting on the Explore agent. Here is the plan.',
+      session_id: 'sess-parent',
+    }) + '\\n');
+    process.exit(0);
+  }, 1800);
+});
+`,
+  );
+
+  const service = new ClaudeService(binPath, runsDir);
+  let pid: number | null = null;
+  const result = await service.runStreaming('sess-nested', {
+    cwd: tmp,
+    prompt: 'plan the merge',
+    onStarted: (handle) => {
+      pid = handle.pid;
+    },
+  });
+
+  assert.equal(result.result, 'Waiting on the Explore agent. Here is the plan.');
+  assert.equal(result.sessionId, 'sess-parent');
+  assert.equal(result.stopped, false);
+  assert.ok(pid);
+  assert.equal(isPidAlive(pid), false);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test('killProcessTree terminates process groups started detached', async () => {
   const child = spawn(
     process.execPath,
@@ -605,6 +672,8 @@ async function setupPrFetchFixture(): Promise<{
     await execGit(main, ['branch', '-M', 'main']);
   }
   await execGit(main, ['push', '-u', 'origin', 'main']);
+  // Common global config that used to delete refs/remotes/pull/*/head after fetch.
+  await execGit(main, ['config', 'fetch.prune', 'true']);
 
   await execGit(main, ['checkout', '-b', 'pr-head']);
   await fs.writeFile(path.join(main, 'feature.txt'), 'pr change\n');
@@ -627,7 +696,23 @@ test('fetchPullRequest creates local branch when not checked out', async () => {
 
   const tip = await execGit(main, ['rev-parse', 'pr-33']);
   assert.equal(tip, prCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), prCommit);
   assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), null);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('fetchPullRequest keeps the PR tip across a second fetch when prune is enabled', async () => {
+  const { tmp, main, prCommit } = await setupPrFetchFixture();
+  const git = new GitService();
+  await execGit(main, ['config', 'remote.origin.prune', 'true']);
+
+  await git.fetchPullRequest(main, 33, 'pr-33');
+  // Used to throw: not a valid object name: 'refs/remotes/pull/33/head'
+  await git.fetchPullRequest(main, 33, 'pr-33');
+
+  assert.equal(await execGit(main, ['rev-parse', 'pr-33']), prCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), prCommit);
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
@@ -660,9 +745,9 @@ test('fetchPullRequest succeeds when local PR branch is already checked out in a
   await assert.doesNotReject(() => git.fetchPullRequest(main, 33, 'pr-33'));
 
   assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
-  // Local checked-out tip is left alone; remote-tracking pull ref is updated
+  // Local checked-out tip is left alone; local PR ref is updated
   assert.equal(await execGit(worktreePath, ['rev-parse', 'pr-33']), prCommit);
-  assert.equal(await execGit(main, ['rev-parse', 'refs/remotes/pull/33/head']), newerCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), newerCommit);
 
   await fs.rm(tmp, { recursive: true, force: true });
 });

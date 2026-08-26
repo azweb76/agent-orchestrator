@@ -6,7 +6,10 @@ import {
   applyStreamEvent,
   assistantTextDelta,
   coalesceTimelineText,
+  isNestedSubagentEvent,
   isSubagentItem,
+  isTopLevelClaudeResult,
+  parentStreamTextDelta,
   runningSubagentItems,
   type StreamPart,
 } from '@agent-orchestrator/shared';
@@ -97,6 +100,81 @@ describe('stream timeline ordering', () => {
     ];
     assert.equal(activeToolItem(parts)?.id, 'b');
   });
+
+  it('keeps nested Explore text off the parent bubble and on the Task tool', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool_explore',
+            name: 'Task',
+            input: { subagent_type: 'Explore', description: 'Analyze merge conflicts' },
+          },
+        ],
+      },
+    });
+    assert.equal(parts[0]?.type, 'tool');
+    if (parts[0]?.type !== 'tool') throw new Error('expected tool');
+    assert.equal(parts[0].status, 'running');
+    assert.equal(parts[0].detail, 'Explore: Analyze merge conflicts');
+
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      parent_tool_use_id: 'tool_explore',
+      message: {
+        content: [
+          {
+            type: 'text',
+            text: 'No nested guidance for release-manager/. Waiting on the Explore agent.',
+          },
+        ],
+      },
+    });
+
+    assert.equal(coalesceTimelineText(parts), '');
+    assert.equal(parts[0]?.type, 'tool');
+    if (parts[0]?.type !== 'tool') throw new Error('expected tool');
+    assert.equal(parts[0].status, 'running');
+    assert.match(parts[0].detail ?? '', /No nested guidance for release-manager/);
+  });
+
+  it('does not treat a nested subagent result as the end of the parent turn', () => {
+    let parts: StreamPart[] = [
+      { type: 'tool', id: 'tool_explore', name: 'Task', detail: 'Explore', status: 'running' },
+      { type: 'tool', id: 'tool_other', name: 'Task', detail: 'Plan', status: 'running' },
+    ];
+    parts = applyStreamEvent(parts, {
+      type: 'result',
+      parent_tool_use_id: 'tool_explore',
+      result: 'Conflicts are in src/merge.ts',
+    });
+
+    const explore = parts.find((part) => part.type === 'tool' && part.id === 'tool_explore');
+    const other = parts.find((part) => part.type === 'tool' && part.id === 'tool_other');
+    assert.equal(explore?.type === 'tool' && explore.status, 'done');
+    assert.equal(other?.type === 'tool' && other.status, 'running');
+    assert.equal(coalesceTimelineText(parts), '');
+  });
+});
+
+describe('nested subagent event helpers', () => {
+  it('detects nested events and top-level results', () => {
+    assert.equal(isNestedSubagentEvent({ type: 'result', parent_tool_use_id: 'tool_1' }), true);
+    assert.equal(isTopLevelClaudeResult({ type: 'result', parent_tool_use_id: 'tool_1' }), false);
+    assert.equal(isTopLevelClaudeResult({ type: 'result' }), true);
+    assert.equal(parentStreamTextDelta({
+      type: 'stream_event',
+      parent_tool_use_id: 'tool_1',
+      event: { delta: { type: 'text_delta', text: 'nested' } },
+    }), undefined);
+    assert.equal(parentStreamTextDelta({
+      type: 'stream_event',
+      event: { delta: { type: 'text_delta', text: 'parent' } },
+    }), 'parent');
+  });
 });
 
 describe('parallel tools and subagents', () => {
@@ -136,8 +214,8 @@ describe('parallel tools and subagents', () => {
           : part,
       ),
       [
-        { id: 'task_1', detail: 'Explore auth', status: 'running', description: 'Explore auth' },
-        { id: 'task_2', detail: 'Explore billing', status: 'running', description: 'Explore billing' },
+        { id: 'task_1', detail: 'Explore: Explore auth', status: 'running', description: 'Explore auth' },
+        { id: 'task_2', detail: 'Explore: Explore billing', status: 'running', description: 'Explore billing' },
       ],
     );
     assert.equal(runningSubagentItems(parts).length, 2);

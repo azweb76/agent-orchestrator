@@ -26,7 +26,10 @@ const SUBAGENT_TYPE_LABELS: Record<string, string> = {
 };
 
 /** Present-tense label for the active Claude tool. */
-export function toolActionLabel(name: string): string {
+export function toolActionLabel(name: string, detail?: string): string {
+  if ((name === 'Task' || name === 'Agent') && detail && /^explore\b/i.test(detail)) {
+    return 'Exploring';
+  }
   if (TOOL_LABELS[name]) return TOOL_LABELS[name];
   if (name.startsWith('mcp__')) {
     const parts = name.split('__').filter(Boolean);
@@ -61,5 +64,6 @@ export function toolPreview(input: Record<string, unknown> | undefined): string 
   if (typeof input.query === 'string') return input.query;
   if (typeof input.url === 'string') return input.url;
   if (typeof input.description === 'string') return input.description;
+  if (typeof input.subagent_type === 'string') return input.subagent_type;
   return undefined;
 }

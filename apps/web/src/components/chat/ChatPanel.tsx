@@ -18,6 +18,7 @@ import {
   coalesceTimelineText,
   extractPlanFromInput,
   isSubagentItem,
+  isTopLevelClaudeResult,
   parseAskUserQuestions,
   type AgentDetail,
   type ChatSession,
@@ -494,7 +495,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
               ...message,
               metadata: {
                 ...message.metadata,
-                streaming: event.type !== 'result',
+                streaming: !isTopLevelClaudeResult(event),
                 timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
               },
             }));
@@ -767,7 +768,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
               ...message,
               metadata: {
                 ...message.metadata,
-                streaming: event.type !== 'result',
+                streaming: !isTopLevelClaudeResult(event),
                 timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
               },
             }));

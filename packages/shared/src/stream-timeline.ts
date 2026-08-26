@@ -35,6 +35,7 @@ const TASK_EVENT_KINDS = new Set([
 ]);
 
 const SUBAGENT_TOOL_NAMES = new Set(['Task', 'Agent']);
+const NESTED_DETAIL_MAX = 80;
 
 function stringField(value: unknown): string | undefined {
   return typeof value === 'string' && value ? value : undefined;
@@ -51,23 +52,32 @@ function recordField(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** Parent tool-use id on nested subagent stream messages, if any. */
-export function parentToolUseId(event: Record<string, unknown>): string | undefined {
-  return stringField(event.parent_tool_use_id);
+export function parentToolUseId(
+  event: Record<string, unknown> | null | undefined,
+): string | undefined {
+  return stringField(event?.parent_tool_use_id);
 }
 
-/**
- * Main-conversation text token from a `stream_event` text_delta.
- * Nested subagent deltas (`parent_tool_use_id`) are ignored so they do not
- * leak into the parent transcript.
- */
-export function assistantTextDelta(event: Record<string, unknown>): string | undefined {
-  if (parentToolUseId(event)) return undefined;
+/** True when this stream-json event belongs to a nested Task/Agent subagent. */
+export function isNestedSubagentEvent(event: Record<string, unknown> | null | undefined): boolean {
+  return Boolean(parentToolUseId(event));
+}
+
+/** True when Claude finished the parent turn (not a nested Explore/Task result). */
+export function isTopLevelClaudeResult(event: Record<string, unknown> | null | undefined): boolean {
+  return String(event?.type ?? '') === 'result' && !isNestedSubagentEvent(event);
+}
+
+export function parentStreamTextDelta(event: Record<string, unknown>): string | undefined {
+  if (isNestedSubagentEvent(event)) return undefined;
   if (String(event.type ?? '') !== 'stream_event') return undefined;
   const nested = recordField(event.event);
   const delta = recordField(nested?.delta);
   if (delta?.type === 'text_delta') return stringField(delta.text);
   return undefined;
 }
+
+export const assistantTextDelta = parentStreamTextDelta;
 
 export function isSubagentToolName(name: string): boolean {
   return SUBAGENT_TOOL_NAMES.has(name);
@@ -90,13 +100,15 @@ export function runningSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
 
 function toolDetail(input: Record<string, unknown> | undefined): string | undefined {
   if (!input) return undefined;
+  const subagent = typeof input.subagent_type === 'string' ? input.subagent_type.trim() : '';
+  const description = typeof input.description === 'string' ? input.description.trim() : '';
+  if (subagent && description) return `${subagent}: ${description}`;
+  if (subagent || description) return subagent || description;
   return (
     stringField(input.file_path) ||
     stringField(input.path) ||
     (typeof input.command === 'string' && String(input.command).slice(0, 60)) ||
     stringField(input.pattern) ||
-    stringField(input.description) ||
-    stringField(input.subagent_type) ||
     (typeof input.prompt === 'string' && String(input.prompt).slice(0, 80)) ||
     undefined
   );
@@ -121,7 +133,9 @@ function mergeTask(prev?: ToolTaskInfo, patch?: ToolTaskInfo): ToolTaskInfo | un
   if (!prev && !patch) return undefined;
   const merged: ToolTaskInfo = { ...prev };
   if (!patch) return merged;
-  for (const [key, value] of Object.entries(patch) as Array<[keyof ToolTaskInfo, ToolTaskInfo[keyof ToolTaskInfo]]>) {
+  for (const [key, value] of Object.entries(patch) as Array<
+    [keyof ToolTaskInfo, ToolTaskInfo[keyof ToolTaskInfo]]
+  >) {
     if (value !== undefined) merged[key] = value as never;
   }
   return merged;
@@ -167,6 +181,35 @@ function findToolIndex(
     if (ids.taskId && part.task?.taskId === ids.taskId) return true;
     return false;
   });
+}
+
+function clipToolDetail(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (compact.length <= NESTED_DETAIL_MAX) return compact;
+  return `${compact.slice(0, NESTED_DETAIL_MAX - 1)}…`;
+}
+
+function nestedEventText(event: Record<string, unknown>): string | undefined {
+  const type = String(event.type ?? '');
+  if (type === 'result' && typeof event.result === 'string' && event.result.trim()) {
+    return event.result;
+  }
+  const nested = recordField(event.event);
+  const delta = recordField(nested?.delta);
+  if (delta?.type === 'text_delta') return stringField(delta.text);
+  const content = recordField(event.message)?.content ?? event.content;
+  if (Array.isArray(content)) {
+    const texts = content
+      .map((block) => {
+        if (!block || typeof block !== 'object') return '';
+        const item = block as Record<string, unknown>;
+        return item.type === 'text' && typeof item.text === 'string' ? item.text : '';
+      })
+      .filter(Boolean);
+    if (texts.length > 0) return texts.join('');
+  }
+  if (typeof content === 'string' && content.trim()) return content;
+  return undefined;
 }
 
 function pushTool(
@@ -246,6 +289,67 @@ function updateParentActivity(
     detail,
     task: lastToolName ? { lastToolName } : undefined,
   });
+}
+
+function applyNestedSubagentEvent(
+  parts: StreamPart[],
+  event: Record<string, unknown>,
+  parentId: string,
+): StreamPart[] {
+  const type = String(event.type ?? '');
+  const nested = recordField(event.event);
+  const content = recordField(event.message)?.content ?? nested?.content ?? event.content;
+  let next = parts;
+  let usedToolUse = false;
+
+  if (type === 'assistant' && Array.isArray(content)) {
+    for (const block of content) {
+      if (!block || typeof block !== 'object') continue;
+      const b = block as Record<string, unknown>;
+      if (b.type === 'tool_use') {
+        usedToolUse = true;
+        next = updateParentActivity(
+          next,
+          parentId,
+          stringField(b.name),
+          toolDetail(recordField(b.input)),
+        );
+      }
+    }
+  }
+
+  if (type === 'stream_event' && nested?.type === 'content_block_start') {
+    const block = recordField(nested.content_block);
+    if (block?.type === 'tool_use') {
+      usedToolUse = true;
+      next = updateParentActivity(
+        next,
+        parentId,
+        stringField(block.name),
+        toolDetail(recordField(block.input)),
+      );
+    }
+  }
+
+  const text = nestedEventText(event);
+  if (text && type !== 'result' && !usedToolUse) {
+    const index = findToolIndex(next, { toolUseId: parentId, id: parentId });
+    if (index >= 0) {
+      next = patchTool(next, index, { detail: clipToolDetail(text), status: 'running' });
+    }
+  }
+
+  if (type === 'result') {
+    const index = findToolIndex(next, { toolUseId: parentId, id: parentId });
+    if (index >= 0) {
+      next = patchTool(next, index, {
+        detail: text ? clipToolDetail(text) : undefined,
+        status: 'done',
+      });
+    }
+  }
+
+  return next;
 }
 
 function taskEventKind(event: Record<string, unknown>): string | undefined {
@@ -371,41 +475,6 @@ function toolResultIds(event: Record<string, unknown>, content: unknown): string
   return ids;
 }
 
-function applyNestedSubagentEvent(
-  parts: StreamPart[],
-  event: Record<string, unknown>,
-  parentId: string,
-  content: unknown,
-  nested: Record<string, unknown> | undefined,
-): StreamPart[] {
-  const type = String(event.type ?? '');
-  let next = parts;
-
-  if (type === 'assistant' && Array.isArray(content)) {
-    for (const block of content) {
-      if (!block || typeof block !== 'object') continue;
-      const b = block as Record<string, unknown>;
-      if (b.type === 'tool_use') {
-        next = updateParentActivity(
-          next,
-          parentId,
-          stringField(b.name),
-          toolDetail(recordField(b.input)),
-        );
-      }
-    }
-  }
-
-  if (type === 'stream_event' && nested?.type === 'content_block_start') {
-    const block = recordField(nested.content_block);
-    if (block?.type === 'tool_use') {
-      next = updateParentActivity(next, parentId, stringField(block.name), undefined);
-    }
-  }
-
-  return next;
-}
-
 /** Append a text token into the timeline, keeping tools interleaved in arrival order. */
 export function appendStreamText(parts: StreamPart[], token: string): StreamPart[] {
   if (!token) return parts;
@@ -432,7 +501,7 @@ export function applyStreamEvent(parts: StreamPart[], event: Record<string, unkn
 
   const parentId = parentToolUseId(event);
   if (parentId) {
-    return applyNestedSubagentEvent(parts, event, parentId, content, nested);
+    return applyNestedSubagentEvent(parts, event, parentId);
   }
 
   let next = [...parts];
@@ -465,12 +534,13 @@ export function applyStreamEvent(parts: StreamPart[], event: Record<string, unkn
       const block = recordField(nested.content_block);
       if (block?.type === 'tool_use') {
         const name = String(block.name ?? 'tool');
+        const input = recordField(block.input);
         next = pushTool(
           next,
           name,
-          undefined,
+          toolDetail(input),
           stringField(block.id),
-          taskFromToolInput(name, recordField(block.input)),
+          taskFromToolInput(name, input),
         );
       }
     }

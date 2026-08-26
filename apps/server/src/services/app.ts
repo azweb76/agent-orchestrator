@@ -76,10 +76,10 @@ import { resolveClaudeSessionFilePath, readClaudeSessionFile } from '../services
 import {
   appendStreamText,
   applyStreamEvent,
-  assistantTextDelta,
   coalesceTimelineText,
   extractPlanFromInput,
   buildAskUserQuestionUpdatedInput,
+  parentStreamTextDelta,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
@@ -1613,10 +1613,10 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
     },
     meta?: { replay?: boolean },
   ) => {
-    const text = assistantTextDelta(event as Record<string, unknown>);
-    if (text) {
-      assistantText += text;
-      timeline = appendStreamText(timeline, text);
+    const token = parentStreamTextDelta(event as Record<string, unknown>);
+    if (token) {
+      assistantText += token;
+      timeline = appendStreamText(timeline, token);
       flushProgress();
     } else if (event.type !== 'stderr') {
       timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
@@ -1837,12 +1837,12 @@ export async function streamAgentChat(
         send('permission_request', payload);
       },
       onEvent: (event) => {
-        const text = assistantTextDelta(event as Record<string, unknown>);
-        if (text) {
-          assistantText += text;
-          timeline = appendStreamText(timeline, text);
+        const token = parentStreamTextDelta(event as Record<string, unknown>);
+        if (token) {
+          assistantText += token;
+          timeline = appendStreamText(timeline, token);
           flushProgress();
-          send('token', { text });
+          send('token', { text: token });
         } else if (event.type !== 'stderr') {
           timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
           flushProgress(true);
