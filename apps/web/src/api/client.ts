@@ -5,6 +5,8 @@ import type {
   AgentEvent,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
+  ArchiveAgentRequest,
+  ArchiveAgentResponse,
   BuildPlanRequest,
   ChatSession,
   CreateAgentFromPrRequest,
@@ -22,6 +24,7 @@ import type {
   MergePullRequestResponse,
   Message,
   PermissionRequest,
+  PruneArchivedAgentsResponse,
   PullRequestChecks,
   PullRequestComment,
   PullRequestCommit,
@@ -70,6 +73,7 @@ export interface SystemStatus {
   claudeInstalled: boolean;
   claudeBin: string;
   githubTokenConfigured: boolean;
+  archivedAgentCount: number;
 }
 
 export const api = {
@@ -158,8 +162,13 @@ export const api = {
     request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),
   stopAgent: (agentId: string) =>
     request<Agent>(`/agents/${agentId}/stop`, { method: 'POST' }),
-  archiveAgent: (agentId: string) =>
-    request<Agent>(`/agents/${agentId}/archive`, { method: 'POST' }),
+  archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>
+    request<ArchiveAgentResponse>(`/agents/${agentId}/archive`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  pruneArchivedAgents: () =>
+    request<PruneArchivedAgentsResponse>('/agents/prune-archived', { method: 'POST' }),
   listSessions: (agentId: string) => request<ChatSession[]>(`/agents/${agentId}/sessions`),
   createSession: (agentId: string, body: CreateChatSessionRequest = {}) =>
     request<{ session: ChatSession; kickoffPrompt: string | null }>(

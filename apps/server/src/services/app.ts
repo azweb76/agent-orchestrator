@@ -9,6 +9,8 @@ import type {
   AgentEvent,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
+  ArchiveAgentRequest,
+  ArchiveAgentResponse,
   BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
@@ -32,6 +34,7 @@ import type {
   MessageMetadata,
   PermissionMode,
   PermissionRequest,
+  PruneArchivedAgentsResponse,
   PullRequestChecks,
   PullRequestDetail,
   PullRequestInbox,
@@ -429,8 +432,7 @@ export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
   const workspace = ctx.repos.workspaces.getById(worktree.workspaceId);
   if (!workspace) throw new Error('Workspace not found');
 
-  const agent = ctx.repos.agents.getByWorktreeId(worktreeId);
-  if (agent) {
+  for (const agent of ctx.repos.agents.listByWorktreeId(worktreeId)) {
     await stopAllSessions(ctx, agent);
   }
 
@@ -539,11 +541,20 @@ export async function stopAgentSession(ctx: AppContext, agentId: string, session
   return updated;
 }
 
-export async function archiveAgent(ctx: AppContext, agentId: string) {
+export async function archiveAgent(
+  ctx: AppContext,
+  agentId: string,
+  body: ArchiveAgentRequest = {},
+): Promise<ArchiveAgentResponse> {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
 
   await stopAllSessions(ctx, agent);
+
+  if (body.deleteWorktree) {
+    await deleteWorktree(ctx, agent.worktreeId);
+    return { agent: null, deletedWorktree: true };
+  }
   const updated: Agent = {
     ...syncAgentFromSessions(ctx, agentId),
     status: 'archived',
@@ -554,7 +565,48 @@ export async function archiveAgent(ctx: AppContext, agentId: string) {
   };
   ctx.repos.agents.update(updated);
   ctx.repos.events.create(makeEvent(agentId, 'agent_archived', {}));
-  return updated;
+  return { agent: updated, deletedWorktree: false };
+}
+
+/**
+ * Permanently remove archived agents. Worktrees are deleted only when they
+ * have no remaining active agent; otherwise only the archived agent rows go.
+ */
+export async function pruneArchivedAgents(ctx: AppContext): Promise<PruneArchivedAgentsResponse> {
+  const archived = ctx.repos.agents.listArchived();
+  let prunedAgents = 0;
+  let deletedWorktrees = 0;
+  const worktreeIds = [...new Set(archived.map((agent) => agent.worktreeId))];
+
+  for (const worktreeId of worktreeIds) {
+    const archivedOnTree = archived.filter((agent) => agent.worktreeId === worktreeId);
+    for (const agent of archivedOnTree) {
+      await stopAllSessions(ctx, agent);
+    }
+
+    const active = ctx.repos.agents.getByWorktreeId(worktreeId);
+    if (active) {
+      for (const agent of archivedOnTree) {
+        ctx.repos.agents.delete(agent.id);
+        prunedAgents += 1;
+      }
+      continue;
+    }
+
+    if (!ctx.repos.worktrees.getById(worktreeId)) {
+      for (const agent of archivedOnTree) {
+        ctx.repos.agents.delete(agent.id);
+        prunedAgents += 1;
+      }
+      continue;
+    }
+
+    await deleteWorktree(ctx, worktreeId);
+    deletedWorktrees += 1;
+    prunedAgents += archivedOnTree.length;
+  }
+
+  return { prunedAgents, deletedWorktrees };
 }
 
 export function listAgentSessions(ctx: AppContext, agentId: string): ChatSession[] {
@@ -1955,5 +2007,6 @@ export async function getSystemStatus(ctx: AppContext) {
     claudeInstalled,
     claudeBin: process.env.CLAUDE_BIN ?? 'claude',
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
+    archivedAgentCount: ctx.repos.agents.countArchived(),
   };
 }

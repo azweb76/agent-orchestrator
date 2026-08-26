@@ -399,6 +399,35 @@ export class AgentRepository {
       .map(rowToAgent);
   }
 
+  listArchived(): Agent[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM agents
+         WHERE archived_at IS NOT NULL
+         ORDER BY archived_at ASC`,
+      )
+      .all()
+      .map(rowToAgent);
+  }
+
+  listByWorktreeId(worktreeId: string): Agent[] {
+    return this.db
+      .prepare(`SELECT * FROM agents WHERE worktree_id = ? ORDER BY created_at DESC`)
+      .all(worktreeId)
+      .map(rowToAgent);
+  }
+
+  countArchived(): number {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS count FROM agents WHERE archived_at IS NOT NULL`)
+      .get() as { count: number };
+    return Number(row.count);
+  }
+
+  delete(id: string): void {
+    this.db.prepare('DELETE FROM agents WHERE id = ?').run(id);
+  }
+
   update(agent: Agent): Agent {
     this.db
       .prepare(

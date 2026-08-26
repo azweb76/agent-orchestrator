@@ -43,6 +43,7 @@ import {
   listWorkspaces,
   listWorktrees,
   mergePullRequest,
+  pruneArchivedAgents,
   rewindAgentChat,
   searchGitHubRepositories,
   setPullRequestState,
@@ -350,6 +351,13 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
+  router.post(
+    '/agents/prune-archived',
+    asyncHandler(async (_req, res) => {
+      res.json(await pruneArchivedAgents(ctx));
+    }),
+  );
+
   router.patch(
     '/agents/:agentId',
     asyncHandler(async (req, res) => {
@@ -377,7 +385,8 @@ export function createRouter(ctx: AppContext): express.Router {
   router.post(
     '/agents/:agentId/archive',
     asyncHandler(async (req, res) => {
-      res.json(await archiveAgent(ctx, param(req.params.agentId)));
+      const body = z.object({ deleteWorktree: z.boolean().optional() }).parse(req.body ?? {});
+      res.json(await archiveAgent(ctx, param(req.params.agentId), body));
     }),
   );
 
