@@ -20,28 +20,33 @@ export function DiffBlock({ patch }: { patch: string }) {
         py: 0.5,
       }}
     >
-      {patch.split('\n').map((line, index) => (
-        <Box
-          key={index}
-          component="pre"
-          sx={{
-            m: 0,
-            px: 1.5,
-            whiteSpace: 'pre',
-            bgcolor: LINE_COLORS[line[0] ?? ''] ?? 'transparent',
-            color:
-              line.startsWith('+')
-                ? 'success.light'
-                : line.startsWith('-')
-                  ? 'error.light'
-                  : line.startsWith('@')
-                    ? 'secondary.light'
-                    : 'text.secondary',
-          }}
-        >
-          {line || ' '}
-        </Box>
-      ))}
+      {/* Override theme `pre` overflow/maxWidth so only this block scrolls. */}
+      <Box sx={{ width: 'max-content', minWidth: '100%' }}>
+        {patch.split('\n').map((line, index) => (
+          <Box
+            key={index}
+            component="pre"
+            sx={{
+              m: 0,
+              px: 1.5,
+              whiteSpace: 'pre',
+              overflowX: 'visible',
+              maxWidth: 'none',
+              bgcolor: LINE_COLORS[line[0] ?? ''] ?? 'transparent',
+              color:
+                line.startsWith('+')
+                  ? 'success.light'
+                  : line.startsWith('-')
+                    ? 'error.light'
+                    : line.startsWith('@')
+                      ? 'secondary.light'
+                      : 'text.secondary',
+            }}
+          >
+            {line || ' '}
+          </Box>
+        ))}
+      </Box>
     </Box>
   );
 }
