@@ -7,6 +7,7 @@ import {
   applyInstructionFile,
   isAllowedInstructionRelativePath,
   listInstructionFiles,
+  loadInstructionFileExcerpts,
   resolveInstructionWritePath,
   sanitizeSkillSlug,
 } from './instruction-files.js';
@@ -98,6 +99,17 @@ description: Personal notes skill
     assert.ok(paths.includes('personal:.claude/skills/notes/SKILL.md'));
     assert.equal(files.find((item) => item.relativePath === 'CLAUDE.md')?.exists, true);
     assert.equal(files.find((item) => item.relativePath === 'AGENTS.md')?.exists, false);
+  });
+
+  it('loads truncated excerpts for existing instruction files', async () => {
+    const excerpts = await loadInstructionFileExcerpts({ worktreePath: tmp, homeDir: home });
+    const claude = excerpts.find((item) => item.relativePath === 'CLAUDE.md');
+    assert.equal(claude?.exists, true);
+    assert.ok((claude?.charCount ?? 0) > 0);
+    assert.match(claude?.excerpt ?? '', /Existing Claude instructions/);
+    const agents = excerpts.find((item) => item.relativePath === 'AGENTS.md');
+    assert.equal(agents?.exists, false);
+    assert.equal(agents?.charCount, 0);
   });
 
   it('creates a skill and updates CLAUDE.md', async () => {

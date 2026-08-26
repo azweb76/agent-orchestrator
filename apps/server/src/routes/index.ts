@@ -445,10 +445,9 @@ export function createRouter(ctx: AppContext): express.Router {
     asyncHandler(async (req, res) => {
       const body = z
         .object({
-          score: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
-          comment: z.string().max(4000).optional(),
+          notes: z.string().max(4000).optional(),
         })
-        .parse(req.body);
+        .parse(req.body ?? {});
       res.json(
         await gradeAgentSession(
           ctx,

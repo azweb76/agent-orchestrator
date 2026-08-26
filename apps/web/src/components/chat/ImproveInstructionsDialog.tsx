@@ -146,7 +146,7 @@ export function ImproveInstructionsDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
-            Use this session’s transcript and grade to draft a reusable skill or update CLAUDE.md /
+            Use this session’s transcript and AI grade to draft a reusable skill or update CLAUDE.md /
             AGENTS.md. Review the markdown before writing it to disk.
           </Typography>
 

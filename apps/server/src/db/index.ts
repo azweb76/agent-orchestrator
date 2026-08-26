@@ -12,6 +12,7 @@ import type {
   MessageMetadata,
   PermissionMode,
   SessionGrade,
+  SessionGradeAnalysis,
   SessionGradeScore,
   Worktree,
   Workspace,
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   grade_score INTEGER,
   grade_comment TEXT,
   grade_transcript TEXT,
+  grade_analysis TEXT,
   graded_at TEXT
 );
 
@@ -202,6 +204,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'grade_score', 'INTEGER');
   ensureColumn(db, 'chat_sessions', 'grade_comment', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'grade_transcript', 'TEXT');
+  ensureColumn(db, 'chat_sessions', 'grade_analysis', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'graded_at', 'TEXT');
 }
 
@@ -554,7 +557,7 @@ export class ChatSessionRepository {
       .prepare(
         `UPDATE chat_sessions
          SET grade_score = @score, grade_comment = @comment, grade_transcript = @transcript,
-             graded_at = @gradedAt, updated_at = @updatedAt
+             grade_analysis = @analysis, graded_at = @gradedAt, updated_at = @updatedAt
          WHERE id = @id`,
       )
       .run({
@@ -562,6 +565,7 @@ export class ChatSessionRepository {
         score: grade.score,
         comment: grade.comment,
         transcript,
+        analysis: grade.analysis ? JSON.stringify(grade.analysis) : null,
         gradedAt: grade.gradedAt,
         updatedAt: grade.gradedAt,
       });
@@ -785,6 +789,19 @@ function parseGradeScore(value: unknown): SessionGradeScore | null {
   return score as SessionGradeScore;
 }
 
+function parseGradeAnalysis(value: unknown): SessionGradeAnalysis | null {
+  if (value == null || value === '') return null;
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    const row = parsed as Record<string, unknown>;
+    if (typeof row.summary !== 'string' || !Array.isArray(row.findings) || !row.stats) return null;
+    return parsed as SessionGradeAnalysis;
+  } catch {
+    return null;
+  }
+}
+
 function rowToGrade(row: Record<string, unknown>): SessionGrade | null {
   const score = parseGradeScore(row.grade_score);
   if (score == null || row.graded_at == null) return null;
@@ -792,6 +809,7 @@ function rowToGrade(row: Record<string, unknown>): SessionGrade | null {
     score,
     comment: row.grade_comment == null ? '' : String(row.grade_comment),
     gradedAt: String(row.graded_at),
+    analysis: parseGradeAnalysis(row.grade_analysis),
   };
 }
 

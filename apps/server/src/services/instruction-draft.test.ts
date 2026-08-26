@@ -41,16 +41,37 @@ test('parseInstructionDraftResponse rejects missing content', () => {
   );
 });
 
-test('buildInstructionDraftPrompt includes grade and transcript', () => {
+test('buildInstructionDraftPrompt includes grade, analysis, and transcript', () => {
   const { system, user } = buildInstructionDraftPrompt({
     transcript: 'user: do the thing',
     score: 2,
     comment: 'Skipped tests',
+    analysis: {
+      summary: 'Skipped tests',
+      stats: {
+        userTurns: 2,
+        assistantTurns: 2,
+        estimatedTokens: 400,
+        costUsd: null,
+        toolCalls: 1,
+        instructionFileCount: 0,
+        skillCount: 1,
+      },
+      findings: [
+        {
+          category: 'skills',
+          severity: 'issue',
+          title: 'Add a test skill',
+          detail: 'The session never ran tests.',
+        },
+      ],
+    },
     request: { kind: 'skill', extraNotes: 'Always run pnpm test' },
   });
   assert.match(system, /JSON object/);
   assert.match(user, /2\/5/);
   assert.match(user, /Skipped tests/);
+  assert.match(user, /Add a test skill/);
   assert.match(user, /pnpm test/);
   assert.match(user, /user: do the thing/);
 });

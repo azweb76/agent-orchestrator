@@ -14,16 +14,60 @@ export const SESSION_GRADE_LABELS: Record<SessionGradeScore, string> = {
   5: 'Excellent',
 };
 
-/** User-assigned quality grade for a chat session. */
+export const SESSION_GRADE_FINDING_CATEGORIES = [
+  'excessive_turns',
+  'wasted_tokens',
+  'bloated_context',
+  'instruction_files',
+  'skills',
+] as const;
+export type SessionGradeFindingCategory = (typeof SESSION_GRADE_FINDING_CATEGORIES)[number];
+
+export const SESSION_GRADE_FINDING_LABELS: Record<SessionGradeFindingCategory, string> = {
+  excessive_turns: 'Excessive turns',
+  wasted_tokens: 'Wasted tokens',
+  bloated_context: 'Bloated context',
+  instruction_files: 'Instruction files',
+  skills: 'Skills',
+};
+
+export type SessionGradeFindingSeverity = 'ok' | 'warning' | 'issue';
+
+export interface SessionGradeFinding {
+  category: SessionGradeFindingCategory;
+  severity: SessionGradeFindingSeverity;
+  title: string;
+  detail: string;
+}
+
+export interface SessionGradeStats {
+  userTurns: number;
+  assistantTurns: number;
+  estimatedTokens: number;
+  costUsd: number | null;
+  toolCalls: number;
+  instructionFileCount: number;
+  skillCount: number;
+}
+
+/** AI analysis of session efficiency and instruction quality. */
+export interface SessionGradeAnalysis {
+  summary: string;
+  findings: SessionGradeFinding[];
+  stats: SessionGradeStats;
+}
+
+/** Quality grade for a chat session, produced by AI analysis. */
 export interface SessionGrade {
   score: SessionGradeScore;
   comment: string;
   gradedAt: string;
+  analysis?: SessionGradeAnalysis | null;
 }
 
 export interface GradeChatSessionRequest {
-  score: SessionGradeScore;
-  comment?: string;
+  /** Optional notes the grader should consider. */
+  notes?: string;
 }
 
 export interface ChatSession {

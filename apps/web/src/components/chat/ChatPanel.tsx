@@ -24,7 +24,6 @@ import {
   type Message,
   type PermissionMode,
   type PermissionRequest,
-  type SessionGradeScore,
 } from '@agent-orchestrator/shared';
 import { api, streamBuildPlan, streamChat } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -224,10 +223,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   });
 
   const gradeMutation = useMutation({
-    mutationFn: (body: { score: SessionGradeScore; comment: string }) =>
-      api.gradeSession(agentId, activeSessionId, body),
+    mutationFn: (body: { notes?: string } = {}) => api.gradeSession(agentId, activeSessionId, body),
     onSuccess: () => {
-      setGradeOpen(false);
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     },
   });
@@ -1054,6 +1051,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             onGrade={() => {
               gradeMutation.reset();
               setGradeOpen(true);
+              if (!session?.grade?.analysis) {
+                gradeMutation.mutate({});
+              }
             }}
             onImprove={() => setImproveOpen(true)}
             onRemoveQueued={(id) => {
@@ -1099,7 +1099,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           setGradeOpen(false);
           gradeMutation.reset();
         }}
-        onSave={(score, comment) => gradeMutation.mutate({ score, comment })}
+        onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
       />
 
       <ImproveInstructionsDialog

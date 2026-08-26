@@ -4,12 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
-import type { InstructionDraft } from '@agent-orchestrator/shared';
+import type { InstructionDraft, SessionGradeAnalysis, SessionGradeScore } from '@agent-orchestrator/shared';
 import {
   buildInstructionDraftPrompt,
   parseInstructionDraftResponse,
   type InstructionDraftPromptInput,
 } from './instruction-draft.js';
+import {
+  buildSessionGradePrompt,
+  parseSessionGradeResponse,
+  type SessionGradeContext,
+} from './session-grade.js';
 
 const execAsync = promisify(exec);
 
@@ -80,6 +85,27 @@ export class AnthropicService {
       .join('');
 
     return sanitizeBranchName(text);
+  }
+
+  async analyzeSessionGrade(
+    input: SessionGradeContext,
+  ): Promise<SessionGradeAnalysis & { score: SessionGradeScore }> {
+    const { apiKey, baseUrl } = await resolveCredentials();
+    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const { system, user } = buildSessionGradePrompt(input);
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 2000,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+
+    return parseSessionGradeResponse(text, input.stats);
   }
 
   async generateInstructionDraft(input: InstructionDraftPromptInput): Promise<InstructionDraft> {

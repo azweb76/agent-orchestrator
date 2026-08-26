@@ -67,9 +67,11 @@ import { buildSessionTranscript } from '../services/session-transcript.js';
 import {
   applyInstructionFile,
   listInstructionFiles,
+  loadInstructionFileExcerpts,
   readInstructionFileContent,
   type InstructionFileRoots,
 } from '../services/instruction-files.js';
+import { buildSessionGradeContext } from '../services/session-grade.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -682,7 +684,7 @@ export async function gradeAgentSession(
   ctx: AppContext,
   agentId: string,
   sessionId: string,
-  body: GradeChatSessionRequest,
+  body: GradeChatSessionRequest = {},
 ): Promise<ChatSession> {
   const session = requireSession(ctx, agentId, sessionId);
   const messages = ctx.repos.messages.listBySession(session.id);
@@ -693,19 +695,44 @@ export async function gradeAgentSession(
     throw new Error('Cannot grade an empty session. Send a message first.');
   }
 
+  const roots = instructionRoots(ctx, agentId);
+  const [instructionFiles, skills] = await Promise.all([
+    loadInstructionFileExcerpts(roots),
+    discoverSlashCommands(roots.worktreePath),
+  ]);
+
+  const context = buildSessionGradeContext({
+    messages,
+    instructionFiles,
+    skills,
+    sessionTitle: session.title,
+    model: session.model,
+    permissionMode: session.permissionMode,
+    notes: body.notes,
+  });
+  if (!context.transcript) {
+    context.transcript = storedTranscript;
+  }
+
+  const result = await ctx.anthropic.analyzeSessionGrade(context);
   const graded = ctx.repos.sessions.setGrade(
     session.id,
     {
-      score: body.score,
-      comment: body.comment?.trim() ?? '',
+      score: result.score,
+      comment: result.summary,
       gradedAt: nowIso(),
+      analysis: {
+        summary: result.summary,
+        findings: result.findings,
+        stats: result.stats,
+      },
     },
-    transcript,
+    context.transcript || transcript,
   );
   ctx.repos.events.create(
     makeEvent(agentId, 'session_graded', {
       sessionId: session.id,
-      score: body.score,
+      score: result.score,
     }),
   );
   return graded;
@@ -744,6 +771,7 @@ export async function generateAgentInstructionDraft(
     transcript,
     score: session.grade?.score ?? null,
     comment: session.grade?.comment ?? '',
+    analysis: session.grade?.analysis ?? null,
     request: body,
     existingContent,
     existingPath: body.relativePath ?? null,

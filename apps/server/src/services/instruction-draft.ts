@@ -2,6 +2,7 @@ import type {
   GenerateInstructionDraftRequest,
   InstructionDraft,
   InstructionFileKind,
+  SessionGradeAnalysis,
   SessionGradeScore,
 } from '@agent-orchestrator/shared';
 import { sanitizeSkillSlug } from './instruction-files.js';
@@ -10,6 +11,7 @@ export interface InstructionDraftPromptInput {
   transcript: string;
   score: SessionGradeScore | null;
   comment: string;
+  analysis?: SessionGradeAnalysis | null;
   request: GenerateInstructionDraftRequest;
   existingContent?: string | null;
   existingPath?: string | null;
@@ -25,15 +27,23 @@ export function buildInstructionDraftPrompt(input: InstructionDraftPromptInput):
   system: string;
   user: string;
 } {
-  const { request, transcript, score, comment } = input;
+  const { request, transcript, score, comment, analysis } = input;
   const target = KIND_LABEL[request.kind];
   const scoreLine =
     score == null
       ? 'The session is ungraded.'
-      : `The user graded this session ${score}/5.${comment ? ` Feedback: ${comment}` : ''}`;
+      : `This session was graded ${score}/5.${comment ? ` Summary: ${comment}` : ''}`;
+  const analysisLine = analysis
+    ? [
+        'AI session analysis findings:',
+        ...analysis.findings.map(
+          (item) => `- ${item.category} [${item.severity}] ${item.title}: ${item.detail}`,
+        ),
+      ].join('\n')
+    : '';
 
   const system = [
-    'You turn a graded coding-agent chat transcript into a durable instruction artifact.',
+    'You turn a coding-agent chat transcript (and its AI grade) into a durable instruction artifact.',
     'Respond with ONLY a JSON object (no markdown fences) with keys:',
     'name (string slug), description (short when-to-use summary), content (full file markdown), rationale (1-3 sentences).',
     'For skills, content MUST start with YAML frontmatter: ---\\nname: slug\\ndescription: ...\\n---',
@@ -44,6 +54,7 @@ export function buildInstructionDraftPrompt(input: InstructionDraftPromptInput):
 
   const parts = [
     `Write ${target}. ${scoreLine}`,
+    analysisLine,
     request.extraNotes?.trim() ? `Additional notes from the user:\n${request.extraNotes.trim()}` : '',
     request.name?.trim() ? `Preferred skill name: ${request.name.trim()}` : '',
     input.existingPath

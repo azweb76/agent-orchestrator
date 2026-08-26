@@ -187,6 +187,38 @@ export async function listInstructionFiles(roots: InstructionFileRoots): Promise
   return files;
 }
 
+const MAX_INSTRUCTION_EXCERPT_CHARS = 2500;
+
+export interface InstructionFileExcerpt extends InstructionFile {
+  charCount: number;
+  excerpt: string;
+}
+
+function clipExcerpt(text: string, max = MAX_INSTRUCTION_EXCERPT_CHARS): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n…`;
+}
+
+/** List instruction files with truncated content for session grading. */
+export async function loadInstructionFileExcerpts(
+  roots: InstructionFileRoots,
+): Promise<InstructionFileExcerpt[]> {
+  const files = await listInstructionFiles(roots);
+  return Promise.all(
+    files.map(async (file) => {
+      if (!file.exists) {
+        return { ...file, charCount: 0, excerpt: '' };
+      }
+      const content = (await readInstructionFileContent(roots, file)) ?? '';
+      return {
+        ...file,
+        charCount: content.length,
+        excerpt: clipExcerpt(content),
+      };
+    }),
+  );
+}
+
 export async function readInstructionFileContent(
   roots: InstructionFileRoots,
   file: Pick<InstructionFile, 'kind' | 'scope' | 'relativePath'>,

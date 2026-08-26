@@ -650,6 +650,8 @@ export {
   chatSessionTemplateById,
   CHAT_SESSION_TEMPLATES,
   LISTED_CHAT_SESSION_TEMPLATES,
+  SESSION_GRADE_FINDING_CATEGORIES,
+  SESSION_GRADE_FINDING_LABELS,
   SESSION_GRADE_LABELS,
   SESSION_GRADE_SCORES,
   type ChatSession,
@@ -658,7 +660,12 @@ export {
   type CreateChatSessionRequest,
   type GradeChatSessionRequest,
   type SessionGrade,
+  type SessionGradeAnalysis,
+  type SessionGradeFinding,
+  type SessionGradeFindingCategory,
+  type SessionGradeFindingSeverity,
   type SessionGradeScore,
+  type SessionGradeStats,
   type UpdateChatSessionRequest,
 } from './chat-session.js';
 
