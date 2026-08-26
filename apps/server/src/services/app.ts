@@ -76,6 +76,7 @@ import { resolveClaudeSessionFilePath, readClaudeSessionFile } from '../services
 import {
   appendStreamText,
   applyStreamEvent,
+  coalesceTimelineText,
   extractPlanFromInput,
   buildAskUserQuestionUpdatedInput,
   type StreamPart,
@@ -1326,6 +1327,7 @@ function finalizeSessionRun(
   const content =
     (typeof result.result === 'string' && result.result.trim() ? result.result : '') ||
     assistantText.trim() ||
+    coalesceTimelineText(extras.timeline ?? []) ||
     '';
   const metadata: MessageMetadata = {
     ...extras,
@@ -1421,7 +1423,7 @@ function persistAssistantProgress(
   }
   const next: Message = {
     ...message,
-    content,
+    content: content || coalesceTimelineText(timeline),
     metadata: {
       ...message.metadata,
       streaming: true,

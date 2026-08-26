@@ -342,6 +342,102 @@ test('runStreaming rejects when the Claude binary is missing instead of crashing
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('runStreaming completes when Claude emits result then waits on stdin', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-result-eof-'));
+  const binPath = path.join(tmp, 'fake-claude');
+  const runsDir = path.join(tmp, 'runs');
+  await writeFakeClaude(
+    binPath,
+    `#!/usr/bin/env node
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.type !== 'user') return;
+  process.stdout.write(JSON.stringify({ type: 'system', session_id: 'sess-eof' }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'stream_event',
+    event: { delta: { type: 'text_delta', text: 'Hi!' } },
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    result: 'Hi!',
+    session_id: 'sess-eof',
+  }) + '\\n');
+});
+rl.on('close', () => process.exit(0));
+`,
+  );
+
+  const service = new ClaudeService(binPath, runsDir);
+  let pid: number | null = null;
+  const result = await service.runStreaming('sess-eof', {
+    cwd: tmp,
+    prompt: 'hi',
+    onStarted: (handle) => {
+      pid = handle.pid;
+    },
+  });
+
+  assert.equal(result.result, 'Hi!');
+  assert.equal(result.sessionId, 'sess-eof');
+  assert.equal(result.stopped, false);
+  assert.ok(pid);
+  assert.equal(isPidAlive(pid), false);
+  assert.equal(service.getRunningProcess('sess-eof'), undefined);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('runStreaming reaps a process that hangs after the result event', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-result-hang-'));
+  const binPath = path.join(tmp, 'fake-claude');
+  const runsDir = path.join(tmp, 'runs');
+  await writeFakeClaude(
+    binPath,
+    `#!/usr/bin/env node
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.type !== 'user') return;
+  process.stdout.write(JSON.stringify({ type: 'system', session_id: 'sess-hang' }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'Hi there.' }] },
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    result: 'Hi there.',
+    session_id: 'sess-hang',
+  }) + '\\n');
+});
+setInterval(() => {}, 1000);
+`,
+  );
+
+  const service = new ClaudeService(binPath, runsDir);
+  let pid: number | null = null;
+  const result = await service.runStreaming('sess-hang', {
+    cwd: tmp,
+    prompt: 'hi',
+    onStarted: (handle) => {
+      pid = handle.pid;
+    },
+  });
+
+  assert.equal(result.result, 'Hi there.');
+  assert.equal(result.sessionId, 'sess-hang');
+  assert.equal(result.stopped, false);
+  assert.ok(pid);
+  assert.equal(isPidAlive(pid), false);
+  assert.equal(service.getRunningProcess('sess-hang'), undefined);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test('killProcessTree terminates process groups started detached', async () => {
   const child = spawn(
     process.execPath,

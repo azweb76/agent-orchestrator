@@ -209,6 +209,8 @@ export class GitService {
 export interface ClaudeStreamEvent {
   type: string;
   subtype?: string;
+  /** Present on nested subagent messages; a top-level turn result omits this. */
+  parent_tool_use_id?: string;
   event?: {
     delta?: {
       type?: string;
@@ -275,8 +277,11 @@ export function buildClaudeArgs(options: {
   defaultAllowedTools?: string;
 }): string[] {
   const permissionMode = options.permissionMode ?? 'plan';
-  // Stream-json stdin is required for --permission-prompt-tool stdio.
-  // Do not pass -p here: the prompt is written as a user message on stdin after spawn.
+  // Print mode is required for --output-format/--input-format/--include-partial-messages.
+  // Without --print the CLI can emit an assistant reply and then wait on stdin forever
+  // (no result event, process never exits) — the chat UI stays "Running".
+  // Do not pass the prompt as a --print argument: write it as a stream-json user
+  // message on stdin so control_response replies share the same channel.
   //
   // --allowedTools auto-approves without prompting. Never list AskUserQuestion /
   // ExitPlanMode here or the agent page cannot collect answers / plan approval.
@@ -286,6 +291,7 @@ export function buildClaudeArgs(options: {
     options.defaultAllowedTools ??
     allowedToolsForPermissionMode(permissionMode);
   const args = [
+    '--print',
     '--output-format',
     'stream-json',
     '--input-format',
@@ -702,6 +708,21 @@ export class ClaudeService {
   }
 
   /**
+   * Stream-json print mode only exits on stdin EOF, and some CLI versions hang
+   * even after a result event. Close stdin, then SIGTERM if the pid lingers.
+   */
+  private reapAfterResult(agentId: string, handlePid: number, waitMs = 1500): void {
+    const timer = setTimeout(() => {
+      const tracked = this.running.get(agentId);
+      if (!tracked || tracked.pid !== handlePid) return;
+      if (!isPidAlive(handlePid)) return;
+      killProcessTree(handlePid);
+      scheduleForceKill(handlePid);
+    }, waitMs);
+    timer.unref();
+  }
+
+  /**
    * Reply to a pending can_use_tool control request over Claude's stdin.
    * Returns false when the request is unknown or stdin is unavailable.
    */
@@ -933,7 +954,7 @@ export class ClaudeService {
           sessionId = event.session_id;
         }
 
-        if (event.type === 'result') {
+        if (event.type === 'result' && !event.parent_tool_use_id) {
           if (typeof event.result === 'string') {
             result = event.result;
           }
@@ -944,6 +965,7 @@ export class ClaudeService {
             // the process open while stdin is still writable). Only touch this run —
             // Build may already have started a replacement process under the same agentId.
             this.closeStdinForRun(agentId, handle.pid);
+            this.reapAfterResult(agentId, handle.pid);
           }
         }
 

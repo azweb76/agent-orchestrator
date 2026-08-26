@@ -25,7 +25,9 @@ test('buildClaudeArgs enables stdio permission prompts and interactive tools', (
     permissionMode: 'plan',
     model: 'sonnet',
   });
+  assert.ok(args.includes('--print'));
   assert.ok(!args.includes('-p'));
+  assert.equal(args[0], '--print');
   assert.ok(args.includes('--permission-prompt-tool'));
   assert.equal(args[args.indexOf('--permission-prompt-tool') + 1], 'stdio');
   assert.ok(args.includes('--input-format'));

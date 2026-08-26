@@ -461,7 +461,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
               ...message,
               metadata: {
                 ...message.metadata,
-                streaming: true,
+                streaming: event.type !== 'result',
                 timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
               },
             }));
@@ -734,7 +734,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
               ...message,
               metadata: {
                 ...message.metadata,
-                streaming: true,
+                streaming: event.type !== 'result',
                 timeline: applyStreamEvent(message.metadata.timeline ?? [], event),
               },
             }));

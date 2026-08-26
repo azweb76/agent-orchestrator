@@ -16,6 +16,7 @@ import {
   createAgentSession,
   getAgentDetail,
   getAgentMessages,
+  streamAgentChat,
   type AppContext,
 } from './app.js';
 import { AnthropicService } from './anthropic.js';
@@ -243,6 +244,115 @@ test('getAgentDetail includes sessions', async () => {
     const detail = await getAgentDetail(ctx, agent.id);
     assert.equal(detail.sessions.length, 1);
     assert.equal(detail.activeSessionId, 'plan-sess');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('streamAgentChat goes idle after a result even if Claude keeps running', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-idle-'));
+  try {
+    const db = initDatabase(tmp);
+    const repos = createRepositories(db);
+    const binPath = path.join(tmp, 'fake-claude');
+    await writeFakeClaude(
+      binPath,
+      `#!/usr/bin/env node
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.type !== 'user') return;
+  process.stdout.write(JSON.stringify({ type: 'system', session_id: 'claude-hi' }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'assistant',
+    message: { content: [{ type: 'text', text: 'Hi! Plan mode is on.' }] },
+  }) + '\\n');
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    result: 'Hi! Plan mode is on.',
+    session_id: 'claude-hi',
+  }) + '\\n');
+});
+setInterval(() => {}, 1000);
+`,
+    );
+
+    const ctx: AppContext = {
+      repos,
+      git: new GitService(),
+      github: new GitHubService({}),
+      claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
+      anthropic: new AnthropicService(),
+      dataDir: tmp,
+    };
+    repos.workspaces.create({
+      id: 'ws-1',
+      name: 'demo',
+      repoUrl: 'https://github.com/example/demo',
+      repoPath: tmp,
+      defaultBranch: 'main',
+      githubOwner: 'example',
+      githubRepo: 'demo',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    repos.worktrees.create({
+      id: 'wt-1',
+      workspaceId: 'ws-1',
+      name: 'agent-1',
+      path: tmp,
+      branch: 'feat',
+      prNumber: null,
+      prTitle: null,
+      baseBranch: 'main',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    repos.agents.create({
+      id: 'ag-1',
+      worktreeId: 'wt-1',
+      name: 'Agent',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      activeSessionId: 'sess-1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      archivedAt: null,
+    });
+    repos.sessions.create({
+      id: 'sess-1',
+      agentId: 'ag-1',
+      title: 'New chat 2',
+      template: 'chat',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    const { res, chunks } = mockResponse();
+    await streamAgentChat(ctx, 'ag-1', { message: 'hi' }, res, 'sess-1');
+
+    const session = ctx.repos.sessions.getById('sess-1');
+    assert.equal(session?.status, 'idle');
+    assert.equal(session?.pid, null);
+    const assistant = ctx.repos.messages
+      .listBySession('sess-1')
+      .find((item) => item.role === 'assistant');
+    assert.equal(assistant?.content, 'Hi! Plan mode is on.');
+    assert.equal(assistant?.metadata.streaming, false);
+    assert.equal(ctx.repos.agents.getById('ag-1')?.status, 'idle');
+    assert.ok(chunks.some((chunk) => chunk.includes('event: done')));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
