@@ -12,6 +12,7 @@ import {
   SESSION_GRADE_FINDING_CATEGORIES,
   SESSION_GRADE_SCORES,
 } from '@agent-orchestrator/shared';
+import { extractJsonObject } from './extract-json-object.js';
 import { buildSessionTranscript } from './session-transcript.js';
 import type { InstructionFileExcerpt } from './instruction-files.js';
 
@@ -155,9 +156,10 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
   const system = [
     'You grade a coding-agent chat session for efficiency and instruction quality.',
     'Look at excessive turns, wasted tokens, bloated context, misconfigured instruction files, and missing or weak skills.',
-    'Respond with ONLY a JSON object (no markdown fences) with keys:',
-    'score (integer 1-5), summary (2-4 sentences), findings (array).',
-    'Each finding is { category, severity, title, detail }.',
+    'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
+    '"score" (integer 1-5), "summary" (2-4 sentences), "findings" (array).',
+    'If you cannot call a tool, respond with ONLY that JSON object (no markdown fences or extra text).',
+    'Each finding is {"category":"...","severity":"...","title":"...","detail":"..."}.',
     'category must be one of: excessive_turns, wasted_tokens, bloated_context, instruction_files, skills.',
     'severity must be ok, warning, or issue.',
     'Include exactly one finding for each of those five categories. Use ok when that area looks healthy.',
@@ -197,22 +199,6 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     .join('\n\n');
 
   return { system, user };
-}
-
-function extractJsonObject(raw: string): Record<string, unknown> {
-  const trimmed = raw.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1]!.trim() : trimmed;
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start < 0 || end <= start) {
-    throw new Error('Session grade response was not valid JSON');
-  }
-  const parsed = JSON.parse(candidate.slice(start, end + 1)) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Session grade response was not a JSON object');
-  }
-  return parsed as Record<string, unknown>;
 }
 
 function asString(value: unknown): string {
@@ -256,10 +242,10 @@ function defaultFinding(category: SessionGradeFindingCategory): SessionGradeFind
 }
 
 export function parseSessionGradeResponse(
-  raw: string,
+  raw: unknown,
   stats: SessionGradeStats,
 ): SessionGradeAnalysis & { score: SessionGradeScore } {
-  const parsed = extractJsonObject(raw);
+  const parsed = extractJsonObject(raw, 'Session grade response');
   const findings: SessionGradeFinding[] = [];
   if (Array.isArray(parsed.findings)) {
     for (const item of parsed.findings) {

@@ -126,6 +126,7 @@ describe('session grade analysis', () => {
     assert.match(user, /CLAUDE.md/);
     assert.match(user, /\/retry-tests/);
     assert.match(user, /Add retry logic/);
+    assert.match(system, /submit_session_grade/);
   });
 
   it('parses fenced JSON and fills missing finding categories', () => {
@@ -155,6 +156,57 @@ describe('session grade analysis', () => {
     assert.equal(parsed.findings.find((item) => item.category === 'wasted_tokens')?.severity, 'ok');
     assert.equal(parsed.findings.find((item) => item.category === 'skills')?.title, 'No retry skill');
     assert.equal(parsed.stats.userTurns, 8);
+  });
+
+  it('parses compact unquoted keys instead of throwing a JSON SyntaxError', () => {
+    const parsed = parseSessionGradeResponse(
+      '{score: 2, summary: "Too many turns and no test skill.", findings: [{category: "excessive_turns", severity: "issue", title: "Eight retries", detail: "The user restated the same ask."}]}',
+      {
+        userTurns: 8,
+        assistantTurns: 8,
+        estimatedTokens: 12000,
+        costUsd: 1.2,
+        toolCalls: 20,
+        instructionFileCount: 1,
+        skillCount: 2,
+      },
+    );
+    assert.equal(parsed.score, 2);
+    assert.match(parsed.summary, /Too many turns/);
+    assert.equal(parsed.findings[0]?.severity, 'issue');
+  });
+
+  it('ignores prose braces before the grade object', () => {
+    const parsed = parseSessionGradeResponse(
+      'Wasted tokens {especially rereads}.\n{"score":4,"summary":"Mostly efficient.","findings":[]}',
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.equal(parsed.score, 4);
+    assert.match(parsed.summary, /Mostly efficient/);
+  });
+
+  it('accepts an already-parsed tool payload', () => {
+    const parsed = parseSessionGradeResponse(
+      { score: 5, summary: 'Efficient session.', findings: [] },
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.equal(parsed.score, 5);
   });
 
   it('derives a score from findings when the model omits one', () => {

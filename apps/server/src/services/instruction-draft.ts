@@ -6,6 +6,7 @@ import type {
   SessionGradeScore,
 } from '@agent-orchestrator/shared';
 import { sanitizeSkillSlug } from './instruction-files.js';
+import { extractJsonObject } from './extract-json-object.js';
 
 export interface InstructionDraftPromptInput {
   transcript: string;
@@ -67,22 +68,6 @@ export function buildInstructionDraftPrompt(input: InstructionDraftPromptInput):
   return { system, user: parts.join('\n\n') };
 }
 
-function extractJsonObject(raw: string): Record<string, unknown> {
-  const trimmed = raw.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1]!.trim() : trimmed;
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start < 0 || end <= start) {
-    throw new Error('Instruction draft response was not valid JSON');
-  }
-  const parsed = JSON.parse(candidate.slice(start, end + 1)) as unknown;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Instruction draft response was not a JSON object');
-  }
-  return parsed as Record<string, unknown>;
-}
-
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -92,7 +77,7 @@ export function parseInstructionDraftResponse(
   request: GenerateInstructionDraftRequest,
   existing: boolean,
 ): InstructionDraft {
-  const parsed = extractJsonObject(raw);
+  const parsed = extractJsonObject(raw, 'Instruction draft response');
   const scope = request.kind === 'skill' ? (request.scope ?? 'project') : 'project';
   const action = existing || Boolean(request.relativePath) ? 'update' : 'create';
 

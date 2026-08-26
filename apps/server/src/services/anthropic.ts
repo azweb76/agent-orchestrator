@@ -4,7 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
-import type { InstructionDraft, SessionGradeAnalysis, SessionGradeScore } from '@agent-orchestrator/shared';
+import {
+  SESSION_GRADE_FINDING_CATEGORIES,
+  type InstructionDraft,
+  type SessionGradeAnalysis,
+  type SessionGradeScore,
+} from '@agent-orchestrator/shared';
 import {
   buildInstructionDraftPrompt,
   parseInstructionDraftResponse,
@@ -64,6 +69,47 @@ async function resolveCredentials(): Promise<AnthropicCredentials> {
   );
 }
 
+const SESSION_GRADE_TOOL: Anthropic.Tool = {
+  name: 'submit_session_grade',
+  description: 'Submit the completed session grade analysis as a JSON object.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      score: {
+        type: 'integer',
+        description: 'Overall score from 1 (poor) to 5 (efficient).',
+        minimum: 1,
+        maximum: 5,
+      },
+      summary: {
+        type: 'string',
+        description: '2-4 sentence overall summary.',
+      },
+      findings: {
+        type: 'array',
+        description: 'Exactly one finding for each analysis category.',
+        items: {
+          type: 'object',
+          properties: {
+            category: {
+              type: 'string',
+              enum: [...SESSION_GRADE_FINDING_CATEGORIES],
+            },
+            severity: {
+              type: 'string',
+              enum: ['ok', 'warning', 'issue'],
+            },
+            title: { type: 'string' },
+            detail: { type: 'string' },
+          },
+          required: ['category', 'severity', 'title', 'detail'],
+        },
+      },
+    },
+    required: ['score', 'summary', 'findings'],
+  },
+};
+
 export class AnthropicService {
   async suggestBranchName(idea: string): Promise<string> {
     const { apiKey, baseUrl } = await resolveCredentials();
@@ -96,10 +142,17 @@ export class AnthropicService {
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 2000,
+      max_tokens: 4000,
       system,
       messages: [{ role: 'user', content: user }],
+      tools: [SESSION_GRADE_TOOL],
+      tool_choice: { type: 'tool', name: SESSION_GRADE_TOOL.name },
     });
+
+    const toolBlock = response.content.find((block) => block.type === 'tool_use');
+    if (toolBlock && toolBlock.type === 'tool_use') {
+      return parseSessionGradeResponse(toolBlock.input, input.stats);
+    }
 
     const text = response.content
       .map((block) => (block.type === 'text' ? block.text : ''))
