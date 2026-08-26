@@ -14,6 +14,7 @@ import { createRepositories, initDatabase } from '../db/index.js';
 import {
   buildApprovedPlan,
   createAgentSession,
+  deleteAgentSession,
   getAgentDetail,
   getAgentMessages,
   streamAgentChat,
@@ -244,6 +245,73 @@ test('getAgentDetail includes sessions', async () => {
     const detail = await getAgentDetail(ctx, agent.id);
     assert.equal(detail.sessions.length, 1);
     assert.equal(detail.activeSessionId, 'plan-sess');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('deleteAgentSession removes a session and keeps the other', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-del-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const created = await createAgentSession(ctx, agent.id, { template: 'review' });
+    ctx.repos.messages.create({
+      id: 'r1',
+      agentId: agent.id,
+      sessionId: created.session.id,
+      role: 'user',
+      content: 'review this',
+      attachments: [],
+      metadata: {},
+      createdAt: '2026-01-01T00:00:03.000Z',
+    });
+    assert.equal(ctx.repos.sessions.listByAgent(agent.id).length, 2);
+
+    const detail = await deleteAgentSession(ctx, agent.id, created.session.id);
+    const sessions = ctx.repos.sessions.listByAgent(agent.id);
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0]?.id, 'plan-sess');
+    assert.equal(detail.activeSessionId, 'plan-sess');
+    assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 2);
+    assert.equal(ctx.repos.messages.listBySession(created.session.id).length, 0);
+    assert.equal(ctx.repos.sessions.getById(created.session.id), null);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('deleteAgentSession recreates a chat session when deleting the last one', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-del-last-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const detail = await deleteAgentSession(ctx, agent.id, 'plan-sess');
+    assert.equal(detail.sessions.length, 1);
+    assert.notEqual(detail.sessions[0]?.id, 'plan-sess');
+    assert.equal(detail.sessions[0]?.title, 'New chat');
+    assert.equal(detail.sessions[0]?.template, 'chat');
+    assert.equal(detail.activeSessionId, detail.sessions[0]?.id);
+    assert.equal(ctx.repos.messages.listBySession(detail.sessions[0]!.id).length, 0);
+    assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 0);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('deleteAgentSession rejects archived agents', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-del-arch-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    ctx.repos.agents.update({
+      ...ctx.repos.agents.getById(agent.id)!,
+      status: 'archived',
+      archivedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await assert.rejects(
+      () => deleteAgentSession(ctx, agent.id, 'plan-sess'),
+      /archived/,
+    );
+    assert.equal(ctx.repos.sessions.listByAgent(agent.id).length, 1);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

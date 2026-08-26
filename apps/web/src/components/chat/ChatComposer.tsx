@@ -17,9 +17,8 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import CloseIcon from '@mui/icons-material/Close';
-import StarOutlinedIcon from '@mui/icons-material/StarOutlined';
-import StarIcon from '@mui/icons-material/Star';
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined';
+import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
+import InsightsIcon from '@mui/icons-material/Insights';
 import {
   CLAUDE_MODELS,
   LOCAL_SLASH_COMMANDS,
@@ -65,9 +64,7 @@ interface ChatComposerProps {
   onDraftChange: (value: string) => void;
   grade?: SessionGrade | null;
   canGrade?: boolean;
-  canImprove?: boolean;
   onGrade?: () => void;
-  onImprove?: () => void;
 }
 
 async function fileToPendingImage(file: File): Promise<PendingImage> {
@@ -134,9 +131,7 @@ export function ChatComposer({
   onDraftChange,
   grade,
   canGrade,
-  canImprove,
   onGrade,
-  onImprove,
 }: ChatComposerProps) {
   const [images, setImages] = useState<PendingImage[]>([]);
   const [slashDismissed, setSlashDismissed] = useState(false);
@@ -494,23 +489,7 @@ export function ChatComposer({
                   onClick={onGrade}
                   aria-label="Analyze this session"
                 >
-                  {grade ? <StarIcon fontSize="small" /> : <StarOutlinedIcon fontSize="small" />}
-                </IconButton>
-              </span>
-            </Tooltip>
-          ) : null}
-
-          {onImprove ? (
-            <Tooltip title="Create or improve a skill or instruction file">
-              <span>
-                <IconButton
-                  size="small"
-                  color="inherit"
-                  disabled={!canImprove}
-                  onClick={onImprove}
-                  aria-label="Create or improve instructions"
-                >
-                  <AutoFixHighOutlinedIcon fontSize="small" />
+                  {grade ? <InsightsIcon fontSize="small" /> : <InsightsOutlinedIcon fontSize="small" />}
                 </IconButton>
               </span>
             </Tooltip>
