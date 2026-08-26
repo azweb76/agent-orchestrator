@@ -31,6 +31,7 @@ import {
 } from '@agent-orchestrator/shared';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { ContextUsageButton } from './ContextUsageDialog';
 
 export interface PendingImage {
   id: string;
@@ -48,6 +49,7 @@ export interface QueuedChatItem {
 
 interface ChatComposerProps {
   agentId: string;
+  sessionId: string;
   archived: boolean;
   isStreaming: boolean;
   model: string;
@@ -115,6 +117,7 @@ const selectSx = {
 
 export function ChatComposer({
   agentId,
+  sessionId,
   archived,
   isStreaming,
   model,
@@ -470,6 +473,10 @@ export function ChatComposer({
               </MenuItem>
             ))}
           </Select>
+
+          {sessionId ? (
+            <ContextUsageButton agentId={agentId} sessionId={sessionId} isStreaming={isStreaming} />
+          ) : null}
 
           <Box sx={{ flex: 1 }} />
 

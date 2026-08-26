@@ -31,3 +31,15 @@ export function formatRelativeTime(iso: string | number | Date): string {
   if (absDay < 14) return rtf.format(Math.sign(diffMs) * absDay, 'day');
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+/** Compact token counts for chips and tables (1200 → 1.2k). */
+export function formatTokenCount(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) {
+    const millions = value / 1_000_000;
+    return `${millions.toFixed(abs >= 10_000_000 || abs % 1_000_000 === 0 ? 0 : 1)}M`;
+  }
+  if (abs >= 10_000) return `${Math.round(value / 1000)}k`;
+  if (abs >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(Math.round(value));
+}

@@ -689,6 +689,20 @@ export {
   type UpdateChatSessionRequest,
 } from './chat-session.js';
 
+export {
+  addTokenUsage,
+  buildSessionContextUsage,
+  contextTokensFromUsage,
+  contextWindowTokensForModel,
+  DEFAULT_CONTEXT_WINDOW_TOKENS,
+  emptyTokenUsage,
+  EXTENDED_CONTEXT_WINDOW_TOKENS,
+  totalTokensFromUsage,
+  type SessionContextTurn,
+  type SessionContextUsage,
+  type TokenUsageBreakdown,
+} from './session-context.js';
+
 export type {
   ApplyInstructionFileRequest,
   ApplyInstructionFileResponse,

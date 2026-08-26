@@ -39,6 +39,7 @@ import type {
   PullRequestInbox,
   PullRequestReview,
   RewindChatResponse,
+  SessionContextUsage,
   SidebarWorkspace,
   SlashCommand,
   SuggestBranchNameResponse,
@@ -217,6 +218,8 @@ export const api = {
     }),
   getMessages: (agentId: string, sessionId: string) =>
     request<Message[]>(`/agents/${agentId}/sessions/${sessionId}/messages`),
+  getSessionContext: (agentId: string, sessionId: string) =>
+    request<SessionContextUsage>(`/agents/${agentId}/sessions/${sessionId}/context`),
   clearMessages: (agentId: string, sessionId: string) =>
     request<{ cleared: number }>(`/agents/${agentId}/sessions/${sessionId}/messages`, {
       method: 'DELETE',
