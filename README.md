@@ -13,7 +13,8 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
   - Queue follow-ups or force-send (interrupts the current run)
   - Stop generation, clear history (`/clear` or Clear button), model + permission mode controls
   - Rewind to any user message (`/rewind` or the history button on a bubble) to truncate later turns, reset the Claude session, and restore the prompt for editing
-  - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that clears the session and implements in **auto** mode
+  - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that stashes the plan session and starts a new auto-mode session to implement
+  - Each agent can hold multiple chat sessions in parallel (for example a plan chat plus a Review or Create draft PR session)
   - Manual / plan modes prompt on the agent page for tool permissions; `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved via `--allowedTools`
   - Slash commands & skills autocomplete (project/personal/bundled)
   - Image attachments (paste or upload), markdown replies, compact tool-use progress bar (updates with the active tool)
@@ -86,6 +87,6 @@ packages/
 data/       Cloned repos, worktrees, database (gitignored)
 ```
 
-Each worktree maps 1:1 to a Claude Code agent session. Chat uses `claude -p` with `stream-json` output; follow-ups resume via `--resume <session_id>`.
+Each worktree maps 1:1 to a Claude Code agent. An agent can have multiple chat sessions (plan, build, review, draft PR) running in parallel. Chat uses `claude` with `stream-json` output; follow-ups resume via `--resume <session_id>`.
 
 Claude runs are **detached** from the orchestrator process: shutting down or restarting the app does not stop in-flight agents. Run output is written to log files under `data/runs/`; stdin uses a named pipe plus a small holder process so AskUserQuestion / permission prompts stay pending across restart. On startup the server re-attaches, rebuilds chat history from the log (without duplicating it), restores any unanswered prompts, and finalizes when the run completes.

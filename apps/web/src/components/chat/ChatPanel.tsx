@@ -19,6 +19,8 @@ import {
   extractPlanFromInput,
   parseAskUserQuestions,
   type AgentDetail,
+  type ChatSession,
+  type ChatSessionTemplate,
   type Message,
   type PermissionMode,
   type PermissionRequest,
@@ -29,6 +31,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
+import { ChatSessionBar } from './ChatSessionBar';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -61,9 +64,10 @@ function upsertMessage(messages: Message[] | undefined, message: Message): Messa
 function setMessagesCache(
   queryClient: QueryClient,
   agentId: string,
+  sessionId: string,
   updater: (prev: Message[] | undefined) => Message[],
 ): void {
-  queryClient.setQueryData<Message[]>(['messages', agentId], (prev) => updater(prev));
+  queryClient.setQueryData<Message[]>(['messages', agentId, sessionId], (prev) => updater(prev));
 }
 
 function MessageTimeline({ message }: { message: Message }) {
@@ -113,6 +117,13 @@ function MessageTimeline({ message }: { message: Message }) {
 export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const agentId = agent.id;
   const queryClient = useQueryClient();
+  const sessions = agent.sessions ?? [];
+  const [sessionId, setSessionId] = useState(
+    () => agent.activeSessionId ?? sessions[0]?.id ?? '',
+  );
+  const session: ChatSession | undefined =
+    sessions.find((item) => item.id === sessionId) ?? sessions[0];
+  const activeSessionId = session?.id ?? sessionId;
   const [draft, setDraft] = useState('');
   const [queue, setQueue] = useState<QueuedChatItem[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -133,39 +144,44 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const queueRef = useRef<QueuedChatItem[]>([]);
   const mountedRef = useRef(true);
   const autoStartedRef = useRef(false);
+  const sessionIdRef = useRef(activeSessionId);
+  const [creatingSession, setCreatingSession] = useState(false);
   const runChatRef = useRef<(text: string, images: PendingImage[], force: boolean) => Promise<void>>(
     async () => undefined,
   );
 
+  sessionIdRef.current = activeSessionId;
+
   const messagesQuery = useQuery({
-    queryKey: ['messages', agentId],
-    queryFn: () => api.getMessages(agentId),
-    // Backend is the source of truth — poll while a run is in progress.
-    refetchInterval: () => (agent.status === 'running' || isSending ? 1000 : false),
+    queryKey: ['messages', agentId, activeSessionId],
+    queryFn: () => api.getMessages(agentId, activeSessionId),
+    enabled: Boolean(activeSessionId),
+    refetchInterval: () =>
+      session?.status === 'running' || isSending ? 1000 : false,
   });
 
   const updateMutation = useMutation({
     mutationFn: (body: { model?: string; permissionMode?: PermissionMode }) =>
-      api.updateAgent(agentId, body),
+      api.updateSession(agentId, activeSessionId, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent', agentId] }),
   });
 
   const clearMutation = useMutation({
-    mutationFn: () => api.clearMessages(agentId),
+    mutationFn: () => api.clearMessages(agentId, activeSessionId),
     onSuccess: () => {
       setClearOpen(false);
       setQueue([]);
       queueRef.current = [];
       setPermissionRequests([]);
       setChatError(null);
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
     },
   });
 
   const rewindMutation = useMutation({
-    mutationFn: (messageId: string) => api.rewindMessages(agentId, messageId),
+    mutationFn: (messageId: string) => api.rewindMessages(agentId, activeSessionId, messageId),
     onSuccess: (result) => {
       setRewindTarget(null);
       setQueue([]);
@@ -174,20 +190,20 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       setChatError(null);
       setLastFailed(null);
       setDraft(result.draft);
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
     },
   });
 
   const hasStreamingMessage = (messagesQuery.data ?? []).some((m) => m.metadata?.streaming);
-  const agentBusy = agent.status === 'running' || isSending || hasStreamingMessage;
+  const sessionBusy = session?.status === 'running' || isSending || hasStreamingMessage;
 
   const pendingPermissionsQuery = useQuery({
-    queryKey: ['permissions', agentId],
-    queryFn: () => api.listPendingPermissions(agentId),
-    enabled: Boolean(agentId) && (agentBusy || permissionRequests.length > 0),
-    refetchInterval: () => (agentBusy || permissionRequests.length > 0 ? 2000 : false),
+    queryKey: ['permissions', agentId, activeSessionId],
+    queryFn: () => api.listPendingPermissions(agentId, activeSessionId),
+    enabled: Boolean(activeSessionId) && (sessionBusy || permissionRequests.length > 0),
+    refetchInterval: () => (sessionBusy || permissionRequests.length > 0 ? 2000 : false),
   });
 
   useEffect(() => {
@@ -220,7 +236,16 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   useEffect(() => {
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
-  }, [agentId]);
+  }, [agentId, activeSessionId]);
+
+  useEffect(() => {
+    if (sendingRef.current) return;
+    setQueue([]);
+    queueRef.current = [];
+    setPermissionRequests([]);
+    setChatError(null);
+    setLastFailed(null);
+  }, [activeSessionId]);
 
   useEffect(() => {
     const el = chatScrollRef.current;
@@ -262,12 +287,12 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [agentId, displayMessages.length, permissionRequests.length, messagesQuery.isLoading]);
+  }, [agentId, activeSessionId, displayMessages.length, permissionRequests.length, messagesQuery.isLoading]);
 
   const patchStreamingAssistant = (
     mutate: (message: Message) => Message,
   ) => {
-    setMessagesCache(queryClient, agentId, (prev) => {
+    setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) => {
       if (!prev?.length) return prev ?? [];
       const next = [...prev];
       for (let i = next.length - 1; i >= 0; i -= 1) {
@@ -294,10 +319,10 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       return;
     }
 
-    if ((sendingRef.current || agent.status === 'running') && force) {
+    if ((sendingRef.current || session?.status === 'running') && force) {
       abortRef.current?.abort();
       try {
-        await api.stopAgent(agentId);
+        await api.stopSession(agentId, activeSessionId);
       } catch {
         // best-effort interrupt
       }
@@ -318,6 +343,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     try {
       await streamChat(
         agentId,
+        sessionIdRef.current,
         {
           message: text,
           force,
@@ -328,13 +354,23 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           })),
         },
         {
+          onSession: (nextSession) => {
+            if (!mountedRef.current) return;
+            sessionIdRef.current = nextSession.id;
+            setSessionId(nextSession.id);
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+          },
           onUserMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+              upsertMessage(prev, message),
+            );
           },
           onAssistantMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+              upsertMessage(prev, message),
+            );
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
@@ -368,19 +404,20 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onDone: (payload) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
-            // Refresh from server instead of blindly clearing — avoids racing a
-            // late permission_request that arrives near turn end.
+            const sid = payload.chatSessionId ?? sessionIdRef.current;
+            setMessagesCache(queryClient, agentId, sid, (prev) =>
+              upsertMessage(prev, payload.message),
+            );
             void queryClient
-              .invalidateQueries({ queryKey: ['permissions', agentId] })
-              .then(() => api.listPendingPermissions(agentId))
+              .invalidateQueries({ queryKey: ['permissions', agentId, sid] })
+              .then(() => api.listPendingPermissions(agentId, sid))
               .then((pending) => {
                 if (mountedRef.current) setPermissionRequests(pending);
               })
               .catch(() => {
                 if (mountedRef.current) setPermissionRequests([]);
               });
-            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
             queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
@@ -389,7 +426,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             if (!mountedRef.current) return;
             setChatError(err);
             setLastFailed({ text, images });
-            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({
+              queryKey: ['messages', agentId, sessionIdRef.current],
+            });
           },
         },
         abortRef.current.signal,
@@ -400,12 +439,10 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         setLastFailed({ text, images });
       }
       if (mountedRef.current) {
-        queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
       }
     } finally {
-      // Always refresh from the backend after the UI subscription ends so a
-      // remount / toggle-back sees persisted history.
-      void queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
 
       if (!mountedRef.current) {
@@ -442,14 +479,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const stopStreaming = async () => {
     abortRef.current?.abort();
     try {
-      await api.stopAgent(agentId);
+      await api.stopSession(agentId, sessionIdRef.current);
     } catch {
       // ignore
     }
     setPermissionRequests([]);
-    queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+    queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-    queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+    queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
   };
 
   const removePermission = (requestId: string) => {
@@ -464,13 +501,13 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionBusy(true);
     setChatError(null);
     try {
-      await api.answerPermission(agentId, {
+      await api.answerPermission(agentId, sessionIdRef.current, {
         requestId: request.requestId,
         answers,
         response,
       });
       removePermission(request.requestId);
-      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
     } catch (error) {
       setChatError((error as Error).message);
     } finally {
@@ -484,14 +521,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     // Drop the UI SSE subscription; the backend stops the hung ExitPlanMode run.
     abortRef.current?.abort();
     try {
-      await api.denyPermission(agentId, {
+      await api.denyPermission(agentId, sessionIdRef.current, {
         requestId: request.requestId,
         message: 'User wants to keep planning. Revise the plan based on further feedback.',
       });
       removePermission(request.requestId);
-      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
     } catch (error) {
       setChatError((error as Error).message);
     } finally {
@@ -504,14 +541,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionBusy(true);
     setChatError(null);
     try {
-      await api.answerPermission(agentId, {
+      await api.answerPermission(agentId, sessionIdRef.current, {
         requestId: request.requestId,
         answers: {},
         response:
           'User skipped these questions. Continue with sensible defaults and ask again only if blocked.',
       });
       removePermission(request.requestId);
-      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
     } catch (error) {
       setChatError((error as Error).message);
     } finally {
@@ -523,9 +560,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionBusy(true);
     setChatError(null);
     try {
-      await api.allowPermission(agentId, { requestId: request.requestId });
+      await api.allowPermission(agentId, sessionIdRef.current, { requestId: request.requestId });
       removePermission(request.requestId);
-      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
     } catch (error) {
       setChatError((error as Error).message);
     } finally {
@@ -537,12 +574,12 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionBusy(true);
     setChatError(null);
     try {
-      await api.denyPermission(agentId, {
+      await api.denyPermission(agentId, sessionIdRef.current, {
         requestId: request.requestId,
         message: 'User denied this tool request.',
       });
       removePermission(request.requestId);
-      queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
     } catch (error) {
       setChatError((error as Error).message);
     } finally {
@@ -573,15 +610,27 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     try {
       await streamBuildPlan(
         agentId,
+        sessionIdRef.current,
         { requestId: request.requestId, plan: plan || undefined },
         {
+          onSession: (nextSession) => {
+            if (!mountedRef.current) return;
+            sessionIdRef.current = nextSession.id;
+            setSessionId(nextSession.id);
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+          },
           onUserMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+              upsertMessage(prev, message),
+            );
           },
           onAssistantMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, message));
+            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+              upsertMessage(prev, message),
+            );
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
@@ -615,17 +664,20 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onDone: (payload) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, (prev) => upsertMessage(prev, payload.message));
+            const sid = payload.chatSessionId ?? sessionIdRef.current;
+            setMessagesCache(queryClient, agentId, sid, (prev) =>
+              upsertMessage(prev, payload.message),
+            );
             void queryClient
-              .invalidateQueries({ queryKey: ['permissions', agentId] })
-              .then(() => api.listPendingPermissions(agentId))
+              .invalidateQueries({ queryKey: ['permissions', agentId, sid] })
+              .then(() => api.listPendingPermissions(agentId, sid))
               .then((pending) => {
                 if (mountedRef.current) setPermissionRequests(pending);
               })
               .catch(() => {
                 if (mountedRef.current) setPermissionRequests([]);
               });
-            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['events', agentId] });
             queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
@@ -634,7 +686,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           onError: (err) => {
             if (!mountedRef.current) return;
             setChatError(err);
-            queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+            queryClient.invalidateQueries({
+              queryKey: ['messages', agentId, sessionIdRef.current],
+            });
           },
         },
         abortRef.current.signal,
@@ -644,7 +698,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         setChatError((error as Error).message);
       }
     } finally {
-      void queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       if (!mountedRef.current) {
         sendingRef.current = false;
@@ -661,7 +715,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const requestClear = () => setClearOpen(true);
 
   const requestRewind = (message: Message) => {
-    if (archived || agentBusy) return;
+    if (archived || sessionBusy) return;
     setRewindTarget(message);
   };
 
@@ -674,6 +728,36 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     requestRewind(lastUser);
   };
 
+  const selectSession = async (id: string) => {
+    if (id === activeSessionId) return;
+    setSessionId(id);
+    try {
+      await api.activateSession(agentId, id);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    } catch (error) {
+      setChatError((error as Error).message);
+    }
+  };
+
+  const createSessionFromTemplate = async (template: ChatSessionTemplate) => {
+    if (archived) return;
+    setCreatingSession(true);
+    setChatError(null);
+    try {
+      const result = await api.createSession(agentId, { template: template.id });
+      sessionIdRef.current = result.session.id;
+      setSessionId(result.session.id);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      if (result.kickoffPrompt) {
+        void runChatRef.current(result.kickoffPrompt, [], false);
+      }
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setCreatingSession(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -684,6 +768,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         height: '100%',
       }}
     >
+      <ChatSessionBar
+        sessions={sessions}
+        activeSessionId={activeSessionId || null}
+        disabled={archived}
+        creating={creatingSession}
+        onSelect={(id) => void selectSession(id)}
+        onCreate={(template) => void createSessionFromTemplate(template)}
+      />
       <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <Box
           ref={chatScrollRef}
@@ -713,7 +805,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
                   compact
                   icon={<ChatOutlinedIcon />}
                   title="Start a conversation"
-                  description="Sessions begin in plan mode. Describe what you want; Claude will explore, ask clarifying questions, and present a plan. Type / for commands, /clear to reset, or /rewind to restore the last prompt."
+                  description="Sessions begin in plan mode. Describe what you want; Claude will explore, ask clarifying questions, and present a plan. Use + to start a Review or Create draft PR session in parallel. Type / for commands, /clear to reset this session, or /rewind to restore the last prompt."
                   action={
                     <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
                       {['/diff', '/test', '/pr', '/code-review'].map((command) => (
@@ -862,9 +954,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           <ChatComposer
             agentId={agentId}
             archived={archived}
-            isStreaming={agentBusy}
-            model={agent.model}
-            permissionMode={agent.permissionMode ?? 'plan'}
+            isStreaming={sessionBusy}
+            model={session?.model ?? agent.model}
+            permissionMode={session?.permissionMode ?? agent.permissionMode ?? 'plan'}
             queue={queue}
             draft={draft}
             onDraftChange={setDraft}
@@ -882,7 +974,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       <ConfirmDialog
         open={clearOpen}
         title="Clear chat?"
-        description="This clears chat history, resets the Claude session, and returns the agent to plan mode."
+        description="This clears this session's chat history, resets its Claude session, and returns it to plan mode. Other sessions are left as they are."
         confirmLabel="Clear"
         loading={clearMutation.isPending}
         onCancel={() => setClearOpen(false)}

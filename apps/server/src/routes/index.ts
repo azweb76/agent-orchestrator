@@ -7,10 +7,12 @@ import {
   archiveAgent,
   allowPermissionRequest,
   answerAskUserQuestion,
+  activateAgentSession,
   buildApprovedPlan,
   clearAgentChat,
   createAgentFromPullRequest,
   createAgentPullRequest,
+  createAgentSession,
   createWorktreeFromBranch,
   createWorktreeFromIdea,
   createWorktreeFromPr,
@@ -32,6 +34,7 @@ import {
   getPullRequestReviews,
   getSystemStatus,
   getWorkspace,
+  listAgentSessions,
   listAgentSlashCommands,
   listGitHubBranches,
   listGitHubPullRequests,
@@ -44,9 +47,11 @@ import {
   searchGitHubRepositories,
   setPullRequestState,
   stopAgent,
+  stopAgentSession,
   streamAgentChat,
   suggestBranchNameForWorkspace,
   updateAgent,
+  updateAgentSession,
   updatePullRequestBranch,
 } from '../services/app.js';
 
@@ -376,6 +381,216 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
+  const sessionTemplate = z.enum(['chat', 'build', 'create-draft-pr', 'review']);
+
+  router.get(
+    '/agents/:agentId/sessions',
+    asyncHandler(async (req, res) => {
+      res.json(listAgentSessions(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          template: sessionTemplate.optional(),
+          title: z.string().optional(),
+        })
+        .parse(req.body ?? {});
+      res.status(201).json(await createAgentSession(ctx, param(req.params.agentId), body));
+    }),
+  );
+
+  router.patch(
+    '/agents/:agentId/sessions/:sessionId',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          title: z.string().optional(),
+          model: z.string().optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+          permissionMode: z
+            .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
+            .optional(),
+        })
+        .parse(req.body);
+      res.json(
+        await updateAgentSession(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+          body,
+        ),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/activate',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await activateAgentSession(ctx, param(req.params.agentId), param(req.params.sessionId)),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/stop',
+    asyncHandler(async (req, res) => {
+      res.json(await stopAgentSession(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/sessions/:sessionId/messages',
+    asyncHandler(async (req, res) => {
+      res.json(getAgentMessages(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.delete(
+    '/agents/:agentId/sessions/:sessionId/messages',
+    asyncHandler(async (req, res) => {
+      res.json(await clearAgentChat(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/messages/rewind',
+    asyncHandler(async (req, res) => {
+      const body = z.object({ messageId: z.string().min(1) }).parse(req.body);
+      res.json(
+        await rewindAgentChat(
+          ctx,
+          param(req.params.agentId),
+          body,
+          param(req.params.sessionId),
+        ),
+      );
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/sessions/:sessionId/permissions',
+    asyncHandler(async (req, res) => {
+      res.json(listPendingPermissions(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/permissions/answer',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().min(1),
+          answers: z.record(z.string(), z.string()),
+          response: z.string().optional(),
+        })
+        .parse(req.body);
+      res.json(
+        await answerAskUserQuestion(
+          ctx,
+          param(req.params.agentId),
+          body,
+          param(req.params.sessionId),
+        ),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/permissions/allow',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().min(1),
+          updatedInput: z.record(z.string(), z.unknown()).optional(),
+        })
+        .parse(req.body);
+      res.json(
+        await allowPermissionRequest(
+          ctx,
+          param(req.params.agentId),
+          body,
+          param(req.params.sessionId),
+        ),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/permissions/deny',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().min(1),
+          message: z.string().optional(),
+        })
+        .parse(req.body);
+      res.json(
+        await denyPermissionRequest(
+          ctx,
+          param(req.params.agentId),
+          body,
+          param(req.params.sessionId),
+        ),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/permissions/build',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          requestId: z.string().optional(),
+          plan: z.string().optional(),
+        })
+        .parse(req.body);
+      await buildApprovedPlan(
+        ctx,
+        param(req.params.agentId),
+        body,
+        res,
+        param(req.params.sessionId),
+      );
+    }),
+  );
+
+  const chatBody = z
+    .object({
+      message: z.string(),
+      force: z.boolean().optional(),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            mimeType: z.string().min(1),
+            dataBase64: z.string().min(1),
+          }),
+        )
+        .optional(),
+    })
+    .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
+      message: 'Message or image required',
+    });
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/chat',
+    asyncHandler(async (req, res) => {
+      const body = chatBody.parse(req.body);
+      await streamAgentChat(
+        ctx,
+        param(req.params.agentId),
+        body,
+        res,
+        param(req.params.sessionId),
+      );
+    }),
+  );
+
   router.get(
     '/agents/:agentId/messages',
     asyncHandler(async (req, res) => {
@@ -519,24 +734,7 @@ export function createRouter(ctx: AppContext): express.Router {
   router.post(
     '/agents/:agentId/chat',
     asyncHandler(async (req, res) => {
-      const body = z
-        .object({
-          message: z.string(),
-          force: z.boolean().optional(),
-          images: z
-            .array(
-              z.object({
-                name: z.string().min(1),
-                mimeType: z.string().min(1),
-                dataBase64: z.string().min(1),
-              }),
-            )
-            .optional(),
-        })
-        .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
-          message: 'Message or image required',
-        })
-        .parse(req.body);
+      const body = chatBody.parse(req.body);
       await streamAgentChat(ctx, param(req.params.agentId), body, res);
     }),
   );

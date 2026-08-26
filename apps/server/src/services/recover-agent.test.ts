@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import type { Agent, Message, Workspace, Worktree } from '@agent-orchestrator/shared';
+import type { Agent, ChatSession, Message, Workspace, Worktree } from '@agent-orchestrator/shared';
 import { createRepositories, initDatabase } from '../db/index.js';
 import { recoverRunningAgents, type AppContext } from './app.js';
 import { AnthropicService } from './anthropic.js';
@@ -118,15 +118,34 @@ rl.on('line', (line) => {
     claudeSessionId: null,
     pid: null,
     runLogPath: null,
+    activeSessionId: 'chat-1',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     archivedAt: null,
   };
   repos.agents.create(agent);
 
+  const chatSession: ChatSession = {
+    id: 'chat-1',
+    agentId: agent.id,
+    title: 'Chat',
+    template: 'chat',
+    status: 'idle',
+    model: 'sonnet',
+    effort: 'high',
+    permissionMode: 'plan',
+    claudeSessionId: null,
+    pid: null,
+    runLogPath: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  repos.sessions.create(chatSession);
+
   repos.messages.create({
     id: 'u1',
     agentId: agent.id,
+    sessionId: chatSession.id,
     role: 'user',
     content: 'hi',
     attachments: [],
@@ -137,6 +156,7 @@ rl.on('line', (line) => {
   const assistant: Message = {
     id: 'a1',
     agentId: agent.id,
+    sessionId: chatSession.id,
     role: 'assistant',
     content: 'What should I do?',
     attachments: [],
@@ -147,7 +167,7 @@ rl.on('line', (line) => {
 
   let startedPid: number | null = null;
   let startedLog: string | null = null;
-  const runPromise = claudeA.runStreaming(agent.id, {
+  const runPromise = claudeA.runStreaming(chatSession.id, {
     cwd: tmp,
     prompt: 'hi',
     permissionMode: 'plan',
@@ -157,10 +177,17 @@ rl.on('line', (line) => {
     },
   });
 
-  await waitFor(() => claudeA.listPendingPermissions(agent.id).length === 1);
+  await waitFor(() => claudeA.listPendingPermissions(chatSession.id).length === 1);
   assert.ok(startedPid);
   assert.ok(startedLog);
 
+  repos.sessions.update({
+    ...chatSession,
+    status: 'running',
+    pid: startedPid,
+    runLogPath: startedLog,
+    updatedAt: new Date().toISOString(),
+  });
   repos.agents.update({
     ...agent,
     status: 'running',
@@ -176,15 +203,15 @@ rl.on('line', (line) => {
   ctx.claude = claudeB;
   recoverRunningAgents(ctx);
 
-  await waitFor(() => claudeB.listPendingPermissions(agent.id).length === 1);
+  await waitFor(() => claudeB.listPendingPermissions(chatSession.id).length === 1);
   assert.equal(isPidAlive(startedPid!), true, 'waiting session must stay running after recovery');
 
-  const afterCatchUp = repos.messages.listByAgent(agent.id);
+  const afterCatchUp = repos.messages.listBySession(chatSession.id);
   assert.equal(afterCatchUp.filter((item) => item.role === 'assistant').length, 1);
   assert.equal(afterCatchUp[afterCatchUp.length - 1]?.content, 'What should I do?');
   assert.equal(afterCatchUp[afterCatchUp.length - 1]?.metadata.streaming, true);
 
-  const answered = claudeB.respondToPermission(agent.id, 'req-1', {
+  const answered = claudeB.respondToPermission(chatSession.id, 'req-1', {
     behavior: 'allow',
     updatedInput: { answers: { Q: 'A' } },
   });
@@ -192,11 +219,11 @@ rl.on('line', (line) => {
 
   await runPromise.catch(() => undefined);
   await waitFor(() => {
-    const current = repos.agents.getById(agent.id);
+    const current = repos.sessions.getById(chatSession.id);
     return current?.status === 'idle';
   });
 
-  const finalMessages = repos.messages.listByAgent(agent.id);
+  const finalMessages = repos.messages.listBySession(chatSession.id);
   const last = finalMessages[finalMessages.length - 1];
   assert.equal(finalMessages.filter((item) => item.role === 'assistant').length, 1);
   assert.equal(last?.content.includes('What should I do?What should I do?'), false);

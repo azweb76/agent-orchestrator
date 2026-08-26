@@ -716,7 +716,7 @@ export class ClaudeService {
 
   async runStreaming(agentId: string, options: ClaudeRunOptions): Promise<ClaudeRunResult> {
     if (this.running.has(agentId)) {
-      throw new Error('Agent already has a running Claude process');
+      throw new Error('This chat session already has a running Claude process');
     }
 
     const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);

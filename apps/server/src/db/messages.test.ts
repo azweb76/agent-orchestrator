@@ -51,11 +51,27 @@ describe('MessageRepository.deleteFrom', () => {
       claudeSessionId: 'sess-1',
       pid: null,
       runLogPath: null,
+      activeSessionId: 'sess-row-1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       archivedAt: null,
     };
     repos.agents.create(agent);
+    repos.sessions.create({
+      id: 'sess-row-1',
+      agentId: agent.id,
+      title: 'Chat',
+      template: 'chat',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: 'sess-1',
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
   });
 
   after(() => {
@@ -67,6 +83,7 @@ describe('MessageRepository.deleteFrom', () => {
     const mk = (id: string, role: Message['role'], createdAt: string): Message => ({
       id,
       agentId,
+      sessionId: 'sess-row-1',
       role,
       content: id,
       attachments: [],
@@ -136,9 +153,25 @@ describe('MessageRepository.update', () => {
       claudeSessionId: null,
       pid: null,
       runLogPath: null,
+      activeSessionId: 'sess-row-1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       archivedAt: null,
+    });
+    repos.sessions.create({
+      id: 'sess-row-1',
+      agentId: 'ag-1',
+      title: 'Chat',
+      template: 'chat',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     });
   });
 
@@ -150,6 +183,7 @@ describe('MessageRepository.update', () => {
     const message: Message = {
       id: 'a1',
       agentId: 'ag-1',
+      sessionId: 'sess-row-1',
       role: 'assistant',
       content: '',
       attachments: [],
