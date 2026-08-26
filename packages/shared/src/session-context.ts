@@ -23,8 +23,13 @@ export interface SessionContextTurn {
 export interface SessionContextUsage {
   model: string | null;
   contextWindowTokens: number;
+  /**
+   * Token count at which Claude Code auto-compacts. Used as the usage max
+   * (percent, fill bars) because the raw window is not fully usable.
+   */
+  compactThresholdTokens: number;
   currentContextTokens: number;
-  /** 0–100, or null when Claude has not reported usage yet. */
+  /** 0–100 of the compact threshold, or null when Claude has not reported usage yet. */
   percent: number | null;
   usage: TokenUsageBreakdown | null;
   /** Sum of API-call usage across the session (not unique tokens). */
@@ -36,6 +41,11 @@ export interface SessionContextUsage {
 
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
 export const EXTENDED_CONTEXT_WINDOW_TOKENS = 1_000_000;
+
+/** Reserved for the compact summary (Claude Code `MAX_OUTPUT_TOKENS_FOR_SUMMARY`). */
+export const RESERVED_TOKENS_FOR_SUMMARY = 20_000;
+/** Safety buffer before the effective window (Claude Code `AUTOCOMPACT_BUFFER_TOKENS`). */
+export const AUTOCOMPACT_BUFFER_TOKENS = 13_000;
 
 export function emptyTokenUsage(): TokenUsageBreakdown {
   return {
@@ -90,6 +100,16 @@ export function contextWindowTokensForModel(
   return DEFAULT_CONTEXT_WINDOW_TOKENS;
 }
 
+/**
+ * Auto-compact trigger for a model context window, matching Claude Code:
+ * `(window - 20k summary reserve) - 13k buffer` → 167k on a 200k window.
+ */
+export function compactThresholdTokensForWindow(contextWindowTokens: number): number {
+  const windowTokens = Math.max(1, Math.floor(contextWindowTokens));
+  const effective = Math.max(1, windowTokens - RESERVED_TOKENS_FOR_SUMMARY);
+  return Math.max(1, effective - AUTOCOMPACT_BUFFER_TOKENS);
+}
+
 export function buildSessionContextUsage(input: {
   model?: string | null;
   fallbackModel?: string | null;
@@ -103,14 +123,16 @@ export function buildSessionContextUsage(input: {
   const model = last?.model || input.model || input.fallbackModel || null;
   const currentContextTokens = last?.contextTokens ?? 0;
   const contextWindowTokens = contextWindowTokensForModel(model, currentContextTokens);
+  const compactThresholdTokens = compactThresholdTokensForWindow(contextWindowTokens);
   const billed = input.billed ?? history.reduce((sum, turn) => addTokenUsage(sum, turn.usage), emptyTokenUsage());
   return {
     model,
     contextWindowTokens,
+    compactThresholdTokens,
     currentContextTokens,
     percent:
       currentContextTokens > 0
-        ? Math.min(100, (currentContextTokens / contextWindowTokens) * 100)
+        ? Math.min(100, (currentContextTokens / compactThresholdTokens) * 100)
         : null,
     usage: last?.usage ?? null,
     billed,

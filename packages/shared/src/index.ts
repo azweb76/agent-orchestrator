@@ -691,12 +691,15 @@ export {
 
 export {
   addTokenUsage,
+  AUTOCOMPACT_BUFFER_TOKENS,
   buildSessionContextUsage,
+  compactThresholdTokensForWindow,
   contextTokensFromUsage,
   contextWindowTokensForModel,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   emptyTokenUsage,
   EXTENDED_CONTEXT_WINDOW_TOKENS,
+  RESERVED_TOKENS_FOR_SUMMARY,
   totalTokensFromUsage,
   type SessionContextTurn,
   type SessionContextUsage,
