@@ -15,6 +15,7 @@ import {
 } from './app.js';
 import type { AnthropicService } from './anthropic.js';
 import type { ClaudeService, GitService } from './git.js';
+import type { SessionGradeContext } from './session-grade.js';
 
 describe('session grading and instruction files', () => {
   let dataDir: string;
@@ -135,7 +136,7 @@ describe('session grading and instruction files', () => {
             '---\nname: retry-tests\ndescription: Always run tests after retries\n---\n# Retry tests\n',
           rationale: 'The assistant skipped tests.',
         }),
-        analyzeSessionGrade: async (input) => ({
+        analyzeSessionGrade: async (input: SessionGradeContext) => ({
           score: 2,
           summary: 'The assistant skipped tests and reread files.',
           findings: [
