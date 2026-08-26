@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   Paper,
   Stack,
   Tab,
@@ -20,12 +21,16 @@ import {
   TableRow,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentEvent } from '@agent-orchestrator/shared';
+import type { AgentDiffScope, AgentEvent } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -50,6 +55,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const locationState = location.state as { initialPrompt?: string } | null;
   const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
   const [tab, setTab] = useState(0);
+  const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [prTitle, setPrTitle] = useState('');
@@ -76,8 +82,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   });
 
   const diffQuery = useQuery({
-    queryKey: ['diff', agentId],
-    queryFn: () => api.getDiff(agentId),
+    queryKey: ['diff', agentId, diffScope],
+    queryFn: () => api.getDiff(agentId, diffScope),
     enabled: Boolean(agentId) && tab === 1,
   });
 
@@ -244,7 +250,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           sx={{ px: { xs: 0.5, sm: 1.5 }, minHeight: 40, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
-          <Tab label="Diff" sx={{ minHeight: 40, py: 1 }} />
+          <Tab label="Changes" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Events" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
@@ -256,38 +262,93 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
         {tab === 1 && (
           <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'auto' }}>
-            {diffQuery.isLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress size={28} />
-              </Box>
-            ) : diffQuery.error ? (
-              <Alert severity="error">{(diffQuery.error as Error).message}</Alert>
-            ) : !diffQuery.data?.patch ? (
-              <EmptyState
-                compact
-                title="No changes"
-                description="The agent has not modified any files in this worktree yet."
-              />
-            ) : (
-              <Stack spacing={1.5}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  {diffQuery.data.stat || 'Changes'}
-                </Typography>
-                <Box
-                  component="pre"
-                  sx={{
-                    p: 1.5,
-                    bgcolor: 'rgba(0,0,0,0.35)',
-                    borderRadius: 2,
-                    overflow: 'auto',
-                    fontSize: 13,
-                    m: 0,
-                  }}
-                >
-                  {diffQuery.data.patch}
+            <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1}
+                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', flexShrink: 0 }}
+              >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    Local path
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                      fontSize: 12,
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {agent.worktree.path}
+                  </Typography>
                 </Box>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                  <ToggleButtonGroup
+                    size="small"
+                    exclusive
+                    value={diffScope}
+                    onChange={(_, value: AgentDiffScope | null) => {
+                      if (value) setDiffScope(value);
+                    }}
+                    aria-label="Change scope"
+                  >
+                    <ToggleButton value="pending">Pending</ToggleButton>
+                    <ToggleButton value="pr">All PR changes</ToggleButton>
+                  </ToggleButtonGroup>
+                  <Tooltip title="Refresh">
+                    <span>
+                      <IconButton
+                        size="small"
+                        aria-label="Refresh changes"
+                        onClick={() => diffQuery.refetch()}
+                        disabled={diffQuery.isFetching}
+                      >
+                        <RefreshIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Stack>
               </Stack>
-            )}
+
+              {diffQuery.isLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress size={28} />
+                </Box>
+              ) : diffQuery.error ? (
+                <Alert severity="error">{(diffQuery.error as Error).message}</Alert>
+              ) : !diffQuery.data?.patch ? (
+                <EmptyState
+                  compact
+                  title={diffScope === 'pending' ? 'No pending changes' : 'No PR changes'}
+                  description={
+                    diffScope === 'pending'
+                      ? 'The working tree matches HEAD. Switch to All PR changes to see commits on this branch.'
+                      : 'No differences from the base branch.'
+                  }
+                />
+              ) : (
+                <Stack spacing={1.5} sx={{ minHeight: 0, flex: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {diffQuery.data.stat || 'Changes'}
+                  </Typography>
+                  <Box
+                    component="pre"
+                    sx={{
+                      p: 1.5,
+                      bgcolor: 'rgba(0,0,0,0.35)',
+                      borderRadius: 2,
+                      overflow: 'auto',
+                      fontSize: 13,
+                      m: 0,
+                      flex: 1,
+                    }}
+                  >
+                    {diffQuery.data.patch}
+                  </Box>
+                </Stack>
+              )}
+            </Stack>
           </Box>
         )}
 

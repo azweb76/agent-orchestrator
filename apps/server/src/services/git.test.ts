@@ -429,6 +429,44 @@ setInterval(() => {}, 1000);
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('getDiff pending includes unstaged and untracked files; base ref shows branch commits', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'git-diff-'));
+  const repo = path.join(tmp, 'repo');
+  await fs.mkdir(repo);
+  await execGit(tmp, ['init', repo]);
+  await execGit(repo, ['config', 'user.email', 'test@example.com']);
+  await execGit(repo, ['config', 'user.name', 'Test']);
+  await fs.writeFile(path.join(repo, 'README.md'), 'main\n');
+  await execGit(repo, ['add', 'README.md']);
+  await execGit(repo, ['commit', '-m', 'initial']);
+  const current = await execGit(repo, ['branch', '--show-current']);
+  if (current !== 'main') {
+    await execGit(repo, ['branch', '-M', 'main']);
+  }
+
+  await execGit(repo, ['checkout', '-b', 'feature']);
+  await fs.writeFile(path.join(repo, 'committed.txt'), 'on branch\n');
+  await execGit(repo, ['add', 'committed.txt']);
+  await execGit(repo, ['commit', '-m', 'branch commit']);
+
+  await fs.writeFile(path.join(repo, 'README.md'), 'main\npending edit\n');
+  await fs.writeFile(path.join(repo, 'new-file.txt'), 'untracked\n');
+
+  const git = new GitService();
+  const pending = await git.getDiff(repo);
+  assert.match(pending.patch, /pending edit/);
+  assert.match(pending.patch, /new-file\.txt/);
+  assert.doesNotMatch(pending.patch, /on branch/);
+
+  const vsMain = await git.getDiff(repo, 'main');
+  assert.match(vsMain.patch, /committed\.txt/);
+  assert.match(vsMain.patch, /pending edit/);
+  // Untracked files are only included for pending (HEAD) diffs.
+  assert.doesNotMatch(vsMain.patch, /new-file\.txt/);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 async function execGit(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('git', ['-C', cwd, ...args], {
     maxBuffer: 10 * 1024 * 1024,

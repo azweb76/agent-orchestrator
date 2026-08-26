@@ -5,6 +5,7 @@ import type { Response } from 'express';
 import type {
   Agent,
   AgentDetail,
+  AgentDiffScope,
   AgentEvent,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
@@ -723,14 +724,32 @@ export function getAgentEvents(ctx: AppContext, agentId: string): AgentEvent[] {
   return ctx.repos.events.listByAgent(agentId);
 }
 
-export async function getAgentDiff(ctx: AppContext, agentId: string) {
+export async function getAgentDiff(
+  ctx: AppContext,
+  agentId: string,
+  scope: AgentDiffScope = 'pending',
+) {
   const detail = await getAgentDetail(ctx, agentId);
-  const base = detail.worktree.baseBranch ?? detail.workspace.defaultBranch;
-  try {
-    return await ctx.git.getDiff(detail.worktree.path, `origin/${base}`);
-  } catch {
-    return await ctx.git.getDiff(detail.worktree.path);
+  const path = detail.worktree.path;
+
+  if (scope === 'pr') {
+    const base = detail.worktree.baseBranch ?? detail.workspace.defaultBranch;
+    try {
+      const diff = await ctx.git.getDiff(path, `origin/${base}`);
+      return { ...diff, path, scope };
+    } catch {
+      try {
+        const diff = await ctx.git.getDiff(path, base);
+        return { ...diff, path, scope };
+      } catch {
+        const diff = await ctx.git.getDiff(path);
+        return { ...diff, path, scope };
+      }
+    }
   }
+
+  const diff = await ctx.git.getDiff(path);
+  return { ...diff, path, scope };
 }
 
 export async function listAgentSlashCommands(ctx: AppContext, agentId: string) {
