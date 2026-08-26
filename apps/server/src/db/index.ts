@@ -96,9 +96,15 @@ CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agents_worktree ON agents(worktree_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
-CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 `;
+
+/** Indexes on columns that older databases may not have until `migrateSchema` runs. */
+const ADDITIVE_INDEXES = `
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+`;
+
+export const DATABASE_FILENAME = 'agent-orchestrator.db';
 
 function ensureColumn(
   db: Database.Database,
@@ -113,25 +119,6 @@ function ensureColumn(
 }
 
 function migrateChatSessions(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS chat_sessions (
-      id TEXT PRIMARY KEY,
-      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-      title TEXT NOT NULL,
-      template TEXT NOT NULL DEFAULT 'chat',
-      status TEXT NOT NULL DEFAULT 'idle',
-      model TEXT NOT NULL DEFAULT 'sonnet',
-      effort TEXT NOT NULL DEFAULT 'high',
-      permission_mode TEXT NOT NULL DEFAULT 'plan',
-      claude_session_id TEXT,
-      pid INTEGER,
-      run_log_path TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
-    CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
-  `);
   ensureColumn(db, 'agents', 'active_session_id', 'TEXT');
   ensureColumn(db, 'messages', 'session_id', 'TEXT');
 
@@ -190,20 +177,85 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'run_log_path', 'TEXT');
   ensureColumn(db, 'agents', 'permission_mode', "TEXT NOT NULL DEFAULT 'plan'");
   ensureColumn(db, 'agents', 'effort', "TEXT NOT NULL DEFAULT 'high'");
+  ensureColumn(db, 'agents', 'archived_at', 'TEXT');
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
   migrateChatSessions(db);
 }
 
-export function initDatabase(dataDir: string): Database.Database {
-  fs.mkdirSync(dataDir, { recursive: true });
-  const dbPath = path.join(dataDir, 'agent-orchestrator.db');
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+function applySchema(db: Database.Database): void {
   db.exec(SCHEMA);
   migrateSchema(db);
-  return db;
+  db.exec(ADDITIVE_INDEXES);
+}
+
+function sqliteErrorCode(err: unknown): string {
+  if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
+    return err.code;
+  }
+  return '';
+}
+
+function sqliteErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function shouldResetDatabase(err: unknown): boolean {
+  const code = sqliteErrorCode(err);
+  if (code === 'SQLITE_CORRUPT' || code === 'SQLITE_NOTADB') return true;
+  const message = sqliteErrorMessage(err);
+  return (
+    /no such column/i.test(message) ||
+    /no such table/i.test(message) ||
+    /file is not a database/i.test(message) ||
+    /database disk image is malformed/i.test(message)
+  );
+}
+
+function databaseSidecars(dbPath: string): string[] {
+  return [dbPath, `${dbPath}-wal`, `${dbPath}-shm`, `${dbPath}-journal`];
+}
+
+function resetDatabaseFiles(dbPath: string): void {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  for (const file of databaseSidecars(dbPath)) {
+    if (!fs.existsSync(file)) continue;
+    const dest = `${file}.broken.${stamp}`;
+    fs.renameSync(file, dest);
+    console.warn(`[db] moved unusable ${path.basename(file)} to ${path.basename(dest)}`);
+  }
+}
+
+function openAndMigrate(dbPath: string): Database.Database {
+  const db = new Database(dbPath);
+  try {
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    applySchema(db);
+    return db;
+  } catch (err) {
+    try {
+      db.close();
+    } catch {
+      // ignore close errors so the original failure is reported
+    }
+    throw err;
+  }
+}
+
+export function initDatabase(dataDir: string): Database.Database {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const dbPath = path.join(dataDir, DATABASE_FILENAME);
+  try {
+    return openAndMigrate(dbPath);
+  } catch (err) {
+    if (!shouldResetDatabase(err)) throw err;
+    console.warn(
+      `[db] ${sqliteErrorMessage(err)}; backing up the database and starting over`,
+    );
+    resetDatabaseFiles(dbPath);
+    return openAndMigrate(dbPath);
+  }
 }
 
 function parseJson<T>(value: string, fallback: T): T {
