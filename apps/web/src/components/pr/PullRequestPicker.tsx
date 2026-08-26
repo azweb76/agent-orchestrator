@@ -7,6 +7,7 @@ import {
   CircularProgress,
   IconButton,
   InputAdornment,
+  Radio,
   Stack,
   TextField,
   Tooltip,
@@ -254,16 +255,27 @@ function PrPickerRow({
         ) : undefined
       }
     >
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.25 }}>
-        <ListRowTitle>
-          #{pr.number} {pr.title}
-        </ListRowTitle>
-        {pr.draft ? <Chip size="small" label="Draft" variant="outlined" /> : null}
-        {pr.state !== 'open' ? (
-          <Chip size="small" label={pr.state} color="default" variant="outlined" />
-        ) : null}
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+        <Radio
+          checked={selected}
+          onChange={() => onSelect(pr.number)}
+          size="small"
+          sx={{ mt: 0.25, p: 0.5 }}
+          slotProps={{ input: { 'aria-label': `Select pull request #${pr.number}` } }}
+        />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.25 }}>
+            <ListRowTitle>
+              #{pr.number} {pr.title}
+            </ListRowTitle>
+            {pr.draft ? <Chip size="small" label="Draft" variant="outlined" /> : null}
+            {pr.state !== 'open' ? (
+              <Chip size="small" label={pr.state} color="default" variant="outlined" />
+            ) : null}
+          </Stack>
+          {meta ? <ListRowMeta>{meta}</ListRowMeta> : null}
+        </Box>
       </Stack>
-      {meta ? <ListRowMeta>{meta}</ListRowMeta> : null}
     </ListRow>
   );
 }
