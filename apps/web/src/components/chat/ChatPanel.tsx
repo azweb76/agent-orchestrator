@@ -38,7 +38,7 @@ const CHAT_COLUMN_MAX_WIDTH = 780;
 interface ChatPanelProps {
   agent: AgentDetail;
   archived: boolean;
-  /** When set on a fresh agent (e.g. from-idea), send as the first plan-mode prompt. */
+  /** When set on a fresh agent (e.g. from-idea), send as the first chat prompt. */
   initialPrompt?: string;
 }
 

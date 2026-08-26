@@ -26,6 +26,7 @@ import type {
   Message,
   MessageAttachment,
   MessageMetadata,
+  PermissionMode,
   PermissionRequest,
   PullRequestChecks,
   PullRequestDetail,
@@ -39,7 +40,7 @@ import type {
   WorktreeWithAgent,
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
-import { DEFAULT_EFFORT_LEVEL } from '@agent-orchestrator/shared';
+import { DEFAULT_EFFORT_LEVEL, DEFAULT_PERMISSION_MODE } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
@@ -71,7 +72,7 @@ async function createAgentForWorktree(
   ctx: AppContext,
   worktreeId: string,
   name: string,
-  options?: { model?: string; effort?: EffortLevel },
+  options?: { model?: string; effort?: EffortLevel; permissionMode?: PermissionMode },
 ): Promise<Agent> {
   const existing = ctx.repos.agents.getByWorktreeId(worktreeId);
   if (existing) {
@@ -86,7 +87,7 @@ async function createAgentForWorktree(
     status: 'idle',
     model: options?.model?.trim() || 'sonnet',
     effort: options?.effort ?? DEFAULT_EFFORT_LEVEL,
-    permissionMode: 'plan',
+    permissionMode: options?.permissionMode ?? DEFAULT_PERMISSION_MODE,
     claudeSessionId: null,
     pid: null,
     runLogPath: null,
@@ -1640,9 +1641,14 @@ export async function createWorktreeFromIdea(
     ...agent,
     model: body.model?.trim() || agent.model,
     effort: body.effort ?? agent.effort,
+    permissionMode: body.permissionMode ?? agent.permissionMode,
     updatedAt: nowIso(),
   };
-  if (configured.model !== agent.model || configured.effort !== agent.effort) {
+  if (
+    configured.model !== agent.model ||
+    configured.effort !== agent.effort ||
+    configured.permissionMode !== agent.permissionMode
+  ) {
     ctx.repos.agents.update(configured);
   }
 
