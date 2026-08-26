@@ -351,6 +351,8 @@ export interface CreateWorktreeFromIdeaRequest {
   model?: string;
   /** Claude Code effort level for runs. */
   effort?: EffortLevel;
+  /** Permission mode for the new agent session (defaults to plan). */
+  permissionMode?: PermissionMode;
 }
 
 export interface SuggestBranchNameRequest {
@@ -511,6 +513,8 @@ export const CLAUDE_EFFORT_LEVELS = [
 ] as const satisfies ReadonlyArray<{ id: EffortLevel; label: string }>;
 
 export const DEFAULT_EFFORT_LEVEL: EffortLevel = 'high';
+
+export const DEFAULT_PERMISSION_MODE: PermissionMode = 'plan';
 
 export const PERMISSION_MODES = [
   { id: 'default', label: 'Manual' },
