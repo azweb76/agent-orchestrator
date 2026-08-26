@@ -24,6 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { CreateWorktreeDialog } from './CreateWorktreeDialog';
+import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 
 export const SIDEBAR_EXPANDED_WIDTH = 280;
 export const SIDEBAR_COLLAPSED_WIDTH = 72;
@@ -96,11 +97,49 @@ function AgentStatusDot({
         borderRadius: '50%',
         bgcolor: statusDotColor(status),
         flexShrink: 0,
-        boxShadow: running ? '0 0 0 3px rgba(124,156,255,0.25)' : 'none',
-        animation: running ? 'ao-pulse 1.4s ease-in-out infinite' : 'none',
-        '@keyframes ao-pulse': {
-          '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-          '50%': { opacity: 0.65, transform: 'scale(0.85)' },
+        boxShadow: running
+          ? '0 0 6px 2px rgba(124,156,255,0.85), 0 0 0 3px rgba(124,156,255,0.3)'
+          : 'none',
+        animation: running ? 'ao-status-glow 1.2s ease-in-out infinite' : 'none',
+        '@keyframes ao-status-glow': {
+          '0%, 100%': {
+            opacity: 1,
+            transform: 'scale(1)',
+            boxShadow: '0 0 6px 2px rgba(124,156,255,0.85), 0 0 0 3px rgba(124,156,255,0.3)',
+          },
+          '50%': {
+            opacity: 0.75,
+            transform: 'scale(0.9)',
+            boxShadow: '0 0 12px 4px rgba(124,156,255,1), 0 0 0 4px rgba(124,156,255,0.45)',
+          },
+        },
+      }}
+    />
+  );
+}
+
+function AgentStatusIcon({
+  status,
+  selected,
+  fontSize = 'small',
+}: {
+  status: AgentStatus;
+  selected?: boolean;
+  fontSize?: 'small' | 'medium';
+}) {
+  const running = status === 'running';
+  return (
+    <SmartToyOutlinedIcon
+      fontSize={fontSize}
+      color={selected ? 'secondary' : running ? 'info' : 'inherit'}
+      sx={{
+        animation: running ? 'ao-agent-spin 2.4s linear infinite' : 'none',
+        filter: running
+          ? 'drop-shadow(0 0 4px rgba(124,156,255,0.9)) drop-shadow(0 0 8px rgba(124,156,255,0.45))'
+          : 'none',
+        '@keyframes ao-agent-spin': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
         },
       }}
     />
@@ -126,6 +165,7 @@ export function WorkspaceSidebar({
   const { workspaceId: routeWorkspaceId, agentId: routeAgentId } = useParams();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(loadExpandedWorkspaces);
   const [createWorkspaceId, setCreateWorkspaceId] = useState<string | null>(null);
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
 
   const sidebarQuery = useQuery({
     queryKey: ['sidebar'],
@@ -224,7 +264,7 @@ export function WorkspaceSidebar({
     >
       <Stack
         direction="row"
-        spacing={1}
+        spacing={0.5}
         sx={{
           alignItems: 'center',
           justifyContent: collapsed ? 'center' : 'space-between',
@@ -236,7 +276,7 @@ export function WorkspaceSidebar({
         }}
       >
         {!collapsed && (
-          <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               Workspaces
             </Typography>
@@ -247,19 +287,29 @@ export function WorkspaceSidebar({
             </Typography>
           </Box>
         )}
-        {!hideCollapseControl ? (
-          <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
+        <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', flexShrink: 0 }}>
+          <Tooltip title="New workspace" placement="right">
             <IconButton
               size="small"
-              onClick={() => setCollapsed(!collapsed)}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => setCreateWorkspaceOpen(true)}
+              aria-label="New workspace"
+              color="secondary"
             >
-              {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+              <AddIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-        ) : (
-          <Box sx={{ width: 8 }} />
-        )}
+          {!hideCollapseControl ? (
+            <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
+              <IconButton
+                size="small"
+                onClick={() => setCollapsed(!collapsed)}
+                aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              >
+                {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          ) : null}
+        </Stack>
       </Stack>
 
       <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', py: 0.5 }}>
@@ -269,6 +319,7 @@ export function WorkspaceSidebar({
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
             pathname={location.pathname}
+            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
           />
         ) : (
           <ExpandedWorkspaceTree
@@ -276,6 +327,7 @@ export function WorkspaceSidebar({
             expandedWorkspaces={expandedWorkspaces}
             onToggleWorkspace={toggleWorkspace}
             onCreateAgent={(workspaceId) => setCreateWorkspaceId(workspaceId)}
+            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
             isLoading={sidebarQuery.isLoading}
@@ -291,6 +343,11 @@ export function WorkspaceSidebar({
           defaultBranch={tree.find((ws) => ws.id === createWorkspaceId)?.defaultBranch}
         />
       )}
+
+      <CreateWorkspaceDialog
+        open={createWorkspaceOpen}
+        onClose={() => setCreateWorkspaceOpen(false)}
+      />
     </Box>
   );
 }
@@ -300,24 +357,61 @@ function CollapsedAgentRail({
   selectedAgentId,
   selectedWorkspaceId,
   pathname,
+  onCreateWorkspace,
 }: {
   agents: Array<{ agent: SidebarAgent; workspace: SidebarWorkspace }>;
   selectedAgentId?: string;
   selectedWorkspaceId: string | null;
   pathname: string;
+  onCreateWorkspace: () => void;
 }) {
   if (agents.length === 0) {
     return (
-      <Tooltip title="No agents yet" placement="right">
-        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2, opacity: 0.5 }}>
-          <SmartToyOutlinedIcon fontSize="small" />
-        </Box>
-      </Tooltip>
+      <Stack spacing={1} sx={{ alignItems: 'center', px: 1, pt: 2 }}>
+        <Tooltip title="New workspace" placement="right">
+          <IconButton
+            size="small"
+            onClick={onCreateWorkspace}
+            aria-label="New workspace"
+            color="secondary"
+            sx={{
+              width: 40,
+              height: 40,
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <AddIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Typography variant="caption" color="text.secondary" sx={{ writingMode: 'vertical-rl' }}>
+          No agents
+        </Typography>
+      </Stack>
     );
   }
 
   return (
     <Stack spacing={0.75} sx={{ alignItems: 'center', px: 1, py: 1 }}>
+      <Tooltip title="New workspace" placement="right">
+        <IconButton
+          size="small"
+          onClick={onCreateWorkspace}
+          aria-label="New workspace"
+          color="secondary"
+          sx={{
+            width: 40,
+            height: 40,
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'rgba(94,234,212,0.06)',
+          }}
+        >
+          <AddIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
       {agents.map(({ agent, workspace }) => {
         const selected = selectedAgentId === agent.id;
         const workspaceActive = selectedWorkspaceId === workspace.id && pathname.startsWith('/workspaces');
@@ -351,15 +445,29 @@ function CollapsedAgentRail({
                 height: 40,
                 borderRadius: 2,
                 border: '1px solid',
-                borderColor: selected || workspaceActive ? 'secondary.main' : 'divider',
-                bgcolor: selected ? 'rgba(94,234,212,0.12)' : 'rgba(255,255,255,0.03)',
+                borderColor:
+                  selected || workspaceActive
+                    ? 'secondary.main'
+                    : agent.status === 'running'
+                      ? 'info.main'
+                      : 'divider',
+                bgcolor:
+                  selected
+                    ? 'rgba(94,234,212,0.12)'
+                    : agent.status === 'running'
+                      ? 'rgba(124,156,255,0.1)'
+                      : 'rgba(255,255,255,0.03)',
                 position: 'relative',
+                boxShadow:
+                  agent.status === 'running'
+                    ? '0 0 10px rgba(124,156,255,0.35)'
+                    : 'none',
                 '&:hover': {
                   bgcolor: 'rgba(255,255,255,0.08)',
                 },
               }}
             >
-              <SmartToyOutlinedIcon fontSize="small" color={selected ? 'secondary' : 'inherit'} />
+              <AgentStatusIcon status={agent.status} selected={selected} />
               <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
                 <AgentStatusDot status={agent.status} size={7} />
               </Box>
@@ -390,6 +498,7 @@ function ExpandedWorkspaceTree({
   expandedWorkspaces,
   onToggleWorkspace,
   onCreateAgent,
+  onCreateWorkspace,
   selectedAgentId,
   selectedWorkspaceId,
   isLoading,
@@ -398,6 +507,7 @@ function ExpandedWorkspaceTree({
   expandedWorkspaces: Set<string>;
   onToggleWorkspace: (workspaceId: string) => void;
   onCreateAgent: (workspaceId: string) => void;
+  onCreateWorkspace: () => void;
   selectedAgentId?: string;
   selectedWorkspaceId: string | null;
   isLoading: boolean;
@@ -419,8 +529,7 @@ function ExpandedWorkspaceTree({
           No workspaces yet.
         </Typography>
         <ListItemButton
-          component={RouterLink}
-          to="/workspaces"
+          onClick={onCreateWorkspace}
           sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', py: 1 }}
         >
           <ListItemIcon sx={{ minWidth: 32 }}>
@@ -440,6 +549,22 @@ function ExpandedWorkspaceTree({
 
   return (
     <List dense disablePadding>
+      <ListItemButton
+        onClick={onCreateWorkspace}
+        sx={{ mx: 1, mb: 0.5, borderRadius: 1.5, py: 0.75 }}
+      >
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          <AddIcon fontSize="small" color="secondary" />
+        </ListItemIcon>
+        <ListItemText
+          primary={
+            <Typography variant="body2" color="secondary.main" sx={{ fontWeight: 600 }}>
+              New workspace
+            </Typography>
+          }
+        />
+      </ListItemButton>
+
       {tree.map((workspace) => {
         const open = expandedWorkspaces.has(workspace.id);
         const workspaceSelected = selectedWorkspaceId === workspace.id && !selectedAgentId;
@@ -567,7 +692,7 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
       sx={{ pl: 5, py: 0.85, alignItems: 'flex-start' }}
     >
       <ListItemIcon sx={{ minWidth: 28, mt: 0.35 }}>
-        <SmartToyOutlinedIcon fontSize="small" color={selected ? 'secondary' : 'inherit'} />
+        <AgentStatusIcon status={agent.status} selected={selected} />
       </ListItemIcon>
       <ListItemText
         primary={
