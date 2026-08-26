@@ -636,13 +636,19 @@ export {
   activeToolItem,
   appendStreamText,
   applyStreamEvent,
+  assistantTextDelta,
   coalesceTimelineText,
   extractToolActivity,
   isNestedSubagentEvent,
+  isSubagentItem,
+  isSubagentToolName,
   isTopLevelClaudeResult,
   parentStreamTextDelta,
+  parentToolUseId,
+  runningSubagentItems,
   type StreamPart,
   type ToolActivityItem,
+  type ToolTaskInfo,
 } from './stream-timeline.js';
 
 export {

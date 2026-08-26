@@ -18,6 +18,13 @@ const TOOL_LABELS: Record<string, string> = {
   KillShell: 'Stopping a command',
 };
 
+const SUBAGENT_TYPE_LABELS: Record<string, string> = {
+  Explore: 'Explore',
+  Plan: 'Plan',
+  Bash: 'Bash',
+  'general-purpose': 'General',
+};
+
 /** Present-tense label for the active Claude tool. */
 export function toolActionLabel(name: string, detail?: string): string {
   if ((name === 'Task' || name === 'Agent') && detail && /^explore\b/i.test(detail)) {
@@ -30,6 +37,22 @@ export function toolActionLabel(name: string, detail?: string): string {
     return last ? last.charAt(0).toUpperCase() + last.slice(1) : name;
   }
   return name;
+}
+
+export function subagentTypeLabel(type: string | undefined): string | undefined {
+  if (!type) return undefined;
+  if (SUBAGENT_TYPE_LABELS[type]) return SUBAGENT_TYPE_LABELS[type];
+  return type.replace(/-/g, ' ');
+}
+
+/** Compact duration for subagent progress (e.g. 14s, 2m 52s). */
+export function formatDurationMs(ms: number | undefined): string | undefined {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return undefined;
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${Math.max(sec, 0)}s`;
+  const min = Math.floor(sec / 60);
+  const rem = sec % 60;
+  return rem ? `${min}m ${rem}s` : `${min}m`;
 }
 
 export function toolPreview(input: Record<string, unknown> | undefined): string | undefined {
