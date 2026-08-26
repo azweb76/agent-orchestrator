@@ -17,6 +17,7 @@ import {
   applyStreamEvent,
   coalesceTimelineText,
   extractPlanFromInput,
+  isSubagentItem,
   parseAskUserQuestions,
   type AgentDetail,
   type ChatSession,
@@ -35,7 +36,7 @@ import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
-import { ThinkingIndicator, ToolProgressBar } from './ToolActivity';
+import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
 
 const CHAT_COLUMN_MAX_WIDTH = 780;
 
@@ -78,17 +79,22 @@ function MessageTimeline({ message }: { message: Message }) {
     (part): part is Extract<(typeof parts)[number], { type: 'tool' }> =>
       part.type === 'tool',
   );
-  const toolsRunning = toolItems.some((part) => part.status === 'running');
+  const subagents = toolItems.filter((item) => isSubagentItem(item));
+  const runningSubagents = subagents.filter((item) => item.status === 'running');
+  const otherTools = toolItems.filter((item) => !isSubagentItem(item));
+  const otherRunning = otherTools.some((item) => item.status === 'running');
   const lastPart = parts[parts.length - 1];
-  // Single progress card that updates with the active tool — never a tool list.
+  const showSubagents = runningSubagents.length > 0;
   const showToolProgress =
-    streaming && (toolsRunning || lastPart?.type === 'tool');
+    streaming &&
+    otherTools.length > 0 &&
+    (otherRunning || (lastPart?.type === 'tool' && !isSubagentItem(lastPart)));
   // One bubble per assistant turn — never split text across tool boundaries.
   const textContent = message.content.trim()
     ? message.content
     : coalesceTimelineText(parts);
   const showText = Boolean(textContent);
-  const showThinking = streaming && !showText && !showToolProgress;
+  const showThinking = streaming && !showText && !showToolProgress && !showSubagents;
 
   return (
     <Box sx={{ mb: 2 }}>
@@ -96,7 +102,7 @@ function MessageTimeline({ message }: { message: Message }) {
         gutter={false}
         hideBody={!showText && streaming}
         streaming={streaming}
-        cursor={streaming && showText && !showToolProgress}
+        cursor={streaming && showText && !showToolProgress && !showSubagents}
         message={{
           ...message,
           content: textContent,
@@ -110,7 +116,10 @@ function MessageTimeline({ message }: { message: Message }) {
         onCopy={() => void navigator.clipboard.writeText(textContent)}
       />
       {showThinking ? <ThinkingIndicator /> : null}
-      {showToolProgress ? <ToolProgressBar items={toolItems} /> : null}
+      {showSubagents ? (
+        <SubagentActivityList items={subagents} />
+      ) : null}
+      {showToolProgress ? <ToolProgressBar items={otherTools} /> : null}
     </Box>
   );
 }

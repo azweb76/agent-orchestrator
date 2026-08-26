@@ -76,6 +76,7 @@ import { resolveClaudeSessionFilePath, readClaudeSessionFile } from '../services
 import {
   appendStreamText,
   applyStreamEvent,
+  assistantTextDelta,
   coalesceTimelineText,
   extractPlanFromInput,
   buildAskUserQuestionUpdatedInput,
@@ -1612,13 +1613,10 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
     },
     meta?: { replay?: boolean },
   ) => {
-    if (
-      event.type === 'stream_event' &&
-      event.event?.delta?.type === 'text_delta' &&
-      event.event.delta.text
-    ) {
-      assistantText += event.event.delta.text;
-      timeline = appendStreamText(timeline, event.event.delta.text);
+    const text = assistantTextDelta(event as Record<string, unknown>);
+    if (text) {
+      assistantText += text;
+      timeline = appendStreamText(timeline, text);
       flushProgress();
     } else if (event.type !== 'stderr') {
       timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
@@ -1839,15 +1837,12 @@ export async function streamAgentChat(
         send('permission_request', payload);
       },
       onEvent: (event) => {
-        if (
-          event.type === 'stream_event' &&
-          event.event?.delta?.type === 'text_delta' &&
-          event.event.delta.text
-        ) {
-          assistantText += event.event.delta.text;
-          timeline = appendStreamText(timeline, event.event.delta.text);
+        const text = assistantTextDelta(event as Record<string, unknown>);
+        if (text) {
+          assistantText += text;
+          timeline = appendStreamText(timeline, text);
           flushProgress();
-          send('token', { text: event.event.delta.text });
+          send('token', { text });
         } else if (event.type !== 'stderr') {
           timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
           flushProgress(true);
