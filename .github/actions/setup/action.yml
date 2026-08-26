@@ -1,0 +1,33 @@
+name: Setup Node.js and pnpm
+description: Install pnpm, Node.js, and workspace dependencies with store caching
+inputs:
+  node-version:
+    description: Node.js version to install
+    required: false
+    default: '22'
+  build-shared:
+    description: Build the shared package so consumers can typecheck and test against dist
+    required: false
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v6
+
+    - name: Setup Node.js
+      id: node
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Build shared package
+      if: ${{ inputs.build-shared == 'true' }}
+      shell: bash
+      run: pnpm --filter @agent-orchestrator/shared build

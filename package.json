@@ -8,6 +8,7 @@
     "start": "pnpm --filter @agent-orchestrator/server start",
     "typecheck": "pnpm -r typecheck"
   },
+  "packageManager": "pnpm@10.33.3",
   "engines": {
     "node": ">=20"
   },
