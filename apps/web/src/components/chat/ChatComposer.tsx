@@ -17,12 +17,17 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import CloseIcon from '@mui/icons-material/Close';
+import StarOutlinedIcon from '@mui/icons-material/StarOutlined';
+import StarIcon from '@mui/icons-material/Star';
+import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined';
 import {
   CLAUDE_MODELS,
   LOCAL_SLASH_COMMANDS,
   PERMISSION_MODES,
   PROMPT_SLASH_COMMANDS,
+  SESSION_GRADE_LABELS,
   type PermissionMode,
+  type SessionGrade,
   type SlashCommand,
 } from '@agent-orchestrator/shared';
 import { useQuery } from '@tanstack/react-query';
@@ -58,6 +63,11 @@ interface ChatComposerProps {
   onRemoveQueued: (id: string) => void;
   draft: string;
   onDraftChange: (value: string) => void;
+  grade?: SessionGrade | null;
+  canGrade?: boolean;
+  canImprove?: boolean;
+  onGrade?: () => void;
+  onImprove?: () => void;
 }
 
 async function fileToPendingImage(file: File): Promise<PendingImage> {
@@ -122,6 +132,11 @@ export function ChatComposer({
   onRemoveQueued,
   draft,
   onDraftChange,
+  grade,
+  canGrade,
+  canImprove,
+  onGrade,
+  onImprove,
 }: ChatComposerProps) {
   const [images, setImages] = useState<PendingImage[]>([]);
   const [slashDismissed, setSlashDismissed] = useState(false);
@@ -462,6 +477,44 @@ export function ChatComposer({
           </Select>
 
           <Box sx={{ flex: 1 }} />
+
+          {onGrade ? (
+            <Tooltip
+              title={
+                grade
+                  ? `Graded ${grade.score}/5 · ${SESSION_GRADE_LABELS[grade.score]}`
+                  : 'Grade this session'
+              }
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  color={grade ? 'secondary' : 'inherit'}
+                  disabled={!canGrade}
+                  onClick={onGrade}
+                  aria-label="Grade this session"
+                >
+                  {grade ? <StarIcon fontSize="small" /> : <StarOutlinedIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : null}
+
+          {onImprove ? (
+            <Tooltip title="Create or improve a skill or instruction file">
+              <span>
+                <IconButton
+                  size="small"
+                  color="inherit"
+                  disabled={!canImprove}
+                  onClick={onImprove}
+                  aria-label="Create or improve instructions"
+                >
+                  <AutoFixHighOutlinedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : null}
 
           <Tooltip title="Clear chat history and reset session (/clear)">
             <span>

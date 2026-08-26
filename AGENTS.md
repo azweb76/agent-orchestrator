@@ -49,6 +49,7 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`) are 
 - **Build** stashes the current plan session (keeps its messages and Claude session) and creates a new auto-mode session to implement. Do not delete the plan transcript.
 - Shared DTOs and stream/permission helpers belong in `packages/shared`. Keep `apps/web/src/api/client.ts` aligned with `apps/server/src/routes/index.ts`.
 - From-idea kickoff sends the raw idea (`buildIdeaKickoffPrompt`); do not append extra instructions there.
+- Session grades persist on `chat_sessions` (`grade_score` / comment / transcript snapshot). Instruction drafts write only allowed paths: `CLAUDE.md`, `AGENTS.md`, `.claude/CLAUDE.md`, and `.claude/skills/<slug>/SKILL.md`.
 
 ## Conventions
 

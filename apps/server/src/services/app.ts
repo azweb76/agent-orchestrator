@@ -27,6 +27,9 @@ import type {
   CreateWorkspaceRequest,
   DenyPermissionRequest,
   EffortLevel,
+  GenerateInstructionDraftRequest,
+  ApplyInstructionFileRequest,
+  GradeChatSessionRequest,
   InboxPullRequest,
   MergePullRequestRequest,
   Message,
@@ -60,6 +63,13 @@ import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
 import { mergeLivePullRequest } from '../services/pr-overlay.js';
+import { buildSessionTranscript } from '../services/session-transcript.js';
+import {
+  applyInstructionFile,
+  listInstructionFiles,
+  readInstructionFileContent,
+  type InstructionFileRoots,
+} from '../services/instruction-files.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -659,6 +669,110 @@ export async function updateAgentSession(
   });
   syncAgentFromSessions(ctx, agentId);
   return updated;
+}
+
+function instructionRoots(ctx: AppContext, agentId: string): InstructionFileRoots {
+  const agent = requireAgent(ctx, agentId);
+  const worktree = ctx.repos.worktrees.getById(agent.worktreeId);
+  if (!worktree) throw new Error('Worktree not found');
+  return { worktreePath: worktree.path };
+}
+
+export async function gradeAgentSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+  body: GradeChatSessionRequest,
+): Promise<ChatSession> {
+  const session = requireSession(ctx, agentId, sessionId);
+  const messages = ctx.repos.messages.listBySession(session.id);
+  const liveTranscript = buildSessionTranscript(messages);
+  const storedTranscript = ctx.repos.sessions.getGradeTranscript(session.id);
+  const transcript = liveTranscript || storedTranscript;
+  if (!transcript) {
+    throw new Error('Cannot grade an empty session. Send a message first.');
+  }
+
+  const graded = ctx.repos.sessions.setGrade(
+    session.id,
+    {
+      score: body.score,
+      comment: body.comment?.trim() ?? '',
+      gradedAt: nowIso(),
+    },
+    transcript,
+  );
+  ctx.repos.events.create(
+    makeEvent(agentId, 'session_graded', {
+      sessionId: session.id,
+      score: body.score,
+    }),
+  );
+  return graded;
+}
+
+export async function listAgentInstructionFiles(ctx: AppContext, agentId: string) {
+  requireAgent(ctx, agentId);
+  return listInstructionFiles(instructionRoots(ctx, agentId));
+}
+
+export async function generateAgentInstructionDraft(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+  body: GenerateInstructionDraftRequest,
+) {
+  const session = requireSession(ctx, agentId, sessionId);
+  const messages = ctx.repos.messages.listBySession(session.id);
+  const transcript =
+    buildSessionTranscript(messages) || ctx.repos.sessions.getGradeTranscript(session.id);
+  if (!transcript) {
+    throw new Error('Cannot generate instructions from an empty session.');
+  }
+
+  const roots = instructionRoots(ctx, agentId);
+  let existingContent: string | null = null;
+  if (body.relativePath) {
+    existingContent = await readInstructionFileContent(roots, {
+      kind: body.kind,
+      scope: body.scope ?? 'project',
+      relativePath: body.relativePath,
+    });
+  }
+
+  const draft = await ctx.anthropic.generateInstructionDraft({
+    transcript,
+    score: session.grade?.score ?? null,
+    comment: session.grade?.comment ?? '',
+    request: body,
+    existingContent,
+    existingPath: body.relativePath ?? null,
+  });
+  ctx.repos.events.create(
+    makeEvent(agentId, 'instruction_draft_generated', {
+      sessionId: session.id,
+      kind: draft.kind,
+      relativePath: draft.relativePath,
+    }),
+  );
+  return draft;
+}
+
+export async function applyAgentInstructionFile(
+  ctx: AppContext,
+  agentId: string,
+  body: ApplyInstructionFileRequest,
+) {
+  requireAgent(ctx, agentId);
+  const result = await applyInstructionFile(instructionRoots(ctx, agentId), body);
+  ctx.repos.events.create(
+    makeEvent(agentId, 'instruction_file_applied', {
+      kind: result.kind,
+      relativePath: result.relativePath,
+      action: result.action,
+    }),
+  );
+  return result;
 }
 
 export async function activateAgentSession(

@@ -3,6 +3,29 @@ import type { AgentStatus, EffortLevel, PermissionMode } from './index.js';
 /** Built-in kickoff templates for a new chat session on an agent. */
 export type ChatSessionTemplateId = 'chat' | 'build' | 'create-draft-pr' | 'review';
 
+export const SESSION_GRADE_SCORES = [1, 2, 3, 4, 5] as const;
+export type SessionGradeScore = (typeof SESSION_GRADE_SCORES)[number];
+
+export const SESSION_GRADE_LABELS: Record<SessionGradeScore, string> = {
+  1: 'Poor',
+  2: 'Weak',
+  3: 'Okay',
+  4: 'Good',
+  5: 'Excellent',
+};
+
+/** User-assigned quality grade for a chat session. */
+export interface SessionGrade {
+  score: SessionGradeScore;
+  comment: string;
+  gradedAt: string;
+}
+
+export interface GradeChatSessionRequest {
+  score: SessionGradeScore;
+  comment?: string;
+}
+
 export interface ChatSession {
   id: string;
   agentId: string;
@@ -17,6 +40,8 @@ export interface ChatSession {
   runLogPath: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Present once the user has graded this session. */
+  grade?: SessionGrade | null;
 }
 
 export interface ChatSessionTemplate {

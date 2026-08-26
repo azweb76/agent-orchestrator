@@ -92,6 +92,11 @@ export function ChatSessionBar({
                   <Typography component="span" variant="caption" sx={{ fontWeight: 600 }}>
                     {session.title}
                   </Typography>
+                  {session.grade ? (
+                    <Typography component="span" variant="caption" sx={{ opacity: selected ? 0.9 : 0.7 }}>
+                      {session.grade.score}★
+                    </Typography>
+                  ) : null}
                 </Stack>
               }
               variant={selected ? 'filled' : 'outlined'}
