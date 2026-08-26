@@ -85,7 +85,7 @@ export function ThinkingIndicator() {
 export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
   const active = pickActive(items);
   const doneCount = items.filter((item) => item.status === 'done').length;
-  const label = active ? toolActionLabel(active.name) : 'Working';
+  const label = active ? toolActionLabel(active.name, active.detail) : 'Working';
   const detail = active?.detail?.trim();
   const running = active?.status === 'running';
 

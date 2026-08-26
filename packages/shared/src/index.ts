@@ -638,6 +638,9 @@ export {
   applyStreamEvent,
   coalesceTimelineText,
   extractToolActivity,
+  isNestedSubagentEvent,
+  isTopLevelClaudeResult,
+  parentStreamTextDelta,
   type StreamPart,
   type ToolActivityItem,
 } from './stream-timeline.js';

@@ -10,8 +10,14 @@ export type StreamPart =
   | { type: 'text'; id: string; text: string }
   | ({ type: 'tool' } & ToolActivityItem);
 
+const NESTED_DETAIL_MAX = 80;
+
 function toolDetail(input: Record<string, unknown> | undefined): string | undefined {
   if (!input) return undefined;
+  const subagent = typeof input.subagent_type === 'string' ? input.subagent_type.trim() : '';
+  const description = typeof input.description === 'string' ? input.description.trim() : '';
+  if (subagent && description) return `${subagent}: ${description}`;
+  if (subagent || description) return subagent || description;
   return (
     (typeof input.file_path === 'string' && input.file_path) ||
     (typeof input.path === 'string' && input.path) ||
@@ -21,10 +27,98 @@ function toolDetail(input: Record<string, unknown> | undefined): string | undefi
   );
 }
 
+function nestedSubagentParentId(event: Record<string, unknown> | null | undefined): string | undefined {
+  const id = event?.parent_tool_use_id;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+/** True when this stream-json event belongs to a nested Task/Agent subagent. */
+export function isNestedSubagentEvent(event: Record<string, unknown> | null | undefined): boolean {
+  return Boolean(nestedSubagentParentId(event));
+}
+
+/** True when Claude finished the parent turn (not a nested Explore/Task result). */
+export function isTopLevelClaudeResult(event: Record<string, unknown> | null | undefined): boolean {
+  return String(event?.type ?? '') === 'result' && !isNestedSubagentEvent(event);
+}
+
+function clipToolDetail(text: string): string {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (compact.length <= NESTED_DETAIL_MAX) return compact;
+  return `${compact.slice(0, NESTED_DETAIL_MAX - 1)}…`;
+}
+
+function nestedEventText(event: Record<string, unknown>): string | undefined {
+  const type = String(event.type ?? '');
+  if (type === 'result' && typeof event.result === 'string' && event.result.trim()) {
+    return event.result;
+  }
+  const nested = event.event as Record<string, unknown> | undefined;
+  const delta = nested?.delta as Record<string, unknown> | undefined;
+  if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text) {
+    return delta.text;
+  }
+  const content =
+    (event.message as { content?: unknown } | undefined)?.content ?? event.content;
+  if (Array.isArray(content)) {
+    const texts = content
+      .map((block) => {
+        if (!block || typeof block !== 'object') return '';
+        const item = block as Record<string, unknown>;
+        return item.type === 'text' && typeof item.text === 'string' ? item.text : '';
+      })
+      .filter(Boolean);
+    if (texts.length > 0) return texts.join('');
+  }
+  if (typeof content === 'string' && content.trim()) return content;
+  return undefined;
+}
+
 function completeTools(parts: StreamPart[]): StreamPart[] {
   return parts.map((part) =>
     part.type === 'tool' && part.status === 'running' ? { ...part, status: 'done' as const } : part,
   );
+}
+
+function updateTool(
+  parts: StreamPart[],
+  toolId: string,
+  patch: { detail?: string; status?: 'running' | 'done' },
+): StreamPart[] {
+  let found = false;
+  const next = parts.map((part) => {
+    if (part.type !== 'tool' || part.id !== toolId) return part;
+    found = true;
+    return {
+      ...part,
+      detail: patch.detail ?? part.detail,
+      status: patch.status ?? part.status,
+    };
+  });
+  return found ? next : parts;
+}
+
+function applyNestedSubagentEvent(
+  parts: StreamPart[],
+  event: Record<string, unknown>,
+  parentToolId: string,
+): StreamPart[] {
+  const type = String(event.type ?? '');
+  const text = nestedEventText(event);
+  let next = parts;
+  if (text && type !== 'result') {
+    next = updateTool(next, parentToolId, {
+      detail: clipToolDetail(text),
+      status: 'running',
+    });
+  }
+  if (type === 'result') {
+    next = updateTool(next, parentToolId, {
+      detail: text ? clipToolDetail(text) : undefined,
+      status: 'done',
+    });
+  }
+  return next;
 }
 
 function pushTool(
@@ -65,8 +159,28 @@ export function appendStreamText(parts: StreamPart[], token: string): StreamPart
   return [...parts, { type: 'text', id: `text-${parts.length}`, text: token }];
 }
 
+/**
+ * Live text_delta from the parent turn only. Nested Explore/Task tokens must not
+ * land in the assistant bubble.
+ */
+export function parentStreamTextDelta(event: Record<string, unknown>): string | undefined {
+  if (isNestedSubagentEvent(event)) return undefined;
+  if (String(event.type ?? '') !== 'stream_event') return undefined;
+  const nested = event.event as Record<string, unknown> | undefined;
+  const delta = nested?.delta as Record<string, unknown> | undefined;
+  if (delta?.type === 'text_delta' && typeof delta.text === 'string' && delta.text) {
+    return delta.text;
+  }
+  return undefined;
+}
+
 /** Apply a Claude stream-json event into the ordered timeline. */
 export function applyStreamEvent(parts: StreamPart[], event: Record<string, unknown>): StreamPart[] {
+  const parentToolId = nestedSubagentParentId(event);
+  if (parentToolId) {
+    return applyNestedSubagentEvent(parts, event, parentToolId);
+  }
+
   const type = String(event.type ?? '');
   const nested = (event.event as Record<string, unknown> | undefined) ?? undefined;
   const content =
@@ -103,7 +217,7 @@ export function applyStreamEvent(parts: StreamPart[], event: Record<string, unkn
         next = pushTool(
           next,
           String(block.name ?? 'tool'),
-          undefined,
+          toolDetail(block.input as Record<string, unknown> | undefined),
           typeof block.id === 'string' ? block.id : undefined,
         );
       }

@@ -79,6 +79,7 @@ import {
   coalesceTimelineText,
   extractPlanFromInput,
   buildAskUserQuestionUpdatedInput,
+  parentStreamTextDelta,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
@@ -1612,13 +1613,10 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
     },
     meta?: { replay?: boolean },
   ) => {
-    if (
-      event.type === 'stream_event' &&
-      event.event?.delta?.type === 'text_delta' &&
-      event.event.delta.text
-    ) {
-      assistantText += event.event.delta.text;
-      timeline = appendStreamText(timeline, event.event.delta.text);
+    const token = parentStreamTextDelta(event as Record<string, unknown>);
+    if (token) {
+      assistantText += token;
+      timeline = appendStreamText(timeline, token);
       flushProgress();
     } else if (event.type !== 'stderr') {
       timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
@@ -1839,15 +1837,12 @@ export async function streamAgentChat(
         send('permission_request', payload);
       },
       onEvent: (event) => {
-        if (
-          event.type === 'stream_event' &&
-          event.event?.delta?.type === 'text_delta' &&
-          event.event.delta.text
-        ) {
-          assistantText += event.event.delta.text;
-          timeline = appendStreamText(timeline, event.event.delta.text);
+        const token = parentStreamTextDelta(event as Record<string, unknown>);
+        if (token) {
+          assistantText += token;
+          timeline = appendStreamText(timeline, token);
           flushProgress();
-          send('token', { text: event.event.delta.text });
+          send('token', { text: token });
         } else if (event.type !== 'stderr') {
           timeline = applyStreamEvent(timeline, event as Record<string, unknown>);
           flushProgress(true);
