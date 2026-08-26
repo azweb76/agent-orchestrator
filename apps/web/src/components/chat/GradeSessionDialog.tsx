@@ -76,6 +76,8 @@ function FindingCard({ finding }: { finding: SessionGradeFinding }) {
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
+
+function formatTokens(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
   return String(value);
 }
@@ -128,9 +130,7 @@ export function GradeSessionDialog({
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                   <Chip
                     size="small"
-                    label={`${analysis.stats.userTurns} user / ${analysis.stats.assistantTurns} assistant ${
-                      analysis.stats.userTurns + analysis.stats.assistantTurns === 1 ? 'turn' : 'turns'
-                    }`}
+                    label={`${analysis.stats.userTurns} user / ${analysis.stats.assistantTurns} assistant turns`}
                   />
                   <Chip size="small" label={`~${formatTokens(analysis.stats.estimatedTokens)} tokens`} />
                   {analysis.stats.costUsd != null ? (
