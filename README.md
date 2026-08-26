@@ -15,7 +15,7 @@ Local web app for managing git workspaces, worktrees, and Claude Code agents.
   - Rewind to any user message (`/rewind` or the history button on a bubble) to truncate later turns, reset the Claude session, and restore the prompt for editing
   - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that stashes the plan session and starts a new auto-mode session to implement
   - Each agent can hold multiple chat sessions in parallel (for example a plan chat plus a Review or Create draft PR session)
-  - New chats are auto-named from the first prompt via the Anthropic API; double-click a tab, use the pencil, or right-click to rename
+  - New chats are auto-named from the first prompt via the Anthropic API; rename from the session bar (pencil, double-click, or right-click)
   - Manual / plan modes prompt on the agent page for tool permissions; `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved via `--allowedTools`
   - Slash commands & skills autocomplete (project/personal/bundled)
   - Image attachments (paste or upload), markdown replies, compact tool-use progress bar (updates with the active tool)

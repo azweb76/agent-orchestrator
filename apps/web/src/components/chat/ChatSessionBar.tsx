@@ -16,7 +16,6 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
@@ -62,6 +61,7 @@ export function ChatSessionBar({
   const inputRef = useRef<HTMLInputElement>(null);
   const canDelete = Boolean(onDelete) && !disabled;
   const canRename = Boolean(onRename) && !disabled;
+  const activeSession = sessions.find((item) => item.id === activeSessionId) ?? null;
 
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
@@ -181,25 +181,11 @@ export function ChatSessionBar({
                       {session.grade.score}★
                     </Typography>
                   ) : null}
-                  {canRename && selected && !editing ? (
-                    <Tooltip title="Rename">
-                      <IconButton
-                        size="small"
-                        aria-label={`Rename ${session.title}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          beginRename(session);
-                        }}
-                        sx={{ p: 0.15, color: 'inherit' }}
-                      >
-                        <EditOutlinedIcon sx={{ fontSize: 14 }} />
-                      </IconButton>
-                    </Tooltip>
-                  ) : null}
                 </Stack>
               }
               variant={selected ? 'filled' : 'outlined'}
               color={selected ? 'primary' : 'default'}
+              title={canRename ? 'Double-click to rename' : undefined}
               onClick={() => {
                 if (editing) return;
                 onSelect(session.id);
@@ -232,6 +218,20 @@ export function ChatSessionBar({
           );
         })}
       </Box>
+      <Tooltip title="Rename session">
+        <span>
+          <IconButton
+            size="small"
+            aria-label="Rename session"
+            disabled={!canRename || !activeSession}
+            onClick={() => {
+              if (activeSession) beginRename(activeSession);
+            }}
+          >
+            <DriveFileRenameOutlineIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
       <Tooltip title="New session">
         <span>
           <IconButton
