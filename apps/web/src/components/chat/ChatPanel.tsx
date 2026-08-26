@@ -24,8 +24,8 @@ import {
   type ChatSession,
   type ChatSessionTemplate,
   type Message,
-  type PermissionMode,
   type PermissionRequest,
+  type UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
 import { api, streamBuildPlan, streamChat } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -71,6 +71,26 @@ function setMessagesCache(
   updater: (prev: Message[] | undefined) => Message[],
 ): void {
   queryClient.setQueryData<Message[]>(['messages', agentId, sessionId], (prev) => updater(prev));
+}
+
+function upsertAgentSession(
+  queryClient: QueryClient,
+  agentId: string,
+  session: ChatSession,
+  options: { activate?: boolean } = {},
+): void {
+  queryClient.setQueryData<AgentDetail>(['agent', agentId], (prev) => {
+    if (!prev) return prev;
+    const sessions = prev.sessions ?? [];
+    const has = sessions.some((item) => item.id === session.id);
+    return {
+      ...prev,
+      ...(options.activate ? { activeSessionId: session.id } : {}),
+      sessions: has
+        ? sessions.map((item) => (item.id === session.id ? { ...item, ...session } : item))
+        : [...sessions, session],
+    };
+  });
 }
 
 function MessageTimeline({ message }: { message: Message }) {
@@ -196,9 +216,36 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (body: { model?: string; permissionMode?: PermissionMode }) =>
+    mutationFn: (body: UpdateChatSessionRequest) =>
       api.updateSession(agentId, activeSessionId, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agent', agentId] }),
+    onSuccess: (updated) => {
+      upsertAgentSession(queryClient, agentId, updated);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    },
+  });
+
+  const renameSessionMutation = useMutation({
+    mutationFn: ({ sessionId, title }: { sessionId: string; title: string }) =>
+      api.updateSession(agentId, sessionId, { title }),
+    onMutate: ({ sessionId, title }) => {
+      queryClient.setQueryData<AgentDetail>(['agent', agentId], (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          sessions: (prev.sessions ?? []).map((item) =>
+            item.id === sessionId ? { ...item, title, titleSource: 'user' } : item,
+          ),
+        };
+      });
+    },
+    onSuccess: (updated) => {
+      upsertAgentSession(queryClient, agentId, updated);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    },
+    onError: (error) => {
+      setChatError((error as Error).message);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    },
   });
 
   const clearMutation = useMutation({
@@ -450,19 +497,23 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           onSession: (nextSession) => {
             if (!mountedRef.current) return;
             const previousId = stream.sessionId;
-            if (abortBySessionRef.current.get(previousId) === controller) {
-              abortBySessionRef.current.delete(previousId);
+            const switched = nextSession.id !== previousId;
+            if (switched) {
+              if (abortBySessionRef.current.get(previousId) === controller) {
+                abortBySessionRef.current.delete(previousId);
+              }
+              abortBySessionRef.current.set(nextSession.id, controller);
+              sendingSessionsRef.current.delete(previousId);
+              sendingSessionsRef.current.add(nextSession.id);
+              setSendingSessionIds((prev) => {
+                const without = prev.filter((id) => id !== previousId);
+                return without.includes(nextSession.id) ? without : [...without, nextSession.id];
+              });
+              stream.sessionId = nextSession.id;
+              sessionIdRef.current = nextSession.id;
+              setSessionId(nextSession.id);
             }
-            abortBySessionRef.current.set(nextSession.id, controller);
-            sendingSessionsRef.current.delete(previousId);
-            sendingSessionsRef.current.add(nextSession.id);
-            setSendingSessionIds((prev) => {
-              const without = prev.filter((id) => id !== previousId);
-              return without.includes(nextSession.id) ? without : [...without, nextSession.id];
-            });
-            stream.sessionId = nextSession.id;
-            sessionIdRef.current = nextSession.id;
-            setSessionId(nextSession.id);
+            upsertAgentSession(queryClient, agentId, nextSession, { activate: switched });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
           },
           onUserMessage: (message) => {
@@ -722,19 +773,23 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           onSession: (nextSession) => {
             if (!mountedRef.current) return;
             const previousId = stream.sessionId;
-            if (abortBySessionRef.current.get(previousId) === controller) {
-              abortBySessionRef.current.delete(previousId);
+            const switched = nextSession.id !== previousId;
+            if (switched) {
+              if (abortBySessionRef.current.get(previousId) === controller) {
+                abortBySessionRef.current.delete(previousId);
+              }
+              abortBySessionRef.current.set(nextSession.id, controller);
+              sendingSessionsRef.current.delete(previousId);
+              sendingSessionsRef.current.add(nextSession.id);
+              setSendingSessionIds((prev) => {
+                const without = prev.filter((id) => id !== previousId);
+                return without.includes(nextSession.id) ? without : [...without, nextSession.id];
+              });
+              stream.sessionId = nextSession.id;
+              sessionIdRef.current = nextSession.id;
+              setSessionId(nextSession.id);
             }
-            abortBySessionRef.current.set(nextSession.id, controller);
-            sendingSessionsRef.current.delete(previousId);
-            sendingSessionsRef.current.add(nextSession.id);
-            setSendingSessionIds((prev) => {
-              const without = prev.filter((id) => id !== previousId);
-              return without.includes(nextSession.id) ? without : [...without, nextSession.id];
-            });
-            stream.sessionId = nextSession.id;
-            sessionIdRef.current = nextSession.id;
-            setSessionId(nextSession.id);
+            upsertAgentSession(queryClient, agentId, nextSession, { activate: switched });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
             queryClient.invalidateQueries({ queryKey: ['sidebar'] });
           },
@@ -889,6 +944,11 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         onSelect={(id) => void selectSession(id)}
         onCreate={(template) => void createSessionFromTemplate(template)}
         onDelete={archived ? undefined : (target) => setDeleteTarget(target)}
+        onRename={
+          archived
+            ? undefined
+            : (target, title) => renameSessionMutation.mutate({ sessionId: target.id, title })
+        }
       />
       <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
         <Box

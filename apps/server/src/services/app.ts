@@ -56,11 +56,12 @@ import {
   DEFAULT_PERMISSION_MODE,
   buildImplementPlanPrompt,
   chatSessionTemplateById,
+  uniqueSessionTitle,
 } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
-import { AnthropicService } from '../services/anthropic.js';
+import { AnthropicService, fallbackTitleFromPrompt, sanitizeChatTitle } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
 import { mergeLivePullRequest } from '../services/pr-overlay.js';
 import { buildSessionTranscript } from '../services/session-transcript.js';
@@ -133,12 +134,61 @@ async function createAgentForWorktree(
   return { ...agent, activeSessionId: session.id };
 }
 
-function uniqueSessionTitle(existing: ChatSession[], base: string): string {
-  const titles = new Set(existing.map((item) => item.title));
-  if (!titles.has(base)) return base;
-  let n = 2;
-  while (titles.has(`${base} ${n}`)) n += 1;
-  return `${base} ${n}`;
+function sessionTitleSource(session: ChatSession): NonNullable<ChatSession['titleSource']> {
+  return session.titleSource ?? 'default';
+}
+
+async function maybeAutoNameChatSession(
+  ctx: AppContext,
+  session: ChatSession,
+  prompt: string,
+): Promise<ChatSession | null> {
+  const latest = ctx.repos.sessions.getById(session.id) ?? session;
+  if (sessionTitleSource(latest) === 'user') return null;
+
+  const userTurns = ctx.repos.messages
+    .listBySession(session.id)
+    .filter((item) => item.role === 'user');
+  if (userTurns.length !== 1) return null;
+
+  let title: string;
+  try {
+    title = await ctx.anthropic.suggestChatTitle(prompt);
+  } catch {
+    title = fallbackTitleFromPrompt(prompt);
+  }
+  title = sanitizeChatTitle(title, prompt);
+
+  const current = ctx.repos.sessions.getById(session.id);
+  if (!current || sessionTitleSource(current) === 'user') return null;
+
+  const siblings = ctx.repos.sessions
+    .listByAgent(session.agentId)
+    .filter((item) => item.id !== session.id);
+  const unique = uniqueSessionTitle(
+    siblings.map((item) => item.title),
+    title,
+  );
+  if (unique === current.title && sessionTitleSource(current) === 'auto') return current;
+
+  return ctx.repos.sessions.update({
+    ...current,
+    title: unique,
+    titleSource: 'auto',
+    updatedAt: nowIso(),
+  });
+}
+
+/** Write session runtime fields without clobbering a title that landed concurrently. */
+function persistSessionRuntime(ctx: AppContext, session: ChatSession): ChatSession {
+  const latest = ctx.repos.sessions.getById(session.id);
+  const next: ChatSession = {
+    ...session,
+    title: latest?.title ?? session.title,
+    titleSource: latest?.titleSource ?? session.titleSource,
+  };
+  ctx.repos.sessions.update(next);
+  return next;
 }
 
 function createSessionForAgent(
@@ -154,7 +204,11 @@ function createSessionForAgent(
   const template = chatSessionTemplateById(options.template ?? 'chat');
   const timestamp = nowIso();
   const existing = ctx.repos.sessions.listByAgent(agent.id);
-  const title = options.title?.trim() || uniqueSessionTitle(existing, template?.title ?? 'Chat');
+  const requestedTitle = options.title?.trim();
+  const title = requestedTitle || uniqueSessionTitle(
+    existing.map((item) => item.title),
+    template?.title ?? 'Chat',
+  );
   const session: ChatSession = {
     id: uuidv4(),
     agentId: agent.id,
@@ -169,6 +223,7 @@ function createSessionForAgent(
     runLogPath: null,
     createdAt: timestamp,
     updatedAt: timestamp,
+    titleSource: requestedTitle ? 'user' : 'default',
   };
   ctx.repos.sessions.create(session);
   if (options.activate !== false) {
@@ -664,9 +719,11 @@ export async function updateAgentSession(
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot update a session on an archived agent');
   const session = requireSession(ctx, agentId, sessionId);
+  const requestedTitle = body.title?.trim();
   const updated = ctx.repos.sessions.update({
     ...session,
-    title: body.title?.trim() || session.title,
+    title: requestedTitle || session.title,
+    titleSource: requestedTitle ? 'user' : sessionTitleSource(session),
     model: body.model ?? session.model,
     effort: body.effort ?? session.effort,
     permissionMode: body.permissionMode ?? session.permissionMode,
@@ -1781,12 +1838,21 @@ export async function streamAgentChat(
   send('user_message', userMessage);
   send('assistant_message', assistantMessage);
 
+  const titleTask = maybeAutoNameChatSession(ctx, session, userMessage.content)
+    .then((named) => {
+      if (named && named.title !== session.title) {
+        send('session', named);
+      }
+      return named;
+    })
+    .catch(() => null);
+
   let runningSession: ChatSession = {
     ...(ctx.repos.sessions.getById(session.id) ?? session),
     status: 'running',
     updatedAt: nowIso(),
   };
-  ctx.repos.sessions.update(runningSession);
+  runningSession = persistSessionRuntime(ctx, runningSession);
   syncAgentFromSessions(ctx, agentId);
 
   let assistantText = '';
@@ -1811,13 +1877,12 @@ export async function streamAgentChat(
       sessionId: runningSession.claudeSessionId,
       imagePaths: attachments.map((item) => item.path),
       onStarted: (handle) => {
-        runningSession = {
+        runningSession = persistSessionRuntime(ctx, {
           ...runningSession,
           pid: handle.pid,
           runLogPath: handle.logPath,
           updatedAt: nowIso(),
-        };
-        ctx.repos.sessions.update(runningSession);
+        });
         syncAgentFromSessions(ctx, agentId);
       },
       onPermissionRequest: (request) => {
@@ -1910,6 +1975,7 @@ export async function streamAgentChat(
       send('error', { message: errMessage });
     }
   } finally {
+    await titleTask;
     if (clientOpen && !res.writableEnded) {
       res.end();
     }

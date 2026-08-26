@@ -72,6 +72,12 @@ export interface GradeChatSessionRequest {
   notes?: string;
 }
 
+/** How a chat session title was last set. User titles are never overwritten by auto-naming. */
+export type ChatSessionTitleSource = 'default' | 'auto' | 'user';
+
+/** Maximum length for a chat session title (auto-generated or renamed). */
+export const CHAT_TITLE_MAX_LENGTH = 80;
+
 export interface ChatSession {
   id: string;
   agentId: string;
@@ -88,6 +94,8 @@ export interface ChatSession {
   updatedAt: string;
   /** Present once the user has graded this session. */
   grade?: SessionGrade | null;
+  /** Defaults to `default` for sessions created before this field existed. */
+  titleSource?: ChatSessionTitleSource;
 }
 
 export interface ChatSessionTemplate {
@@ -155,6 +163,16 @@ export function chatSessionTemplateById(
 ): ChatSessionTemplate | undefined {
   if (!id) return undefined;
   return CHAT_SESSION_TEMPLATES.find((item) => item.id === id);
+}
+
+/** Pick a unique title among siblings, appending ` 2`, ` 3`, … as needed. */
+export function uniqueSessionTitle(existingTitles: Iterable<string>, base: string): string {
+  const trimmed = base.trim() || 'Chat';
+  const titles = existingTitles instanceof Set ? existingTitles : new Set(existingTitles);
+  if (!titles.has(trimmed)) return trimmed;
+  let n = 2;
+  while (titles.has(`${trimmed} ${n}`)) n += 1;
+  return `${trimmed} ${n}`;
 }
 
 export interface CreateChatSessionRequest {

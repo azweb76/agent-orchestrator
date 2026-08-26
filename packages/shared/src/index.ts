@@ -665,7 +665,9 @@ export { buildIdeaKickoffPrompt } from './idea-prompt.js';
 export {
   buildImplementPlanPrompt,
   chatSessionTemplateById,
+  uniqueSessionTitle,
   CHAT_SESSION_TEMPLATES,
+  CHAT_TITLE_MAX_LENGTH,
   LISTED_CHAT_SESSION_TEMPLATES,
   SESSION_GRADE_FINDING_CATEGORIES,
   SESSION_GRADE_FINDING_LABELS,
@@ -674,6 +676,7 @@ export {
   type ChatSession,
   type ChatSessionTemplate,
   type ChatSessionTemplateId,
+  type ChatSessionTitleSource,
   type CreateChatSessionRequest,
   type GradeChatSessionRequest,
   type SessionGrade,

@@ -83,7 +83,7 @@ rl.on('line', (line) => {
     git: new GitService(),
     github: new GitHubService({}),
     claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
-    anthropic: new AnthropicService(),
+    anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
     dataDir: tmp,
   };
 
@@ -352,7 +352,7 @@ setInterval(() => {}, 1000);
       git: new GitService(),
       github: new GitHubService({}),
       claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
-      anthropic: new AnthropicService(),
+      anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
       dataDir: tmp,
     };
     repos.workspaces.create({
@@ -481,7 +481,7 @@ rl.on('line', (line) => {
       git: new GitService(),
       github: new GitHubService({}),
       claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
-      anthropic: new AnthropicService(),
+      anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
       dataDir: tmp,
     };
     repos.workspaces.create({

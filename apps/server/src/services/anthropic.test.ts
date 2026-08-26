@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { sanitizeBranchName } from './anthropic.js';
+import { sanitizeBranchName, sanitizeChatTitle, fallbackTitleFromPrompt } from './anthropic.js';
 
 test('sanitizeBranchName converts a normal idea into a hyphenated slug', () => {
   assert.equal(sanitizeBranchName('Add dark mode toggle'), 'add-dark-mode-toggle');
@@ -41,4 +41,23 @@ test('sanitizeBranchName passes through an already-valid slug', () => {
 
 test('sanitizeBranchName strips leading/trailing separators', () => {
   assert.equal(sanitizeBranchName('/-add-thing-/-'), 'add-thing');
+});
+
+test('sanitizeChatTitle strips quotes and trailing punctuation', () => {
+  assert.equal(sanitizeChatTitle('"Add Dark Mode Toggle."'), 'Add Dark Mode Toggle');
+});
+
+test('sanitizeChatTitle collapses whitespace and line breaks', () => {
+  assert.equal(sanitizeChatTitle('  Fix\nthe   login  '), 'Fix the login');
+});
+
+test('sanitizeChatTitle falls back to the first words of the prompt', () => {
+  assert.equal(
+    sanitizeChatTitle('   ', 'Please add retry logic for the API client'),
+    'Please add retry logic for the',
+  );
+});
+
+test('fallbackTitleFromPrompt uses a generic name for empty input', () => {
+  assert.equal(fallbackTitleFromPrompt('   '), 'Chat');
 });

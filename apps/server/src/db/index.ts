@@ -6,6 +6,7 @@ import type {
   AgentEvent,
   ChatSession,
   ChatSessionTemplateId,
+  ChatSessionTitleSource,
   EffortLevel,
   Message,
   MessageAttachment,
@@ -78,7 +79,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   grade_comment TEXT,
   grade_transcript TEXT,
   grade_analysis TEXT,
-  graded_at TEXT
+  graded_at TEXT,
+  title_source TEXT NOT NULL DEFAULT 'default'
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -194,6 +196,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'grade_transcript', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'grade_analysis', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'graded_at', 'TEXT');
+  ensureColumn(db, 'chat_sessions', 'title_source', "TEXT NOT NULL DEFAULT 'default'");
 }
 
 function applySchema(db: Database.Database): void {
@@ -528,10 +531,10 @@ export class ChatSessionRepository {
       .prepare(
         `INSERT INTO chat_sessions (
            id, agent_id, title, template, status, model, effort, permission_mode,
-           claude_session_id, pid, run_log_path, created_at, updated_at
+           claude_session_id, pid, run_log_path, created_at, updated_at, title_source
          ) VALUES (
            @id, @agentId, @title, @template, @status, @model, @effort, @permissionMode,
-           @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt
+           @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @titleSource
          )`,
       )
       .run({
@@ -548,6 +551,7 @@ export class ChatSessionRepository {
         runLogPath: session.runLogPath,
         createdAt: session.createdAt,
         updatedAt: session.updatedAt,
+        titleSource: session.titleSource ?? 'default',
       });
     return session;
   }
@@ -581,7 +585,7 @@ export class ChatSessionRepository {
         `UPDATE chat_sessions SET title = @title, template = @template, status = @status,
          model = @model, effort = @effort, permission_mode = @permissionMode,
          claude_session_id = @claudeSessionId, pid = @pid, run_log_path = @runLogPath,
-         updated_at = @updatedAt
+         updated_at = @updatedAt, title_source = @titleSource
          WHERE id = @id`,
       )
       .run({
@@ -596,6 +600,7 @@ export class ChatSessionRepository {
         pid: session.pid,
         runLogPath: session.runLogPath,
         updatedAt: session.updatedAt,
+        titleSource: session.titleSource ?? 'default',
       });
     return session;
   }
@@ -835,6 +840,10 @@ function parseSessionTemplate(value: unknown): ChatSessionTemplateId {
     : 'chat';
 }
 
+function parseTitleSource(value: unknown): ChatSessionTitleSource {
+  return value === 'auto' || value === 'user' ? value : 'default';
+}
+
 function parseGradeScore(value: unknown): SessionGradeScore | null {
   const score = typeof value === 'number' ? value : Number(value);
   if (!Number.isInteger(score) || score < 1 || score > 5) return null;
@@ -886,6 +895,7 @@ function rowToChatSession(row: unknown): ChatSession {
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
     grade: rowToGrade(r),
+    titleSource: parseTitleSource(r.title_source),
   };
 }
 

@@ -71,6 +71,7 @@ describe('chat session migration and isolation', () => {
       const sessions = repos.sessions.listByAgent(agent.id);
       assert.equal(sessions.length, 1);
       assert.equal(sessions[0]?.title, 'Chat');
+      assert.equal(sessions[0]?.titleSource, 'default');
       assert.equal(sessions[0]?.claudeSessionId, 'claude-1');
       assert.equal(repos.agents.getById(agent.id)?.activeSessionId, sessions[0]?.id);
       assert.equal(repos.messages.listBySession(sessions[0]!.id).length, 1);

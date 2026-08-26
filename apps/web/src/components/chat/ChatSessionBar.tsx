@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Chip,
@@ -9,16 +9,19 @@ import {
   Menu,
   MenuItem,
   Stack,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
+import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import type { ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
-import { LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
+import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
 
 interface ChatSessionBarProps {
   sessions: ChatSession[];
@@ -28,6 +31,7 @@ interface ChatSessionBarProps {
   onSelect: (sessionId: string) => void;
   onCreate: (template: ChatSessionTemplate) => void;
   onDelete?: (session: ChatSession) => void;
+  onRename?: (session: ChatSession, title: string) => void;
 }
 
 function templateIcon(id: string) {
@@ -44,9 +48,48 @@ export function ChatSessionBar({
   onSelect,
   onCreate,
   onDelete,
+  onRename,
 }: ChatSessionBarProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [sessionMenu, setSessionMenu] = useState<{
+    el: HTMLElement;
+    session: ChatSession;
+  } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const skipBlurRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const canDelete = Boolean(onDelete) && !disabled;
+  const canRename = Boolean(onRename) && !disabled;
+  const activeSession = sessions.find((item) => item.id === activeSessionId) ?? null;
+
+  useEffect(() => {
+    if (editingId) inputRef.current?.focus();
+  }, [editingId]);
+
+  const beginRename = (session: ChatSession) => {
+    if (!canRename) return;
+    skipBlurRef.current = false;
+    setSessionMenu(null);
+    setEditingId(session.id);
+    setDraft(session.title);
+  };
+
+  const cancelRename = () => {
+    skipBlurRef.current = true;
+    setEditingId(null);
+  };
+
+  const commitRename = (session: ChatSession) => {
+    if (skipBlurRef.current) {
+      skipBlurRef.current = false;
+      return;
+    }
+    const next = draft.trim();
+    setEditingId(null);
+    if (!next || next === session.title) return;
+    onRename?.(session, next.slice(0, CHAT_TITLE_MAX_LENGTH));
+  };
 
   return (
     <Stack
@@ -76,6 +119,7 @@ export function ChatSessionBar({
         {sessions.map((session) => {
           const selected = session.id === activeSessionId;
           const running = session.status === 'running';
+          const editing = editingId === session.id;
           return (
             <Chip
               key={session.id}
@@ -93,10 +137,46 @@ export function ChatSessionBar({
                       }}
                     />
                   ) : null}
-                  <Typography component="span" variant="caption" sx={{ fontWeight: 600 }}>
-                    {session.title}
-                  </Typography>
-                  {session.grade ? (
+                  {editing ? (
+                    <TextField
+                      inputRef={inputRef}
+                      size="small"
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          commitRename(session);
+                        } else if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelRename();
+                        }
+                      }}
+                      onBlur={() => commitRename(session)}
+                      slotProps={{
+                        htmlInput: {
+                          maxLength: CHAT_TITLE_MAX_LENGTH,
+                          'aria-label': 'Session name',
+                        },
+                      }}
+                      sx={{
+                        width: { xs: 132, sm: 168 },
+                        '& .MuiInputBase-root': { height: 22 },
+                        '& .MuiInputBase-input': {
+                          py: 0,
+                          px: 0.5,
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                        },
+                      }}
+                    />
+                  ) : (
+                    <Typography component="span" variant="caption" sx={{ fontWeight: 600 }}>
+                      {session.title}
+                    </Typography>
+                  )}
+                  {!editing && session.grade ? (
                     <Typography component="span" variant="caption" sx={{ opacity: selected ? 0.9 : 0.7 }}>
                       {session.grade.score}★
                     </Typography>
@@ -105,8 +185,21 @@ export function ChatSessionBar({
               }
               variant={selected ? 'filled' : 'outlined'}
               color={selected ? 'primary' : 'default'}
-              onClick={() => onSelect(session.id)}
-              onDelete={canDelete ? () => onDelete?.(session) : undefined}
+              title={canRename ? 'Double-click to rename' : undefined}
+              onClick={() => {
+                if (editing) return;
+                onSelect(session.id);
+              }}
+              onDoubleClick={(event) => {
+                event.preventDefault();
+                beginRename(session);
+              }}
+              onContextMenu={(event) => {
+                if (!canRename && !canDelete) return;
+                event.preventDefault();
+                setSessionMenu({ el: event.currentTarget, session });
+              }}
+              onDelete={canDelete && !editing ? () => onDelete?.(session) : undefined}
               deleteIcon={
                 <CloseIcon fontSize="small" aria-label={`Delete ${session.title} session`} />
               }
@@ -125,6 +218,20 @@ export function ChatSessionBar({
           );
         })}
       </Box>
+      <Tooltip title="Rename session">
+        <span>
+          <IconButton
+            size="small"
+            aria-label="Rename session"
+            disabled={!canRename || !activeSession}
+            onClick={() => {
+              if (activeSession) beginRename(activeSession);
+            }}
+          >
+            <DriveFileRenameOutlineIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
       <Tooltip title="New session">
         <span>
           <IconButton
@@ -161,7 +268,40 @@ export function ChatSessionBar({
           </MenuItem>
         ))}
       </Menu>
+      <Menu
+        anchorEl={sessionMenu?.el}
+        open={Boolean(sessionMenu)}
+        onClose={() => setSessionMenu(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+      >
+        {canRename ? (
+          <MenuItem
+            onClick={() => {
+              if (sessionMenu) beginRename(sessionMenu.session);
+            }}
+          >
+            <ListItemIcon>
+              <DriveFileRenameOutlineIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Rename" />
+          </MenuItem>
+        ) : null}
+        {canDelete && sessionMenu ? (
+          <MenuItem
+            onClick={() => {
+              const target = sessionMenu.session;
+              setSessionMenu(null);
+              onDelete?.(target);
+            }}
+          >
+            <ListItemIcon>
+              <DeleteOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Delete" />
+          </MenuItem>
+        ) : null}
+      </Menu>
     </Stack>
   );
 }
-

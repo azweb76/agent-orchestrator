@@ -133,6 +133,28 @@ export class AnthropicService {
     return sanitizeBranchName(text);
   }
 
+  async suggestChatTitle(prompt: string): Promise<string> {
+    const { apiKey, baseUrl } = await resolveCredentials();
+    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined, timeout: 8_000 });
+    const clipped = prompt.trim().slice(0, 2000) || 'The user sent an image.';
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 40,
+      system:
+        "You name a chat session from the user's first message. " +
+        'Respond with ONLY a short title: 2 to 6 words, Title Case, no quotes, no trailing punctuation. ' +
+        'Capture the intent; do not copy the prompt verbatim unless it is already a short name.',
+      messages: [{ role: 'user', content: clipped }],
+    });
+
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+
+    return sanitizeChatTitle(text, prompt);
+  }
+
   async analyzeSessionGrade(
     input: SessionGradeContext,
   ): Promise<SessionGradeAnalysis & { score: SessionGradeScore }> {
@@ -207,4 +229,37 @@ export function sanitizeBranchName(input: string): string {
   }
 
   return slug || fallback;
+}
+
+const AUTO_CHAT_TITLE_MAX_LENGTH = 60;
+
+/** First-few-words fallback when the model is unavailable or returns nothing useful. */
+export function fallbackTitleFromPrompt(prompt: string): string {
+  const words = prompt
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6);
+  const title = words.join(' ').replace(/[.!?]+$/g, '').trim();
+  if (!title) return 'Chat';
+  return title.length <= AUTO_CHAT_TITLE_MAX_LENGTH
+    ? title
+    : title.slice(0, AUTO_CHAT_TITLE_MAX_LENGTH).trim();
+}
+
+export function sanitizeChatTitle(input: string, fallbackPrompt = ''): string {
+  if (typeof input !== 'string') return fallbackTitleFromPrompt(fallbackPrompt);
+
+  const cleaned = input
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/^[\s"'`“”‘’]+|[\s"'`“”‘’]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!?]+$/g, '')
+    .trim();
+
+  if (!cleaned) return fallbackTitleFromPrompt(fallbackPrompt);
+  if (cleaned.length <= AUTO_CHAT_TITLE_MAX_LENGTH) return cleaned;
+  return cleaned.slice(0, AUTO_CHAT_TITLE_MAX_LENGTH).trim();
 }
