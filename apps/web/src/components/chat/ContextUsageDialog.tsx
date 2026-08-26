@@ -30,7 +30,7 @@ const CACHE_READ = '#5eead4';
 const CACHE_WRITE = '#8ba4ff';
 const FRESH_INPUT = '#ffb74d';
 const CHART_HEIGHT = 168;
-const Y_TICKS = [0, 0.25, 0.5, 0.75, 1] as const;
+const Y_TICKS = [0, 0.5, 1] as const;
 
 function percentColor(percent: number | null): 'secondary' | 'warning' | 'error' {
   if (percent == null) return 'secondary';
@@ -91,21 +91,22 @@ function ContextFillBar({ usage, windowTokens }: { usage: TokenUsageBreakdown; w
   );
 }
 
-/** Round up to 1 / 2 / 2.5 / 5 / 10 × 10^n so axis labels stay compact. */
+/** Round up to 1 / 2 / 2.5 / 4 / 5 / 8 / 10 × 10^n so axis labels stay compact. */
 function niceCeiling(value: number): number {
   if (value <= 0) return 1;
   const exp = Math.floor(Math.log10(value));
   const mag = 10 ** exp;
   const n = value / mag;
-  const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+  const nice =
+    n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 4 ? 4 : n <= 5 ? 5 : n <= 8 ? 8 : 10;
   return nice * mag;
 }
 
 function historyAxisMax(history: SessionContextTurn[], windowTokens: number): number {
   const peak = Math.max(0, ...history.map((turn) => turn.contextTokens));
   if (peak <= 0) return windowTokens;
-  if (peak >= windowTokens * 0.28) return windowTokens;
-  return Math.min(windowTokens, niceCeiling(peak * 1.12));
+  if (peak >= windowTokens * 0.35) return windowTokens;
+  return Math.min(windowTokens, niceCeiling(peak));
 }
 
 function barSlotWidth(count: number): number {
@@ -165,6 +166,7 @@ function HistoryBar({
       enterDelay={400}
     >
       <ButtonBase
+        disableRipple
         onClick={onSelect}
         aria-label={label}
         aria-pressed={selected}
@@ -184,6 +186,7 @@ function HistoryBar({
           outlineColor: 'primary.main',
           outlineOffset: -2,
           '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
+          '&:focus': { outline: 'none' },
           '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 0 },
         }}
       >
@@ -278,7 +281,7 @@ function HistoryChart({
                 position: 'absolute',
                 right: 0,
                 bottom: `${tick * 100}%`,
-                transform: 'translateY(50%)',
+                transform: tick === 0 ? 'none' : tick === 1 ? 'translateY(-100%)' : 'translateY(50%)',
                 fontVariantNumeric: 'tabular-nums',
                 lineHeight: 1,
                 fontSize: 10,
