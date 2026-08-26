@@ -329,6 +329,19 @@ setInterval(() => {
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('runStreaming rejects when the Claude binary is missing instead of crashing', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-missing-'));
+  const runsDir = path.join(tmp, 'runs');
+  const service = new ClaudeService(path.join(tmp, 'no-such-claude'), runsDir);
+
+  await assert.rejects(
+    () => service.runStreaming('sess-missing', { cwd: tmp, prompt: 'hi' }),
+    /Failed to start Claude process/,
+  );
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test('killProcessTree terminates process groups started detached', async () => {
   const child = spawn(
     process.execPath,
