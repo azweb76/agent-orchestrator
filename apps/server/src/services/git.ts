@@ -122,13 +122,66 @@ export class GitService {
     }
   }
 
+  /**
+   * Diff the worktree against `baseRef` (default HEAD = pending uncommitted changes).
+   * When comparing to HEAD, untracked files are included so new agent-created files appear.
+   */
   async getDiff(worktreePath: string, baseRef?: string): Promise<{ stat: string; patch: string }> {
     const base = baseRef ?? 'HEAD';
     const [statResult, patchResult] = await Promise.all([
       execFileAsync('git', ['-C', worktreePath, 'diff', '--stat', base], { maxBuffer: 10 * 1024 * 1024 }),
       execFileAsync('git', ['-C', worktreePath, 'diff', base], { maxBuffer: 20 * 1024 * 1024 }),
     ]);
-    return { stat: statResult.stdout.trim(), patch: patchResult.stdout };
+
+    let stat = statResult.stdout.trim();
+    let patch = patchResult.stdout;
+
+    if (base === 'HEAD') {
+      const untracked = await this.getUntrackedDiff(worktreePath);
+      if (untracked.patch) {
+        patch = patch ? `${patch}${patch.endsWith('\n') ? '' : '\n'}${untracked.patch}` : untracked.patch;
+        const untrackedStat = untracked.paths
+          .map((filePath) => ` ${filePath} | Untracked`)
+          .join('\n');
+        stat = [stat, untrackedStat, untracked.paths.length ? ` ${untracked.paths.length} untracked` : '']
+          .filter(Boolean)
+          .join('\n');
+      }
+    }
+
+    return { stat, patch };
+  }
+
+  /** Build a unified diff for untracked (and not ignored) files. */
+  private async getUntrackedDiff(
+    worktreePath: string,
+  ): Promise<{ patch: string; paths: string[] }> {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', worktreePath, 'ls-files', '--others', '--exclude-standard', '-z'],
+      { maxBuffer: 10 * 1024 * 1024 },
+    );
+    const paths = stdout.split('\0').map((p) => p.trim()).filter(Boolean);
+    if (paths.length === 0) return { patch: '', paths: [] };
+
+    const chunks: string[] = [];
+    for (const filePath of paths) {
+      try {
+        const { stdout: fileDiff } = await execFileAsync(
+          'git',
+          ['-C', worktreePath, 'diff', '--no-index', '--', '/dev/null', filePath],
+          { maxBuffer: 10 * 1024 * 1024 },
+        );
+        if (fileDiff) chunks.push(fileDiff);
+      } catch (err) {
+        // git diff --no-index exits 1 when files differ; stdout still has the patch.
+        const execErr = err as { stdout?: string; code?: number };
+        if (typeof execErr.stdout === 'string' && execErr.stdout) {
+          chunks.push(execErr.stdout);
+        }
+      }
+    }
+    return { patch: chunks.join(''), paths };
   }
 
   async getCurrentBranch(worktreePath: string): Promise<string> {

@@ -166,7 +166,8 @@ export const api = {
       body: JSON.stringify({ messageId }),
     }),
   getEvents: (agentId: string) => request<AgentEvent[]>(`/agents/${agentId}/events`),
-  getDiff: (agentId: string) => request<AgentDiff>(`/agents/${agentId}/diff`),
+  getDiff: (agentId: string, scope: 'pending' | 'pr' = 'pending') =>
+    request<AgentDiff>(`/agents/${agentId}/diff?scope=${encodeURIComponent(scope)}`),
   listSlashCommands: (agentId: string) =>
     request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),
   listPendingPermissions: (agentId: string) =>

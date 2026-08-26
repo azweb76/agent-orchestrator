@@ -486,7 +486,12 @@ export function createRouter(ctx: AppContext): express.Router {
   router.get(
     '/agents/:agentId/diff',
     asyncHandler(async (req, res) => {
-      res.json(await getAgentDiff(ctx, param(req.params.agentId)));
+      const scopeParse = z.enum(['pending', 'pr']).safeParse(req.query.scope ?? 'pending');
+      if (!scopeParse.success) {
+        res.status(400).json({ error: 'Invalid scope; use pending or pr' });
+        return;
+      }
+      res.json(await getAgentDiff(ctx, param(req.params.agentId), scopeParse.data));
     }),
   );
 

@@ -469,9 +469,15 @@ export interface CreatePrRequest {
   base?: string;
 }
 
+/** Diff view scope for an agent's worktree. */
+export type AgentDiffScope = 'pending' | 'pr';
+
 export interface AgentDiff {
   stat: string;
   patch: string;
+  /** Absolute worktree path on the server. */
+  path: string;
+  scope: AgentDiffScope;
 }
 
 export interface WorkspaceWithCounts extends Workspace {
