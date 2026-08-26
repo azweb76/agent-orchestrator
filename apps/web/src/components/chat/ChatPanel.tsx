@@ -125,8 +125,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     sessions.find((item) => item.id === sessionId) ?? sessions[0];
   const activeSessionId = session?.id ?? sessionId;
   const [draft, setDraft] = useState('');
-  const [queue, setQueue] = useState<QueuedChatItem[]>([]);
-  const [isSending, setIsSending] = useState(false);
+  const [queues, setQueues] = useState<Record<string, QueuedChatItem[]>>({});
+  const [sendingSessionIds, setSendingSessionIds] = useState<string[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
@@ -135,22 +135,44 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
     null,
   );
-  const abortRef = useRef<AbortController | null>(null);
+  const abortBySessionRef = useRef(new Map<string, AbortController>());
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const sendingRef = useRef(false);
-  const queueRef = useRef<QueuedChatItem[]>([]);
+  const sendingSessionsRef = useRef(new Set<string>());
+  const queueRef = useRef<Record<string, QueuedChatItem[]>>({});
   const mountedRef = useRef(true);
   const autoStartedRef = useRef(false);
   const sessionIdRef = useRef(activeSessionId);
   const [creatingSession, setCreatingSession] = useState(false);
-  const runChatRef = useRef<(text: string, images: PendingImage[], force: boolean) => Promise<void>>(
-    async () => undefined,
-  );
+  const runChatRef = useRef<
+    (text: string, images: PendingImage[], force: boolean, sessionId?: string) => Promise<void>
+  >(async () => undefined);
 
   sessionIdRef.current = activeSessionId;
+  const queue = queues[activeSessionId] ?? [];
+  const isSending = sendingSessionIds.includes(activeSessionId);
+
+  const beginSending = (id: string) => {
+    sendingSessionsRef.current.add(id);
+    setSendingSessionIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
+  const endSending = (id: string) => {
+    sendingSessionsRef.current.delete(id);
+    setSendingSessionIds((prev) => prev.filter((item) => item !== id));
+  };
+  const startSessionAbort = (id: string) => {
+    abortBySessionRef.current.get(id)?.abort();
+    const controller = new AbortController();
+    abortBySessionRef.current.set(id, controller);
+    return controller;
+  };
+  const releaseSessionAbort = (id: string, controller: AbortController) => {
+    if (abortBySessionRef.current.get(id) === controller) {
+      abortBySessionRef.current.delete(id);
+    }
+  };
 
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId, activeSessionId],
@@ -170,8 +192,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     mutationFn: () => api.clearMessages(agentId, activeSessionId),
     onSuccess: () => {
       setClearOpen(false);
-      setQueue([]);
-      queueRef.current = [];
+      setQueues((prev) => ({ ...prev, [activeSessionId]: [] }));
+      queueRef.current = { ...queueRef.current, [activeSessionId]: [] };
       setPermissionRequests([]);
       setChatError(null);
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
@@ -184,8 +206,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     mutationFn: (messageId: string) => api.rewindMessages(agentId, activeSessionId, messageId),
     onSuccess: (result) => {
       setRewindTarget(null);
-      setQueue([]);
-      queueRef.current = [];
+      setQueues((prev) => ({ ...prev, [activeSessionId]: [] }));
+      queueRef.current = { ...queueRef.current, [activeSessionId]: [] };
       setPermissionRequests([]);
       setChatError(null);
       setLastFailed(null);
@@ -207,8 +229,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   });
 
   useEffect(() => {
-    queueRef.current = queue;
-  }, [queue]);
+    queueRef.current = queues;
+  }, [queues]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -216,8 +238,11 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       mountedRef.current = false;
       // Aborting only drops the UI SSE subscription — the backend keeps the run
       // and continues persisting chat history.
-      abortRef.current?.abort();
-      sendingRef.current = false;
+      for (const controller of abortBySessionRef.current.values()) {
+        controller.abort();
+      }
+      abortBySessionRef.current.clear();
+      sendingSessionsRef.current.clear();
     };
   }, []);
 
@@ -239,9 +264,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   }, [agentId, activeSessionId]);
 
   useEffect(() => {
-    if (sendingRef.current) return;
-    setQueue([]);
-    queueRef.current = [];
     setPermissionRequests([]);
     setChatError(null);
     setLastFailed(null);
@@ -290,9 +312,10 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   }, [agentId, activeSessionId, displayMessages.length, permissionRequests.length, messagesQuery.isLoading]);
 
   const patchStreamingAssistant = (
+    sid: string,
     mutate: (message: Message) => Message,
   ) => {
-    setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) => {
+    setMessagesCache(queryClient, agentId, sid, (prev) => {
       if (!prev?.length) return prev ?? [];
       const next = [...prev];
       for (let i = next.length - 1; i >= 0; i -= 1) {
@@ -306,23 +329,46 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     });
   };
 
-  const runChat = async (text: string, images: PendingImage[], force: boolean) => {
-    if (archived || !mountedRef.current) return;
+  const enqueueForSession = (sid: string, item: QueuedChatItem) => {
+    const next = [...(queueRef.current[sid] ?? []), item];
+    queueRef.current = { ...queueRef.current, [sid]: next };
+    setQueues((prev) => ({ ...prev, [sid]: next }));
+  };
 
-    if (sendingRef.current && !force) {
-      const item: QueuedChatItem = {
+  const shiftQueue = (sid: string): QueuedChatItem | undefined => {
+    const [next, ...rest] = queueRef.current[sid] ?? [];
+    queueRef.current = { ...queueRef.current, [sid]: rest };
+    setQueues((prev) => ({ ...prev, [sid]: rest }));
+    return next;
+  };
+
+  const viewed = (sid: string) => sid === sessionIdRef.current;
+
+  const runChat = async (
+    text: string,
+    images: PendingImage[],
+    force: boolean,
+    targetSessionId = sessionIdRef.current,
+  ) => {
+    if (archived || !mountedRef.current || !targetSessionId) return;
+
+    const targetBusy =
+      sendingSessionsRef.current.has(targetSessionId) ||
+      (targetSessionId === activeSessionId && session?.status === 'running');
+
+    if (targetBusy && !force) {
+      enqueueForSession(targetSessionId, {
         id: `q-${Date.now()}-${Math.random()}`,
         text,
         images,
-      };
-      setQueue((prev) => [...prev, item]);
+      });
       return;
     }
 
-    if ((sendingRef.current || session?.status === 'running') && force) {
-      abortRef.current?.abort();
+    if (targetBusy && force) {
+      abortBySessionRef.current.get(targetSessionId)?.abort();
       try {
-        await api.stopSession(agentId, activeSessionId);
+        await api.stopSession(agentId, targetSessionId);
       } catch {
         // best-effort interrupt
       }
@@ -330,20 +376,22 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       if (!mountedRef.current) return;
     }
 
-    setChatError(null);
-    setLastFailed(null);
-    setPermissionRequests([]);
-    setIsSending(true);
-    sendingRef.current = true;
-    // Sending should always pin the viewport to the latest messages.
-    stickToBottomRef.current = true;
-    setShowJumpToLatest(false);
-    abortRef.current = new AbortController();
+    if (viewed(targetSessionId)) {
+      setChatError(null);
+      setLastFailed(null);
+      setPermissionRequests([]);
+      stickToBottomRef.current = true;
+      setShowJumpToLatest(false);
+    }
+
+    const stream = { sessionId: targetSessionId };
+    const controller = startSessionAbort(targetSessionId);
+    beginSending(targetSessionId);
 
     try {
       await streamChat(
         agentId,
-        sessionIdRef.current,
+        stream.sessionId,
         {
           message: text,
           force,
@@ -356,25 +404,37 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         {
           onSession: (nextSession) => {
             if (!mountedRef.current) return;
+            const previousId = stream.sessionId;
+            if (abortBySessionRef.current.get(previousId) === controller) {
+              abortBySessionRef.current.delete(previousId);
+            }
+            abortBySessionRef.current.set(nextSession.id, controller);
+            sendingSessionsRef.current.delete(previousId);
+            sendingSessionsRef.current.add(nextSession.id);
+            setSendingSessionIds((prev) => {
+              const without = prev.filter((id) => id !== previousId);
+              return without.includes(nextSession.id) ? without : [...without, nextSession.id];
+            });
+            stream.sessionId = nextSession.id;
             sessionIdRef.current = nextSession.id;
             setSessionId(nextSession.id);
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
           },
           onUserMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+            setMessagesCache(queryClient, agentId, stream.sessionId, (prev) =>
               upsertMessage(prev, message),
             );
           },
           onAssistantMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+            setMessagesCache(queryClient, agentId, stream.sessionId, (prev) =>
               upsertMessage(prev, message),
             );
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
-            patchStreamingAssistant((message) => ({
+            patchStreamingAssistant(stream.sessionId, (message) => ({
               ...message,
               content: message.content + token,
               metadata: {
@@ -386,7 +446,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
-            patchStreamingAssistant((message) => ({
+            patchStreamingAssistant(stream.sessionId, (message) => ({
               ...message,
               metadata: {
                 ...message.metadata,
@@ -396,7 +456,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             }));
           },
           onPermissionRequest: (request) => {
-            if (!mountedRef.current) return;
+            if (!mountedRef.current || !viewed(stream.sessionId)) return;
             setPermissionRequests((prev) => {
               if (prev.some((item) => item.requestId === request.requestId)) return prev;
               return [...prev, request];
@@ -404,7 +464,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onDone: (payload) => {
             if (!mountedRef.current) return;
-            const sid = payload.chatSessionId ?? sessionIdRef.current;
+            const sid = payload.chatSessionId ?? stream.sessionId;
             setMessagesCache(queryClient, agentId, sid, (prev) =>
               upsertMessage(prev, payload.message),
             );
@@ -412,10 +472,10 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
               .invalidateQueries({ queryKey: ['permissions', agentId, sid] })
               .then(() => api.listPendingPermissions(agentId, sid))
               .then((pending) => {
-                if (mountedRef.current) setPermissionRequests(pending);
+                if (mountedRef.current && viewed(sid)) setPermissionRequests(pending);
               })
               .catch(() => {
-                if (mountedRef.current) setPermissionRequests([]);
+                if (mountedRef.current && viewed(sid)) setPermissionRequests([]);
               });
             queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -424,40 +484,38 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onError: (err) => {
             if (!mountedRef.current) return;
-            setChatError(err);
-            setLastFailed({ text, images });
+            if (viewed(stream.sessionId)) {
+              setChatError(err);
+              setLastFailed({ text, images });
+            }
             queryClient.invalidateQueries({
-              queryKey: ['messages', agentId, sessionIdRef.current],
+              queryKey: ['messages', agentId, stream.sessionId],
             });
           },
         },
-        abortRef.current.signal,
+        controller.signal,
       );
     } catch (error) {
       if (mountedRef.current && (error as Error).name !== 'AbortError') {
-        setChatError((error as Error).message);
-        setLastFailed({ text, images });
+        if (viewed(stream.sessionId)) {
+          setChatError((error as Error).message);
+          setLastFailed({ text, images });
+        }
       }
       if (mountedRef.current) {
-        queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       }
     } finally {
-      void queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      releaseSessionAbort(stream.sessionId, controller);
+      endSending(stream.sessionId);
 
-      if (!mountedRef.current) {
-        sendingRef.current = false;
-        abortRef.current = null;
-        return;
-      }
-      setIsSending(false);
-      sendingRef.current = false;
-      abortRef.current = null;
+      if (!mountedRef.current) return;
 
-      const next = queueRef.current[0];
+      const next = shiftQueue(stream.sessionId);
       if (next) {
-        setQueue((prev) => prev.slice(1));
-        void runChat(next.text, next.images, false);
+        void runChat(next.text, next.images, false, stream.sessionId);
       }
     }
   };
@@ -477,16 +535,17 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   }, [initialPrompt, archived, messagesQuery.isLoading, messagesQuery.data]);
 
   const stopStreaming = async () => {
-    abortRef.current?.abort();
+    const sid = sessionIdRef.current;
+    abortBySessionRef.current.get(sid)?.abort();
     try {
-      await api.stopSession(agentId, sessionIdRef.current);
+      await api.stopSession(agentId, sid);
     } catch {
       // ignore
     }
     setPermissionRequests([]);
-    queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
+    queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-    queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionIdRef.current] });
+    queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sid] });
   };
 
   const removePermission = (requestId: string) => {
@@ -519,7 +578,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     setPermissionBusy(true);
     setChatError(null);
     // Drop the UI SSE subscription; the backend stops the hung ExitPlanMode run.
-    abortRef.current?.abort();
+    abortBySessionRef.current.get(sessionIdRef.current)?.abort();
     try {
       await api.denyPermission(agentId, sessionIdRef.current, {
         requestId: request.requestId,
@@ -589,32 +648,46 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
 
   const buildPlan = async (request: PermissionRequest) => {
     if (archived || !mountedRef.current) return;
+    const planSessionId = sessionIdRef.current;
     setPermissionBusy(true);
     setChatError(null);
 
-    abortRef.current?.abort();
+    abortBySessionRef.current.get(planSessionId)?.abort();
     await new Promise((r) => setTimeout(r, 150));
     if (!mountedRef.current) return;
 
-    setQueue([]);
-    queueRef.current = [];
+    queueRef.current = { ...queueRef.current, [planSessionId]: [] };
+    setQueues((prev) => ({ ...prev, [planSessionId]: [] }));
     setPermissionRequests([]);
-    setIsSending(true);
-    sendingRef.current = true;
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
-    abortRef.current = new AbortController();
+
+    const stream = { sessionId: planSessionId };
+    const controller = startSessionAbort(planSessionId);
+    beginSending(planSessionId);
 
     const plan = extractPlanFromInput(request.input);
 
     try {
       await streamBuildPlan(
         agentId,
-        sessionIdRef.current,
+        planSessionId,
         { requestId: request.requestId, plan: plan || undefined },
         {
           onSession: (nextSession) => {
             if (!mountedRef.current) return;
+            const previousId = stream.sessionId;
+            if (abortBySessionRef.current.get(previousId) === controller) {
+              abortBySessionRef.current.delete(previousId);
+            }
+            abortBySessionRef.current.set(nextSession.id, controller);
+            sendingSessionsRef.current.delete(previousId);
+            sendingSessionsRef.current.add(nextSession.id);
+            setSendingSessionIds((prev) => {
+              const without = prev.filter((id) => id !== previousId);
+              return without.includes(nextSession.id) ? without : [...without, nextSession.id];
+            });
+            stream.sessionId = nextSession.id;
             sessionIdRef.current = nextSession.id;
             setSessionId(nextSession.id);
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -622,19 +695,19 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onUserMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+            setMessagesCache(queryClient, agentId, stream.sessionId, (prev) =>
               upsertMessage(prev, message),
             );
           },
           onAssistantMessage: (message) => {
             if (!mountedRef.current) return;
-            setMessagesCache(queryClient, agentId, sessionIdRef.current, (prev) =>
+            setMessagesCache(queryClient, agentId, stream.sessionId, (prev) =>
               upsertMessage(prev, message),
             );
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
-            patchStreamingAssistant((message) => ({
+            patchStreamingAssistant(stream.sessionId, (message) => ({
               ...message,
               content: message.content + token,
               metadata: {
@@ -646,7 +719,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
-            patchStreamingAssistant((message) => ({
+            patchStreamingAssistant(stream.sessionId, (message) => ({
               ...message,
               metadata: {
                 ...message.metadata,
@@ -656,7 +729,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             }));
           },
           onPermissionRequest: (nextRequest) => {
-            if (!mountedRef.current) return;
+            if (!mountedRef.current || !viewed(stream.sessionId)) return;
             setPermissionRequests((prev) => {
               if (prev.some((item) => item.requestId === nextRequest.requestId)) return prev;
               return [...prev, nextRequest];
@@ -664,7 +737,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onDone: (payload) => {
             if (!mountedRef.current) return;
-            const sid = payload.chatSessionId ?? sessionIdRef.current;
+            const sid = payload.chatSessionId ?? stream.sessionId;
             setMessagesCache(queryClient, agentId, sid, (prev) =>
               upsertMessage(prev, payload.message),
             );
@@ -672,10 +745,10 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
               .invalidateQueries({ queryKey: ['permissions', agentId, sid] })
               .then(() => api.listPendingPermissions(agentId, sid))
               .then((pending) => {
-                if (mountedRef.current) setPermissionRequests(pending);
+                if (mountedRef.current && viewed(sid)) setPermissionRequests(pending);
               })
               .catch(() => {
-                if (mountedRef.current) setPermissionRequests([]);
+                if (mountedRef.current && viewed(sid)) setPermissionRequests([]);
               });
             queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
             queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -685,29 +758,24 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           },
           onError: (err) => {
             if (!mountedRef.current) return;
-            setChatError(err);
+            if (viewed(stream.sessionId)) setChatError(err);
             queryClient.invalidateQueries({
-              queryKey: ['messages', agentId, sessionIdRef.current],
+              queryKey: ['messages', agentId, stream.sessionId],
             });
           },
         },
-        abortRef.current.signal,
+        controller.signal,
       );
     } catch (error) {
-      if (mountedRef.current && (error as Error).name !== 'AbortError') {
+      if (mountedRef.current && (error as Error).name !== 'AbortError' && viewed(stream.sessionId)) {
         setChatError((error as Error).message);
       }
     } finally {
-      void queryClient.invalidateQueries({ queryKey: ['messages', agentId, sessionIdRef.current] });
+      void queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      if (!mountedRef.current) {
-        sendingRef.current = false;
-        abortRef.current = null;
-        return;
-      }
-      setIsSending(false);
-      sendingRef.current = false;
-      abortRef.current = null;
+      releaseSessionAbort(stream.sessionId, controller);
+      endSending(stream.sessionId);
+      if (!mountedRef.current) return;
       setPermissionBusy(false);
     }
   };
@@ -749,7 +817,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       setSessionId(result.session.id);
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       if (result.kickoffPrompt) {
-        void runChatRef.current(result.kickoffPrompt, [], false);
+        void runChatRef.current(result.kickoffPrompt, [], false, result.session.id);
       }
     } catch (error) {
       setChatError((error as Error).message);
@@ -966,7 +1034,12 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             onStop={() => void stopStreaming()}
             onClear={requestClear}
             onRewind={requestRewindLast}
-            onRemoveQueued={(id) => setQueue((prev) => prev.filter((item) => item.id !== id))}
+            onRemoveQueued={(id) => {
+              const sid = activeSessionId;
+              const next = (queueRef.current[sid] ?? []).filter((item) => item.id !== id);
+              queueRef.current = { ...queueRef.current, [sid]: next };
+              setQueues((prev) => ({ ...prev, [sid]: next }));
+            }}
           />
         </Box>
       </Box>
