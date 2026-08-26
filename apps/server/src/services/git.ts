@@ -71,15 +71,27 @@ export class GitService {
   }
 
   /**
-   * Fetch a GitHub PR head into a remote-tracking ref, then create/update
+   * Fetch a GitHub PR head into `refs/pull/<n>/head`, then create/update
    * `localBranch` to match — without fetching directly into a checked-out branch
    * (which Git refuses when the branch is used by a worktree).
+   *
+   * Dest is GitHub's PR namespace, not `refs/remotes/pull/<n>/head`. With
+   * `fetch.prune` / `remote.origin.prune` (common global config), Git treats a
+   * `refs/remotes/...` dest as a stale tracking ref and deletes it after the
+   * fetch, so `git branch -f` fails with "not a valid object name".
    */
   async fetchPullRequest(mainRepoPath: string, prNumber: number, localBranch: string): Promise<void> {
-    const pullRef = `refs/remotes/pull/${prNumber}/head`;
+    const pullRef = `refs/pull/${prNumber}/head`;
     await execFileAsync(
       'git',
-      ['-C', mainRepoPath, 'fetch', 'origin', `+pull/${prNumber}/head:${pullRef}`],
+      [
+        '-C',
+        mainRepoPath,
+        'fetch',
+        '--no-prune',
+        'origin',
+        `+refs/pull/${prNumber}/head:${pullRef}`,
+      ],
       { maxBuffer: 10 * 1024 * 1024 },
     );
 

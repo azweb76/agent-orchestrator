@@ -605,6 +605,8 @@ async function setupPrFetchFixture(): Promise<{
     await execGit(main, ['branch', '-M', 'main']);
   }
   await execGit(main, ['push', '-u', 'origin', 'main']);
+  // Common global config that used to delete refs/remotes/pull/*/head after fetch.
+  await execGit(main, ['config', 'fetch.prune', 'true']);
 
   await execGit(main, ['checkout', '-b', 'pr-head']);
   await fs.writeFile(path.join(main, 'feature.txt'), 'pr change\n');
@@ -627,7 +629,23 @@ test('fetchPullRequest creates local branch when not checked out', async () => {
 
   const tip = await execGit(main, ['rev-parse', 'pr-33']);
   assert.equal(tip, prCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), prCommit);
   assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), null);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('fetchPullRequest keeps the PR tip across a second fetch when prune is enabled', async () => {
+  const { tmp, main, prCommit } = await setupPrFetchFixture();
+  const git = new GitService();
+  await execGit(main, ['config', 'remote.origin.prune', 'true']);
+
+  await git.fetchPullRequest(main, 33, 'pr-33');
+  // Used to throw: not a valid object name: 'refs/remotes/pull/33/head'
+  await git.fetchPullRequest(main, 33, 'pr-33');
+
+  assert.equal(await execGit(main, ['rev-parse', 'pr-33']), prCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), prCommit);
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
@@ -660,9 +678,9 @@ test('fetchPullRequest succeeds when local PR branch is already checked out in a
   await assert.doesNotReject(() => git.fetchPullRequest(main, 33, 'pr-33'));
 
   assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
-  // Local checked-out tip is left alone; remote-tracking pull ref is updated
+  // Local checked-out tip is left alone; local PR ref is updated
   assert.equal(await execGit(worktreePath, ['rev-parse', 'pr-33']), prCommit);
-  assert.equal(await execGit(main, ['rev-parse', 'refs/remotes/pull/33/head']), newerCommit);
+  assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), newerCommit);
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
