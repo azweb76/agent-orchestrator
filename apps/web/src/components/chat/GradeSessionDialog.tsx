@@ -73,7 +73,9 @@ function FindingCard({ finding }: { finding: SessionGradeFinding }) {
   );
 }
 
-function formatTokens(value: number): string {
+function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
   return String(value);
 }
@@ -126,18 +128,20 @@ export function GradeSessionDialog({
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                   <Chip
                     size="small"
-                    label={`${analysis.stats.userTurns} user / ${analysis.stats.assistantTurns} assistant turns`}
+                    label={`${analysis.stats.userTurns} user / ${analysis.stats.assistantTurns} assistant ${
+                      analysis.stats.userTurns + analysis.stats.assistantTurns === 1 ? 'turn' : 'turns'
+                    }`}
                   />
                   <Chip size="small" label={`~${formatTokens(analysis.stats.estimatedTokens)} tokens`} />
                   {analysis.stats.costUsd != null ? (
                     <Chip size="small" label={`$${analysis.stats.costUsd.toFixed(2)}`} />
                   ) : null}
-                  <Chip size="small" label={`${analysis.stats.toolCalls} tools`} />
+                  <Chip size="small" label={plural(analysis.stats.toolCalls, 'tool')} />
                   <Chip
                     size="small"
-                    label={`${analysis.stats.instructionFileCount} instruction files`}
+                    label={plural(analysis.stats.instructionFileCount, 'instruction file')}
                   />
-                  <Chip size="small" label={`${analysis.stats.skillCount} skills`} />
+                  <Chip size="small" label={plural(analysis.stats.skillCount, 'skill')} />
                 </Box>
               ) : null}
               <Typography variant="body2">{analysis?.summary || current.comment}</Typography>
