@@ -634,10 +634,13 @@ export const PROMPT_SLASH_COMMANDS: SlashCommand[] = CHAT_SLASH_COMMANDS.map((it
 
 export {
   activeToolItem,
+  adoptParentClaudeSessionId,
   appendStreamText,
   applyStreamEvent,
   assistantTextDelta,
+  claudeResultErrorMessage,
   coalesceTimelineText,
+  completeRunningTools,
   extractToolActivity,
   isNestedSubagentEvent,
   isSubagentItem,
@@ -646,6 +649,7 @@ export {
   parentStreamTextDelta,
   parentToolUseId,
   runningSubagentItems,
+  visibleAssistantContent,
   type StreamPart,
   type ToolActivityItem,
   type ToolTaskInfo,
