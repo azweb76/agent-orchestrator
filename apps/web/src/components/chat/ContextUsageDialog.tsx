@@ -32,10 +32,46 @@ const FRESH_INPUT = '#ffb74d';
 const CHART_HEIGHT = 168;
 const Y_TICKS = [0, 0.5, 1] as const;
 
-function percentColor(percent: number | null): 'secondary' | 'warning' | 'error' {
+/** Fill color stops as usage approaches the auto-compact max. */
+const USAGE_COLOR_STOPS: Array<{ at: number; color: string }> = [
+  { at: 0, color: '#5eead4' },
+  { at: 50, color: '#5eead4' },
+  { at: 70, color: '#ffb74d' },
+  { at: 85, color: '#ff8a50' },
+  { at: 100, color: '#ef5350' },
+];
+
+function hexToRgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mixHex(from: string, to: string, t: number): string {
+  const a = hexToRgb(from);
+  const b = hexToRgb(to);
+  const mix = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t);
+  return `#${[mix(0), mix(1), mix(2)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Interpolated bar/label color: teal while there is room, red at the compact max. */
+function percentFillColor(percent: number | null): string {
+  if (percent == null || percent <= 0) return USAGE_COLOR_STOPS[0]!.color;
+  const p = Math.min(100, percent);
+  for (let i = 1; i < USAGE_COLOR_STOPS.length; i++) {
+    const prev = USAGE_COLOR_STOPS[i - 1]!;
+    const next = USAGE_COLOR_STOPS[i]!;
+    if (p <= next.at) {
+      const span = next.at - prev.at || 1;
+      return mixHex(prev.color, next.color, (p - prev.at) / span);
+    }
+  }
+  return USAGE_COLOR_STOPS[USAGE_COLOR_STOPS.length - 1]!.color;
+}
+
+function percentChipColor(percent: number | null): 'secondary' | 'warning' | 'error' {
   if (percent == null) return 'secondary';
-  if (percent >= 80) return 'error';
-  if (percent >= 60) return 'warning';
+  if (percent >= 85) return 'error';
+  if (percent >= 70) return 'warning';
   return 'secondary';
 }
 
@@ -131,22 +167,21 @@ function toolsLabel(tools: string[]): string {
 function HistoryBar({
   turn,
   yMax,
-  windowTokens,
+  maxTokens,
   selected,
   width,
   onSelect,
 }: {
   turn: SessionContextTurn;
   yMax: number;
-  windowTokens: number;
+  maxTokens: number;
   selected: boolean;
   width: number;
   onSelect: () => void;
 }) {
   const heightPct = share(turn.contextTokens, yMax);
-  const occupancy = share(turn.contextTokens, windowTokens);
-  const warnColor =
-    occupancy >= 80 ? 'error.main' : occupancy >= 60 ? 'warning.main' : undefined;
+  const occupancy = share(turn.contextTokens, maxTokens);
+  const occupancyColor = occupancy >= 50 ? percentFillColor(occupancy) : undefined;
   const label = `Turn ${turn.turn}: ${formatTokenCount(turn.contextTokens)} (${formatPercent(occupancy)})`;
 
   return (
@@ -217,8 +252,8 @@ function HistoryBar({
               flexDirection: 'column-reverse',
               borderRadius: 0.5,
               overflow: 'hidden',
-              boxShadow: warnColor ? 'inset 0 0 0 1px' : undefined,
-              color: warnColor,
+              boxShadow: occupancyColor ? 'inset 0 0 0 1px' : undefined,
+              color: occupancyColor,
               bgcolor: 'rgba(255,255,255,0.08)',
             }}
           >
@@ -234,12 +269,12 @@ function HistoryBar({
 
 function HistoryChart({
   history,
-  windowTokens,
+  maxTokens,
 }: {
   history: SessionContextTurn[];
-  windowTokens: number;
+  maxTokens: number;
 }) {
-  const yMax = useMemo(() => historyAxisMax(history, windowTokens), [history, windowTokens]);
+  const yMax = useMemo(() => historyAxisMax(history, maxTokens), [history, maxTokens]);
   const latestTurn = history[history.length - 1]?.turn ?? 1;
   const [pinnedTurn, setPinnedTurn] = useState<number | null>(null);
   const selectedTurn =
@@ -251,8 +286,8 @@ function HistoryChart({
   const selected = history.find((turn) => turn.turn === selectedTurn) ?? history[history.length - 1];
   if (!selected) return null;
   const slotWidth = barSlotWidth(history.length);
-  const occupancy = share(selected.contextTokens, windowTokens);
-  const scaledToWindow = yMax === windowTokens;
+  const occupancy = share(selected.contextTokens, maxTokens);
+  const scaledToMax = yMax === maxTokens;
   const hasCompact = history.some((turn) => turn.compacted);
 
   return (
@@ -319,7 +354,7 @@ function HistoryChart({
                   key={turn.turn}
                   turn={turn}
                   yMax={yMax}
-                  windowTokens={windowTokens}
+                  maxTokens={maxTokens}
                   selected={turn.turn === selected.turn}
                   width={slotWidth}
                   onSelect={() => setPinnedTurn(turn.turn)}
@@ -351,9 +386,9 @@ function HistoryChart({
       </Box>
 
       <Typography variant="caption" color="text.secondary">
-        {scaledToWindow
-          ? 'Context tokens per call versus the model window'
-          : `Context tokens per call · axis to ${formatTokenCount(yMax)} of ${formatTokenCount(windowTokens)} window`}
+        {scaledToMax
+          ? 'Context tokens per call versus auto-compact'
+          : `Context tokens per call · axis to ${formatTokenCount(yMax)} of ${formatTokenCount(maxTokens)} compact`}
         {hasCompact ? ' · yellow marks a compact' : ''}
       </Typography>
 
@@ -414,7 +449,9 @@ function HistoryChart({
 
 function ContextUsageBody({ data }: { data: SessionContextUsage }) {
   const hasUsage = data.currentContextTokens > 0 && data.usage;
-  const color = percentColor(data.percent);
+  const color = percentChipColor(data.percent);
+  const fill = percentFillColor(data.percent);
+  const remaining = Math.max(0, data.compactThresholdTokens - data.currentContextTokens);
 
   return (
     <Stack spacing={2.25} sx={{ mt: 0.5 }}>
@@ -423,7 +460,7 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
           <Typography variant="h5" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
             {formatTokenCount(data.currentContextTokens)}
             <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.75, fontWeight: 600 }}>
-              / {formatTokenCount(data.contextWindowTokens)}
+              / {formatTokenCount(data.compactThresholdTokens)}
             </Typography>
           </Typography>
           <Chip size="small" color={color} label={formatPercent(data.percent)} />
@@ -431,19 +468,27 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
         <LinearProgress
           variant="determinate"
           value={data.percent ?? 0}
-          color={color}
-          sx={{ height: 8, borderRadius: 1 }}
+          sx={{
+            height: 8,
+            borderRadius: 1,
+            bgcolor: 'rgba(255,255,255,0.08)',
+            '& .MuiLinearProgress-bar': { bgcolor: fill, borderRadius: 1 },
+          }}
         />
         <Typography variant="caption" color="text.secondary">
           {data.model ? `${data.model} · ` : ''}
-          Current prompt size versus the model context window
+          {data.currentContextTokens > 0
+            ? remaining === 0
+              ? `At auto-compact threshold · ${formatTokenCount(data.contextWindowTokens)} window`
+              : `${formatTokenCount(remaining)} until auto-compact · ${formatTokenCount(data.contextWindowTokens)} window`
+            : `Auto-compact at ${formatTokenCount(data.compactThresholdTokens)} of the ${formatTokenCount(data.contextWindowTokens)} window`}
         </Typography>
       </Stack>
 
       {hasUsage ? (
         <Stack spacing={1}>
           <Typography variant="subtitle2">Usage</Typography>
-          <ContextFillBar usage={data.usage!} windowTokens={data.contextWindowTokens} />
+          <ContextFillBar usage={data.usage!} windowTokens={data.compactThresholdTokens} />
           <Box
             sx={{
               display: 'grid',
@@ -485,7 +530,7 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
             No context history yet.
           </Typography>
         ) : (
-          <HistoryChart history={data.history} windowTokens={data.contextWindowTokens} />
+          <HistoryChart history={data.history} maxTokens={data.compactThresholdTokens} />
         )}
       </Stack>
     </Stack>
@@ -504,15 +549,26 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
 
   const data = query.data;
   const percent = data?.percent ?? null;
-  const color = percentColor(percent);
+  const color = percentChipColor(percent);
+  const fill = percentFillColor(percent);
+  const remaining =
+    data && data.currentContextTokens > 0
+      ? Math.max(0, data.compactThresholdTokens - data.currentContextTokens)
+      : null;
   const label =
     data && data.currentContextTokens > 0
       ? `${formatTokenCount(data.currentContextTokens)} · ${formatPercent(percent)}`
       : 'Context';
+  const tooltip =
+    remaining == null
+      ? 'Context usage'
+      : remaining === 0
+        ? 'Context usage · at auto-compact threshold'
+        : `Context usage · ${formatTokenCount(remaining)} until auto-compact`;
 
   return (
     <>
-      <Tooltip title="Context usage">
+      <Tooltip title={tooltip}>
         <span>
           <Button
             size="small"
@@ -528,7 +584,7 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
               fontSize: 12,
               fontWeight: 700,
               fontVariantNumeric: 'tabular-nums',
-              color: color === 'secondary' ? 'text.secondary' : undefined,
+              color: percent == null ? 'text.secondary' : fill,
             }}
           >
             <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
@@ -546,7 +602,7 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
                   sx={{
                     width: `${percent ?? 0}%`,
                     height: '100%',
-                    bgcolor: color === 'error' ? 'error.main' : color === 'warning' ? 'warning.main' : 'secondary.main',
+                    bgcolor: fill,
                   }}
                 />
               </Box>

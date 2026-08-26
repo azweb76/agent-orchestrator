@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, it } from 'node:test';
-import { buildSessionContextUsage } from '@agent-orchestrator/shared';
+import { buildSessionContextUsage, compactThresholdTokensForWindow } from '@agent-orchestrator/shared';
 import {
   encodeClaudeProjectDir,
   parseClaudeSessionContext,
@@ -306,6 +306,7 @@ describe('buildSessionContextUsage', () => {
       ],
     });
     assert.equal(small.contextWindowTokens, 200_000);
+    assert.equal(small.compactThresholdTokens, 167_000);
     assert.equal(small.currentContextTokens, 1300);
     assert.ok(small.percent != null && small.percent < 1);
 
@@ -329,6 +330,59 @@ describe('buildSessionContextUsage', () => {
       ],
     });
     assert.equal(large.contextWindowTokens, 1_000_000);
+    assert.equal(large.compactThresholdTokens, 967_000);
     assert.ok(large.percent != null && large.percent > 20 && large.percent < 30);
+  });
+
+  it('measures percent against the auto-compact threshold, not the raw window', () => {
+    const atCompact = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: [
+        {
+          turn: 1,
+          createdAt: null,
+          model: 'sonnet',
+          usage: {
+            inputTokens: 167_000,
+            outputTokens: 10,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+          },
+          contextTokens: 167_000,
+          compacted: false,
+          tools: [],
+        },
+      ],
+    });
+    assert.equal(atCompact.compactThresholdTokens, 167_000);
+    assert.equal(atCompact.percent, 100);
+
+    const half = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: [
+        {
+          turn: 1,
+          createdAt: null,
+          model: 'sonnet',
+          usage: {
+            inputTokens: 83_500,
+            outputTokens: 10,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+          },
+          contextTokens: 83_500,
+          compacted: false,
+          tools: [],
+        },
+      ],
+    });
+    assert.equal(half.percent, 50);
+  });
+});
+
+describe('compactThresholdTokensForWindow', () => {
+  it('reserves 20k for the compact summary and a 13k buffer', () => {
+    assert.equal(compactThresholdTokensForWindow(200_000), 167_000);
+    assert.equal(compactThresholdTokensForWindow(1_000_000), 967_000);
   });
 });

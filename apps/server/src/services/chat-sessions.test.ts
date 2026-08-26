@@ -673,6 +673,7 @@ test('getAgentSessionContext returns empty usage when no session file exists', a
     assert.equal(usage.currentContextTokens, 0);
     assert.equal(usage.history.length, 0);
     assert.equal(usage.contextWindowTokens, 200_000);
+    assert.equal(usage.compactThresholdTokens, 167_000);
     assert.equal(usage.sessionFilePath, null);
     assert.equal(usage.model, 'sonnet');
   } finally {
