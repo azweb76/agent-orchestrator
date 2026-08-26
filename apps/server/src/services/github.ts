@@ -17,7 +17,7 @@ import type {
   PullRequestUser,
   UpdatePullRequestBranchResponse,
 } from '@agent-orchestrator/shared';
-import { rollupChecks } from '@agent-orchestrator/shared';
+import { parsePullRequestNumber, rollupChecks } from '@agent-orchestrator/shared';
 
 interface GitHubApiOptions {
   token?: string;
@@ -59,6 +59,8 @@ interface RawPullRequest {
   html_url: string;
   head: { ref: string };
   base: { ref: string };
+  user?: { login: string } | null;
+  updated_at?: string;
 }
 
 function mapPullRequest(pr: RawPullRequest): GitHubPullRequest {
@@ -70,7 +72,28 @@ function mapPullRequest(pr: RawPullRequest): GitHubPullRequest {
     baseRef: pr.base.ref,
     htmlUrl: pr.html_url,
     draft: pr.draft,
+    authorLogin: pr.user?.login ?? '',
+    updatedAt: pr.updated_at ?? '',
   };
+}
+
+function mapSearchedPullRequest(item: SearchedPullRequest): GitHubPullRequest {
+  return {
+    number: item.number,
+    title: item.title,
+    state: item.state,
+    headRef: '',
+    baseRef: '',
+    htmlUrl: item.htmlUrl,
+    draft: item.draft,
+    authorLogin: item.authorLogin,
+    updatedAt: item.updatedAt,
+  };
+}
+
+/** Strip characters that would change GitHub search operators (`repo:`, quotes). */
+function sanitizePullRequestSearchText(query: string): string {
+  return query.replace(/[:"']/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 interface GitHubSearchIssue {
@@ -243,6 +266,42 @@ export class GitHubService {
     );
 
     return data.map(mapPullRequest);
+  }
+
+  /**
+   * Search pull requests in a repo (open and closed). Empty query lists open PRs.
+   * A bare number / `#N` / GitHub URL also tries the direct PR endpoint so private
+   * PRs that search misses still resolve.
+   */
+  async searchRepositoryPullRequests(owner: string, repo: string, query: string): Promise<GitHubPullRequest[]> {
+    this.assertPathSegment(owner, 'owner');
+    this.assertPathSegment(repo, 'repo');
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return this.listPullRequests(owner, repo);
+    }
+
+    const number = parsePullRequestNumber(trimmed);
+    const searchText = number ? String(number) : sanitizePullRequestSearchText(trimmed);
+    const searched = searchText
+      ? await this.searchPullRequests(`is:pr repo:${owner}/${repo} ${searchText}`)
+      : [];
+
+    const mapped = searched
+      .filter((item) => item.owner === owner && item.repo === repo)
+      .map(mapSearchedPullRequest);
+
+    if (number) {
+      try {
+        const pr = await this.getPullRequest(owner, repo, number);
+        return [pr, ...mapped.filter((item) => item.number !== number)];
+      } catch {
+        // Direct lookup failed; return whatever search found.
+      }
+    }
+
+    return mapped;
   }
 
   async getPullRequest(owner: string, repo: string, prNumber: number): Promise<GitHubPullRequest> {

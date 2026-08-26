@@ -129,3 +129,67 @@ export function evaluateMergeReadiness(pr: PullRequestDetail): MergeReadiness {
       };
   }
 }
+
+/** Fields the PR picker / inbox search can match against. */
+export interface PullRequestSearchFields {
+  number: number;
+  title: string;
+  headRef?: string;
+  baseRef?: string;
+  authorLogin?: string;
+  owner?: string;
+  repo?: string;
+}
+
+/**
+ * Parse a typed PR picker query into a number when the user pasted a URL,
+ * `#42`, or a bare issue number. Returns null for free-text searches.
+ */
+export function parsePullRequestNumber(query: string): number | null {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  const urlMatch = trimmed.match(/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/i);
+  if (urlMatch) {
+    const n = Number(urlMatch[1]);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }
+
+  const direct = trimmed.startsWith('#') ? trimmed.slice(1).trim() : trimmed;
+  if (/^\d+$/.test(direct)) {
+    const n = Number(direct);
+    return n > 0 ? n : null;
+  }
+
+  return null;
+}
+
+/** Case-insensitive match of a search box against PR metadata. */
+export function pullRequestMatchesQuery(pr: PullRequestSearchFields, query: string): boolean {
+  const trimmed = query.trim();
+  if (!trimmed) return true;
+
+  const number = parsePullRequestNumber(trimmed);
+  if (number !== null) {
+    return pr.number === number;
+  }
+
+  const haystack = [
+    `#${pr.number}`,
+    String(pr.number),
+    pr.title,
+    pr.headRef ?? '',
+    pr.baseRef ?? '',
+    pr.authorLogin ?? '',
+    pr.owner ?? '',
+    pr.repo ?? '',
+    pr.owner && pr.repo ? `${pr.owner}/${pr.repo}` : '',
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return trimmed
+    .toLowerCase()
+    .split(/\s+/)
+    .every((token) => haystack.includes(token));
+}

@@ -115,6 +115,14 @@ export interface GitHubPullRequest {
   baseRef: string;
   htmlUrl: string;
   draft: boolean;
+  authorLogin: string;
+  updatedAt: string;
+}
+
+/** Workspace-scoped PR picker payload, including the authenticated GitHub login. */
+export interface WorkspacePullRequestList {
+  viewerLogin: string | null;
+  pullRequests: GitHubPullRequest[];
 }
 
 export interface InboxPullRequest {
@@ -681,7 +689,10 @@ export type {
 
 export {
   evaluateMergeReadiness,
+  parsePullRequestNumber,
+  pullRequestMatchesQuery,
   rollupChecks,
   type MergeReadiness,
+  type PullRequestSearchFields,
 } from './pull-request.js';
 

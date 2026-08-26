@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PullRequestCheck, PullRequestDetail, PullRequestMergeMethod } from '@agent-orchestrator/shared';
-import { evaluateMergeReadiness, rollupChecks } from '@agent-orchestrator/shared';
+import { evaluateMergeReadiness, parsePullRequestNumber, pullRequestMatchesQuery, rollupChecks } from '@agent-orchestrator/shared';
 
 function check(overrides: Partial<PullRequestCheck> = {}): PullRequestCheck {
   return {
@@ -171,4 +171,36 @@ test('evaluateMergeReadiness intersects repo settings with rebaseability', () =>
   const readiness = evaluateMergeReadiness(detail({ allowedMergeMethods: allowed, rebaseable: null }));
 
   assert.deepEqual(readiness.allowedMethods, ['squash']);
+});
+
+test('parsePullRequestNumber reads bare numbers, hashes, and GitHub URLs', () => {
+  assert.equal(parsePullRequestNumber('42'), 42);
+  assert.equal(parsePullRequestNumber('  #42  '), 42);
+  assert.equal(parsePullRequestNumber('https://github.com/azweb76/agent-orchestrator/pull/42'), 42);
+  assert.equal(parsePullRequestNumber('https://github.com/azweb76/agent-orchestrator/pull/42/files'), 42);
+  assert.equal(parsePullRequestNumber('0'), null);
+  assert.equal(parsePullRequestNumber('fix login'), null);
+  assert.equal(parsePullRequestNumber('see #42'), null);
+});
+
+test('pullRequestMatchesQuery matches title tokens, author, branches, and repo', () => {
+  const pr = {
+    number: 12,
+    title: 'Fix login redirect',
+    headRef: 'fix/login',
+    baseRef: 'main',
+    authorLogin: 'azweb76',
+    owner: 'acme',
+    repo: 'web-app',
+  };
+
+  assert.equal(pullRequestMatchesQuery(pr, ''), true);
+  assert.equal(pullRequestMatchesQuery(pr, 'login redirect'), true);
+  assert.equal(pullRequestMatchesQuery(pr, 'AZWEB76'), true);
+  assert.equal(pullRequestMatchesQuery(pr, 'acme/web-app'), true);
+  assert.equal(pullRequestMatchesQuery(pr, 'fix/login'), true);
+  assert.equal(pullRequestMatchesQuery(pr, 'missing'), false);
+  assert.equal(pullRequestMatchesQuery(pr, '#12'), true);
+  assert.equal(pullRequestMatchesQuery(pr, 'https://github.com/acme/web-app/pull/12'), true);
+  assert.equal(pullRequestMatchesQuery(pr, '99'), false);
 });
