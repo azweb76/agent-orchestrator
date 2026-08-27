@@ -188,6 +188,24 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
 
 export const LISTED_CHAT_SESSION_TEMPLATES = CHAT_SESSION_TEMPLATES.filter((item) => item.listed);
 
+/** Templates that commit, push, or otherwise mutate the shared worktree. */
+export const GIT_MUTATING_SESSION_TEMPLATES: readonly ChatSessionTemplateId[] = [
+  'build',
+  'create-draft-pr',
+  'address-review',
+  'fix-ci',
+];
+
+const GIT_MUTATING_SESSION_TEMPLATE_SET = new Set<ChatSessionTemplateId>(
+  GIT_MUTATING_SESSION_TEMPLATES,
+);
+
+export function isGitMutatingSessionTemplate(
+  template: ChatSessionTemplateId | string | undefined,
+): boolean {
+  return Boolean(template && GIT_MUTATING_SESSION_TEMPLATE_SET.has(template as ChatSessionTemplateId));
+}
+
 export function chatSessionTemplateById(
   id: string | undefined,
 ): ChatSessionTemplate | undefined {

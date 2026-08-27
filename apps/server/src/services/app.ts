@@ -46,8 +46,6 @@ import type {
   PermissionMode,
   PermissionRequest,
   PruneArchivedAgentsResponse,
-  QueuedChatMessage,
-  EnqueueChatMessageRequest,
   UsageSummary,
   AgentUsage,
   SessionUsage,
@@ -104,6 +102,18 @@ import { buildSessionGradeContext } from '../services/session-grade.js';
 import { buildTemplateKickoffPrompt } from '../services/session-kickoff.js';
 import { gatherPlanBuildHandoffContext } from '../services/plan-handoff.js';
 import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionContext } from '../services/claude-session-file.js';
+import {
+  clearSessionQueue,
+  cleanupQueuedAttachments,
+  drainSessionQueue,
+  drainWaitingMutatingSessions,
+  enqueueBehindWorktreeLock,
+  enqueueChatMessage,
+  findRunningMutatingPeer,
+  isGitMutatingSession,
+  listQueuedMessages,
+  removeQueuedMessage,
+} from './chat-queue.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -761,6 +771,7 @@ export async function stopAgentSession(ctx: AppContext, agentId: string, session
   );
   const updated = syncAgentFromSessions(ctx, agentId);
   ctx.repos.events.create(makeEvent(agentId, 'session_stopped', { sessionId }));
+  void drainWaitingMutatingSessions(ctx, agentId);
   return updated;
 }
 
@@ -955,7 +966,7 @@ export async function deleteAgentSession(
   const messages = ctx.repos.messages.listBySession(session.id);
   const queued = ctx.repos.queued.listBySession(session.id);
   await cleanupMessageAttachments(messages);
-  await cleanupAttachmentFiles(queued.flatMap((item) => item.attachments));
+  await cleanupQueuedAttachments(queued.flatMap((item) => item.attachments));
   ctx.repos.messages.deleteBySession(session.id);
   ctx.repos.sessions.delete(session.id);
 
@@ -977,6 +988,7 @@ export async function deleteAgentSession(
       title: session.title,
     }),
   );
+  void drainWaitingMutatingSessions(ctx, agentId);
   return getAgentDetail(ctx, agentId);
 }
 
@@ -1235,6 +1247,7 @@ export async function clearAgentChat(
     claudeSessionId: null,
     runLogPath: null,
     permissionMode: 'plan',
+    status: session.status === 'queued' ? 'idle' : session.status,
     updatedAt: nowIso(),
   });
   ctx.repos.sessions.clearGrade(session.id);
@@ -1304,147 +1317,15 @@ export async function rewindAgentChat(
 }
 
 async function cleanupMessageAttachments(messages: Message[]): Promise<void> {
-  for (const message of messages) {
-    for (const attachment of message.attachments ?? []) {
-      if (!attachment.path) continue;
-      try {
-        await fs.unlink(attachment.path);
-      } catch {
-        // best-effort cleanup
-      }
-    }
-  }
+  await cleanupQueuedAttachments(messages.flatMap((message) => message.attachments ?? []));
 }
 
-async function cleanupAttachmentFiles(attachments: MessageAttachment[]): Promise<void> {
-  for (const attachment of attachments) {
-    if (!attachment.path) continue;
-    try {
-      await fs.unlink(attachment.path);
-    } catch {
-      // best-effort cleanup
-    }
-  }
-}
-
-/** Drop every queued message for a session (and their attachment files). */
-async function clearSessionQueue(ctx: AppContext, sessionId: string): Promise<number> {
-  const queued = ctx.repos.queued.listBySession(sessionId);
-  for (const item of queued) {
-    await cleanupAttachmentFiles(item.attachments);
-  }
-  return ctx.repos.queued.deleteBySession(sessionId);
-}
-
-/**
- * Persist a follow-up while the session is busy. The queue drains server-side
- * as soon as the running reply finishes, so queued messages survive browser
- * closes and orchestrator restarts.
- */
-export async function enqueueChatMessage(
-  ctx: AppContext,
-  agentId: string,
-  sessionId: string,
-  body: EnqueueChatMessageRequest,
-): Promise<QueuedChatMessage> {
-  const agent = requireAgent(ctx, agentId);
-  if (agent.archivedAt) throw new Error('Cannot queue messages on an archived agent');
-  const session = requireSession(ctx, agentId, sessionId);
-
-  const message = body.message.trim();
-  const hasMentions = (body.mentions?.length ?? 0) > 0;
-  if (!message && !(body.images && body.images.length > 0) && !hasMentions) {
-    throw new Error('Message or image attachment required');
-  }
-
-  const attachments = await saveChatImages(ctx, agentId, body.images);
-  const mentions = body.mentions ?? [];
-  const queued: QueuedChatMessage = {
-    id: uuidv4(),
-    agentId,
-    sessionId: session.id,
-    content: message || (hasMentions ? '(mention attachment)' : '(image attachment)'),
-    attachments,
-    mentions,
-    createdAt: nowIso(),
-  };
-  ctx.repos.queued.create(queued);
-  ctx.repos.events.create(
-    makeEvent(agentId, 'message_queued', { queuedId: queued.id, sessionId: session.id }),
-  );
-  notify(ctx, 'queue_changed', { agentId, sessionId: session.id });
-
-  // If the session finished while the message was in flight, deliver right away.
-  const latest = ctx.repos.sessions.getById(session.id);
-  if (latest && latest.status !== 'running') {
-    void drainSessionQueue(ctx, agentId, session.id);
-  }
-  return queued;
-}
-
-export function listQueuedMessages(
-  ctx: AppContext,
-  agentId: string,
-  sessionId: string,
-): QueuedChatMessage[] {
-  const session = requireSession(ctx, agentId, sessionId);
-  return ctx.repos.queued.listBySession(session.id);
-}
-
-export async function removeQueuedMessage(
-  ctx: AppContext,
-  agentId: string,
-  sessionId: string,
-  queuedId: string,
-): Promise<{ removed: boolean }> {
-  requireSession(ctx, agentId, sessionId);
-  const queued = ctx.repos.queued.getById(queuedId);
-  if (!queued || queued.agentId !== agentId || queued.sessionId !== sessionId) return { removed: false };
-  await cleanupAttachmentFiles(queued.attachments);
-  ctx.repos.queued.delete(queuedId);
-  notify(ctx, 'queue_changed', { agentId, sessionId: queued.sessionId });
-  return { removed: true };
-}
-
-/** Sessions currently draining, to keep concurrent finalizers from double-sending. */
-const drainingSessions = new Set<string>();
-
-/**
- * Send queued messages for an idle session, in order, until the queue is empty
- * or the session is busy/archived. Safe to call from any finalization path.
- */
-export async function drainSessionQueue(
-  ctx: AppContext,
-  agentId: string,
-  sessionId: string,
-): Promise<void> {
-  if (drainingSessions.has(sessionId)) return;
-  drainingSessions.add(sessionId);
-  try {
-    while (true) {
-      const agent = ctx.repos.agents.getById(agentId);
-      if (!agent || agent.archivedAt) return;
-      const session = ctx.repos.sessions.getById(sessionId);
-      if (!session || session.status === 'running') return;
-      const next = ctx.repos.queued.takeNext(sessionId);
-      if (!next) return;
-      ctx.repos.events.create(
-        makeEvent(agentId, 'queued_message_sent', { queuedId: next.id, sessionId }),
-      );
-      notify(ctx, 'queue_changed', { agentId, sessionId });
-      try {
-        await streamAgentChat(ctx, agentId, { message: next.content, mentions: next.mentions }, null, sessionId, {
-          attachments: next.attachments,
-        });
-      } catch (error) {
-        console.error(`Failed to send queued message for session ${sessionId}:`, error);
-        return;
-      }
-    }
-  } finally {
-    drainingSessions.delete(sessionId);
-  }
-}
+export {
+  drainSessionQueue,
+  enqueueChatMessage,
+  listQueuedMessages,
+  removeQueuedMessage,
+};
 
 function resolvePermissionSession(
   ctx: AppContext,
@@ -2025,7 +1906,7 @@ function extensionForMime(mimeType: string): string {
   }
 }
 
-async function saveChatImages(
+export async function saveChatImages(
   ctx: AppContext,
   agentId: string,
   images: ChatImageAttachment[] | undefined,
@@ -2195,11 +2076,19 @@ export function recoverRunningAgents(ctx: AppContext): void {
   }
   // Queued messages left behind by a previous process (e.g. the app was
   // restarted after a run finished but before the queue drained).
+  const mutatingAgents = new Set<string>();
   for (const sessionId of ctx.repos.queued.listSessionIdsWithQueued()) {
     if (runningIds.has(sessionId)) continue;
     const session = ctx.repos.sessions.getById(sessionId);
     if (!session) continue;
+    if (isGitMutatingSession(session)) {
+      mutatingAgents.add(session.agentId);
+      continue;
+    }
     void drainSessionQueue(ctx, session.agentId, sessionId);
+  }
+  for (const agentId of mutatingAgents) {
+    void drainWaitingMutatingSessions(ctx, agentId);
   }
 }
 
@@ -2411,6 +2300,26 @@ export async function streamAgentChat(
     markStreamingAssistantStopped(ctx, agentId, activeSession.id);
   }
 
+  const latestForLock = ctx.repos.sessions.getById(activeSession.id) ?? activeSession;
+  const mutatingPeer = findRunningMutatingPeer(
+    ctx.repos.sessions.listByAgent(agentId),
+    latestForLock.id,
+  );
+  const forceUnlockPeer = force && !options.createdSession;
+  if (
+    mutatingPeer &&
+    isGitMutatingSession(latestForLock) &&
+    !forceUnlockPeer &&
+    !options.attachments
+  ) {
+    await enqueueBehindWorktreeLock(ctx, agentId, latestForLock, {
+      message: rawMessage,
+      images: body.images,
+      mentions: body.mentions,
+    }, res);
+    return;
+  }
+
   // Reserve the session before any await below. Without this, two requests
   // arriving together can both observe an idle session while image files are
   // written and subsequently start overlapping Claude runs.
@@ -2421,6 +2330,11 @@ export async function streamAgentChat(
   };
   runningSession = persistSessionRuntime(ctx, runningSession);
   syncAgentFromSessions(ctx, agentId);
+
+  if (mutatingPeer && isGitMutatingSession(latestForLock) && forceUnlockPeer) {
+    await stopClaudeRun(ctx, mutatingPeer);
+    markStreamingAssistantStopped(ctx, agentId, mutatingPeer.id);
+  }
 
   let attachments: MessageAttachment[];
   let mentionContext = slash.mentionContext?.trim() ?? '';
