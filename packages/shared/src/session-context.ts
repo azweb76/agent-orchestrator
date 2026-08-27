@@ -110,6 +110,18 @@ export function compactThresholdTokensForWindow(contextWindowTokens: number): nu
   return Math.max(1, effective - AUTOCOMPACT_BUFFER_TOKENS);
 }
 
+/** Latest turn that still reports prompt occupancy (skips output-only / interrupted stubs). */
+export function latestContextTurn(
+  history: SessionContextTurn[] | null | undefined,
+): SessionContextTurn | null {
+  if (!history || history.length === 0) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const turn = history[i];
+    if (turn && turn.contextTokens > 0) return turn;
+  }
+  return null;
+}
+
 export function buildSessionContextUsage(input: {
   model?: string | null;
   fallbackModel?: string | null;
@@ -119,9 +131,12 @@ export function buildSessionContextUsage(input: {
   sessionFilePath?: string | null;
 }): SessionContextUsage {
   const history = input.history ?? [];
-  const last = history[history.length - 1];
-  const model = last?.model || input.model || input.fallbackModel || null;
-  const currentContextTokens = last?.contextTokens ?? 0;
+  const current = latestContextTurn(history);
+  const lastWithModel =
+    [...history].reverse().find((turn) => Boolean(turn.model?.trim())) ?? current;
+  const model =
+    current?.model || lastWithModel?.model || input.model || input.fallbackModel || null;
+  const currentContextTokens = current?.contextTokens ?? 0;
   const contextWindowTokens = contextWindowTokensForModel(model, currentContextTokens);
   const compactThresholdTokens = compactThresholdTokensForWindow(contextWindowTokens);
   const billed = input.billed ?? history.reduce((sum, turn) => addTokenUsage(sum, turn.usage), emptyTokenUsage());
@@ -134,7 +149,7 @@ export function buildSessionContextUsage(input: {
       currentContextTokens > 0
         ? Math.min(100, (currentContextTokens / compactThresholdTokens) * 100)
         : null,
-    usage: last?.usage ?? null,
+    usage: current?.usage ?? null,
     billed,
     costUsd: input.costUsd ?? null,
     history,

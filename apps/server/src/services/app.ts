@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import type { Response } from 'express';
@@ -319,7 +320,8 @@ function clearSessionRunFields(
     ...session,
     ...overrides,
     pid: null,
-    runLogPath: null,
+    // Keep the last run log path so context usage / grading can still read the
+    // stream after stop when the Claude session JSONL is missing or incomplete.
     updatedAt: nowIso(),
   };
 }
@@ -1140,26 +1142,48 @@ export async function getAgentSessionContext(
 ): Promise<SessionContextUsage> {
   const session = requireSession(ctx, agentId, sessionId);
   const roots = instructionRoots(ctx, agentId);
-  const sessionFilePath = resolveClaudeSessionFilePath({
+  const claudeSessionPath = resolveClaudeSessionFilePath({
     cwd: roots.worktreePath,
     sessionId: session.claudeSessionId,
-    runLogPath: session.runLogPath,
+    runLogPath: null,
   });
-  if (!sessionFilePath) {
+  const runLogPath =
+    session.runLogPath?.trim() && existsSync(session.runLogPath.trim())
+      ? session.runLogPath.trim()
+      : null;
+
+  const candidates = [...new Set([claudeSessionPath, runLogPath].filter(Boolean))] as string[];
+  if (candidates.length === 0) {
     return buildSessionContextUsage({
       fallbackModel: session.model,
       history: [],
       sessionFilePath: null,
     });
   }
-  const parsed = await readClaudeSessionContext(sessionFilePath);
+
+  let bestPath: string | null = null;
+  let best = await readClaudeSessionContext(candidates[0]!);
+  bestPath = candidates[0]!;
+  // Prefer a source that actually reports prompt occupancy. After stop, the Claude
+  // JSONL can exist but still lack usage while the orchestrator run log has it.
+  if (!best.history.some((turn) => turn.contextTokens > 0)) {
+    for (const candidate of candidates.slice(1)) {
+      const parsed = await readClaudeSessionContext(candidate);
+      if (parsed.history.some((turn) => turn.contextTokens > 0)) {
+        best = parsed;
+        bestPath = candidate;
+        break;
+      }
+    }
+  }
+
   return buildSessionContextUsage({
-    model: parsed.model,
+    model: best.model,
     fallbackModel: session.model,
-    history: parsed.history,
-    billed: parsed.billed,
-    costUsd: parsed.costUsd,
-    sessionFilePath,
+    history: best.history,
+    billed: best.billed,
+    costUsd: best.costUsd,
+    sessionFilePath: bestPath,
   });
 }
 

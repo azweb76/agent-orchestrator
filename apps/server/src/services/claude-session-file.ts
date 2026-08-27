@@ -358,14 +358,17 @@ export function parseClaudeSessionContext(contents: string): ParsedClaudeSession
         hasCost = true;
       }
       const resultUsage = parseTokenUsage(event.usage);
-      if (resultUsage && history.length === 0) {
+      const resultContext = resultUsage ? contextTokensFromUsage(resultUsage) : 0;
+      // Only seed history from result when nothing else reported occupancy. Output-only
+      // result stubs (common after interrupt) must not wipe the current size to zero.
+      if (resultUsage && resultContext > 0 && history.length === 0) {
         billed = resultUsage;
         history.push({
           turn: 1,
           createdAt: eventTimestamp(event),
           model: eventModel(event, null),
           usage: resultUsage,
-          contextTokens: contextTokensFromUsage(resultUsage),
+          contextTokens: resultContext,
           compacted: pendingCompact,
           tools: [],
         });
@@ -383,6 +386,9 @@ export function parseClaudeSessionContext(contents: string): ParsedClaudeSession
 
     const usage = parseTokenUsage(message?.usage ?? event.usage);
     if (!usage) continue;
+    const contextTokens = contextTokensFromUsage(usage);
+    // Skip output-only usage rows so a stopped mid-turn stub cannot become "current".
+    if (contextTokens <= 0) continue;
 
     const turnModel = eventModel(event, message);
     if (turnModel) model = turnModel;
@@ -392,7 +398,7 @@ export function parseClaudeSessionContext(contents: string): ParsedClaudeSession
       createdAt: eventTimestamp(event),
       model: turnModel,
       usage,
-      contextTokens: contextTokensFromUsage(usage),
+      contextTokens,
       compacted: pendingCompact,
       tools: toolNamesFromContent(content),
     });

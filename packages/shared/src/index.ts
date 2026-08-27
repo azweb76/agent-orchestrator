@@ -808,6 +808,7 @@ export {
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   emptyTokenUsage,
   EXTENDED_CONTEXT_WINDOW_TOKENS,
+  latestContextTurn,
   RESERVED_TOKENS_FOR_SUMMARY,
   totalTokensFromUsage,
   type SessionContextTurn,
