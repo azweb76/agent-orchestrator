@@ -98,6 +98,7 @@ import {
   type InstructionFileRoots,
 } from '../services/instruction-files.js';
 import { buildSessionGradeContext } from '../services/session-grade.js';
+import { buildTemplateKickoffPrompt } from '../services/session-kickoff.js';
 import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionContext } from '../services/claude-session-file.js';
 import {
   appendStreamText,
@@ -898,7 +899,17 @@ export async function createAgentSession(
       template: session.template,
     }),
   );
-  return { session, kickoffPrompt: template?.prompt ?? null };
+  const basePrompt = template?.prompt ?? null;
+  const kickoffPrompt =
+    basePrompt && (session.template === 'address-review' || session.template === 'fix-ci')
+      ? await buildTemplateKickoffPrompt(
+          { repos: ctx.repos, github: ctx.github },
+          agent.worktreeId,
+          session.template,
+          basePrompt,
+        )
+      : basePrompt;
+  return { session, kickoffPrompt };
 }
 
 export async function updateAgentSession(

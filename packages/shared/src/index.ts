@@ -307,6 +307,19 @@ export interface PullRequestComment {
   createdAt: string;
 }
 
+/** Inline review comment on a pull request diff (may be part of a thread). */
+export interface PullRequestReviewComment {
+  id: string;
+  author: PullRequestUser | null;
+  body: string;
+  path: string | null;
+  line: number | null;
+  htmlUrl: string | null;
+  createdAt: string;
+  inReplyToId: string | null;
+  pullRequestReviewId: string | null;
+}
+
 const PULL_REQUEST_REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as const;
 export type PullRequestReviewEvent = (typeof PULL_REQUEST_REVIEW_EVENTS)[number];
 
