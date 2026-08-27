@@ -768,6 +768,19 @@ test('streamAgentChat reserves an idle session before asynchronously saving imag
     const image = { name: 'test.png', mimeType: 'image/png', dataBase64: 'aW1hZ2U=' };
 
     const first = streamAgentChat(ctx, agent.id, { message: 'first', images: [image] }, null, 'plan-sess');
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 1_000;
+      const check = () => {
+        if (ctx.repos.sessions.getById('plan-sess')?.status === 'running') {
+          resolve();
+        } else if (Date.now() >= deadline) {
+          reject(new Error('Session was not reserved'));
+        } else {
+          setTimeout(check, 5);
+        }
+      };
+      check();
+    });
     await assert.rejects(
       () => streamAgentChat(ctx, agent.id, { message: 'second', images: [image] }, null, 'plan-sess'),
       /already has a running Claude process/,
