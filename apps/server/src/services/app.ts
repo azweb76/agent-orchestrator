@@ -1651,8 +1651,10 @@ function sleep(ms: number): Promise<void> {
  * Used by Build / Keep planning so a hung ExitPlanMode stdio wait cannot leak.
  */
 async function stopClaudeRun(ctx: AppContext, session: ChatSession): Promise<void> {
+  // Prefer the tracked process pid — the session row may not have one yet
+  // (stop can race the startup window before onStarted persists the handle).
+  const pid = ctx.claude.getRunningProcess(session.id)?.pid ?? session.pid;
   ctx.claude.stop(session.id, session.pid, session.runLogPath);
-  const pid = session.pid;
   if (pid == null) {
     const afterStop = ctx.repos.sessions.getById(session.id);
     if (afterStop && (afterStop.status === 'running' || afterStop.pid != null)) {
@@ -1842,7 +1844,14 @@ export async function streamAgentChat(
     throw new Error('Message or image attachment required');
   }
 
-  if (session.status === 'running' && session.pid != null) {
+  // Check the in-process tracked run as well as the persisted pid: between
+  // marking the session running and onStarted persisting the handle, the pid
+  // is still null. Without this a concurrent send would slip past the guard,
+  // persist a user message Claude never sees, and fail late in runStreaming.
+  const hasActiveRun =
+    Boolean(ctx.claude.getRunningProcess(session.id)) ||
+    (session.status === 'running' && session.pid != null);
+  if (hasActiveRun) {
     if (!force) {
       throw new Error('Session already has a running Claude process. Queue the message or force-send.');
     }
