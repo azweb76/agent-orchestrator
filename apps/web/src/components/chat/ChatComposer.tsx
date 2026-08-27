@@ -389,13 +389,16 @@ export function ChatComposer({
                 return;
               }
             }
+            // Check the modifier combo first — a bare `Enter` guard would also
+            // match Cmd/Ctrl+Enter and submit the same message twice.
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              submit(isStreaming);
+              return;
+            }
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
               submit(false);
-            }
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              submit(isStreaming);
             }
           }}
           sx={{
