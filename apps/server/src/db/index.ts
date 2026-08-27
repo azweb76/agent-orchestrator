@@ -678,16 +678,20 @@ export class MessageRepository {
     return message;
   }
 
+  // A user message and its assistant placeholder are created in the same
+  // millisecond, so `created_at` alone leaves their order unspecified in
+  // SQLite. Tie-break on rowid (insertion order) to keep transcripts — and
+  // rewind's delete range, which slices this ordering — deterministic.
   listByAgent(agentId: string): Message[] {
     return this.db
-      .prepare('SELECT * FROM messages WHERE agent_id = ? ORDER BY created_at ASC')
+      .prepare('SELECT * FROM messages WHERE agent_id = ? ORDER BY created_at ASC, rowid ASC')
       .all(agentId)
       .map(rowToMessage);
   }
 
   listBySession(sessionId: string): Message[] {
     return this.db
-      .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC')
+      .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC')
       .all(sessionId)
       .map(rowToMessage);
   }
@@ -701,7 +705,7 @@ export class MessageRepository {
 
   /**
    * Delete the given message and every later message in the same session
-   * (ordered by created_at, then id).
+   * (ordered by created_at, then insertion order).
    */
   deleteFrom(agentId: string, messageId: string): { removed: number; target: Message | null } {
     const target = this.getById(agentId, messageId);
