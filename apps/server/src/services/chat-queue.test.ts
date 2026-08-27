@@ -214,6 +214,27 @@ test('clearAgentChat drops queued messages', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-clear-'));
   try {
     const { ctx, agent } = await seedAgent(tmp);
+    const messageAttachmentPath = path.join(tmp, 'message-image.png');
+    await fs.writeFile(messageAttachmentPath, 'image');
+    ctx.repos.messages.create({
+      id: 'message-with-image',
+      agentId: agent.id,
+      sessionId: 'sess-1',
+      role: 'user',
+      content: '(image attachment)',
+      attachments: [
+        {
+          id: 'message-image',
+          type: 'image',
+          mimeType: 'image/png',
+          name: 'message-image.png',
+          path: messageAttachmentPath,
+          url: '/api/agents/ag-1/attachments/message-image',
+        },
+      ],
+      metadata: {},
+      createdAt: '2026-01-01T00:00:01.000Z',
+    });
     ctx.repos.sessions.update({
       ...ctx.repos.sessions.getById('sess-1')!,
       status: 'running',
@@ -228,6 +249,8 @@ test('clearAgentChat drops queued messages', async () => {
 
     await clearAgentChat(ctx, agent.id, 'sess-1');
     assert.equal(ctx.repos.queued.listBySession('sess-1').length, 0);
+    assert.equal(ctx.repos.messages.listBySession('sess-1').length, 0);
+    await assert.rejects(fs.access(messageAttachmentPath));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

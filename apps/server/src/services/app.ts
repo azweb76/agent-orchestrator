@@ -938,7 +938,9 @@ export async function deleteAgentSession(
   }
 
   const messages = ctx.repos.messages.listBySession(session.id);
+  const queued = ctx.repos.queued.listBySession(session.id);
   await cleanupMessageAttachments(messages);
+  await cleanupAttachmentFiles(queued.flatMap((item) => item.attachments));
   ctx.repos.messages.deleteBySession(session.id);
   ctx.repos.sessions.delete(session.id);
 
@@ -1210,6 +1212,8 @@ export async function clearAgentChat(
   }
 
   await clearSessionQueue(ctx, session.id);
+  const messages = ctx.repos.messages.listBySession(session.id);
+  await cleanupMessageAttachments(messages);
   const cleared = ctx.repos.messages.deleteBySession(session.id);
   ctx.repos.sessions.update({
     ...session,

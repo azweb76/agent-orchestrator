@@ -266,6 +266,25 @@ test('deleteAgentSession removes a session and keeps the other', async () => {
       metadata: {},
       createdAt: '2026-01-01T00:00:03.000Z',
     });
+    const queuedAttachmentPath = path.join(tmp, 'queued-image.png');
+    await fs.writeFile(queuedAttachmentPath, 'image');
+    ctx.repos.queued.create({
+      id: 'queued-r1',
+      agentId: agent.id,
+      sessionId: created.session.id,
+      content: '(image attachment)',
+      attachments: [
+        {
+          id: 'queued-image',
+          type: 'image',
+          mimeType: 'image/png',
+          name: 'queued-image.png',
+          path: queuedAttachmentPath,
+          url: '/api/agents/ag-1/attachments/queued-image',
+        },
+      ],
+      createdAt: '2026-01-01T00:00:04.000Z',
+    });
     assert.equal(ctx.repos.sessions.listByAgent(agent.id).length, 2);
 
     const detail = await deleteAgentSession(ctx, agent.id, created.session.id);
@@ -276,6 +295,8 @@ test('deleteAgentSession removes a session and keeps the other', async () => {
     assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 2);
     assert.equal(ctx.repos.messages.listBySession(created.session.id).length, 0);
     assert.equal(ctx.repos.sessions.getById(created.session.id), null);
+    assert.equal(ctx.repos.queued.listBySession(created.session.id).length, 0);
+    await assert.rejects(fs.access(queuedAttachmentPath));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
