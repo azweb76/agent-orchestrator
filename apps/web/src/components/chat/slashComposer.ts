@@ -1,13 +1,15 @@
 import {
+  CONTEXT_SLASH_COMMANDS,
   LOCAL_SLASH_COMMANDS,
-  PROMPT_SLASH_COMMANDS,
   type SlashCommand,
 } from '@agent-orchestrator/shared';
 
 export const FALLBACK_SLASH_COMMANDS: SlashCommand[] = [
   ...LOCAL_SLASH_COMMANDS,
-  ...PROMPT_SLASH_COMMANDS,
+  ...CONTEXT_SLASH_COMMANDS,
 ];
+
+export const CONTEXT_SLASH_CHIP_COMMANDS = ['/diff', '/test', '/pr', '/code-review'] as const;
 
 export function resolveSlashCommand(commands: SlashCommand[], text: string): SlashCommand | undefined {
   const token = text.trim().split(/\s+/)[0]?.toLowerCase();

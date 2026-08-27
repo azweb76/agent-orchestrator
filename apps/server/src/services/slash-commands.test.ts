@@ -47,6 +47,7 @@ Ship it.
     assert.ok(names.includes('/deploy'));
     assert.ok(names.includes('/ship'));
     assert.ok(names.includes('/diff'));
+    assert.equal(findSlashCommand(commands, '/diff')?.kind, 'context');
     assert.equal(findSlashCommand(commands, '/clear')?.kind, 'local');
     assert.equal(findSlashCommand(commands, '/rewind')?.kind, 'local');
     assert.equal(findSlashCommand(commands, '/deploy')?.kind, 'skill');

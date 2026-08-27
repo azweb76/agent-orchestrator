@@ -43,6 +43,7 @@ import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { pendingMentionToChatMention, createPendingMention, type PendingMention } from './mentionComposer';
+import { CONTEXT_SLASH_CHIP_COMMANDS } from './slashComposer';
 import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
 import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
@@ -1209,14 +1210,14 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                   description="Sessions begin in plan mode. Describe what you want; Claude will explore, ask clarifying questions, and present a plan. Use + to start a Review or Create draft PR session in parallel. Type / for commands, /clear to reset this session, or /rewind to restore the last prompt."
                   action={
                     <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-                      {['/diff', '/test', '/pr', '/code-review'].map((command) => (
+                      {CONTEXT_SLASH_CHIP_COMMANDS.map((command) => (
                         <Chip
                           key={command}
                           size="small"
                           label={command}
                           variant="outlined"
                           clickable
-                          onClick={() => setDraft(command)}
+                          onClick={() => void runChatRef.current(command, [], [], false)}
                           sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
                         />
                       ))}
