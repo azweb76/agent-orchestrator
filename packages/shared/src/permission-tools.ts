@@ -94,7 +94,7 @@ export function parseAskUserQuestions(input: Record<string, unknown>): ParsedQue
   return questions;
 }
 
-export interface BuildAskUserQuestionUpdatedInputOptions {
+interface BuildAskUserQuestionUpdatedInputOptions {
   /** Map of question text → selected label(s). Multi-select values may be comma-joined. */
   answers?: Record<string, string>;
   /** Optional freeform reply instead of (or in addition to) structured answers. */

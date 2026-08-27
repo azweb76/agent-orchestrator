@@ -10,18 +10,6 @@ import type { ReactNode } from 'react';
 import { type ToolActivityItem } from '@agent-orchestrator/shared';
 import { formatDurationMs, subagentTypeLabel, toolActionLabel } from './toolPresentation';
 
-export type { StreamPart, ToolActivityItem } from '@agent-orchestrator/shared';
-export {
-  activeToolItem,
-  appendStreamText,
-  applyStreamEvent,
-  coalesceTimelineText,
-  extractToolActivity,
-  isSubagentItem,
-  runningSubagentItems,
-  visibleSubagentItems,
-} from '@agent-orchestrator/shared';
-
 function pickActive(items: ToolActivityItem[]): ToolActivityItem | undefined {
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const item = items[i]!;

@@ -4,7 +4,6 @@ import {
   activeToolItem,
   appendStreamText,
   applyStreamEvent,
-  assistantTextDelta,
   adoptParentClaudeSessionId,
   claudeResultErrorMessage,
   coalesceTimelineText,
@@ -603,14 +602,14 @@ describe('task events', () => {
 
   it('ignores nested text_delta tokens for the parent transcript', () => {
     assert.equal(
-      assistantTextDelta({
+      parentStreamTextDelta({
         type: 'stream_event',
         event: { delta: { type: 'text_delta', text: 'hello' } },
       }),
       'hello',
     );
     assert.equal(
-      assistantTextDelta({
+      parentStreamTextDelta({
         type: 'stream_event',
         parent_tool_use_id: 'parent_task',
         event: { delta: { type: 'text_delta', text: 'nested' } },

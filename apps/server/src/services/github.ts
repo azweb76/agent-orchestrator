@@ -9,7 +9,6 @@ import type {
   PullRequestComment,
   PullRequestCommit,
   PullRequestDetail,
-  PullRequestFile,
   PullRequestFiles,
   PullRequestMergeMethod,
   PullRequestMergeableState,

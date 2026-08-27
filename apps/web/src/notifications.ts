@@ -6,7 +6,7 @@ import { onAppEvent } from './api/events';
 
 const STORAGE_KEY = 'ao.notifications.enabled';
 
-export function notificationsSupported(): boolean {
+function notificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 

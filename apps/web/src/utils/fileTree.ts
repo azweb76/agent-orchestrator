@@ -1,6 +1,6 @@
 import type { DiffFile } from './parseUnifiedDiff';
 
-export interface FileTreeFileNode {
+interface FileTreeFileNode {
   type: 'file';
   name: string;
   path: string;

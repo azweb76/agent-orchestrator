@@ -2,7 +2,6 @@ import type {
   Agent,
   AgentDetail,
   AgentDiff,
-  AgentEvent,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
   ArchiveAgentRequest,
@@ -50,8 +49,6 @@ import type {
   SlashCommand,
   SubmitPullRequestReviewRequest,
   UsageSummary,
-  SuggestBranchNameResponse,
-  UpdateAgentRequest,
   UpdateChatSessionRequest,
   UpdatePullRequestBranchRequest,
   UpdatePullRequestBranchResponse,
@@ -64,7 +61,7 @@ import type {
 const API_BASE = '/api';
 const AUTH_STORAGE_KEY = 'ao.authToken';
 
-export function getAuthToken(): string {
+function getAuthToken(): string {
   try {
     return localStorage.getItem(AUTH_STORAGE_KEY) ?? '';
   } catch {
@@ -151,11 +148,6 @@ export const api = {
       `/workspaces/${workspaceId}/worktrees/from-idea`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  suggestBranchName: (workspaceId: string, idea: string) =>
-    request<SuggestBranchNameResponse>(`/workspaces/${workspaceId}/worktrees/suggest-branch-name`, {
-      method: 'POST',
-      body: JSON.stringify({ idea }),
-    }),
   createWorktreeFromPr: (workspaceId: string, body: CreateWorktreeFromPrRequest) =>
     request<{ worktree: WorktreeWithAgent; agent: Agent }>(
       `/workspaces/${workspaceId}/worktrees/from-pr`,
@@ -235,10 +227,6 @@ export const api = {
       body: JSON.stringify({ state }),
     }),
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
-  updateAgent: (agentId: string, body: UpdateAgentRequest) =>
-    request<Agent>(`/agents/${agentId}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  stopAgent: (agentId: string) =>
-    request<Agent>(`/agents/${agentId}/stop`, { method: 'POST' }),
   archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>
     request<ArchiveAgentResponse>(`/agents/${agentId}/archive`, {
       method: 'POST',
@@ -253,7 +241,6 @@ export const api = {
     ),
   pruneArchivedAgents: () =>
     request<PruneArchivedAgentsResponse>('/agents/prune-archived', { method: 'POST' }),
-  listSessions: (agentId: string) => request<ChatSession[]>(`/agents/${agentId}/sessions`),
   createSession: (agentId: string, body: CreateChatSessionRequest = {}) =>
     request<{ session: ChatSession; kickoffPrompt: string | null }>(
       `/agents/${agentId}/sessions`,
@@ -315,7 +302,6 @@ export const api = {
     request<{ removed: boolean }>(`/agents/${agentId}/sessions/${sessionId}/queue/${queuedId}`, {
       method: 'DELETE',
     }),
-  getEvents: (agentId: string) => request<AgentEvent[]>(`/agents/${agentId}/events`),
   getDiff: (agentId: string, scope: 'pending' | 'pr' = 'pending') =>
     request<AgentDiff>(`/agents/${agentId}/diff?scope=${encodeURIComponent(scope)}`),
   listSlashCommands: (agentId: string) =>
@@ -360,7 +346,7 @@ export interface ChatStreamHandlers {
   onError: (message: string) => void;
 }
 
-export interface StreamChatOptions {
+interface StreamChatOptions {
   message: string;
   force?: boolean;
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
