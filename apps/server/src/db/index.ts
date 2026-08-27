@@ -643,6 +643,17 @@ export class ChatSessionRepository {
     return updated;
   }
 
+  clearGrade(sessionId: string): void {
+    this.db
+      .prepare(
+        `UPDATE chat_sessions
+         SET grade_score = NULL, grade_comment = NULL, grade_transcript = NULL,
+             grade_analysis = NULL, graded_at = NULL
+         WHERE id = ?`,
+      )
+      .run(sessionId);
+  }
+
   getGradeTranscript(sessionId: string): string {
     const row = this.db
       .prepare('SELECT grade_transcript FROM chat_sessions WHERE id = ?')

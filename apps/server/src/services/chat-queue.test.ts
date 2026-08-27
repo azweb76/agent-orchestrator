@@ -210,6 +210,26 @@ test('queue endpoints validate and remove entries', async () => {
   }
 });
 
+test('removing a queued message cannot target another session', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-other-session-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const other = ctx.repos.sessions.create({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      id: 'sess-2',
+      title: 'Other chat',
+      status: 'running',
+    });
+    const queued = await enqueueChatMessage(ctx, agent.id, other.id, { message: 'belongs elsewhere' });
+
+    const result = await removeQueuedMessage(ctx, agent.id, 'sess-1', queued.id);
+    assert.equal(result.removed, false);
+    assert.equal(ctx.repos.queued.listBySession(other.id).length, 1);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('clearAgentChat drops queued messages', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-clear-'));
   try {
@@ -244,13 +264,27 @@ test('clearAgentChat drops queued messages', async () => {
     ctx.repos.sessions.update({
       ...ctx.repos.sessions.getById('sess-1')!,
       status: 'idle',
+      runLogPath: path.join(tmp, 'old-run.log'),
       updatedAt: new Date().toISOString(),
     });
+    ctx.repos.sessions.setGrade(
+      'sess-1',
+      {
+        score: 4,
+        comment: 'Old conversation',
+        gradedAt: new Date().toISOString(),
+      },
+      'old transcript',
+    );
 
     await clearAgentChat(ctx, agent.id, 'sess-1');
     assert.equal(ctx.repos.queued.listBySession('sess-1').length, 0);
     assert.equal(ctx.repos.messages.listBySession('sess-1').length, 0);
     await assert.rejects(fs.access(messageAttachmentPath));
+    const session = ctx.repos.sessions.getById('sess-1');
+    assert.equal(session?.runLogPath, null);
+    assert.equal(session?.grade, null);
+    assert.equal(ctx.repos.sessions.getGradeTranscript('sess-1'), '');
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

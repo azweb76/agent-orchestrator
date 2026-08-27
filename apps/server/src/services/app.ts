@@ -1218,9 +1218,11 @@ export async function clearAgentChat(
   ctx.repos.sessions.update({
     ...session,
     claudeSessionId: null,
+    runLogPath: null,
     permissionMode: 'plan',
     updatedAt: nowIso(),
   });
+  ctx.repos.sessions.clearGrade(session.id);
   syncAgentFromSessions(ctx, agentId);
   ctx.repos.events.create(makeEvent(agentId, 'chat_cleared', { cleared, sessionId: session.id }));
   return { cleared };
@@ -1266,8 +1268,10 @@ export async function rewindAgentChat(
   ctx.repos.sessions.update({
     ...session,
     claudeSessionId: null,
+    runLogPath: null,
     updatedAt: nowIso(),
   });
+  ctx.repos.sessions.clearGrade(session.id);
   syncAgentFromSessions(ctx, agentId);
   ctx.repos.events.create(
     makeEvent(agentId, 'chat_rewound', {
@@ -1377,7 +1381,7 @@ export async function removeQueuedMessage(
 ): Promise<{ removed: boolean }> {
   requireSession(ctx, agentId, sessionId);
   const queued = ctx.repos.queued.getById(queuedId);
-  if (!queued || queued.agentId !== agentId) return { removed: false };
+  if (!queued || queued.agentId !== agentId || queued.sessionId !== sessionId) return { removed: false };
   await cleanupAttachmentFiles(queued.attachments);
   ctx.repos.queued.delete(queuedId);
   notify(ctx, 'queue_changed', { agentId, sessionId: queued.sessionId });
@@ -2334,7 +2338,25 @@ export async function streamAgentChat(
     markStreamingAssistantStopped(ctx, agentId, session.id);
   }
 
-  const attachments = options.attachments ?? (await saveChatImages(ctx, agentId, body.images));
+  // Reserve the session before any await below. Without this, two requests
+  // arriving together can both observe an idle session while image files are
+  // written and subsequently start overlapping Claude runs.
+  let runningSession: ChatSession = {
+    ...(ctx.repos.sessions.getById(session.id) ?? session),
+    status: 'running',
+    updatedAt: nowIso(),
+  };
+  runningSession = persistSessionRuntime(ctx, runningSession);
+  syncAgentFromSessions(ctx, agentId);
+
+  let attachments: MessageAttachment[];
+  try {
+    attachments = options.attachments ?? (await saveChatImages(ctx, agentId, body.images));
+  } catch (error) {
+    ctx.repos.sessions.update(clearSessionRunFields(runningSession, { status: 'idle' }));
+    syncAgentFromSessions(ctx, agentId);
+    throw error;
+  }
 
   const userMessage: Message = {
     id: uuidv4(),
@@ -2390,13 +2412,6 @@ export async function streamAgentChat(
     })
     .catch(() => null);
 
-  let runningSession: ChatSession = {
-    ...(ctx.repos.sessions.getById(session.id) ?? session),
-    status: 'running',
-    updatedAt: nowIso(),
-  };
-  runningSession = persistSessionRuntime(ctx, runningSession);
-  syncAgentFromSessions(ctx, agentId);
   send('session', runningSession);
 
   let assistantText = '';
