@@ -307,7 +307,7 @@ export interface PullRequestComment {
   createdAt: string;
 }
 
-export const PULL_REQUEST_REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as const;
+const PULL_REQUEST_REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as const;
 export type PullRequestReviewEvent = (typeof PULL_REQUEST_REVIEW_EVENTS)[number];
 
 export interface SubmitPullRequestReviewRequest {
@@ -394,14 +394,6 @@ export interface CreateWorktreeFromIdeaRequest {
   effort?: EffortLevel;
   /** Permission mode for the new agent session (defaults to plan). */
   permissionMode?: PermissionMode;
-}
-
-export interface SuggestBranchNameRequest {
-  idea: string;
-}
-
-export interface SuggestBranchNameResponse {
-  branchName: string;
 }
 
 export interface UpdateAgentRequest {
@@ -667,7 +659,7 @@ export const PERMISSION_MODES = [
   { id: 'bypassPermissions', label: 'Bypass permissions' },
 ] as const satisfies ReadonlyArray<{ id: PermissionMode; label: string }>;
 
-export const CHAT_SLASH_COMMANDS = [
+const CHAT_SLASH_COMMANDS = [
   { command: '/diff', prompt: 'Show a summary of the current git diff and what still needs work.' },
   { command: '/test', prompt: 'Run the relevant tests for recent changes and fix any failures.' },
   { command: '/pr', prompt: 'Prepare a pull request: summarize changes, suggest a title and description.' },
@@ -744,23 +736,18 @@ export {
   adoptParentClaudeSessionId,
   appendStreamText,
   applyStreamEvent,
-  assistantTextDelta,
   claudeResultErrorMessage,
   coalesceTimelineText,
   completeRunningTools,
-  extractToolActivity,
   isNestedSubagentEvent,
   isSubagentItem,
-  isSubagentToolName,
   isTopLevelClaudeResult,
   parentStreamTextDelta,
-  parentToolUseId,
   runningSubagentItems,
   visibleAssistantContent,
   visibleSubagentItems,
   type StreamPart,
   type ToolActivityItem,
-  type ToolTaskInfo,
 } from './stream-timeline.js';
 
 export {
@@ -771,8 +758,6 @@ export {
   isClaudePlansPath,
   parseAskUserQuestions,
 } from './permission-tools.js';
-
-export { buildIdeaKickoffPrompt } from './idea-prompt.js';
 
 export {
   buildImplementPlanPrompt,
@@ -803,16 +788,10 @@ export {
 
 export {
   addTokenUsage,
-  AUTOCOMPACT_BUFFER_TOKENS,
   buildSessionContextUsage,
   compactThresholdTokensForWindow,
   contextTokensFromUsage,
-  contextWindowTokensForModel,
-  DEFAULT_CONTEXT_WINDOW_TOKENS,
   emptyTokenUsage,
-  EXTENDED_CONTEXT_WINDOW_TOKENS,
-  latestContextTurn,
-  RESERVED_TOKENS_FOR_SUMMARY,
   totalTokensFromUsage,
   type SessionContextTurn,
   type SessionContextUsage,
@@ -835,6 +814,5 @@ export {
   pullRequestMatchesQuery,
   rollupChecks,
   type MergeReadiness,
-  type PullRequestSearchFields,
 } from './pull-request.js';
 

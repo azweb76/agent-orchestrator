@@ -54,16 +54,3 @@ export function formatDurationMs(ms: number | undefined): string | undefined {
   const rem = sec % 60;
   return rem ? `${min}m ${rem}s` : `${min}m`;
 }
-
-export function toolPreview(input: Record<string, unknown> | undefined): string | undefined {
-  if (!input) return undefined;
-  if (typeof input.command === 'string') return input.command;
-  if (typeof input.file_path === 'string') return input.file_path;
-  if (typeof input.path === 'string') return input.path;
-  if (typeof input.pattern === 'string') return input.pattern;
-  if (typeof input.query === 'string') return input.query;
-  if (typeof input.url === 'string') return input.url;
-  if (typeof input.description === 'string') return input.description;
-  if (typeof input.subagent_type === 'string') return input.subagent_type;
-  return undefined;
-}

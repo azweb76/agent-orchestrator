@@ -131,7 +131,7 @@ export function evaluateMergeReadiness(pr: PullRequestDetail): MergeReadiness {
 }
 
 /** Fields the PR picker / inbox search can match against. */
-export interface PullRequestSearchFields {
+interface PullRequestSearchFields {
   number: number;
   title: string;
   headRef?: string;

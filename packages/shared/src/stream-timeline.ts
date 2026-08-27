@@ -131,8 +131,6 @@ export function visibleAssistantContent(content: string): string {
   return content;
 }
 
-export const assistantTextDelta = parentStreamTextDelta;
-
 export function isSubagentToolName(name: string): boolean {
   return SUBAGENT_TOOL_NAMES.has(name);
 }
@@ -681,15 +679,4 @@ export function activeToolItem(parts: StreamPart[]): ToolActivityItem | undefine
   }
   const last = tools[tools.length - 1];
   return last ? toolItemFields(last) : undefined;
-}
-
-/** Extract tool chips only (legacy helper). */
-export function extractToolActivity(
-  event: Record<string, unknown>,
-  prev: ToolActivityItem[],
-): ToolActivityItem[] {
-  const parts: StreamPart[] = prev.map((item) => ({ type: 'tool' as const, ...item }));
-  return applyStreamEvent(parts, event)
-    .filter((part): part is Extract<StreamPart, { type: 'tool' }> => part.type === 'tool')
-    .map((part) => toolItemFields(part));
 }
