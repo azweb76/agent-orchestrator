@@ -1,5 +1,6 @@
 import type { StreamPart } from './stream-timeline.js';
 import type { ChatSession } from './chat-session.js';
+import type { ChatMention } from './chat-mentions.js';
 
 export type AgentStatus = 'idle' | 'running' | 'stopped' | 'archived';
 
@@ -464,11 +465,15 @@ export interface ChatImageAttachment {
   dataBase64: string;
 }
 
+export type { ChatMention, ChatMentionKind, WorktreeFileEntry } from './chat-mentions.js';
+export { chatMentionLabel, formatChatMentionToken } from './chat-mentions.js';
+
 export interface ChatRequest {
   message: string;
   /** When true, stop any in-flight Claude run before starting this message. */
   force?: boolean;
   images?: ChatImageAttachment[];
+  mentions?: ChatMention[];
 }
 
 /**
@@ -482,12 +487,14 @@ export interface QueuedChatMessage {
   sessionId: string;
   content: string;
   attachments: MessageAttachment[];
+  mentions?: ChatMention[];
   createdAt: string;
 }
 
 export interface EnqueueChatMessageRequest {
   message: string;
   images?: ChatImageAttachment[];
+  mentions?: ChatMention[];
 }
 
 /** Truncate chat from a user message onward and reset the Claude session. */

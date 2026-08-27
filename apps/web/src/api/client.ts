@@ -53,6 +53,7 @@ import type {
   UpdatePullRequestBranchRequest,
   UpdatePullRequestBranchResponse,
   Worktree,
+  WorktreeFileEntry,
   WorktreeWithAgent,
   Workspace,
   WorkspaceWithCounts,
@@ -306,6 +307,8 @@ export const api = {
     request<AgentDiff>(`/agents/${agentId}/diff?scope=${encodeURIComponent(scope)}`),
   listSlashCommands: (agentId: string) =>
     request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),
+  listMentionFiles: (agentId: string) =>
+    request<WorktreeFileEntry[]>(`/agents/${agentId}/mention-files`),
   listPendingPermissions: (agentId: string, sessionId: string) =>
     request<PermissionRequest[]>(`/agents/${agentId}/sessions/${sessionId}/permissions`),
   answerPermission: (agentId: string, sessionId: string, body: AnswerAskUserQuestionRequest) =>
@@ -350,6 +353,7 @@ interface StreamChatOptions {
   message: string;
   force?: boolean;
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
+  mentions?: Array<{ kind: 'file' | 'diff'; path?: string }>;
 }
 
 async function consumeChatSse(
@@ -425,6 +429,7 @@ export async function streamChat(
       message: options.message,
       force: options.force,
       images: options.images,
+      mentions: options.mentions,
     }),
     signal,
   });

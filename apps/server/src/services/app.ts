@@ -20,6 +20,7 @@ import type {
   SubmitPullRequestReviewRequest,
   BuildPlanRequest,
   ChatImageAttachment,
+  ChatMention,
   ChatRequest,
   ChatSession,
   ChatSessionTemplateId,
@@ -88,6 +89,7 @@ import {
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService, fallbackTitleFromPrompt, sanitizeChatTitle } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
+import { listWorktreeFiles, resolveChatMentions } from '../services/chat-mentions.js';
 import { mergeLivePullRequest } from '../services/pr-overlay.js';
 import { buildSessionTranscript } from '../services/session-transcript.js';
 import {
@@ -1349,17 +1351,20 @@ export async function enqueueChatMessage(
   const session = requireSession(ctx, agentId, sessionId);
 
   const message = body.message.trim();
-  if (!message && !(body.images && body.images.length > 0)) {
+  const hasMentions = (body.mentions?.length ?? 0) > 0;
+  if (!message && !(body.images && body.images.length > 0) && !hasMentions) {
     throw new Error('Message or image attachment required');
   }
 
   const attachments = await saveChatImages(ctx, agentId, body.images);
+  const mentions = body.mentions ?? [];
   const queued: QueuedChatMessage = {
     id: uuidv4(),
     agentId,
     sessionId: session.id,
-    content: message || '(image attachment)',
+    content: message || (hasMentions ? '(mention attachment)' : '(image attachment)'),
     attachments,
+    mentions,
     createdAt: nowIso(),
   };
   ctx.repos.queued.create(queued);
@@ -1427,7 +1432,7 @@ export async function drainSessionQueue(
       );
       notify(ctx, 'queue_changed', { agentId, sessionId });
       try {
-        await streamAgentChat(ctx, agentId, { message: next.content }, null, sessionId, {
+        await streamAgentChat(ctx, agentId, { message: next.content, mentions: next.mentions }, null, sessionId, {
           attachments: next.attachments,
         });
       } catch (error) {
@@ -1743,6 +1748,12 @@ export async function getAgentDiff(
 export async function listAgentSlashCommands(ctx: AppContext, agentId: string) {
   const detail = await getAgentDetail(ctx, agentId);
   return discoverSlashCommands(detail.worktree.path);
+}
+
+export async function listAgentMentionFiles(ctx: AppContext, agentId: string) {
+  const detail = await getAgentDetail(ctx, agentId);
+  const paths = await listWorktreeFiles(detail.worktree.path);
+  return paths.map((filePath) => ({ path: filePath }));
 }
 
 export async function createAgentPullRequest(
@@ -2338,7 +2349,11 @@ export async function streamAgentChat(
   body: ChatRequest,
   res: Response | null,
   sessionId?: string,
-  options: { createdSession?: ChatSession; attachments?: MessageAttachment[] } = {},
+  options: {
+    createdSession?: ChatSession;
+    attachments?: MessageAttachment[];
+    mentions?: ChatMention[];
+  } = {},
 ) {
   const detail = await getAgentDetail(ctx, agentId);
   if (detail.archivedAt) {
@@ -2349,8 +2364,10 @@ export async function streamAgentChat(
 
   const force = Boolean(body.force);
   const message = body.message.trim();
+  const requestMentions = body.mentions ?? options.mentions ?? [];
   const hasImages = (body.images?.length ?? 0) > 0 || (options.attachments?.length ?? 0) > 0;
-  if (!message && !hasImages) {
+  const hasMentions = requestMentions.length > 0;
+  if (!message && !hasImages && !hasMentions) {
     throw new Error('Message or image attachment required');
   }
 
@@ -2381,8 +2398,11 @@ export async function streamAgentChat(
   syncAgentFromSessions(ctx, agentId);
 
   let attachments: MessageAttachment[];
+  let mentionContext = '';
   try {
     attachments = options.attachments ?? (await saveChatImages(ctx, agentId, body.images));
+    const mentionResult = await resolveChatMentions(ctx.git, detail.worktree.path, requestMentions);
+    mentionContext = mentionResult.context;
   } catch (error) {
     ctx.repos.sessions.update(clearSessionRunFields(runningSession, { status: 'idle' }));
     syncAgentFromSessions(ctx, agentId);
@@ -2394,7 +2414,7 @@ export async function streamAgentChat(
     agentId,
     sessionId: session.id,
     role: 'user',
-    content: message || '(image attachment)',
+    content: message || (hasMentions ? '(mention attachment)' : '(image attachment)'),
     attachments,
     metadata: {},
     createdAt: nowIso(),
@@ -2469,6 +2489,7 @@ export async function streamAgentChat(
       permissionMode: runningSession.permissionMode,
       sessionId: runningSession.claudeSessionId,
       imagePaths: attachments.map((item) => item.path),
+      mentionContext,
       onStarted: (handle) => {
         runningSession = persistSessionRuntime(ctx, {
           ...runningSession,

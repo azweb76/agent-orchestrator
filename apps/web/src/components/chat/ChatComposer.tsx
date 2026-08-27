@@ -16,15 +16,12 @@ import StopIcon from '@mui/icons-material/Stop';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
-import CloseIcon from '@mui/icons-material/Close';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import InsightsIcon from '@mui/icons-material/Insights';
 import {
   CLAUDE_EFFORT_LEVELS,
   CLAUDE_MODELS,
-  LOCAL_SLASH_COMMANDS,
   PERMISSION_MODES,
-  PROMPT_SLASH_COMMANDS,
   SESSION_GRADE_LABELS,
   type EffortLevel,
   type PermissionMode,
@@ -34,6 +31,12 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { ContextUsageButton } from './ContextUsageDialog';
+import { MentionMenu } from './MentionMenu';
+import { SlashCommandMenu } from './SlashCommandMenu';
+import { ComposerPendingAttachments } from './ComposerPendingAttachments';
+import { useComposerMentions } from './useComposerMentions';
+import { FALLBACK_SLASH_COMMANDS, filterSlashCommands, resolveSlashCommand } from './slashComposer';
+import type { PendingMention } from './mentionComposer';
 
 export interface PendingImage {
   id: string;
@@ -47,6 +50,7 @@ export interface QueuedChatItem {
   id: string;
   text: string;
   images: PendingImage[];
+  mentions: PendingMention[];
 }
 
 interface ChatComposerProps {
@@ -61,7 +65,7 @@ interface ChatComposerProps {
   onModelChange: (model: string) => void;
   onEffortChange: (effort: EffortLevel) => void;
   onPermissionModeChange: (mode: PermissionMode) => void;
-  onSend: (text: string, images: PendingImage[], force: boolean) => void;
+  onSend: (text: string, images: PendingImage[], mentions: PendingMention[], force: boolean) => void;
   onStop: () => void;
   onClear: () => void;
   onRewind: () => void;
@@ -89,28 +93,6 @@ async function fileToPendingImage(file: File): Promise<PendingImage> {
     dataBase64,
   };
 }
-
-function resolveSlashCommand(commands: SlashCommand[], text: string): SlashCommand | undefined {
-  const token = text.trim().split(/\s+/)[0]?.toLowerCase();
-  if (!token?.startsWith('/')) return undefined;
-  const exact = commands.find((item) => item.command.toLowerCase() === token);
-  if (exact) return exact;
-  return commands.find((item) => item.aliases?.some((alias) => alias.toLowerCase() === token));
-}
-
-function filterSlashCommands(commands: SlashCommand[], draft: string): SlashCommand[] {
-  const token = draft.trim().split(/\s+/)[0] ?? '';
-  if (!token.startsWith('/')) return [];
-  const needle = token.toLowerCase();
-  return commands
-    .filter((item) => {
-      if (item.command.toLowerCase().startsWith(needle)) return true;
-      return item.aliases?.some((alias) => alias.toLowerCase().startsWith(needle)) ?? false;
-    })
-    .slice(0, 12);
-}
-
-const FALLBACK_COMMANDS: SlashCommand[] = [...LOCAL_SLASH_COMMANDS, ...PROMPT_SLASH_COMMANDS];
 
 const selectSx = {
   fontSize: 13,
@@ -147,6 +129,18 @@ export function ChatComposer({
   const [highlight, setHighlight] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const imagesRef = useRef<PendingImage[]>([]);
+  const {
+    mentions,
+    mentionHighlight,
+    mentionOptions,
+    showMentionMenu,
+    setMentionDismissed,
+    setMentionHighlight,
+    clearMentions,
+    removeMention,
+    applyMentionSelection,
+    buildOutgoingMessage,
+  } = useComposerMentions(agentId, draft, onDraftChange);
 
   const revokeImages = (pending: PendingImage[]) => {
     for (const image of pending) URL.revokeObjectURL(image.previewUrl);
@@ -177,7 +171,7 @@ export function ChatComposer({
     staleTime: 60_000,
   });
 
-  const commands = slashQuery.data ?? FALLBACK_COMMANDS;
+  const commands = slashQuery.data ?? FALLBACK_SLASH_COMMANDS;
   const slashMatch = useMemo(() => filterSlashCommands(commands, draft), [commands, draft]);
   const showSlashMenu =
     !slashDismissed &&
@@ -219,7 +213,8 @@ export function ChatComposer({
     onDraftChange(`${item.command} `);
   };
 
-  const canSend = !archived && Boolean(draft.trim() || images.length > 0);
+  const canSend =
+    !archived && Boolean(draft.trim() || images.length > 0 || mentions.length > 0);
 
   const submit = (force: boolean) => {
     const raw = draft.trim();
@@ -228,6 +223,7 @@ export function ChatComposer({
     if (slash?.kind === 'local' && slash.command === '/clear') {
       onDraftChange('');
       clearImages();
+      clearMentions();
       onClear();
       return;
     }
@@ -235,6 +231,7 @@ export function ChatComposer({
     if (slash?.kind === 'local' && slash.command === '/rewind') {
       onDraftChange('');
       clearImages();
+      clearMentions();
       onRewind();
       return;
     }
@@ -244,10 +241,12 @@ export function ChatComposer({
       text = slash.prompt;
     }
 
-    if ((!text && images.length === 0) || archived) return;
-    onSend(text, images, force);
+    const outgoing = buildOutgoingMessage(text);
+    if ((!outgoing && images.length === 0 && mentions.length === 0) || archived) return;
+    onSend(outgoing, images, mentions, force);
     onDraftChange('');
     clearImages();
+    clearMentions();
   };
 
   return (
@@ -261,7 +260,7 @@ export function ChatComposer({
             {queue.map((item, index) => (
               <Chip
                 key={item.id}
-                label={`${index + 1}. ${item.text.slice(0, 48) || '(image)'}${item.text.length > 48 ? '…' : ''}`}
+                label={`${index + 1}. ${item.text.slice(0, 48) || (item.mentions.length ? '(mention)' : '(image)')}${item.text.length > 48 ? '…' : ''}`}
                 onDelete={() => onRemoveQueued(item.id)}
                 size="small"
               />
@@ -271,92 +270,29 @@ export function ChatComposer({
       )}
 
       {showSlashMenu && (
-        <Box
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 2,
-            bgcolor: 'background.paper',
-            overflow: 'hidden',
-            maxHeight: 260,
-            overflowY: 'auto',
-          }}
-          role="listbox"
-          aria-label="Slash commands"
-        >
-          {slashMatch.map((item, index) => (
-            <Box
-              key={`${item.command}-${item.source ?? 'app'}`}
-              role="option"
-              aria-selected={index === highlight}
-              onMouseEnter={() => setHighlight(index)}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                applySlashSelection(item);
-              }}
-              sx={{
-                px: 1.5,
-                py: 0.85,
-                cursor: 'pointer',
-              display: 'flex',
-                alignItems: { xs: 'flex-start', sm: 'baseline' },
-                flexDirection: { xs: 'column', sm: 'row' },
-                justifyContent: 'space-between',
-                gap: { xs: 0.25, sm: 2 },
-                bgcolor: index === highlight ? 'rgba(94,234,212,0.1)' : 'transparent',
-                '&:hover': { bgcolor: 'rgba(94,234,212,0.1)' },
-              }}
-            >
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: '"IBM Plex Mono", monospace', fontWeight: 600, flexShrink: 0 }}
-              >
-                {item.command}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                {item.description}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
+        <SlashCommandMenu
+          commands={slashMatch}
+          highlight={highlight}
+          onHighlight={setHighlight}
+          onSelect={applySlashSelection}
+        />
       )}
 
-      {images.length > 0 && (
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {images.map((image) => (
-            <Box key={image.id} sx={{ position: 'relative' }}>
-              <Box
-                component="img"
-                src={image.previewUrl}
-                alt={image.name}
-                sx={{
-                  width: 72,
-                  height: 72,
-                  objectFit: 'cover',
-                  borderRadius: 1.5,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              />
-              <IconButton
-                size="small"
-                onClick={() => removeImage(image.id)}
-                aria-label={`Remove ${image.name}`}
-                sx={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <CloseIcon fontSize="inherit" />
-              </IconButton>
-            </Box>
-          ))}
-        </Stack>
+      {showMentionMenu && (
+        <MentionMenu
+          options={mentionOptions}
+          highlight={mentionHighlight}
+          onHighlight={setMentionHighlight}
+          onSelect={applyMentionSelection}
+        />
       )}
+
+      <ComposerPendingAttachments
+        mentions={mentions}
+        images={images}
+        onRemoveMention={removeMention}
+        onRemoveImage={removeImage}
+      />
 
       <Box
         sx={{
@@ -388,6 +324,7 @@ export function ChatComposer({
           }}
           onChange={(e) => {
             setSlashDismissed(false);
+            setMentionDismissed(false);
             onDraftChange(e.target.value);
           }}
           onPaste={(e) => {
@@ -420,6 +357,31 @@ export function ChatComposer({
               if (e.key === 'Escape') {
                 e.preventDefault();
                 setSlashDismissed(true);
+                return;
+              }
+            }
+            if (showMentionMenu) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setMentionHighlight((prev) => Math.min(prev + 1, mentionOptions.length - 1));
+                return;
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setMentionHighlight((prev) => Math.max(prev - 1, 0));
+                return;
+              }
+              if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
+                const selected = mentionOptions[mentionHighlight];
+                if (selected) {
+                  e.preventDefault();
+                  applyMentionSelection(selected);
+                  return;
+                }
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setMentionDismissed(true);
                 return;
               }
             }

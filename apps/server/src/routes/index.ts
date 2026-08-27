@@ -50,6 +50,7 @@ import {
   listAgentInstructionFiles,
   listAgentSessions,
   listAgentSlashCommands,
+  listAgentMentionFiles,
   listGitHubBranches,
   listGitHubPullRequests,
   listPendingPermissions,
@@ -786,6 +787,15 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
+  const mentionBody = z
+    .array(
+      z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('diff') }),
+        z.object({ kind: z.literal('file'), path: z.string().min(1) }),
+      ]),
+    )
+    .optional();
+
   const chatBody = z
     .object({
       message: z.string(),
@@ -799,10 +809,15 @@ export function createRouter(ctx: AppContext): express.Router {
           }),
         )
         .optional(),
+      mentions: mentionBody,
     })
-    .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
-      message: 'Message or image required',
-    });
+    .refine(
+      (value) =>
+        value.message.trim().length > 0 ||
+        (value.images?.length ?? 0) > 0 ||
+        (value.mentions?.length ?? 0) > 0,
+      { message: 'Message, image, or mention required' },
+    );
 
   router.post(
     '/agents/:agentId/sessions/:sessionId/chat',
@@ -842,10 +857,15 @@ export function createRouter(ctx: AppContext): express.Router {
           }),
         )
         .optional(),
+      mentions: mentionBody,
     })
-    .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
-      message: 'Message or image required',
-    });
+    .refine(
+      (value) =>
+        value.message.trim().length > 0 ||
+        (value.images?.length ?? 0) > 0 ||
+        (value.mentions?.length ?? 0) > 0,
+      { message: 'Message, image, or mention required' },
+    );
 
   router.get(
     '/agents/:agentId/sessions/:sessionId/queue',
@@ -1008,6 +1028,13 @@ export function createRouter(ctx: AppContext): express.Router {
     '/agents/:agentId/slash-commands',
     asyncHandler(async (req, res) => {
       res.json(await listAgentSlashCommands(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/mention-files',
+    asyncHandler(async (req, res) => {
+      res.json(await listAgentMentionFiles(ctx, param(req.params.agentId)));
     }),
   );
 
