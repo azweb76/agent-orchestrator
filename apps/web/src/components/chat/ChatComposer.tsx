@@ -146,6 +146,29 @@ export function ChatComposer({
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef<PendingImage[]>([]);
+
+  const revokeImages = (pending: PendingImage[]) => {
+    for (const image of pending) URL.revokeObjectURL(image.previewUrl);
+  };
+
+  const clearImages = () => {
+    setImages((prev) => {
+      revokeImages(prev);
+      return [];
+    });
+  };
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
+  useEffect(
+    () => () => {
+      revokeImages(imagesRef.current);
+    },
+    [],
+  );
 
   const slashQuery = useQuery({
     queryKey: ['slash-commands', agentId],
@@ -170,7 +193,12 @@ export function ChatComposer({
     const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
     if (list.length === 0) return;
     const pending = await Promise.all(list.map(fileToPendingImage));
-    setImages((prev) => [...prev, ...pending].slice(0, 6));
+    setImages((prev) => {
+      const next = [...prev, ...pending];
+      const kept = next.slice(0, 6);
+      revokeImages(next.slice(6));
+      return kept;
+    });
   };
 
   const removeImage = (id: string) => {
@@ -199,14 +227,14 @@ export function ChatComposer({
 
     if (slash?.kind === 'local' && slash.command === '/clear') {
       onDraftChange('');
-      setImages([]);
+      clearImages();
       onClear();
       return;
     }
 
     if (slash?.kind === 'local' && slash.command === '/rewind') {
       onDraftChange('');
-      setImages([]);
+      clearImages();
       onRewind();
       return;
     }
@@ -219,7 +247,7 @@ export function ChatComposer({
     if ((!text && images.length === 0) || archived) return;
     onSend(text, images, force);
     onDraftChange('');
-    setImages([]);
+    clearImages();
   };
 
   return (

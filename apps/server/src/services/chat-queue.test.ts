@@ -210,10 +210,51 @@ test('queue endpoints validate and remove entries', async () => {
   }
 });
 
+test('removing a queued message cannot target another session', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-other-session-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const other = ctx.repos.sessions.create({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      id: 'sess-2',
+      title: 'Other chat',
+      status: 'running',
+    });
+    const queued = await enqueueChatMessage(ctx, agent.id, other.id, { message: 'belongs elsewhere' });
+
+    const result = await removeQueuedMessage(ctx, agent.id, 'sess-1', queued.id);
+    assert.equal(result.removed, false);
+    assert.equal(ctx.repos.queued.listBySession(other.id).length, 1);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('clearAgentChat drops queued messages', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-clear-'));
   try {
     const { ctx, agent } = await seedAgent(tmp);
+    const messageAttachmentPath = path.join(tmp, 'message-image.png');
+    await fs.writeFile(messageAttachmentPath, 'image');
+    ctx.repos.messages.create({
+      id: 'message-with-image',
+      agentId: agent.id,
+      sessionId: 'sess-1',
+      role: 'user',
+      content: '(image attachment)',
+      attachments: [
+        {
+          id: 'message-image',
+          type: 'image',
+          mimeType: 'image/png',
+          name: 'message-image.png',
+          path: messageAttachmentPath,
+          url: '/api/agents/ag-1/attachments/message-image',
+        },
+      ],
+      metadata: {},
+      createdAt: '2026-01-01T00:00:01.000Z',
+    });
     ctx.repos.sessions.update({
       ...ctx.repos.sessions.getById('sess-1')!,
       status: 'running',
@@ -223,11 +264,27 @@ test('clearAgentChat drops queued messages', async () => {
     ctx.repos.sessions.update({
       ...ctx.repos.sessions.getById('sess-1')!,
       status: 'idle',
+      runLogPath: path.join(tmp, 'old-run.log'),
       updatedAt: new Date().toISOString(),
     });
+    ctx.repos.sessions.setGrade(
+      'sess-1',
+      {
+        score: 4,
+        comment: 'Old conversation',
+        gradedAt: new Date().toISOString(),
+      },
+      'old transcript',
+    );
 
     await clearAgentChat(ctx, agent.id, 'sess-1');
     assert.equal(ctx.repos.queued.listBySession('sess-1').length, 0);
+    assert.equal(ctx.repos.messages.listBySession('sess-1').length, 0);
+    await assert.rejects(fs.access(messageAttachmentPath));
+    const session = ctx.repos.sessions.getById('sess-1');
+    assert.equal(session?.runLogPath, null);
+    assert.equal(session?.grade, null);
+    assert.equal(ctx.repos.sessions.getGradeTranscript('sess-1'), '');
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

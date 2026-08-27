@@ -103,7 +103,7 @@ function upsertAgentSession(
   });
 }
 
-function MessageTimeline({ message }: { message: Message }) {
+function MessageTimeline({ message, onRetry }: { message: Message; onRetry?: () => void }) {
   const streaming = Boolean(message.metadata?.streaming);
   const parts = streaming
     ? (message.metadata?.timeline ?? [])
@@ -147,6 +147,7 @@ function MessageTimeline({ message }: { message: Message }) {
           },
         }}
         onCopy={() => void navigator.clipboard.writeText(textContent)}
+        onRetry={onRetry}
       />
       {showThinking ? <ThinkingIndicator /> : null}
       {showSubagents ? (
@@ -188,6 +189,8 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const mountedRef = useRef(true);
   const autoStartedRef = useRef(false);
   const sessionIdRef = useRef(activeSessionId);
+  const activationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const latestActivationRef = useRef(0);
   const [creatingSession, setCreatingSession] = useState(false);
   const [gradeOpen, setGradeOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
@@ -1058,11 +1061,25 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const selectSession = async (id: string) => {
     if (id === activeSessionId) return;
     setSessionId(id);
+    sessionIdRef.current = id;
+    latestActivationRef.current += 1;
+    const activation = latestActivationRef.current;
+    // The endpoint persists the active session. Serialize requests so A → B
+    // cannot finish in reverse order and leave A active after a reload.
+    const request = activationQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const detail = await api.activateSession(agentId, id);
+        if (!mountedRef.current || activation !== latestActivationRef.current) return;
+        queryClient.setQueryData(['agent', agentId], detail);
+      });
+    activationQueueRef.current = request;
     try {
-      await api.activateSession(agentId, id);
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      await request;
     } catch (error) {
-      setChatError((error as Error).message);
+      if (mountedRef.current && activation === latestActivationRef.current) {
+        setChatError((error as Error).message);
+      }
     }
   };
 
@@ -1072,6 +1089,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     setChatError(null);
     try {
       const result = await api.createSession(agentId, { template: template.id });
+      upsertAgentSession(queryClient, agentId, result.session, { activate: true });
       sessionIdRef.current = result.session.id;
       setSessionId(result.session.id);
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -1165,9 +1183,22 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                 />
               </Box>
             ) : (
-              displayMessages.map((message) => {
+              displayMessages.map((message, index) => {
                 if (message.role === 'assistant') {
-                  return <MessageTimeline key={message.id} message={message} />;
+                  const priorUser = [...displayMessages.slice(0, index)]
+                    .reverse()
+                    .find((item) => item.role === 'user');
+                  return (
+                    <MessageTimeline
+                      key={message.id}
+                      message={message}
+                      onRetry={
+                        message.metadata?.error && priorUser && priorUser.attachments.length === 0
+                          ? () => void runChat(priorUser.content, [], true)
+                          : undefined
+                      }
+                    />
+                  );
                 }
                 return (
                   <ChatBubble

@@ -18,6 +18,7 @@ import {
   getAgentDetail,
   getAgentMessages,
   getAgentSessionContext,
+  rewindAgentChat,
   streamAgentChat,
   type AppContext,
 } from './app.js';
@@ -266,6 +267,25 @@ test('deleteAgentSession removes a session and keeps the other', async () => {
       metadata: {},
       createdAt: '2026-01-01T00:00:03.000Z',
     });
+    const queuedAttachmentPath = path.join(tmp, 'queued-image.png');
+    await fs.writeFile(queuedAttachmentPath, 'image');
+    ctx.repos.queued.create({
+      id: 'queued-r1',
+      agentId: agent.id,
+      sessionId: created.session.id,
+      content: '(image attachment)',
+      attachments: [
+        {
+          id: 'queued-image',
+          type: 'image',
+          mimeType: 'image/png',
+          name: 'queued-image.png',
+          path: queuedAttachmentPath,
+          url: '/api/agents/ag-1/attachments/queued-image',
+        },
+      ],
+      createdAt: '2026-01-01T00:00:04.000Z',
+    });
     assert.equal(ctx.repos.sessions.listByAgent(agent.id).length, 2);
 
     const detail = await deleteAgentSession(ctx, agent.id, created.session.id);
@@ -276,6 +296,8 @@ test('deleteAgentSession removes a session and keeps the other', async () => {
     assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 2);
     assert.equal(ctx.repos.messages.listBySession(created.session.id).length, 0);
     assert.equal(ctx.repos.sessions.getById(created.session.id), null);
+    assert.equal(ctx.repos.queued.listBySession(created.session.id).length, 0);
+    await assert.rejects(fs.access(queuedAttachmentPath));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
@@ -313,6 +335,33 @@ test('deleteAgentSession rejects archived agents', async () => {
       /archived/,
     );
     assert.equal(ctx.repos.sessions.listByAgent(agent.id).length, 1);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('rewindAgentChat clears the discarded session lineage and grade', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-rewind-grade-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const session = ctx.repos.sessions.getById('plan-sess')!;
+    ctx.repos.sessions.update({
+      ...session,
+      runLogPath: path.join(tmp, 'old-run.log'),
+    });
+    ctx.repos.sessions.setGrade(
+      session.id,
+      { score: 3, comment: 'Old grade', gradedAt: new Date().toISOString() },
+      'old transcript',
+    );
+
+    await rewindAgentChat(ctx, agent.id, { messageId: 'u1' }, session.id);
+
+    const updated = ctx.repos.sessions.getById(session.id);
+    assert.equal(updated?.claudeSessionId, null);
+    assert.equal(updated?.runLogPath, null);
+    assert.equal(updated?.grade, null);
+    assert.equal(ctx.repos.sessions.getGradeTranscript(session.id), '');
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
@@ -690,6 +739,57 @@ test('streamAgentChat rejects a non-force send while a tracked run has no persis
     );
     // No orphan user message that Claude never received.
     assert.equal(ctx.repos.messages.listBySession('plan-sess').length, before);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('streamAgentChat reserves an idle session before asynchronously saving images', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-reserve-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    let starts = 0;
+    let releaseRun: (() => void) | undefined;
+    const runDone = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    ctx.claude = {
+      getRunningProcess: () => undefined,
+      runStreaming: async (
+        _id: string,
+        options: { onStarted?: (handle: { pid: number; logPath: string }) => void },
+      ) => {
+        starts += 1;
+        options.onStarted?.({ pid: 999_999_999, logPath: path.join(tmp, 'run.log') });
+        await runDone;
+        return { result: 'done', sessionId: 'claude-reserved', events: [], stopped: false };
+      },
+    } as unknown as ClaudeService;
+    const image = { name: 'test.png', mimeType: 'image/png', dataBase64: 'aW1hZ2U=' };
+
+    const first = streamAgentChat(ctx, agent.id, { message: 'first', images: [image] }, null, 'plan-sess');
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 1_000;
+      const check = () => {
+        if (ctx.repos.sessions.getById('plan-sess')?.status === 'running') {
+          resolve();
+        } else if (Date.now() >= deadline) {
+          reject(new Error('Session was not reserved'));
+        } else {
+          setTimeout(check, 5);
+        }
+      };
+      check();
+    });
+    await assert.rejects(
+      () => streamAgentChat(ctx, agent.id, { message: 'second', images: [image] }, null, 'plan-sess'),
+      /already has a running Claude process/,
+    );
+    releaseRun?.();
+    await first;
+
+    assert.equal(starts, 1);
+    assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 4);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
