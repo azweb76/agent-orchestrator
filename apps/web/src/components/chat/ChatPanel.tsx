@@ -341,6 +341,10 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       setClearOpen(false);
       setPermissionRequests([]);
       setChatError(null);
+      setLastFailed(null);
+      // Drop stale optimistic/SSE messages before refetch — mergeChatMessages keeps
+      // local-only ids, so an empty remote would otherwise resurrect the old transcript.
+      setMessagesCache(queryClient, agentId, activeSessionId, () => []);
       queryClient.invalidateQueries({ queryKey: ['queue', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -350,12 +354,18 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
 
   const rewindMutation = useMutation({
     mutationFn: (messageId: string) => api.rewindMessages(agentId, activeSessionId, messageId),
-    onSuccess: (result) => {
+    onSuccess: (result, messageId) => {
       setRewindTarget(null);
       setPermissionRequests([]);
       setChatError(null);
       setLastFailed(null);
       setDraft(result.draft);
+      setMessagesCache(queryClient, agentId, activeSessionId, (prev) => {
+        if (!prev?.length) return [];
+        const index = prev.findIndex((item) => item.id === messageId);
+        if (index < 0) return prev;
+        return prev.slice(0, index);
+      });
       queryClient.invalidateQueries({ queryKey: ['queue', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
