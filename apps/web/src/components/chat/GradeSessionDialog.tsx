@@ -37,6 +37,8 @@ interface GradeSessionDialogProps {
   error?: string | null;
   onClose: () => void;
   onAnalyze: (notes: string) => void;
+  /** Open the instruction-improvement flow seeded from this session. */
+  onImprove?: () => void;
 }
 
 function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warning' | 'error' {
@@ -136,6 +138,7 @@ export function GradeSessionDialog({
   error,
   onClose,
   onAnalyze,
+  onImprove,
 }: GradeSessionDialogProps) {
   const [notes, setNotes] = useState('');
   const analysis = current?.analysis;
@@ -224,6 +227,11 @@ export function GradeSessionDialog({
         <Button onClick={onClose} disabled={loading}>
           Close
         </Button>
+        {onImprove ? (
+          <Button variant="outlined" disabled={loading} onClick={onImprove}>
+            Improve instructions
+          </Button>
+        ) : null}
         <Button variant="contained" disabled={loading} onClick={() => onAnalyze(notes)}>
           {loading ? 'Analyzing…' : current ? 'Analyze again' : 'Analyze session'}
         </Button>

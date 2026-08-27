@@ -38,6 +38,7 @@ import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
+import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -181,6 +182,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const sessionIdRef = useRef(activeSessionId);
   const [creatingSession, setCreatingSession] = useState(false);
   const [gradeOpen, setGradeOpen] = useState(false);
+  const [improveOpen, setImproveOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const runChatRef = useRef<
     (text: string, images: PendingImage[], force: boolean, sessionId?: string) => Promise<void>
@@ -1256,7 +1258,23 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           gradeMutation.reset();
         }}
         onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
+        onImprove={() => {
+          setGradeOpen(false);
+          setImproveOpen(true);
+        }}
       />
+
+      {activeSessionId ? (
+        <ImproveInstructionsDialog
+          open={improveOpen}
+          agentId={agentId}
+          sessionId={activeSessionId}
+          onClose={() => setImproveOpen(false)}
+          onApplied={() => {
+            queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
+          }}
+        />
+      ) : null}
     </Box>
   );
 }
