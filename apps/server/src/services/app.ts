@@ -2578,7 +2578,10 @@ export async function followAgentSession(
     if (current.status === 'running' || live) return undefined;
     const last = ctx.repos.messages.listBySession(current.id).at(-1);
     if (last?.role === 'assistant' && last.metadata?.streaming) {
-      markStreamingAssistantStopped(ctx, agentId, current.id);
+      ctx.repos.messages.update({
+        ...last,
+        metadata: { ...last.metadata, streaming: false },
+      });
     }
     const next = ctx.repos.messages.listBySession(current.id).at(-1);
     return next?.role === 'assistant' ? next : undefined;

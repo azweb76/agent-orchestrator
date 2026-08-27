@@ -164,6 +164,7 @@ test('followAgentSession heals leftover streaming on an idle session', async () 
 
     const assistant = ctx.repos.messages.getById('ag-1', 'a1');
     assert.equal(assistant?.metadata.streaming, false);
+    assert.equal(assistant?.metadata.stopped, undefined);
     assert.ok(chunks.some((chunk) => chunk.includes('event: done')));
     assert.ok(chunks.some((chunk) => chunk.includes('"streaming":false')));
   } finally {
