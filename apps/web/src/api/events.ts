@@ -27,7 +27,12 @@ function invalidateForEvent(queryClient: QueryClient, event: AppEvent): void {
   switch (event.type) {
     case 'agent_changed':
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      if (agentId) queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      if (agentId) {
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['queue', agentId] });
+      }
       break;
     case 'run_finished':
       if (agentId) {
@@ -81,6 +86,21 @@ export function useAppEventStream(): void {
         ? `/api/events/stream?access_token=${encodeURIComponent(token)}`
         : '/api/events/stream',
     );
+
+    let openedOnce = false;
+    source.onopen = () => {
+      // Replay is not stored; a reconnect can miss run_finished. Refresh the
+      // caches that keep the agent page in sync with the backend.
+      if (!openedOnce) {
+        openedOnce = true;
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['agent'] });
+      void queryClient.invalidateQueries({ queryKey: ['messages'] });
+      void queryClient.invalidateQueries({ queryKey: ['permissions'] });
+      void queryClient.invalidateQueries({ queryKey: ['queue'] });
+      void queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+    };
 
     const handle = (raw: MessageEvent) => {
       let event: AppEvent;

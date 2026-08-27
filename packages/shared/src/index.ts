@@ -737,6 +737,8 @@ export const PROMPT_SLASH_COMMANDS: SlashCommand[] = CHAT_SLASH_COMMANDS.map((it
   source: 'app' as const,
 }));
 
+export { mergeChatMessages } from './chat-sync.js';
+
 export {
   activeToolItem,
   adoptParentClaudeSessionId,

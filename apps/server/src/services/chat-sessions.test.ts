@@ -422,6 +422,10 @@ setInterval(() => {}, 1000);
     assert.equal(assistant?.metadata.streaming, false);
     assert.equal(ctx.repos.agents.getById('ag-1')?.status, 'idle');
     assert.ok(chunks.some((chunk) => chunk.includes('event: done')));
+    assert.ok(
+      chunks.some((chunk) => chunk.includes('"status":"running"')),
+      'chat SSE must publish the session after it is marked running so the UI can poll/follow',
+    );
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

@@ -80,7 +80,14 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     queryKey: ['agent', agentId],
     queryFn: () => api.getAgent(agentId),
     enabled: Boolean(agentId),
-    refetchInterval: (query) => (query.state.data?.status === 'running' ? 2000 : false),
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      if (data.status === 'running') return 2000;
+      if (data.sessions?.some((item) => item.status === 'running')) return 2000;
+      return false;
+    },
   });
 
   const diffQuery = useQuery({
@@ -352,19 +359,32 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           <Tab label="Changes" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
-        {tab === 0 && (
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <ChatPanel
-              agent={agent}
-              archived={archived}
-              initialPrompt={initialPrompt}
-              initialTemplate={initialTemplate}
-            />
-          </Box>
-        )}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: tab === 0 ? 'flex' : 'none',
+            flexDirection: 'column',
+          }}
+        >
+          <ChatPanel
+            agent={agent}
+            archived={archived}
+            initialPrompt={initialPrompt}
+            initialTemplate={initialTemplate}
+          />
+        </Box>
 
-        {tab === 1 && (
-          <Box sx={{ p: 1.5, flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Box
+          sx={{
+            p: 1.5,
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: tab === 1 ? 'flex' : 'none',
+            flexDirection: 'column',
+          }}
+        >
             <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
@@ -449,7 +469,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
               )}
             </Stack>
           </Box>
-        )}
       </Paper>
 
       <ResponsiveDialog open={prOpen} onClose={() => setPrOpen(false)} maxWidth="sm" fullWidth>
