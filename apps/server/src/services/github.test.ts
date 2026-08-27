@@ -921,3 +921,62 @@ test('createPullRequestComment posts to the issues comments endpoint', async (t)
   assert.equal(comment.id, '22');
   assert.equal(comment.body, 'Thanks');
 });
+
+test('getOpenPullRequestForBranch queries state=open and ignores closed PRs', async (t) => {
+  const fetchMock = t.mock.method(globalThis, 'fetch', async (url: string) => {
+    const parsed = new URL(url);
+    assert.equal(parsed.searchParams.get('state'), 'open');
+    return jsonResponse([rawPr(42, 'Open PR', 'open', 'feature/foo')]);
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const result = await service.getOpenPullRequestForBranch('azweb76', 'agent-orchestrator', 'feature/foo');
+
+  assert.equal(fetchMock.mock.callCount(), 1);
+  assert.equal(result?.number, 42);
+  assert.equal(result?.state, 'open');
+});
+
+test('getBranchHeadSha returns the commit sha for a matching branch', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () =>
+    jsonResponse([
+      { name: 'main', commit: { sha: 'b'.repeat(40) }, protected: true },
+      { name: 'feature/foo', commit: { sha: 'a'.repeat(40) }, protected: false },
+    ]),
+  );
+
+  const service = new GitHubService({ token: 'tok' });
+  const sha = await service.getBranchHeadSha('azweb76', 'agent-orchestrator', 'feature/foo');
+  assert.equal(sha, 'a'.repeat(40));
+});
+
+test('listPullRequestReviewComments maps inline review comments with thread metadata', async (t) => {
+  routeFetch(t, [
+    [
+      /\/pulls\/42\/comments$/,
+      () =>
+        jsonResponse([
+          {
+            id: 101,
+            user: { login: 'alice', avatar_url: null, html_url: 'https://github.com/alice' },
+            body: 'Fix the null check',
+            path: 'src/foo.ts',
+            line: 12,
+            html_url: 'https://github.com/azweb76/agent-orchestrator/pull/42#discussion_r101',
+            created_at: '2026-01-02T00:00:00Z',
+            in_reply_to_id: null,
+            pull_request_review_id: 55,
+          },
+        ]),
+    ],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const comments = await service.listPullRequestReviewComments('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(comments.length, 1);
+  assert.equal(comments[0].path, 'src/foo.ts');
+  assert.equal(comments[0].line, 12);
+  assert.equal(comments[0].pullRequestReviewId, '55');
+  assert.match(comments[0].body, /null check/);
+});

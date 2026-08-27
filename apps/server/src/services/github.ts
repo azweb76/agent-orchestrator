@@ -13,6 +13,7 @@ import type {
   PullRequestMergeMethod,
   PullRequestMergeableState,
   PullRequestReview,
+  PullRequestReviewComment,
   PullRequestUser,
   UpdatePullRequestBranchResponse,
 } from '@agent-orchestrator/shared';
@@ -311,6 +312,32 @@ export class GitHubService {
     return mapPullRequest(pr);
   }
 
+  async getOpenPullRequestForBranch(
+    owner: string,
+    repo: string,
+    branch: string,
+  ): Promise<GitHubPullRequest | null> {
+    const cacheKey = `${owner}/${repo}/${branch}:open`;
+    const cached = this.prByBranchCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < PR_BY_BRANCH_CACHE_TTL_MS) {
+      return cached.pr;
+    }
+
+    const data = await this.request<RawPullRequest[]>(
+      `https://api.github.com/repos/${owner}/${repo}/pulls?head=${owner}:${branch}&state=open`,
+    );
+
+    const pr = data.length > 0 ? mapPullRequest(data[0]) : null;
+    this.prByBranchCache.set(cacheKey, { pr, fetchedAt: Date.now() });
+    return pr;
+  }
+
+  async getBranchHeadSha(owner: string, repo: string, branch: string): Promise<string | null> {
+    const branches = await this.listBranches(owner, repo);
+    const match = branches.find((item) => item.name === branch);
+    return match?.sha ?? null;
+  }
+
   async getPullRequestForBranch(owner: string, repo: string, branch: string): Promise<GitHubPullRequest | null> {
     const cacheKey = `${owner}/${repo}/${branch}`;
     const cached = this.prByBranchCache.get(cacheKey);
@@ -471,6 +498,29 @@ export class GitHubService {
       truncated: runs.length < totalCount,
       checks,
     };
+  }
+
+  /** Inline review comments on the PR diff (includes thread replies). */
+  async listPullRequestReviewComments(
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ): Promise<PullRequestReviewComment[]> {
+    const data = await this.request<RawReviewComment[]>(
+      `${this.prUrl(owner, repo, prNumber)}/comments?per_page=100`,
+    );
+    return data.map((comment) => ({
+      id: String(comment.id),
+      author: mapUser(comment.user),
+      body: comment.body ?? '',
+      path: comment.path ?? null,
+      line: comment.line ?? comment.original_line ?? null,
+      htmlUrl: comment.html_url ?? null,
+      createdAt: comment.created_at,
+      inReplyToId: comment.in_reply_to_id != null ? String(comment.in_reply_to_id) : null,
+      pullRequestReviewId:
+        comment.pull_request_review_id != null ? String(comment.pull_request_review_id) : null,
+    }));
   }
 
   async listPullRequestReviews(owner: string, repo: string, prNumber: number): Promise<PullRequestReview[]> {
@@ -804,6 +854,19 @@ interface RawComment {
   body: string | null;
   html_url?: string | null;
   created_at: string;
+}
+
+interface RawReviewComment {
+  id: number;
+  user: RawUser | null;
+  body: string | null;
+  path?: string | null;
+  line?: number | null;
+  original_line?: number | null;
+  html_url?: string | null;
+  created_at: string;
+  in_reply_to_id?: number | null;
+  pull_request_review_id?: number | null;
 }
 
 /** Prefer GitHub's own error text; fall back to the raw body. */
