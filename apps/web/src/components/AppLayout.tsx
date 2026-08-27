@@ -17,12 +17,15 @@ import {
 } from '@mui/material';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useAppEventStream } from '../api/events';
+import { useAppNotifications, useNotificationSettings } from '../notifications';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_EXPANDED_WIDTH,
@@ -55,6 +58,8 @@ export function AppLayout() {
 
   // Live cache invalidation + notification fan-out over one SSE connection.
   useAppEventStream();
+  useAppNotifications();
+  const notifications = useNotificationSettings();
 
   const { data: status } = useQuery({
     queryKey: ['status'],
@@ -159,6 +164,30 @@ export function AppLayout() {
           ) : null}
 
           <Box sx={{ flexGrow: 1 }} />
+
+          {notifications.supported ? (
+            <Tooltip
+              title={
+                notifications.enabled
+                  ? 'Notifications on — you will be alerted when agents finish or need input'
+                  : 'Turn on notifications for finished runs and permission prompts'
+              }
+            >
+              <IconButton
+                size="small"
+                color={notifications.enabled ? 'secondary' : 'inherit'}
+                onClick={() => void notifications.toggle()}
+                aria-label={notifications.enabled ? 'Disable notifications' : 'Enable notifications'}
+                sx={{ mr: 0.5 }}
+              >
+                {notifications.enabled ? (
+                  <NotificationsActiveIcon fontSize="small" />
+                ) : (
+                  <NotificationsNoneIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+          ) : null}
 
           <Stack direction="row" spacing={0.75} sx={{ display: { xs: 'none', sm: 'flex' }, flexShrink: 0 }}>
             <Tooltip title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}>

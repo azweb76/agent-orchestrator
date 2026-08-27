@@ -564,6 +564,8 @@ export interface AgentDetail extends Agent {
 /** Agent summary for sidebar navigation (includes worktree context). */
 export interface SidebarAgent extends Agent {
   worktree: Pick<Worktree, 'id' | 'name' | 'branch' | 'prNumber'>;
+  /** Pending interactive prompts (AskUserQuestion / tool permissions) across sessions. */
+  pendingPermissionCount: number;
 }
 
 /** Workspace with nested agents for the app sidebar tree. */

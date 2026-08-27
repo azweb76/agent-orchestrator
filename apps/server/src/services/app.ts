@@ -328,6 +328,13 @@ export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCoun
   });
 }
 
+/** Pending interactive prompts across all of an agent's sessions. */
+function countPendingPermissions(ctx: AppContext, agentId: string): number {
+  return ctx.repos.sessions
+    .listByAgent(agentId)
+    .reduce((total, session) => total + ctx.claude.listPendingPermissions(session.id).length, 0);
+}
+
 /** Workspace → agents tree for the persistent app sidebar. */
 export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace[]> {
   const workspaces = ctx.repos.workspaces.list();
@@ -344,6 +351,7 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
           branch: worktree?.branch ?? '',
           prNumber: worktree?.prNumber ?? null,
         },
+        pendingPermissionCount: countPendingPermissions(ctx, agent.id),
       };
     });
     return { ...workspace, agents };
