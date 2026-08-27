@@ -230,7 +230,7 @@ describe('nested subagent event helpers', () => {
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
   });
 
-  it('does not revive a completed tool from later task_progress', () => {
+  it('does not mark subagents done on parent result so progress can continue', () => {
     let parts: StreamPart[] = [];
     parts = applyStreamEvent(parts, {
       type: 'system',
@@ -240,7 +240,7 @@ describe('nested subagent event helpers', () => {
       description: 'Explore',
     });
     parts = applyStreamEvent(parts, { type: 'result', result: 'done' });
-    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
     parts = applyStreamEvent(parts, {
       type: 'system',
       subtype: 'task_progress',
@@ -249,8 +249,38 @@ describe('nested subagent event helpers', () => {
       description: 'Still reading',
       last_tool_name: 'Read',
     });
-    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
     assert.equal(parts[0]?.type === 'tool' && parts[0].detail, 'Still reading');
+  });
+
+  it('does not revive a tool completed by task_notification from later task_progress', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 't1',
+      tool_use_id: 'toolu_1',
+      description: 'Explore',
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 't1',
+      tool_use_id: 'toolu_1',
+      status: 'completed',
+      summary: 'Found the buttons',
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 't1',
+      tool_use_id: 'toolu_1',
+      description: 'Stale progress',
+      last_tool_name: 'Read',
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    assert.equal(parts[0]?.type === 'tool' && parts[0].detail, 'Stale progress');
   });
 
   it('hides synthetic assistant placeholders', () => {
@@ -340,13 +370,16 @@ describe('parallel tools and subagents', () => {
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
   });
 
-  it('marks remaining tools done on the final result event', () => {
+  it('keeps running subagents on the final result; completes ordinary tools', () => {
     let parts: StreamPart[] = [
       { type: 'tool', id: 'task_1', name: 'Task', status: 'running' },
+      { type: 'tool', id: 'read_1', name: 'Read', status: 'running' },
       { type: 'tool', id: 'task_2', name: 'Task', status: 'done' },
     ];
     parts = applyStreamEvent(parts, { type: 'result', result: 'done' });
-    assert.ok(parts.every((part) => part.type !== 'tool' || part.status === 'done'));
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
+    assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'done');
+    assert.equal(parts[2]?.type === 'tool' && parts[2].status, 'done');
   });
 });
 
