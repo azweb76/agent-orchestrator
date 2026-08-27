@@ -65,4 +65,10 @@ describe('mergeChatMessages', () => {
     assert.equal(merged.length, 2);
     assert.equal(merged[1]?.id, 'a1');
   });
+
+  it('keeps local-only ids when remote is empty (clear must reset local cache first)', () => {
+    const local = [message('u1', 'user', 'hi'), message('a1', 'assistant', 'bye')];
+    assert.equal(mergeChatMessages(local, []).length, 2);
+    assert.deepEqual(mergeChatMessages([], []), []);
+  });
 });
