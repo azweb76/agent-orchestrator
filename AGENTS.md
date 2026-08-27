@@ -58,11 +58,14 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOS
 - Prefer existing MUI components and `sx` over custom CSS. Reuse `components/ui/*`; use `ResponsiveDialog` for form dialogs (full-screen on `sm` down). Theme is dark (`theme.ts`); do not introduce a second styling system.
 - Validate API bodies with Zod in the router. Persist via repositories in `db/`; put process/git/GitHub/Claude I/O in services.
 - Colocate server tests as `*.test.ts` next to the module. Use `node:test` + `node:assert/strict`.
+- Keep every source file at most **400 lines**. Split modules, components, or helpers when a file grows past that limit.
+- When designing code, always prefer reuse: extend or compose existing helpers, components, and services before adding parallel implementations.
 
 ## Do / don't
 
 - Do add or update tests for server behavior you change; run the affected suite and `pnpm typecheck` before finishing.
 - Do keep UI changes responsive (phone and desktop). Verify chat, workspaces, and dashboard if you touch shared layout or state.
+- Do keep new and edited files within the 400-line limit; extract shared pieces instead of duplicating logic.
 - Do not commit `.env`, `data/`, SQLite files, or secrets.
 - Do not auto-approve `AskUserQuestion` or `ExitPlanMode`.
 - Do not stop detached Claude processes on orchestrator shutdown.
