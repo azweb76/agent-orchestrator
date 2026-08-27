@@ -15,6 +15,7 @@ import {
   parentStreamTextDelta,
   runningSubagentItems,
   visibleAssistantContent,
+  visibleSubagentItems,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
@@ -380,6 +381,56 @@ describe('parallel tools and subagents', () => {
     assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'done');
     assert.equal(parts[2]?.type === 'tool' && parts[2].status, 'done');
+  });
+});
+
+describe('visible subagent cards', () => {
+  const bashTimeline: StreamPart[] = [
+    {
+      type: 'tool',
+      id: 'bash_1',
+      name: 'Bash',
+      status: 'done',
+      task: { taskType: 'local_bash', description: 'Install dependencies with pnpm' },
+    },
+    {
+      type: 'tool',
+      id: 'bash_2',
+      name: 'Bash',
+      status: 'done',
+      task: { taskType: 'local_bash', description: 'Run web app typecheck via pnpm' },
+    },
+    {
+      type: 'tool',
+      id: 'bash_3',
+      name: 'Bash',
+      status: 'done',
+      task: { taskType: 'local_bash', description: 'Re-run web app typecheck' },
+    },
+  ];
+
+  it('hides finished Bash/Task cards after the turn completes', () => {
+    assert.equal(visibleSubagentItems(bashTimeline, false).length, 0);
+  });
+
+  it('shows finished subagents while the turn is still streaming', () => {
+    assert.equal(visibleSubagentItems(bashTimeline, true).length, 3);
+  });
+
+  it('keeps a live Explore card after parent Ready, including done siblings', () => {
+    const parts: StreamPart[] = [
+      ...bashTimeline,
+      {
+        type: 'tool',
+        id: 'task_1',
+        name: 'Task',
+        status: 'running',
+        task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
+      },
+    ];
+    const visible = visibleSubagentItems(parts, false);
+    assert.equal(visible.length, 4);
+    assert.equal(visible.some((item) => item.status === 'running'), true);
   });
 });
 
