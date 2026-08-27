@@ -38,6 +38,8 @@ import type {
   PullRequestFiles,
   PullRequestInbox,
   PullRequestReview,
+  QueuedChatMessage,
+  EnqueueChatMessageRequest,
   RewindChatResponse,
   SessionContextUsage,
   SidebarWorkspace,
@@ -228,6 +230,17 @@ export const api = {
     request<RewindChatResponse>(`/agents/${agentId}/sessions/${sessionId}/messages/rewind`, {
       method: 'POST',
       body: JSON.stringify({ messageId }),
+    }),
+  listQueuedMessages: (agentId: string, sessionId: string) =>
+    request<QueuedChatMessage[]>(`/agents/${agentId}/sessions/${sessionId}/queue`),
+  enqueueMessage: (agentId: string, sessionId: string, body: EnqueueChatMessageRequest) =>
+    request<QueuedChatMessage>(`/agents/${agentId}/sessions/${sessionId}/queue`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  removeQueuedMessage: (agentId: string, sessionId: string, queuedId: string) =>
+    request<{ removed: boolean }>(`/agents/${agentId}/sessions/${sessionId}/queue/${queuedId}`, {
+      method: 'DELETE',
     }),
   getEvents: (agentId: string) => request<AgentEvent[]>(`/agents/${agentId}/events`),
   getDiff: (agentId: string, scope: 'pending' | 'pr' = 'pending') =>

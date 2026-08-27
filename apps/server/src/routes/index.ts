@@ -19,6 +19,9 @@ import {
   createWorkspace,
   denyPermissionRequest,
   deleteAgentSession,
+  enqueueChatMessage,
+  listQueuedMessages,
+  removeQueuedMessage,
   deleteWorktree,
   deleteWorkspace,
   getAgentAttachment,
@@ -694,6 +697,61 @@ export function createRouter(ctx: AppContext): express.Router {
         body,
         res,
         param(req.params.sessionId),
+      );
+    }),
+  );
+
+  const queueBody = z
+    .object({
+      message: z.string(),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            mimeType: z.string().min(1),
+            dataBase64: z.string().min(1),
+          }),
+        )
+        .optional(),
+    })
+    .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
+      message: 'Message or image required',
+    });
+
+  router.get(
+    '/agents/:agentId/sessions/:sessionId/queue',
+    asyncHandler(async (req, res) => {
+      res.json(listQueuedMessages(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/queue',
+    asyncHandler(async (req, res) => {
+      const body = queueBody.parse(req.body);
+      res
+        .status(201)
+        .json(
+          await enqueueChatMessage(
+            ctx,
+            param(req.params.agentId),
+            param(req.params.sessionId),
+            body,
+          ),
+        );
+    }),
+  );
+
+  router.delete(
+    '/agents/:agentId/sessions/:sessionId/queue/:queuedId',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await removeQueuedMessage(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+          param(req.params.queuedId),
+        ),
       );
     }),
   );

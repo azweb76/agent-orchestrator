@@ -414,6 +414,25 @@ export interface ChatRequest {
   images?: ChatImageAttachment[];
 }
 
+/**
+ * Follow-up persisted server-side while a session is busy. The server sends
+ * queued messages in order as soon as the running reply finishes, even if no
+ * browser is attached.
+ */
+export interface QueuedChatMessage {
+  id: string;
+  agentId: string;
+  sessionId: string;
+  content: string;
+  attachments: MessageAttachment[];
+  createdAt: string;
+}
+
+export interface EnqueueChatMessageRequest {
+  message: string;
+  images?: ChatImageAttachment[];
+}
+
 /** Truncate chat from a user message onward and reset the Claude session. */
 export interface RewindChatRequest {
   messageId: string;
