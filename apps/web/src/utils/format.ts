@@ -6,6 +6,8 @@ export function statusLabel(status: AgentStatus | string): string {
       return 'Running';
     case 'idle':
       return 'Ready';
+    case 'queued':
+      return 'Waiting';
     case 'stopped':
       return 'Stopped';
     case 'archived':

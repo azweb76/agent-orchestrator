@@ -2,7 +2,7 @@ import type { StreamPart } from './stream-timeline.js';
 import type { ChatSession } from './chat-session.js';
 import type { ChatMention } from './chat-mentions.js';
 
-export type AgentStatus = 'idle' | 'running' | 'stopped' | 'archived';
+export type AgentStatus = 'idle' | 'running' | 'queued' | 'stopped' | 'archived';
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -788,9 +788,11 @@ export {
 export {
   buildImplementPlanPrompt,
   chatSessionTemplateById,
+  isGitMutatingSessionTemplate,
   uniqueSessionTitle,
   CHAT_SESSION_TEMPLATES,
   CHAT_TITLE_MAX_LENGTH,
+  GIT_MUTATING_SESSION_TEMPLATES,
   LISTED_CHAT_SESSION_TEMPLATES,
   SESSION_GRADE_FINDING_CATEGORIES,
   SESSION_GRADE_FINDING_LABELS,

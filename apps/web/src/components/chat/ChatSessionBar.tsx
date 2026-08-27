@@ -22,6 +22,7 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import type { ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
 import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
 
@@ -123,6 +124,7 @@ export function ChatSessionBar({
         {sessions.map((session) => {
           const selected = session.id === activeSessionId;
           const running = session.status === 'running';
+          const waiting = session.status === 'queued';
           const editing = editingId === session.id;
           return (
             <Chip
@@ -139,6 +141,10 @@ export function ChatSessionBar({
                         bgcolor: 'secondary.main',
                         boxShadow: '0 0 0 3px rgba(94,234,212,0.25)',
                       }}
+                    />
+                  ) : waiting ? (
+                    <ScheduleOutlinedIcon
+                      sx={{ fontSize: 14, color: selected ? 'inherit' : 'warning.main' }}
                     />
                   ) : null}
                   {editing ? (
@@ -178,6 +184,7 @@ export function ChatSessionBar({
                   ) : (
                     <Typography component="span" variant="caption" sx={{ fontWeight: 600 }}>
                       {session.title}
+                      {waiting ? ' · Waiting' : ''}
                     </Typography>
                   )}
                   {!editing && session.grade ? (
@@ -189,7 +196,13 @@ export function ChatSessionBar({
               }
               variant={selected ? 'filled' : 'outlined'}
               color={selected ? 'primary' : 'default'}
-              title={canRename ? 'Double-click to rename' : undefined}
+              title={
+                waiting
+                  ? 'Waiting — another session is using this worktree'
+                  : canRename
+                    ? 'Double-click to rename'
+                    : undefined
+              }
               onClick={() => {
                 if (editing) return;
                 onSelect(session.id);

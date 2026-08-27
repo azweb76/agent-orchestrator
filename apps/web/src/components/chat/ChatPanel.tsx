@@ -132,6 +132,9 @@ function upsertAgentSession(
         : [...sessions, session],
     };
   });
+  if (session.status === 'queued') {
+    queryClient.invalidateQueries({ queryKey: ['queue', agentId, session.id] });
+  }
 }
 
 function MessageTimeline({ message, onRetry }: { message: Message; onRetry?: () => void }) {
@@ -272,7 +275,10 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     queryFn: () => api.listQueuedMessages(agentId, activeSessionId),
     enabled: Boolean(activeSessionId),
     refetchInterval: (query) =>
-      session?.status === 'running' || isSending || (query.state.data?.length ?? 0) > 0
+      session?.status === 'running' ||
+      session?.status === 'queued' ||
+      isSending ||
+      (query.state.data?.length ?? 0) > 0
         ? 2000
         : false,
   });
@@ -552,16 +558,20 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   ) => {
     if (archived || !mountedRef.current || !targetSessionId) return;
 
+    const targetSession =
+      sessions.find((item) => item.id === targetSessionId) ??
+      (targetSessionId === activeSessionId ? session : undefined);
+    const targetRunning = targetSession?.status === 'running';
+    const targetWaiting = targetSession?.status === 'queued';
     const targetBusy =
-      sendingSessionsRef.current.has(targetSessionId) ||
-      (targetSessionId === activeSessionId && session?.status === 'running');
+      sendingSessionsRef.current.has(targetSessionId) || targetRunning || targetWaiting;
 
     if (targetBusy && !force) {
       await enqueueForSession(targetSessionId, text, images, mentions);
       return;
     }
 
-    if (targetBusy && force) {
+    if (targetRunning && force) {
       abortBySessionRef.current.get(targetSessionId)?.abort();
       try {
         await api.stopSession(agentId, targetSessionId);
