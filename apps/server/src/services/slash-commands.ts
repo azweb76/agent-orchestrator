@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   BUNDLED_SKILL_COMMANDS,
+  CONTEXT_SLASH_COMMANDS,
   LOCAL_SLASH_COMMANDS,
-  PROMPT_SLASH_COMMANDS,
   type SlashCommand,
 } from '@agent-orchestrator/shared';
 
@@ -123,7 +123,7 @@ export async function discoverSlashCommands(worktreePath: string): Promise<Slash
   };
 
   for (const item of BUNDLED_SKILL_COMMANDS) upsert(item);
-  for (const item of PROMPT_SLASH_COMMANDS) upsert(item);
+  for (const item of CONTEXT_SLASH_COMMANDS) upsert(item);
   for (const item of personalCommands) upsert(item);
   for (const item of personalSkills) upsert(item);
   for (const item of projectCommands) upsert(item);

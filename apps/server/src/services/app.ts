@@ -90,6 +90,7 @@ import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService, fallbackTitleFromPrompt, sanitizeChatTitle } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
 import { listWorktreeFiles, resolveChatMentions } from '../services/chat-mentions.js';
+import { resolveSlashCommandContext } from '../services/slash-command-context.js';
 import { mergeLivePullRequest } from '../services/pr-overlay.js';
 import { buildSessionTranscript } from '../services/session-transcript.js';
 import {
@@ -2363,10 +2364,34 @@ export async function streamAgentChat(
   const session = options.createdSession ?? requireSession(ctx, agentId, sessionId);
 
   const force = Boolean(body.force);
-  const message = body.message.trim();
+  const rawMessage = body.message.trim();
   const requestMentions = body.mentions ?? options.mentions ?? [];
   const hasImages = (body.images?.length ?? 0) > 0 || (options.attachments?.length ?? 0) > 0;
   const hasMentions = requestMentions.length > 0;
+
+  const agent = requireAgent(ctx, agentId);
+  const slash = await resolveSlashCommandContext(
+    ctx,
+    agent,
+    detail.worktree.path,
+    detail.workspace
+      ? { githubOwner: detail.workspace.githubOwner, githubRepo: detail.workspace.githubRepo }
+      : null,
+    detail.worktree ? { branch: detail.worktree.branch } : null,
+    rawMessage,
+  );
+  let activeSession = slash.sessionSwitch ?? session;
+  if (slash.sessionSwitch && agent.activeSessionId !== slash.sessionSwitch.id) {
+    ctx.repos.agents.update({
+      ...agent,
+      activeSessionId: slash.sessionSwitch.id,
+      updatedAt: nowIso(),
+    });
+    syncAgentFromSessions(ctx, agentId);
+  }
+
+  const message = slash.handled ? slash.displayMessage : rawMessage;
+  const claudePrompt = slash.handled ? slash.prompt : rawMessage;
   if (!message && !hasImages && !hasMentions) {
     throw new Error('Message or image attachment required');
   }
@@ -2376,21 +2401,21 @@ export async function streamAgentChat(
   // is still null. Without this a concurrent send would slip past the guard,
   // persist a user message Claude never sees, and fail late in runStreaming.
   const hasActiveRun =
-    Boolean(ctx.claude.getRunningProcess(session.id)) ||
-    (session.status === 'running' && session.pid != null);
+    Boolean(ctx.claude.getRunningProcess(activeSession.id)) ||
+    (activeSession.status === 'running' && activeSession.pid != null);
   if (hasActiveRun) {
     if (!force) {
       throw new Error('Session already has a running Claude process. Queue the message or force-send.');
     }
-    await stopClaudeRun(ctx, session);
-    markStreamingAssistantStopped(ctx, agentId, session.id);
+    await stopClaudeRun(ctx, activeSession);
+    markStreamingAssistantStopped(ctx, agentId, activeSession.id);
   }
 
   // Reserve the session before any await below. Without this, two requests
   // arriving together can both observe an idle session while image files are
   // written and subsequently start overlapping Claude runs.
   let runningSession: ChatSession = {
-    ...(ctx.repos.sessions.getById(session.id) ?? session),
+    ...(ctx.repos.sessions.getById(activeSession.id) ?? activeSession),
     status: 'running',
     updatedAt: nowIso(),
   };
@@ -2398,11 +2423,15 @@ export async function streamAgentChat(
   syncAgentFromSessions(ctx, agentId);
 
   let attachments: MessageAttachment[];
-  let mentionContext = '';
+  let mentionContext = slash.mentionContext?.trim() ?? '';
   try {
     attachments = options.attachments ?? (await saveChatImages(ctx, agentId, body.images));
     const mentionResult = await resolveChatMentions(ctx.git, detail.worktree.path, requestMentions);
-    mentionContext = mentionResult.context;
+    if (mentionResult.context.trim()) {
+      mentionContext = mentionContext
+        ? `${mentionContext}\n\n${mentionResult.context}`
+        : mentionResult.context;
+    }
   } catch (error) {
     ctx.repos.sessions.update(clearSessionRunFields(runningSession, { status: 'idle' }));
     syncAgentFromSessions(ctx, agentId);
@@ -2412,7 +2441,7 @@ export async function streamAgentChat(
   const userMessage: Message = {
     id: uuidv4(),
     agentId,
-    sessionId: session.id,
+    sessionId: activeSession.id,
     role: 'user',
     content: message || (hasMentions ? '(mention attachment)' : '(image attachment)'),
     attachments,
@@ -2424,7 +2453,7 @@ export async function streamAgentChat(
   let assistantMessage: Message = {
     id: uuidv4(),
     agentId,
-    sessionId: session.id,
+    sessionId: activeSession.id,
     role: 'assistant',
     content: '',
     attachments: [],
@@ -2452,13 +2481,13 @@ export async function streamAgentChat(
     }
   };
 
-  send('session', session);
+  send('session', activeSession);
   send('user_message', userMessage);
   send('assistant_message', assistantMessage);
 
-  const titleTask = maybeAutoNameChatSession(ctx, session, userMessage.content)
+  const titleTask = maybeAutoNameChatSession(ctx, activeSession, userMessage.content)
     .then((named) => {
-      if (named && named.title !== session.title) {
+      if (named && named.title !== activeSession.title) {
         send('session', named);
       }
       return named;
@@ -2483,7 +2512,7 @@ export async function streamAgentChat(
   try {
     const result = await ctx.claude.runStreaming(runningSession.id, {
       cwd: detail.worktree.path,
-      prompt: userMessage.content,
+      prompt: claudePrompt,
       model: runningSession.model,
       effort: runningSession.effort,
       permissionMode: runningSession.permissionMode,

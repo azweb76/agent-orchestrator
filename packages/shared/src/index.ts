@@ -687,7 +687,7 @@ const CHAT_SLASH_COMMANDS = [
 ] as const;
 
 /** How a slash command should be handled by the orchestrator chat UI. */
-export type SlashCommandKind = 'local' | 'prompt' | 'skill';
+export type SlashCommandKind = 'local' | 'prompt' | 'skill' | 'context';
 
 export interface SlashCommand {
   /** Fully-qualified command including leading slash, e.g. `/clear` or `/code-review`. */
@@ -741,13 +741,19 @@ export const BUNDLED_SKILL_COMMANDS: SlashCommand[] = [
   { command: '/init', description: 'Initialize project with a CLAUDE.md guide', kind: 'skill', source: 'bundled' },
 ];
 
-export const PROMPT_SLASH_COMMANDS: SlashCommand[] = CHAT_SLASH_COMMANDS.map((item) => ({
+/** Orchestrator-side context slash commands (/diff, /test, /pr). */
+export const CONTEXT_SLASH_COMMANDS: SlashCommand[] = CHAT_SLASH_COMMANDS.filter(
+  (item) => item.command !== '/review',
+).map((item) => ({
   command: item.command,
   description: item.prompt,
-  kind: 'prompt' as const,
+  kind: 'context' as const,
   prompt: item.prompt,
   source: 'app' as const,
 }));
+
+/** @deprecated Use CONTEXT_SLASH_COMMANDS — kept for older imports. */
+export const PROMPT_SLASH_COMMANDS: SlashCommand[] = CONTEXT_SLASH_COMMANDS;
 
 export { mergeChatMessages } from './chat-sync.js';
 
