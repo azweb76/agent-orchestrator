@@ -217,13 +217,33 @@ export interface UpdateChatSessionRequest {
   permissionMode?: PermissionMode;
 }
 
-export function buildImplementPlanPrompt(plan: string): string {
-  return [
+import type { PlanBuildHandoffContext } from './plan-handoff.js';
+
+export function buildImplementPlanPrompt(plan: string, handoff?: PlanBuildHandoffContext): string {
+  const sections: string[] = [
     'The user approved the following plan. Implement it now in auto mode.',
     'Do not ask clarifying questions unless blocked. Prefer making progress with sensible defaults.',
     '',
     '## Approved plan',
     '',
     plan,
-  ].join('\n');
+  ];
+
+  const qaPairs = handoff?.qaPairs;
+  if (qaPairs && qaPairs.length > 0) {
+    sections.push('', '## Planning Q&A', '');
+    for (const pair of qaPairs) {
+      sections.push(`- **${pair.question}** → ${pair.answer}`);
+    }
+  }
+
+  const filePaths = handoff?.filePaths;
+  if (filePaths && filePaths.length > 0) {
+    sections.push('', '## Files mentioned', '');
+    for (const filePath of filePaths) {
+      sections.push(`- ${filePath}`);
+    }
+  }
+
+  return sections.join('\n');
 }

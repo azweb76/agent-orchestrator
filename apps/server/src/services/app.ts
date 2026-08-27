@@ -99,6 +99,7 @@ import {
 } from '../services/instruction-files.js';
 import { buildSessionGradeContext } from '../services/session-grade.js';
 import { buildTemplateKickoffPrompt } from '../services/session-kickoff.js';
+import { gatherPlanBuildHandoffContext } from '../services/plan-handoff.js';
 import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionContext } from '../services/claude-session-file.js';
 import {
   appendStreamText,
@@ -1656,6 +1657,7 @@ export async function buildApprovedPlan(
 
   const planSession = resolvePermissionSession(ctx, agentId, sessionId, body.requestId);
   const plan = await resolvePlanText(ctx, agentId, planSession, body);
+  const handoff = await gatherPlanBuildHandoffContext(ctx, agentId, planSession, plan);
 
   if (body.requestId) {
     ctx.claude.dismissPermission(planSession.id, body.requestId);
@@ -1687,7 +1689,7 @@ export async function buildApprovedPlan(
   await streamAgentChat(
     ctx,
     agentId,
-    { message: buildImplementPlanPrompt(plan), force: true },
+    { message: buildImplementPlanPrompt(plan, handoff), force: true },
     res,
     buildSession.id,
     { createdSession: buildSession },

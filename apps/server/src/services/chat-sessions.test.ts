@@ -459,6 +459,67 @@ test('buildApprovedPlan stashes the plan session and streams into a new Build se
   }
 });
 
+test('buildApprovedPlan kickoff includes plan Q&A and mentioned file paths', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-build-rich-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const planText =
+      '## Plan\n\nUpdate `apps/server/src/services/plan-handoff.ts` and packages/shared/src/plan-handoff.ts.';
+
+    ctx.repos.events.create({
+      id: 'evt-perm',
+      agentId: agent.id,
+      type: 'permission_request',
+      data: {
+        sessionId: 'plan-sess',
+        requestId: 'req-plan',
+        toolName: 'AskUserQuestion',
+        input: {
+          questions: [{ question: 'Testing strategy?', header: 'Tests', options: [{ label: 'Unit' }] }],
+        },
+      },
+      createdAt: '2026-01-01T00:00:02.500Z',
+    });
+    ctx.repos.events.create({
+      id: 'evt-answer',
+      agentId: agent.id,
+      type: 'ask_user_question_answered',
+      data: {
+        sessionId: 'plan-sess',
+        requestId: 'req-plan',
+        answers: { 'Testing strategy?': 'Unit tests' },
+      },
+      createdAt: '2026-01-01T00:00:02.600Z',
+    });
+
+    const { res } = mockResponse();
+    await buildApprovedPlan(ctx, agent.id, { plan: planText }, res, 'plan-sess');
+
+    const build = ctx.repos.sessions.listByAgent(agent.id).find((item) => item.template === 'build');
+    assert.ok(build);
+    const kickoff = ctx.repos.messages
+      .listBySession(build!.id)
+      .find((item) => item.role === 'user');
+    assert.ok(kickoff?.content.includes('## Approved plan'));
+    assert.ok(kickoff?.content.includes(planText.trim()));
+    assert.ok(kickoff?.content.includes('## Planning Q&A'));
+    assert.ok(kickoff?.content.includes('Testing strategy?'));
+    assert.ok(kickoff?.content.includes('Unit tests'));
+    assert.ok(kickoff?.content.includes('## Files mentioned'));
+    assert.ok(kickoff?.content.includes('apps/server/src/services/plan-handoff.ts'));
+    assert.ok(kickoff?.content.includes('packages/shared/src/plan-handoff.ts'));
+
+    assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 2);
+    assert.deepEqual(
+      getAgentMessages(ctx, agent.id, 'plan-sess').map((item) => item.id),
+      ['u1', 'a1'],
+    );
+    assert.equal(build?.permissionMode, 'auto');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('getAgentDetail includes sessions', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-detail-'));
   try {

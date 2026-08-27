@@ -800,6 +800,18 @@ export {
 } from './chat-session.js';
 
 export {
+  buildPlanQaPairsFromAskUserAnswer,
+  collectPlanHandoffFilePaths,
+  extractAskUserQuestionPairsFromLog,
+  extractMentionedFilePathsFromText,
+  extractToolFilePathsFromLog,
+  mergeUniqueFilePaths,
+  mergeUniquePlanQaPairs,
+  type PlanBuildHandoffContext,
+  type PlanQaPair,
+} from './plan-handoff.js';
+
+export {
   addTokenUsage,
   buildSessionContextUsage,
   compactThresholdTokensForWindow,
