@@ -1,7 +1,13 @@
 import type { AgentStatus, EffortLevel, PermissionMode } from './index.js';
 
 /** Built-in kickoff templates for a new chat session on an agent. */
-export type ChatSessionTemplateId = 'chat' | 'build' | 'create-draft-pr' | 'review';
+export type ChatSessionTemplateId =
+  | 'chat'
+  | 'build'
+  | 'create-draft-pr'
+  | 'review'
+  | 'address-review'
+  | 'fix-ci';
 
 export const SESSION_GRADE_SCORES = [1, 2, 3, 4, 5] as const;
 export type SessionGradeScore = (typeof SESSION_GRADE_SCORES)[number];
@@ -143,6 +149,32 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
       'Review the current uncommitted and branch changes for bugs, edge cases, missing tests, and regressions.',
       'Start by inspecting the diff. Ask clarifying questions if the intent is unclear.',
       'Do not make changes unless I ask you to.',
+    ].join(' '),
+    listed: true,
+  },
+  {
+    id: 'address-review',
+    title: 'Address review',
+    description: 'Read PR review comments and address the feedback.',
+    permissionMode: 'auto',
+    prompt: [
+      'Address the pull request review feedback on the current branch.',
+      'Start by inspecting the open PR, its reviews, review comments, and conversation comments.',
+      'Fix the requested changes, add tests when they were asked for, and reply in the PR when a comment needs a written response rather than a code change.',
+      'Do not merge. Leave a short summary of what you changed.',
+    ].join(' '),
+    listed: true,
+  },
+  {
+    id: 'fix-ci',
+    title: 'Fix CI',
+    description: 'Inspect failing checks and fix them on this branch.',
+    permissionMode: 'auto',
+    prompt: [
+      'Fix the failing CI checks on the current branch.',
+      'Start by inspecting the open pull request (if any) and its check runs or commit statuses.',
+      'Reproduce the failures locally when possible, fix the root cause, and leave tests covering the failure.',
+      'Do not merge. Summarize which checks failed and what you changed.',
     ].join(' '),
     listed: true,
   },

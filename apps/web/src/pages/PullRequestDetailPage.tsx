@@ -11,11 +11,13 @@ import {
   Tab,
   Tabs,
 } from '@mui/material';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { evaluateMergeReadiness } from '@agent-orchestrator/shared';
-import type { PullRequestDetail } from '@agent-orchestrator/shared';
+import type { ChatSessionTemplateId, PullRequestDetail } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { MergeActions } from '../components/pr/MergeActions';
 import { MergeReadinessPanel } from '../components/pr/MergeReadinessPanel';
@@ -85,7 +87,6 @@ function PullRequestDetailContent({
   const checksQuery = useQuery({
     queryKey: [...prKey, 'checks'],
     queryFn: () => api.getPullRequestChecks(owner, repo, prNumber),
-    enabled: tab === 'checks',
     staleTime: 15_000,
     refetchInterval: (query) =>
       query.state.data?.checks.some((check) => check.status !== 'completed') ? 10_000 : false,
@@ -94,7 +95,6 @@ function PullRequestDetailContent({
   const reviewsQuery = useQuery({
     queryKey: [...prKey, 'reviews'],
     queryFn: () => api.getPullRequestReviews(owner, repo, prNumber),
-    enabled: tab === 'reviews',
     staleTime: 30_000,
   });
 
@@ -126,6 +126,39 @@ function PullRequestDetailContent({
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       queryClient.invalidateQueries({ queryKey: prKey });
       navigate(`/agents/${result.agent.id}`);
+    },
+  });
+
+  const startTemplate = useMutation({
+    mutationFn: async (template: ChatSessionTemplateId) => {
+      const result = await api.createAgentFromPr({ owner, repo, prNumber });
+      return { agentId: result.agent.id, template };
+    },
+    onSuccess: ({ agentId, template }) => {
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: prKey });
+      navigate(`/agents/${agentId}`, { state: { sessionTemplate: template } });
+    },
+  });
+
+  const submitReview = useMutation({
+    mutationFn: (input: { event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'; body: string }) =>
+      api.submitPullRequestReview(owner, repo, prNumber, {
+        event: input.event,
+        body: input.body || undefined,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...prKey, 'reviews'] });
+      queryClient.invalidateQueries({ queryKey: prKey });
+    },
+  });
+
+  const submitComment = useMutation({
+    mutationFn: (body: string) => api.createPullRequestComment(owner, repo, prNumber, { body }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...prKey, 'comments'] });
+      queryClient.invalidateQueries({ queryKey: prKey });
     },
   });
 
@@ -176,6 +209,27 @@ function PullRequestDetailContent({
         }
         actions={
           <>
+            {pr.state === 'open' && !pr.merged && (checksQuery.data?.failing ?? 0) > 0 ? (
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<BugReportOutlinedIcon />}
+                disabled={startTemplate.isPending}
+                onClick={() => startTemplate.mutate('fix-ci')}
+              >
+                Fix CI
+              </Button>
+            ) : null}
+            {pr.state === 'open' && !pr.merged ? (
+              <Button
+                variant="outlined"
+                startIcon={<ReplyOutlinedIcon />}
+                disabled={startTemplate.isPending}
+                onClick={() => startTemplate.mutate('address-review')}
+              >
+                Address review
+              </Button>
+            ) : null}
             {pr.agentId ? (
               <Button
                 component={RouterLink}
@@ -217,6 +271,9 @@ function PullRequestDetailContent({
       {createAgent.error ? (
         <Alert severity="error">{(createAgent.error as Error).message}</Alert>
       ) : null}
+      {startTemplate.error ? (
+        <Alert severity="error">{(startTemplate.error as Error).message}</Alert>
+      ) : null}
 
       {/*
         `behind` is only reported when the base branch requires strict status checks,
@@ -251,6 +308,12 @@ function PullRequestDetailContent({
               checks={checksQuery.data}
               loading={checksQuery.isLoading}
               error={checksQuery.error}
+              onFixCi={
+                pr.state === 'open' && !pr.merged
+                  ? () => startTemplate.mutate('fix-ci')
+                  : undefined
+              }
+              fixing={startTemplate.isPending}
             />
           )}
           {tab === 'files' && (
@@ -272,6 +335,10 @@ function PullRequestDetailContent({
               reviews={reviewsQuery.data}
               loading={reviewsQuery.isLoading}
               error={reviewsQuery.error}
+              canWrite={pr.state === 'open' && !pr.merged}
+              submitting={submitReview.isPending}
+              submitError={submitReview.error ? (submitReview.error as Error).message : null}
+              onSubmitReview={(event, body) => submitReview.mutate({ event, body })}
             />
           )}
           {tab === 'conversation' && (
@@ -279,6 +346,10 @@ function PullRequestDetailContent({
               comments={commentsQuery.data}
               loading={commentsQuery.isLoading}
               error={commentsQuery.error}
+              canWrite={pr.state === 'open' && !pr.merged}
+              submitting={submitComment.isPending}
+              submitError={submitComment.error ? (submitComment.error as Error).message : null}
+              onSubmitComment={(body) => submitComment.mutate(body)}
             />
           )}
         </Box>

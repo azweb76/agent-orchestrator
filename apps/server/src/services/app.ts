@@ -11,6 +11,12 @@ import type {
   AnswerAskUserQuestionRequest,
   ArchiveAgentRequest,
   ArchiveAgentResponse,
+  CommitAgentChangesRequest,
+  CommitAgentChangesResponse,
+  CreatePullRequestCommentRequest,
+  DeleteAgentRequest,
+  DeleteAgentResponse,
+  SubmitPullRequestReviewRequest,
   BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
@@ -38,6 +44,11 @@ import type {
   PermissionMode,
   PermissionRequest,
   PruneArchivedAgentsResponse,
+  QueuedChatMessage,
+  EnqueueChatMessageRequest,
+  UsageSummary,
+  AgentUsage,
+  SessionUsage,
   PullRequestChecks,
   PullRequestDetail,
   PullRequestInbox,
@@ -60,7 +71,9 @@ import {
   chatSessionTemplateById,
   uniqueSessionTitle,
 } from '@agent-orchestrator/shared';
+import type { AppEventType } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
+import type { Notifier } from './notifier.js';
 import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService, fallbackTitleFromPrompt, sanitizeChatTitle } from '../services/anthropic.js';
@@ -96,10 +109,20 @@ export interface AppContext {
   claude: ClaudeService;
   anthropic: AnthropicService;
   dataDir: string;
+  /** Live pub/sub for the global SSE stream; optional so tests can omit it. */
+  notifier?: Notifier;
 }
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function notify(
+  ctx: AppContext,
+  type: AppEventType,
+  fields: { agentId?: string; sessionId?: string; data?: Record<string, unknown> } = {},
+): void {
+  ctx.notifier?.emit(type, fields);
 }
 
 async function createAgentForWorktree(
@@ -272,7 +295,7 @@ function syncAgentFromSessions(ctx: AppContext, agentId: string): Agent {
   const anyRunning = sessions.some((item) => item.status === 'running');
   const active =
     sessions.find((item) => item.id === agent.activeSessionId) ?? sessions[0] ?? null;
-  return ctx.repos.agents.update({
+  const updated = ctx.repos.agents.update({
     ...agent,
     status: agent.archivedAt ? 'archived' : anyRunning ? 'running' : 'idle',
     pid: active?.pid ?? null,
@@ -284,6 +307,8 @@ function syncAgentFromSessions(ctx: AppContext, agentId: string): Agent {
     activeSessionId: active?.id ?? agent.activeSessionId,
     updatedAt: nowIso(),
   });
+  notify(ctx, 'agent_changed', { agentId, data: { status: updated.status } });
+  return updated;
 }
 
 function clearSessionRunFields(
@@ -312,6 +337,13 @@ export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCoun
   });
 }
 
+/** Pending interactive prompts across all of an agent's sessions. */
+function countPendingPermissions(ctx: AppContext, agentId: string): number {
+  return ctx.repos.sessions
+    .listByAgent(agentId)
+    .reduce((total, session) => total + ctx.claude.listPendingPermissions(session.id).length, 0);
+}
+
 /** Workspace → agents tree for the persistent app sidebar. */
 export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace[]> {
   const workspaces = ctx.repos.workspaces.list();
@@ -328,10 +360,93 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
           branch: worktree?.branch ?? '',
           prNumber: worktree?.prNumber ?? null,
         },
+        pendingPermissionCount: countPendingPermissions(ctx, agent.id),
       };
     });
     return { ...workspace, agents };
   });
+}
+
+/** Fleet-wide cost rollup from persisted assistant turns, grouped per agent and session. */
+export function getUsageSummary(ctx: AppContext): UsageSummary {
+  const rows = ctx.repos.messages.listCostRows();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayMs = startOfToday.getTime();
+
+  const round = (value: number) => Number(value.toFixed(4));
+
+  type SessionAccumulator = { costUsd: number; assistantTurns: number; lastActivityAt: string | null };
+  const byAgent = new Map<string, Map<string, SessionAccumulator>>();
+  let totalCostUsd = 0;
+  let todayCostUsd = 0;
+  let totalAssistantTurns = 0;
+
+  for (const row of rows) {
+    if (!Number.isFinite(row.costUsd)) continue;
+    totalCostUsd += row.costUsd;
+    totalAssistantTurns += 1;
+    if (Date.parse(row.createdAt) >= todayMs) todayCostUsd += row.costUsd;
+
+    const sessions = byAgent.get(row.agentId) ?? new Map<string, SessionAccumulator>();
+    byAgent.set(row.agentId, sessions);
+    const key = row.sessionId ?? '';
+    const acc = sessions.get(key) ?? { costUsd: 0, assistantTurns: 0, lastActivityAt: null };
+    acc.costUsd += row.costUsd;
+    acc.assistantTurns += 1;
+    if (!acc.lastActivityAt || row.createdAt > acc.lastActivityAt) acc.lastActivityAt = row.createdAt;
+    sessions.set(key, acc);
+  }
+
+  const agents: AgentUsage[] = [];
+  for (const workspace of ctx.repos.workspaces.list()) {
+    for (const agent of ctx.repos.agents.listByWorkspace(workspace.id)) {
+      const sessions = byAgent.get(agent.id);
+      if (!sessions) continue;
+      const titleById = new Map(
+        ctx.repos.sessions.listByAgent(agent.id).map((session) => [session.id, session.title]),
+      );
+      const sessionUsages: SessionUsage[] = [...sessions.entries()]
+        .map(([sessionId, acc]) => ({
+          sessionId,
+          title: titleById.get(sessionId) ?? 'Deleted session',
+          costUsd: round(acc.costUsd),
+          assistantTurns: acc.assistantTurns,
+          lastActivityAt: acc.lastActivityAt,
+        }))
+        .sort((a, b) => b.costUsd - a.costUsd);
+      const agentTotal = sessionUsages.reduce(
+        (sum, session) => ({
+          costUsd: sum.costUsd + session.costUsd,
+          assistantTurns: sum.assistantTurns + session.assistantTurns,
+          lastActivityAt:
+            session.lastActivityAt && (!sum.lastActivityAt || session.lastActivityAt > sum.lastActivityAt)
+              ? session.lastActivityAt
+              : sum.lastActivityAt,
+        }),
+        { costUsd: 0, assistantTurns: 0, lastActivityAt: null as string | null },
+      );
+      agents.push({
+        agentId: agent.id,
+        agentName: agent.name,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        archived: Boolean(agent.archivedAt),
+        costUsd: round(agentTotal.costUsd),
+        assistantTurns: agentTotal.assistantTurns,
+        lastActivityAt: agentTotal.lastActivityAt,
+        sessions: sessionUsages,
+      });
+    }
+  }
+  agents.sort((a, b) => b.costUsd - a.costUsd);
+
+  return {
+    totalCostUsd: round(totalCostUsd),
+    todayCostUsd: round(todayCostUsd),
+    totalAssistantTurns,
+    agents,
+  };
 }
 
 export async function createWorkspace(ctx: AppContext, body: CreateWorkspaceRequest) {
@@ -358,6 +473,7 @@ export async function createWorkspace(ctx: AppContext, body: CreateWorkspaceRequ
     createdAt: nowIso(),
   });
 
+  notify(ctx, 'workspaces_changed');
   return workspace;
 }
 
@@ -370,7 +486,20 @@ export async function getWorkspace(ctx: AppContext, workspaceId: string) {
 export async function deleteWorkspace(ctx: AppContext, workspaceId: string) {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
+
+  const worktrees = ctx.repos.worktrees.listByWorkspace(workspaceId);
+  for (const worktree of worktrees) {
+    try {
+      await deleteWorktree(ctx, worktree.id);
+    } catch {
+      // continue so the clone and remaining rows still get cleaned up
+    }
+  }
+
   ctx.repos.workspaces.delete(workspaceId);
+  await fs.rm(workspace.repoPath, { recursive: true, force: true });
+  await fs.rm(path.join(ctx.dataDir, 'worktrees', workspaceId), { recursive: true, force: true });
+  notify(ctx, 'workspaces_changed');
 }
 
 // Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
@@ -448,6 +577,7 @@ export async function createWorktreeFromBranch(
   });
 
   const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`);
+  notify(ctx, 'workspaces_changed');
   return { worktree, agent };
 }
 
@@ -497,6 +627,7 @@ export async function createWorktreeFromPr(
   });
 
   const agent = await createAgentForWorktree(ctx, worktree.id, `PR #${pr.number} agent`);
+  notify(ctx, 'workspaces_changed');
   return { worktree, agent };
 }
 
@@ -513,6 +644,7 @@ export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
 
   await ctx.git.removeWorktree(workspace.repoPath, worktree.path);
   ctx.repos.worktrees.delete(worktreeId);
+  notify(ctx, 'workspaces_changed');
 }
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
@@ -625,6 +757,9 @@ export async function archiveAgent(
   if (!agent) throw new Error('Agent not found');
 
   await stopAllSessions(ctx, agent);
+  for (const session of ctx.repos.sessions.listByAgent(agentId)) {
+    await clearSessionQueue(ctx, session.id);
+  }
 
   if (body.deleteWorktree) {
     await deleteWorktree(ctx, agent.worktreeId);
@@ -640,7 +775,47 @@ export async function archiveAgent(
   };
   ctx.repos.agents.update(updated);
   ctx.repos.events.create(makeEvent(agentId, 'agent_archived', {}));
+  notify(ctx, 'agent_changed', { agentId, data: { status: 'archived' } });
   return { agent: updated, deletedWorktree: false };
+}
+
+export async function unarchiveAgent(ctx: AppContext, agentId: string): Promise<Agent> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+  if (!agent.archivedAt) throw new Error('Agent is not archived');
+  ctx.repos.agents.update({
+    ...agent,
+    archivedAt: null,
+    status: 'idle',
+    updatedAt: nowIso(),
+  });
+  const updated = syncAgentFromSessions(ctx, agentId);
+  ctx.repos.events.create(makeEvent(agentId, 'agent_unarchived', {}));
+  notify(ctx, 'agent_changed', { agentId, data: { status: updated.status } });
+  return updated;
+}
+
+export async function deleteAgent(
+  ctx: AppContext,
+  agentId: string,
+  body: DeleteAgentRequest = {},
+): Promise<DeleteAgentResponse> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  await stopAllSessions(ctx, agent);
+  for (const session of ctx.repos.sessions.listByAgent(agentId)) {
+    await clearSessionQueue(ctx, session.id);
+  }
+
+  if (body.deleteWorktree) {
+    await deleteWorktree(ctx, agent.worktreeId);
+    return { deleted: true, deletedWorktree: true };
+  }
+
+  ctx.repos.agents.delete(agentId);
+  notify(ctx, 'workspaces_changed');
+  return { deleted: true, deletedWorktree: false };
 }
 
 /**
@@ -1001,6 +1176,7 @@ export async function clearAgentChat(
     throw new Error('Cannot clear chat while the session is running. Stop it first.');
   }
 
+  await clearSessionQueue(ctx, session.id);
   const cleared = ctx.repos.messages.deleteBySession(session.id);
   ctx.repos.sessions.update({
     ...session,
@@ -1048,6 +1224,7 @@ export async function rewindAgentChat(
   if (!deleted || removed === 0) throw new Error('Message not found');
 
   await cleanupMessageAttachments(dropped);
+  await clearSessionQueue(ctx, session.id);
 
   ctx.repos.sessions.update({
     ...session,
@@ -1080,6 +1257,133 @@ async function cleanupMessageAttachments(messages: Message[]): Promise<void> {
         // best-effort cleanup
       }
     }
+  }
+}
+
+async function cleanupAttachmentFiles(attachments: MessageAttachment[]): Promise<void> {
+  for (const attachment of attachments) {
+    if (!attachment.path) continue;
+    try {
+      await fs.unlink(attachment.path);
+    } catch {
+      // best-effort cleanup
+    }
+  }
+}
+
+/** Drop every queued message for a session (and their attachment files). */
+async function clearSessionQueue(ctx: AppContext, sessionId: string): Promise<number> {
+  const queued = ctx.repos.queued.listBySession(sessionId);
+  for (const item of queued) {
+    await cleanupAttachmentFiles(item.attachments);
+  }
+  return ctx.repos.queued.deleteBySession(sessionId);
+}
+
+/**
+ * Persist a follow-up while the session is busy. The queue drains server-side
+ * as soon as the running reply finishes, so queued messages survive browser
+ * closes and orchestrator restarts.
+ */
+export async function enqueueChatMessage(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+  body: EnqueueChatMessageRequest,
+): Promise<QueuedChatMessage> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot queue messages on an archived agent');
+  const session = requireSession(ctx, agentId, sessionId);
+
+  const message = body.message.trim();
+  if (!message && !(body.images && body.images.length > 0)) {
+    throw new Error('Message or image attachment required');
+  }
+
+  const attachments = await saveChatImages(ctx, agentId, body.images);
+  const queued: QueuedChatMessage = {
+    id: uuidv4(),
+    agentId,
+    sessionId: session.id,
+    content: message || '(image attachment)',
+    attachments,
+    createdAt: nowIso(),
+  };
+  ctx.repos.queued.create(queued);
+  ctx.repos.events.create(
+    makeEvent(agentId, 'message_queued', { queuedId: queued.id, sessionId: session.id }),
+  );
+  notify(ctx, 'queue_changed', { agentId, sessionId: session.id });
+
+  // If the session finished while the message was in flight, deliver right away.
+  const latest = ctx.repos.sessions.getById(session.id);
+  if (latest && latest.status !== 'running') {
+    void drainSessionQueue(ctx, agentId, session.id);
+  }
+  return queued;
+}
+
+export function listQueuedMessages(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+): QueuedChatMessage[] {
+  const session = requireSession(ctx, agentId, sessionId);
+  return ctx.repos.queued.listBySession(session.id);
+}
+
+export async function removeQueuedMessage(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+  queuedId: string,
+): Promise<{ removed: boolean }> {
+  requireSession(ctx, agentId, sessionId);
+  const queued = ctx.repos.queued.getById(queuedId);
+  if (!queued || queued.agentId !== agentId) return { removed: false };
+  await cleanupAttachmentFiles(queued.attachments);
+  ctx.repos.queued.delete(queuedId);
+  notify(ctx, 'queue_changed', { agentId, sessionId: queued.sessionId });
+  return { removed: true };
+}
+
+/** Sessions currently draining, to keep concurrent finalizers from double-sending. */
+const drainingSessions = new Set<string>();
+
+/**
+ * Send queued messages for an idle session, in order, until the queue is empty
+ * or the session is busy/archived. Safe to call from any finalization path.
+ */
+export async function drainSessionQueue(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+): Promise<void> {
+  if (drainingSessions.has(sessionId)) return;
+  drainingSessions.add(sessionId);
+  try {
+    while (true) {
+      const agent = ctx.repos.agents.getById(agentId);
+      if (!agent || agent.archivedAt) return;
+      const session = ctx.repos.sessions.getById(sessionId);
+      if (!session || session.status === 'running') return;
+      const next = ctx.repos.queued.takeNext(sessionId);
+      if (!next) return;
+      ctx.repos.events.create(
+        makeEvent(agentId, 'queued_message_sent', { queuedId: next.id, sessionId }),
+      );
+      notify(ctx, 'queue_changed', { agentId, sessionId });
+      try {
+        await streamAgentChat(ctx, agentId, { message: next.content }, null, sessionId, {
+          attachments: next.attachments,
+        });
+      } catch (error) {
+        console.error(`Failed to send queued message for session ${sessionId}:`, error);
+        return;
+      }
+    }
+  } finally {
+    drainingSessions.delete(sessionId);
   }
 }
 
@@ -1308,6 +1612,9 @@ export async function buildApprovedPlan(
   // Stop the in-flight plan-mode run (avoids ExitPlanMode stdio hang on approve)
   // but keep its messages and Claude session so the user can return to it.
   await stopClaudeRun(ctx, planSession);
+  // Follow-ups queued on the plan session were meant for planning; drop them
+  // so they do not fire at the stashed session once it goes idle.
+  await clearSessionQueue(ctx, planSession.id);
 
   const agent = requireAgent(ctx, agentId);
   const buildSession = createSessionForAgent(ctx, agent, {
@@ -1424,6 +1731,44 @@ export async function createAgentPullRequest(
   return pr;
 }
 
+export async function commitAgentChanges(
+  ctx: AppContext,
+  agentId: string,
+  body: CommitAgentChangesRequest,
+): Promise<CommitAgentChangesResponse> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot commit changes for an archived agent');
+  const message = body.message.trim();
+  if (!message) throw new Error('Commit message is required');
+
+  const detail = await getAgentDetail(ctx, agentId);
+  const branch = await ctx.git.getCurrentBranch(detail.worktree.path);
+  const hasChanges = await ctx.git.hasChanges(detail.worktree.path);
+  if (hasChanges) {
+    await ctx.git.commitAll(detail.worktree.path, message);
+  }
+
+  const shouldPush = body.push !== false;
+  if (shouldPush) {
+    await ctx.git.pushBranch(detail.worktree.path, branch);
+  }
+
+  ctx.repos.events.create(
+    makeEvent(agentId, 'changes_committed', {
+      committed: hasChanges,
+      pushed: shouldPush,
+      branch,
+    }),
+  );
+  notify(ctx, 'agent_changed', { agentId });
+  return {
+    committed: hasChanges,
+    pushed: shouldPush,
+    branch,
+    message: hasChanges ? message : 'No local changes to commit',
+  };
+}
+
 function extractCostUsd(
   events: Array<Record<string, unknown>>,
   parentSessionId?: string | null,
@@ -1470,6 +1815,14 @@ function finalizeSessionRun(
       }),
     );
     syncAgentFromSessions(ctx, session.agentId);
+    notify(ctx, 'run_finished', {
+      agentId: session.agentId,
+      sessionId: session.id,
+      data: {
+        stopped: Boolean(result.stopped),
+        error: result.error ?? null,
+      },
+    });
   }
 
   const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;
@@ -1682,8 +2035,20 @@ async function stopClaudeRun(ctx: AppContext, session: ChatSession): Promise<voi
  */
 export function recoverRunningAgents(ctx: AppContext): void {
   const running = ctx.repos.sessions.listRunning();
+  const runningIds = new Set(running.map((session) => session.id));
   for (const session of running) {
-    void recoverOneSession(ctx, session);
+    void recoverOneSession(ctx, session).then(
+      () => drainSessionQueue(ctx, session.agentId, session.id),
+      () => undefined,
+    );
+  }
+  // Queued messages left behind by a previous process (e.g. the app was
+  // restarted after a run finished but before the queue drained).
+  for (const sessionId of ctx.repos.queued.listSessionIdsWithQueued()) {
+    if (runningIds.has(sessionId)) continue;
+    const session = ctx.repos.sessions.getById(sessionId);
+    if (!session) continue;
+    void drainSessionQueue(ctx, session.agentId, sessionId);
   }
 }
 
@@ -1771,6 +2136,11 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
       ctx.repos.events.create(
         makeEvent(session.agentId, 'permission_request', payload as unknown as Record<string, unknown>),
       );
+      notify(ctx, 'permission_request', {
+        agentId: session.agentId,
+        sessionId: session.id,
+        data: { requestId: request.requestId, toolName: request.toolName },
+      });
     }
   };
 
@@ -1827,9 +2197,9 @@ export async function streamAgentChat(
   ctx: AppContext,
   agentId: string,
   body: ChatRequest,
-  res: Response,
+  res: Response | null,
   sessionId?: string,
-  options: { createdSession?: ChatSession } = {},
+  options: { createdSession?: ChatSession; attachments?: MessageAttachment[] } = {},
 ) {
   const detail = await getAgentDetail(ctx, agentId);
   if (detail.archivedAt) {
@@ -1840,7 +2210,8 @@ export async function streamAgentChat(
 
   const force = Boolean(body.force);
   const message = body.message.trim();
-  if (!message && !(body.images && body.images.length > 0)) {
+  const hasImages = (body.images?.length ?? 0) > 0 || (options.attachments?.length ?? 0) > 0;
+  if (!message && !hasImages) {
     throw new Error('Message or image attachment required');
   }
 
@@ -1859,7 +2230,7 @@ export async function streamAgentChat(
     markStreamingAssistantStopped(ctx, agentId, session.id);
   }
 
-  const attachments = await saveChatImages(ctx, agentId, body.images);
+  const attachments = options.attachments ?? (await saveChatImages(ctx, agentId, body.images));
 
   const userMessage: Message = {
     id: uuidv4(),
@@ -1885,18 +2256,19 @@ export async function streamAgentChat(
   };
   ctx.repos.messages.create(assistantMessage);
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-
-  let clientOpen = true;
-  res.on('close', () => {
-    clientOpen = false;
-  });
+  let clientOpen = res != null;
+  if (res) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.on('close', () => {
+      clientOpen = false;
+    });
+  }
 
   const send = (event: string, data: unknown) => {
-    if (!clientOpen || res.writableEnded) return;
+    if (!res || !clientOpen || res.writableEnded) return;
     try {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     } catch {
@@ -1970,6 +2342,11 @@ export async function streamAgentChat(
             sessionId: runningSession.id,
           } as unknown as Record<string, unknown>),
         );
+        notify(ctx, 'permission_request', {
+          agentId,
+          sessionId: runningSession.id,
+          data: { requestId: request.requestId, toolName: request.toolName },
+        });
         send('permission_request', payload);
       },
       onEvent: (event) => {
@@ -2049,9 +2426,11 @@ export async function streamAgentChat(
     }
   } finally {
     await titleTask;
-    if (clientOpen && !res.writableEnded) {
+    if (res && clientOpen && !res.writableEnded) {
       res.end();
     }
+    // Deliver any follow-ups queued while this run was busy.
+    void drainSessionQueue(ctx, agentId, session.id);
   }
 }
 
@@ -2223,6 +2602,46 @@ export async function getPullRequestComments(
   return ctx.github.listPullRequestComments(owner, repo, prNumber);
 }
 
+export async function submitPullRequestReview(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: SubmitPullRequestReviewRequest,
+) {
+  const text = body.body?.trim() ?? '';
+  if (body.event !== 'APPROVE' && !text) {
+    throw new Error('A review body is required when requesting changes or commenting');
+  }
+  const review = await ctx.github.createPullRequestReview(owner, repo, prNumber, {
+    event: body.event,
+    body: text || undefined,
+  });
+  recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_reviewed', {
+    number: prNumber,
+    event: body.event,
+    reviewId: review.id,
+  });
+  return review;
+}
+
+export async function createPullRequestComment(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: CreatePullRequestCommentRequest,
+) {
+  const text = body.body.trim();
+  if (!text) throw new Error('Comment body is required');
+  const comment = await ctx.github.createPullRequestComment(owner, repo, prNumber, text);
+  recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_commented', {
+    number: prNumber,
+    commentId: comment.id,
+  });
+  return comment;
+}
+
 export async function mergePullRequest(
   ctx: AppContext,
   owner: string,
@@ -2363,10 +2782,50 @@ export async function createWorktreeFromIdea(
 
 export async function getSystemStatus(ctx: AppContext) {
   const claudeInstalled = await ctx.claude.checkInstalled();
+  let githubLogin: string | null = null;
+  if (process.env.GITHUB_TOKEN || process.env.GITHUB_LOGIN?.trim()) {
+    try {
+      githubLogin = await ctx.github.getAuthenticatedLogin();
+    } catch {
+      githubLogin = null;
+    }
+  }
   return {
     claudeInstalled,
     claudeBin: process.env.CLAUDE_BIN ?? 'claude',
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
+    githubLogin,
     archivedAgentCount: ctx.repos.agents.countArchived(),
+    dataDirBytes: await directorySizeBytes(ctx.dataDir),
   };
+}
+
+async function directorySizeBytes(root: string): Promise<number> {
+  let total = 0;
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    let entries;
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      try {
+        const stat = await fs.stat(full);
+        total += stat.size;
+      } catch {
+        // skipped
+      }
+    }
+  }
+  return total;
 }

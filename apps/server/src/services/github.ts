@@ -538,6 +538,52 @@ export class GitHubService {
     }));
   }
 
+  async createPullRequestReview(
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: { event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'; body?: string },
+  ): Promise<PullRequestReview> {
+    const data = await this.request<RawReview>(`${this.prUrl(owner, repo, prNumber)}/reviews`, {
+      method: 'POST',
+      body: {
+        event: body.event,
+        ...(body.body?.trim() ? { body: body.body.trim() } : {}),
+      },
+    });
+    this.invalidatePullRequestCaches(owner, repo);
+    return {
+      id: String(data.id),
+      author: mapUser(data.user),
+      state: data.state,
+      body: data.body ?? '',
+      htmlUrl: data.html_url ?? null,
+      submittedAt: data.submitted_at ?? null,
+    };
+  }
+
+  async createPullRequestComment(
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: string,
+  ): Promise<PullRequestComment> {
+    this.assertPathSegment(owner, 'owner');
+    this.assertPathSegment(repo, 'repo');
+    const data = await this.request<RawComment>(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+      { method: 'POST', body: { body } },
+    );
+    this.invalidatePullRequestCaches(owner, repo);
+    return {
+      id: String(data.id),
+      author: mapUser(data.user),
+      body: data.body ?? '',
+      htmlUrl: data.html_url ?? null,
+      createdAt: data.created_at,
+    };
+  }
+
   /**
    * Merge the PR. GitHub answers 405 when it is not mergeable, 409 when the head
    * branch moved since `sha` was captured, and 422 when the method is disabled.

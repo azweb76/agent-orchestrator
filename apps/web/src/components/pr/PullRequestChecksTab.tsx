@@ -1,4 +1,4 @@
-import { Box, Chip, Link, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Link, Stack, Typography } from '@mui/material';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
@@ -29,9 +29,17 @@ export interface PullRequestChecksTabProps {
   checks?: PullRequestChecks;
   loading: boolean;
   error: unknown;
+  onFixCi?: () => void;
+  fixing?: boolean;
 }
 
-export function PullRequestChecksTab({ checks, loading, error }: PullRequestChecksTabProps) {
+export function PullRequestChecksTab({
+  checks,
+  loading,
+  error,
+  onFixCi,
+  fixing,
+}: PullRequestChecksTabProps) {
   return (
     <TabState
       loading={loading}
@@ -46,6 +54,18 @@ export function PullRequestChecksTab({ checks, loading, error }: PullRequestChec
       }
     >
       <Stack spacing={1.5}>
+        {checks && checks.failing > 0 && onFixCi ? (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" disabled={fixing} onClick={onFixCi}>
+                {fixing ? 'Starting…' : 'Fix CI'}
+              </Button>
+            }
+          >
+            {checks.failing === 1 ? '1 check is failing.' : `${checks.failing} checks are failing.`}
+          </Alert>
+        ) : null}
         {checks && checks.truncated ? (
           <Typography variant="caption" color="text.secondary">
             Showing the first {checks.checks.length} of {checks.total} checks.

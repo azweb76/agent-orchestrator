@@ -23,9 +23,12 @@ import {
   isTopLevelClaudeResult,
   parseAskUserQuestions,
   visibleAssistantContent,
+  chatSessionTemplateById,
   type AgentDetail,
   type ChatSession,
   type ChatSessionTemplate,
+  type ChatSessionTemplateId,
+  type EffortLevel,
   type Message,
   type PermissionRequest,
   type UpdateChatSessionRequest,
@@ -38,6 +41,7 @@ import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
+import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -49,6 +53,8 @@ interface ChatPanelProps {
   archived: boolean;
   /** When set on a fresh agent (e.g. from-idea), send as the first chat prompt. */
   initialPrompt?: string;
+  /** When set, create a new session from this template after mount. */
+  initialTemplate?: ChatSessionTemplateId;
 }
 
 /** Distance from the bottom (px) still treated as "stuck" for auto-scroll. */
@@ -149,7 +155,7 @@ function MessageTimeline({ message }: { message: Message }) {
   );
 }
 
-export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
+export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: ChatPanelProps) {
   const agentId = agent.id;
   const queryClient = useQueryClient();
   const sessions = agent.sessions ?? [];
@@ -160,7 +166,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     sessions.find((item) => item.id === sessionId) ?? sessions[0];
   const activeSessionId = session?.id ?? sessionId;
   const [draft, setDraft] = useState('');
-  const [queues, setQueues] = useState<Record<string, QueuedChatItem[]>>({});
   const [sendingSessionIds, setSendingSessionIds] = useState<string[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
@@ -177,19 +182,18 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
   const stickToBottomRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const sendingSessionsRef = useRef(new Set<string>());
-  const queueRef = useRef<Record<string, QueuedChatItem[]>>({});
   const mountedRef = useRef(true);
   const autoStartedRef = useRef(false);
   const sessionIdRef = useRef(activeSessionId);
   const [creatingSession, setCreatingSession] = useState(false);
   const [gradeOpen, setGradeOpen] = useState(false);
+  const [improveOpen, setImproveOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const runChatRef = useRef<
     (text: string, images: PendingImage[], force: boolean, sessionId?: string) => Promise<void>
   >(async () => undefined);
 
   sessionIdRef.current = activeSessionId;
-  const queue = queues[activeSessionId] ?? [];
   const isSending = sendingSessionIds.includes(activeSessionId);
 
   const beginSending = (id: string) => {
@@ -212,12 +216,29 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     }
   };
 
+  // Queued follow-ups are persisted server-side and drained by the server when
+  // the running reply finishes (even if this browser tab closes).
+  const queueQuery = useQuery({
+    queryKey: ['queue', agentId, activeSessionId],
+    queryFn: () => api.listQueuedMessages(agentId, activeSessionId),
+    enabled: Boolean(activeSessionId),
+    refetchInterval: (query) =>
+      session?.status === 'running' || isSending || (query.state.data?.length ?? 0) > 0
+        ? 2000
+        : false,
+  });
+  const queue: QueuedChatItem[] = (queueQuery.data ?? []).map((item) => ({
+    id: item.id,
+    text: item.content,
+    images: [],
+  }));
+
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId, activeSessionId],
     queryFn: () => api.getMessages(agentId, activeSessionId),
     enabled: Boolean(activeSessionId),
     refetchInterval: () =>
-      session?.status === 'running' || isSending ? 1000 : false,
+      session?.status === 'running' || isSending || queue.length > 0 ? 1000 : false,
   });
 
   const updateMutation = useMutation({
@@ -257,10 +278,9 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     mutationFn: () => api.clearMessages(agentId, activeSessionId),
     onSuccess: () => {
       setClearOpen(false);
-      setQueues((prev) => ({ ...prev, [activeSessionId]: [] }));
-      queueRef.current = { ...queueRef.current, [activeSessionId]: [] };
       setPermissionRequests([]);
       setChatError(null);
+      queryClient.invalidateQueries({ queryKey: ['queue', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
@@ -271,12 +291,11 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     mutationFn: (messageId: string) => api.rewindMessages(agentId, activeSessionId, messageId),
     onSuccess: (result) => {
       setRewindTarget(null);
-      setQueues((prev) => ({ ...prev, [activeSessionId]: [] }));
-      queueRef.current = { ...queueRef.current, [activeSessionId]: [] };
       setPermissionRequests([]);
       setChatError(null);
       setLastFailed(null);
       setDraft(result.draft);
+      queryClient.invalidateQueries({ queryKey: ['queue', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
@@ -289,10 +308,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       abortBySessionRef.current.get(target.id)?.abort();
       abortBySessionRef.current.delete(target.id);
       endSending(target.id);
-      const nextQueues = { ...queueRef.current };
-      delete nextQueues[target.id];
-      queueRef.current = nextQueues;
-      setQueues(nextQueues);
       setDeleteTarget(null);
       setPermissionRequests([]);
       setChatError(null);
@@ -303,6 +318,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       queryClient.setQueryData(['agent', agentId], detail);
       queryClient.removeQueries({ queryKey: ['messages', agentId, target.id] });
       queryClient.removeQueries({ queryKey: ['permissions', agentId, target.id] });
+      queryClient.removeQueries({ queryKey: ['queue', agentId, target.id] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
     },
@@ -324,10 +340,6 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     enabled: Boolean(activeSessionId) && (sessionBusy || permissionRequests.length > 0),
     refetchInterval: () => (sessionBusy || permissionRequests.length > 0 ? 2000 : false),
   });
-
-  useEffect(() => {
-    queueRef.current = queues;
-  }, [queues]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -426,17 +438,20 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     });
   };
 
-  const enqueueForSession = (sid: string, item: QueuedChatItem) => {
-    const next = [...(queueRef.current[sid] ?? []), item];
-    queueRef.current = { ...queueRef.current, [sid]: next };
-    setQueues((prev) => ({ ...prev, [sid]: next }));
-  };
-
-  const shiftQueue = (sid: string): QueuedChatItem | undefined => {
-    const [next, ...rest] = queueRef.current[sid] ?? [];
-    queueRef.current = { ...queueRef.current, [sid]: rest };
-    setQueues((prev) => ({ ...prev, [sid]: rest }));
-    return next;
+  const enqueueForSession = async (sid: string, text: string, images: PendingImage[]) => {
+    try {
+      await api.enqueueMessage(agentId, sid, {
+        message: text,
+        images: images.map((image) => ({
+          name: image.name,
+          mimeType: image.mimeType,
+          dataBase64: image.dataBase64,
+        })),
+      });
+    } catch (error) {
+      if (sid === sessionIdRef.current) setChatError((error as Error).message);
+    }
+    queryClient.invalidateQueries({ queryKey: ['queue', agentId, sid] });
   };
 
   const viewed = (sid: string) => sid === sessionIdRef.current;
@@ -464,11 +479,7 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       (targetSessionId === activeSessionId && session?.status === 'running');
 
     if (targetBusy && !force) {
-      enqueueForSession(targetSessionId, {
-        id: `q-${Date.now()}-${Math.random()}`,
-        text,
-        images,
-      });
+      await enqueueForSession(targetSessionId, text, images);
       return;
     }
 
@@ -618,33 +629,16 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
         queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       }
     } finally {
+      // The server drains any queued follow-ups itself once the run finishes.
       void queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['queue', agentId, stream.sessionId] });
       releaseSessionAbort(stream.sessionId, controller);
       endSending(stream.sessionId);
-
-      if (!mountedRef.current) return;
-
-      const next = shiftQueue(stream.sessionId);
-      if (next) {
-        void runChat(next.text, next.images, false, stream.sessionId);
-      }
     }
   };
 
   runChatRef.current = runChat;
-
-  // Flush queued messages once the session goes idle. The send loop in runChat
-  // only dequeues after a locally-run stream finishes; when the running reply
-  // belongs to a detached run (page reload, another tab, recovered process),
-  // queued items would otherwise sit forever after that run completes.
-  useEffect(() => {
-    if (archived || sessionBusy || !activeSessionId) return;
-    if (sendingSessionsRef.current.has(activeSessionId)) return;
-    if ((queueRef.current[activeSessionId] ?? []).length === 0) return;
-    const next = shiftQueue(activeSessionId);
-    if (next) void runChatRef.current(next.text, next.images, false, activeSessionId);
-  }, [archived, sessionBusy, activeSessionId, queues]);
 
   // From-idea: auto-send the idea as the first plan-mode prompt once messages load empty.
   useEffect(() => {
@@ -780,8 +774,8 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     await new Promise((r) => setTimeout(r, 150));
     if (!mountedRef.current) return;
 
-    queueRef.current = { ...queueRef.current, [planSessionId]: [] };
-    setQueues((prev) => ({ ...prev, [planSessionId]: [] }));
+    // The server drops queued follow-ups on the stashed plan session.
+    queryClient.invalidateQueries({ queryKey: ['queue', agentId, planSessionId] });
     setPermissionRequests([]);
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
@@ -954,6 +948,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
       setCreatingSession(false);
     }
   };
+
+  useEffect(() => {
+    if (!initialTemplate || archived || autoStartedRef.current) return;
+    const template = chatSessionTemplateById(initialTemplate);
+    if (!template) return;
+    autoStartedRef.current = true;
+    void createSessionFromTemplate(template);
+  }, [archived, initialTemplate]);
 
   return (
     <Box
@@ -1166,11 +1168,13 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             archived={archived}
             isStreaming={sessionBusy}
             model={session?.model ?? agent.model}
+            effort={session?.effort ?? agent.effort}
             permissionMode={session?.permissionMode ?? agent.permissionMode ?? 'plan'}
             queue={queue}
             draft={draft}
             onDraftChange={setDraft}
             onModelChange={(model) => updateMutation.mutate({ model })}
+            onEffortChange={(effort: EffortLevel) => updateMutation.mutate({ effort })}
             onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
             onSend={(text, images, force) => void runChat(text, images, force)}
             onStop={() => void stopStreaming()}
@@ -1187,9 +1191,12 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             }}
             onRemoveQueued={(id) => {
               const sid = activeSessionId;
-              const next = (queueRef.current[sid] ?? []).filter((item) => item.id !== id);
-              queueRef.current = { ...queueRef.current, [sid]: next };
-              setQueues((prev) => ({ ...prev, [sid]: next }));
+              void api
+                .removeQueuedMessage(agentId, sid, id)
+                .catch(() => undefined)
+                .finally(() => {
+                  queryClient.invalidateQueries({ queryKey: ['queue', agentId, sid] });
+                });
             }}
           />
         </Box>
@@ -1254,7 +1261,23 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
           gradeMutation.reset();
         }}
         onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
+        onImprove={() => {
+          setGradeOpen(false);
+          setImproveOpen(true);
+        }}
       />
+
+      {activeSessionId ? (
+        <ImproveInstructionsDialog
+          open={improveOpen}
+          agentId={agentId}
+          sessionId={activeSessionId}
+          onClose={() => setImproveOpen(false)}
+          onApplied={() => {
+            queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
+          }}
+        />
+      ) : null}
     </Box>
   );
 }

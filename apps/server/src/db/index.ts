@@ -12,6 +12,7 @@ import type {
   MessageAttachment,
   MessageMetadata,
   PermissionMode,
+  QueuedChatMessage,
   SessionGrade,
   SessionGradeAnalysis,
   SessionGradeScore,
@@ -102,6 +103,15 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS queued_messages (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  attachments TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agents_worktree ON agents(worktree_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
@@ -112,6 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 /** Indexes on columns that older databases may not have until `migrateSchema` runs. */
 const ADDITIVE_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_queued_messages_session ON queued_messages(session_id);
 `;
 
 export const DATABASE_FILENAME = 'agent-orchestrator.db';
@@ -703,6 +714,28 @@ export class MessageRepository {
     return row ? rowToMessage(row) : null;
   }
 
+  /** Assistant turns that recorded a cost, without deserializing full metadata. */
+  listCostRows(): Array<{
+    agentId: string;
+    sessionId: string | null;
+    createdAt: string;
+    costUsd: number;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT agent_id AS agentId, session_id AS sessionId, created_at AS createdAt,
+                CAST(json_extract(metadata, '$.costUsd') AS REAL) AS costUsd
+         FROM messages
+         WHERE role = 'assistant' AND json_extract(metadata, '$.costUsd') IS NOT NULL`,
+      )
+      .all() as Array<{
+      agentId: string;
+      sessionId: string | null;
+      createdAt: string;
+      costUsd: number;
+    }>;
+  }
+
   /**
    * Delete the given message and every later message in the same session
    * (ordered by created_at, then insertion order).
@@ -741,6 +774,66 @@ export class MessageRepository {
       if (match) return match;
     }
     return null;
+  }
+}
+
+export class QueuedMessageRepository {
+  constructor(private db: Database.Database) {}
+
+  create(message: QueuedChatMessage): QueuedChatMessage {
+    this.db
+      .prepare(
+        `INSERT INTO queued_messages (id, agent_id, session_id, content, attachments, created_at)
+         VALUES (@id, @agentId, @sessionId, @content, @attachments, @createdAt)`,
+      )
+      .run({
+        id: message.id,
+        agentId: message.agentId,
+        sessionId: message.sessionId,
+        content: message.content,
+        attachments: JSON.stringify(message.attachments ?? []),
+        createdAt: message.createdAt,
+      });
+    return message;
+  }
+
+  listBySession(sessionId: string): QueuedChatMessage[] {
+    // rowid preserves insertion order even when created_at timestamps tie.
+    return this.db
+      .prepare('SELECT * FROM queued_messages WHERE session_id = ? ORDER BY rowid ASC')
+      .all(sessionId)
+      .map(rowToQueuedMessage);
+  }
+
+  getById(id: string): QueuedChatMessage | null {
+    const row = this.db.prepare('SELECT * FROM queued_messages WHERE id = ?').get(id);
+    return row ? rowToQueuedMessage(row) : null;
+  }
+
+  /** Remove and return the oldest queued message for the session, if any. */
+  takeNext(sessionId: string): QueuedChatMessage | null {
+    const next = this.listBySession(sessionId)[0] ?? null;
+    if (next) this.delete(next.id);
+    return next;
+  }
+
+  delete(id: string): void {
+    this.db.prepare('DELETE FROM queued_messages WHERE id = ?').run(id);
+  }
+
+  deleteBySession(sessionId: string): number {
+    const result = this.db
+      .prepare('DELETE FROM queued_messages WHERE session_id = ?')
+      .run(sessionId);
+    return result.changes;
+  }
+
+  /** Session ids that still have queued messages (used to drain after restart). */
+  listSessionIdsWithQueued(): string[] {
+    return this.db
+      .prepare('SELECT DISTINCT session_id FROM queued_messages')
+      .all()
+      .map((row) => String((row as Record<string, unknown>).session_id));
   }
 }
 
@@ -835,6 +928,8 @@ const SESSION_TEMPLATES = new Set<ChatSessionTemplateId>([
   'build',
   'create-draft-pr',
   'review',
+  'address-review',
+  'fix-ci',
 ]);
 
 function parseSessionTemplate(value: unknown): ChatSessionTemplateId {
@@ -928,6 +1023,25 @@ function rowToMessage(row: unknown): Message {
   };
 }
 
+function rowToQueuedMessage(row: unknown): QueuedChatMessage {
+  const r = row as Record<string, unknown>;
+  const agentId = String(r.agent_id);
+  const attachments = parseJson<MessageAttachment[]>(String(r.attachments ?? '[]'), []).map(
+    (item) => ({
+      ...item,
+      url: item.url || attachmentUrl(agentId, item.id),
+    }),
+  );
+  return {
+    id: String(r.id),
+    agentId,
+    sessionId: String(r.session_id),
+    content: String(r.content),
+    attachments,
+    createdAt: String(r.created_at),
+  };
+}
+
 function rowToEvent(row: unknown): AgentEvent {
   const r = row as Record<string, unknown>;
   return {
@@ -946,6 +1060,7 @@ export type AppRepositories = {
   sessions: ChatSessionRepository;
   messages: MessageRepository;
   events: EventRepository;
+  queued: QueuedMessageRepository;
 };
 
 export function createRepositories(db: Database.Database): AppRepositories {
@@ -956,5 +1071,6 @@ export function createRepositories(db: Database.Database): AppRepositories {
     sessions: new ChatSessionRepository(db),
     messages: new MessageRepository(db),
     events: new EventRepository(db),
+    queued: new QueuedMessageRepository(db),
   };
 }

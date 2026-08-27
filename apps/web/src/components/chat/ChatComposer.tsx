@@ -20,11 +20,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 import InsightsIcon from '@mui/icons-material/Insights';
 import {
+  CLAUDE_EFFORT_LEVELS,
   CLAUDE_MODELS,
   LOCAL_SLASH_COMMANDS,
   PERMISSION_MODES,
   PROMPT_SLASH_COMMANDS,
   SESSION_GRADE_LABELS,
+  type EffortLevel,
   type PermissionMode,
   type SessionGrade,
   type SlashCommand,
@@ -53,9 +55,11 @@ interface ChatComposerProps {
   archived: boolean;
   isStreaming: boolean;
   model: string;
+  effort: EffortLevel;
   permissionMode: PermissionMode;
   queue: QueuedChatItem[];
   onModelChange: (model: string) => void;
+  onEffortChange: (effort: EffortLevel) => void;
   onPermissionModeChange: (mode: PermissionMode) => void;
   onSend: (text: string, images: PendingImage[], force: boolean) => void;
   onStop: () => void;
@@ -121,9 +125,11 @@ export function ChatComposer({
   archived,
   isStreaming,
   model,
+  effort,
   permissionMode,
   queue,
   onModelChange,
+  onEffortChange,
   onPermissionModeChange,
   onSend,
   onStop,
@@ -457,6 +463,22 @@ export function ChatComposer({
             {CLAUDE_MODELS.map((item) => (
               <MenuItem key={item.id} value={item.id}>
                 {item.label.replace('Claude ', '')}
+              </MenuItem>
+            ))}
+          </Select>
+
+          <Select
+            variant="standard"
+            disableUnderline
+            value={effort}
+            disabled={archived}
+            onChange={(e) => onEffortChange(e.target.value as EffortLevel)}
+            inputProps={{ 'aria-label': 'Effort' }}
+            sx={{ ...selectSx, minWidth: { xs: 72, sm: 92 } }}
+          >
+            {CLAUDE_EFFORT_LEVELS.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                {item.label}
               </MenuItem>
             ))}
           </Select>

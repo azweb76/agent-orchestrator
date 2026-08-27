@@ -71,6 +71,8 @@ pnpm dev
 | `CLAUDE_BIN` | Path to Claude Code binary | `claude` |
 | `DATA_DIR` | Directory for repos, worktrees, and SQLite DB | `./data` |
 | `PORT` | Server port | `3001` |
+| `HOST` | Bind address | `127.0.0.1` |
+| `AUTH_TOKEN` | Optional shared secret for API access | — |
 
 ## Usage
 

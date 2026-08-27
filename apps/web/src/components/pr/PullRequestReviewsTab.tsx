@@ -1,6 +1,21 @@
-import { Avatar, Box, Chip, Link, Stack, Typography } from '@mui/material';
+import { useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  FormControl,
+  InputLabel,
+  Link,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import type { PullRequestReview } from '@agent-orchestrator/shared';
+import type { PullRequestReview, PullRequestReviewEvent } from '@agent-orchestrator/shared';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowTitle } from '../ui/ListPanel';
@@ -23,10 +38,26 @@ export interface PullRequestReviewsTabProps {
   reviews?: PullRequestReview[];
   loading: boolean;
   error: unknown;
+  canWrite?: boolean;
+  submitting?: boolean;
+  submitError?: string | null;
+  onSubmitReview?: (event: PullRequestReviewEvent, body: string) => void;
 }
 
-export function PullRequestReviewsTab({ reviews, loading, error }: PullRequestReviewsTabProps) {
+export function PullRequestReviewsTab({
+  reviews,
+  loading,
+  error,
+  canWrite,
+  submitting,
+  submitError,
+  onSubmitReview,
+}: PullRequestReviewsTabProps) {
+  const [event, setEvent] = useState<PullRequestReviewEvent>('COMMENT');
+  const [body, setBody] = useState('');
+
   return (
+    <Stack spacing={2}>
     <TabState
       loading={loading}
       error={error}
@@ -82,5 +113,49 @@ export function PullRequestReviewsTab({ reviews, loading, error }: PullRequestRe
         ))}
       </ListPanel>
     </TabState>
+
+      {canWrite && onSubmitReview ? (
+        <Stack spacing={1.25} sx={{ pt: 0.5 }}>
+          <Typography variant="subtitle2">Submit a review</Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <FormControl size="small" sx={{ minWidth: { sm: 200 } }}>
+              <InputLabel id="review-event-label">Action</InputLabel>
+              <Select
+                labelId="review-event-label"
+                label="Action"
+                value={event}
+                onChange={(e) => setEvent(e.target.value as PullRequestReviewEvent)}
+              >
+                <MenuItem value="COMMENT">Comment</MenuItem>
+                <MenuItem value="APPROVE">Approve</MenuItem>
+                <MenuItem value="REQUEST_CHANGES">Request changes</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+          <TextField
+            label={event === 'APPROVE' ? 'Comment (optional)' : 'Comment'}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            fullWidth
+            multiline
+            minRows={3}
+            placeholder="What should the author know?"
+          />
+          {submitError ? <Alert severity="error">{submitError}</Alert> : null}
+          <Box>
+            <Button
+              variant="contained"
+              disabled={submitting || (event !== 'APPROVE' && !body.trim())}
+              onClick={() => {
+                onSubmitReview(event, body.trim());
+                setBody('');
+              }}
+            >
+              {submitting ? 'Submitting…' : 'Submit review'}
+            </Button>
+          </Box>
+        </Stack>
+      ) : null}
+    </Stack>
   );
 }

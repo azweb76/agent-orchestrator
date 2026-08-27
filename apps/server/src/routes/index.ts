@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import { GitHubApiError } from '../services/github.js';
+import { authCookieName } from '../auth.js';
 import {
   archiveAgent,
   allowPermissionRequest,
@@ -10,15 +11,21 @@ import {
   activateAgentSession,
   buildApprovedPlan,
   clearAgentChat,
+  commitAgentChanges,
   createAgentFromPullRequest,
   createAgentPullRequest,
   createAgentSession,
+  createPullRequestComment,
   createWorktreeFromBranch,
   createWorktreeFromIdea,
   createWorktreeFromPr,
   createWorkspace,
   denyPermissionRequest,
+  deleteAgent,
   deleteAgentSession,
+  enqueueChatMessage,
+  listQueuedMessages,
+  removeQueuedMessage,
   deleteWorktree,
   deleteWorkspace,
   getAgentAttachment,
@@ -35,6 +42,7 @@ import {
   getPullRequestInbox,
   getPullRequestReviews,
   getSystemStatus,
+  getUsageSummary,
   getWorkspace,
   gradeAgentSession,
   generateAgentInstructionDraft,
@@ -56,7 +64,9 @@ import {
   stopAgent,
   stopAgentSession,
   streamAgentChat,
+  submitPullRequestReview,
   suggestBranchNameForWorkspace,
+  unarchiveAgent,
   updateAgent,
   updateAgentSession,
   updatePullRequestBranch,
@@ -77,12 +87,66 @@ function asyncHandler(
 export function createRouter(ctx: AppContext): express.Router {
   const router = express.Router();
 
+  router.post('/auth', (req, res) => {
+    const expected = process.env.AUTH_TOKEN?.trim();
+    if (!expected) {
+      res.status(204).end();
+      return;
+    }
+    const body = z.object({ token: z.string().min(1) }).parse(req.body ?? {});
+    if (body.token !== expected) {
+      res.status(401).json({ error: 'Unauthorized', authRequired: true });
+      return;
+    }
+    res.setHeader(
+      'Set-Cookie',
+      `${authCookieName()}=${encodeURIComponent(body.token)}; Path=/; SameSite=Lax; HttpOnly`,
+    );
+    res.json({ ok: true });
+  });
+
   router.get(
     '/status',
     asyncHandler(async (_req, res) => {
       res.json(await getSystemStatus(ctx));
     }),
   );
+
+  // Global live-update stream: agent/session status, permission prompts, queue
+  // and workspace changes. The web client uses it to invalidate caches and
+  // raise notifications instead of polling every endpoint.
+  router.get('/events/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write(': connected\n\n');
+
+    const unsubscribe = ctx.notifier?.subscribe((event) => {
+      try {
+        res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      } catch {
+        // dropped below via close
+      }
+    });
+    const ping = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        // close handler cleans up
+      }
+    }, 25_000);
+    ping.unref?.();
+
+    req.on('close', () => {
+      clearInterval(ping);
+      unsubscribe?.();
+    });
+  });
+
+  router.get('/usage', (_req, res) => {
+    res.json(getUsageSummary(ctx));
+  });
 
   router.get(
     '/workspaces',
@@ -316,6 +380,32 @@ export function createRouter(ctx: AppContext): express.Router {
   );
 
   router.post(
+    `${prPath}/reviews`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      const body = z
+        .object({
+          event: z.enum(['APPROVE', 'REQUEST_CHANGES', 'COMMENT']),
+          body: z.string().max(65_536).optional(),
+        })
+        .refine((value) => value.event === 'APPROVE' || Boolean(value.body?.trim()), {
+          message: 'A review body is required when requesting changes or commenting',
+        })
+        .parse(req.body ?? {});
+      res.status(201).json(await submitPullRequestReview(ctx, owner, repo, prNumber, body));
+    }),
+  );
+
+  router.post(
+    `${prPath}/comments`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      const body = z.object({ body: z.string().min(1).max(65_536) }).parse(req.body ?? {});
+      res.status(201).json(await createPullRequestComment(ctx, owner, repo, prNumber, body));
+    }),
+  );
+
+  router.post(
     `${prPath}/merge`,
     asyncHandler(async (req, res) => {
       const { owner, repo, prNumber } = prRef(req);
@@ -397,7 +487,30 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
-  const sessionTemplate = z.enum(['chat', 'build', 'create-draft-pr', 'review']);
+  router.post(
+    '/agents/:agentId/unarchive',
+    asyncHandler(async (req, res) => {
+      res.json(await unarchiveAgent(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.delete(
+    '/agents/:agentId',
+    asyncHandler(async (req, res) => {
+      const deleteWorktree =
+        req.query.deleteWorktree === 'true' || req.query.deleteWorktree === '1';
+      res.json(await deleteAgent(ctx, param(req.params.agentId), { deleteWorktree }));
+    }),
+  );
+
+  const sessionTemplate = z.enum([
+    'chat',
+    'build',
+    'create-draft-pr',
+    'review',
+    'address-review',
+    'fix-ci',
+  ]);
 
   router.get(
     '/agents/:agentId/sessions',
@@ -698,6 +811,61 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
+  const queueBody = z
+    .object({
+      message: z.string(),
+      images: z
+        .array(
+          z.object({
+            name: z.string().min(1),
+            mimeType: z.string().min(1),
+            dataBase64: z.string().min(1),
+          }),
+        )
+        .optional(),
+    })
+    .refine((value) => value.message.trim().length > 0 || (value.images?.length ?? 0) > 0, {
+      message: 'Message or image required',
+    });
+
+  router.get(
+    '/agents/:agentId/sessions/:sessionId/queue',
+    asyncHandler(async (req, res) => {
+      res.json(listQueuedMessages(ctx, param(req.params.agentId), param(req.params.sessionId)));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/queue',
+    asyncHandler(async (req, res) => {
+      const body = queueBody.parse(req.body);
+      res
+        .status(201)
+        .json(
+          await enqueueChatMessage(
+            ctx,
+            param(req.params.agentId),
+            param(req.params.sessionId),
+            body,
+          ),
+        );
+    }),
+  );
+
+  router.delete(
+    '/agents/:agentId/sessions/:sessionId/queue/:queuedId',
+    asyncHandler(async (req, res) => {
+      res.json(
+        await removeQueuedMessage(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+          param(req.params.queuedId),
+        ),
+      );
+    }),
+  );
+
   router.get(
     '/agents/:agentId/messages',
     asyncHandler(async (req, res) => {
@@ -835,6 +1003,19 @@ export function createRouter(ctx: AppContext): express.Router {
         })
         .parse(req.body);
       res.status(201).json(await createAgentPullRequest(ctx, param(req.params.agentId), body));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/commit',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          message: z.string().trim().min(1).max(4000),
+          push: z.boolean().optional(),
+        })
+        .parse(req.body ?? {});
+      res.json(await commitAgentChanges(ctx, param(req.params.agentId), body));
     }),
   );
 

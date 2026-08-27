@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
 import {
+  Badge,
   Box,
   Collapse,
   IconButton,
@@ -170,11 +171,13 @@ export function WorkspaceSidebar({
   const sidebarQuery = useQuery({
     queryKey: ['sidebar'],
     queryFn: api.listSidebar,
+    // The SSE event stream invalidates this cache on changes; polling is a
+    // slow fallback for missed events.
     refetchInterval: (query) => {
       const tree = query.state.data;
-      if (!tree) return 10_000;
+      if (!tree) return 15_000;
       const hasRunning = tree.some((ws) => ws.agents.some((a) => a.status === 'running'));
-      return hasRunning ? 2_000 : 10_000;
+      return hasRunning ? 10_000 : 30_000;
     },
   });
 
@@ -415,6 +418,7 @@ function CollapsedAgentRail({
       {agents.map(({ agent, workspace }) => {
         const selected = selectedAgentId === agent.id;
         const workspaceActive = selectedWorkspaceId === workspace.id && pathname.startsWith('/workspaces');
+        const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
         return (
           <Tooltip
             key={agent.id}
@@ -427,6 +431,11 @@ function CollapsedAgentRail({
                 <Typography variant="caption" sx={{ display: 'block' }}>
                   {workspace.name} · {agent.status}
                 </Typography>
+                {needsInput && (
+                  <Typography variant="caption" color="warning.light">
+                    Needs your input
+                  </Typography>
+                )}
                 {agent.status === 'running' && (
                   <Typography variant="caption" color="info.light">
                     In progress…
@@ -467,7 +476,9 @@ function CollapsedAgentRail({
                 },
               }}
             >
-              <AgentStatusIcon status={agent.status} selected={selected} />
+              <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
+                <AgentStatusIcon status={agent.status} selected={selected} />
+              </Badge>
               <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
                 <AgentStatusDot status={agent.status} size={7} />
               </Box>
@@ -684,6 +695,7 @@ function ExpandedWorkspaceTree({
 }
 
 function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boolean }) {
+  const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   return (
     <ListItemButton
       component={RouterLink}
@@ -692,7 +704,9 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
       sx={{ pl: 5, py: 0.85, alignItems: 'flex-start' }}
     >
       <ListItemIcon sx={{ minWidth: 28, mt: 0.35 }}>
-        <AgentStatusIcon status={agent.status} selected={selected} />
+        <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
+          <AgentStatusIcon status={agent.status} selected={selected} />
+        </Badge>
       </ListItemIcon>
       <ListItemText
         primary={
@@ -717,9 +731,15 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
               {agent.worktree.branch}
               {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
               {' · '}
-              <Box component="span" sx={{ textTransform: 'capitalize' }}>
-                {agent.status}
-              </Box>
+              {needsInput ? (
+                <Box component="span" sx={{ color: 'warning.main', fontWeight: 700 }}>
+                  Needs input
+                </Box>
+              ) : (
+                <Box component="span" sx={{ textTransform: 'capitalize' }}>
+                  {agent.status}
+                </Box>
+              )}
             </Typography>
             <AgentProgressBar status={agent.status} />
           </Box>

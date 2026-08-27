@@ -19,6 +19,8 @@ import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutli
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import type { ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
 import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
@@ -36,6 +38,8 @@ interface ChatSessionBarProps {
 
 function templateIcon(id: string) {
   if (id === 'review') return <RateReviewOutlinedIcon fontSize="small" />;
+  if (id === 'address-review') return <ReplyOutlinedIcon fontSize="small" />;
+  if (id === 'fix-ci') return <BugReportOutlinedIcon fontSize="small" />;
   if (id === 'create-draft-pr') return <MergeTypeIcon fontSize="small" />;
   return <ChatOutlinedIcon fontSize="small" />;
 }

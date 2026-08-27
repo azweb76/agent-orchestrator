@@ -5,10 +5,12 @@ import {
   Box,
   Button,
   Chip,
+  Checkbox,
   CircularProgress,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
@@ -21,12 +23,16 @@ import {
   Typography,
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
+import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentDiffScope } from '@agent-orchestrator/shared';
+import type { AgentDiffScope, ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ChangesDiffView } from '../components/changes/ChangesDiffView';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -47,20 +53,28 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
-  const locationState = location.state as { initialPrompt?: string } | null;
+  const locationState = location.state as {
+    initialPrompt?: string;
+    sessionTemplate?: ChatSessionTemplateId;
+  } | null;
   const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
+  const [initialTemplate] = useState(() => locationState?.sessionTemplate);
   const [tab, setTab] = useState(0);
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [commitOpen, setCommitOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [commitPush, setCommitPush] = useState(true);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
 
   // Consume one-shot navigation state so refresh does not re-send the idea.
   useEffect(() => {
-    if (!locationState?.initialPrompt) return;
+    if (!locationState?.initialPrompt && !locationState?.sessionTemplate) return;
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, locationState?.initialPrompt, navigate]);
+  }, [location.pathname, locationState?.initialPrompt, locationState?.sessionTemplate, navigate]);
 
   const agentQuery = useQuery({
     queryKey: ['agent', agentId],
@@ -88,6 +102,38 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         navigate(detail?.workspace.id ? `/workspaces/${detail.workspace.id}` : '/');
         return;
       }
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    },
+  });
+
+  const unarchiveMutation = useMutation({
+    mutationFn: () => api.unarchiveAgent(agentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['status'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteAgent(agentId, false),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['worktrees'] });
+      queryClient.invalidateQueries({ queryKey: ['status'] });
+      const detail = queryClient.getQueryData<{ workspace: { id: string } }>(['agent', agentId]);
+      navigate(detail?.workspace.id ? `/workspaces/${detail.workspace.id}` : '/');
+    },
+  });
+
+  const commitMutation = useMutation({
+    mutationFn: () =>
+      api.commitChanges(agentId, { message: commitMessage.trim(), push: commitPush }),
+    onSuccess: () => {
+      setCommitOpen(false);
+      setCommitMessage('');
+      queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     },
   });
@@ -189,19 +235,61 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         </Box>
 
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          <Button
-            size="small"
-            variant="outlined"
-            color="error"
-            startIcon={<ArchiveOutlinedIcon />}
-            disabled={archived || archiveMutation.isPending}
-            onClick={() => {
-              archiveMutation.reset();
-              setArchiveOpen(true);
-            }}
-          >
-            Archive
-          </Button>
+          {archived ? (
+            <>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<UnarchiveOutlinedIcon />}
+                disabled={unarchiveMutation.isPending}
+                onClick={() => unarchiveMutation.mutate()}
+              >
+                Unarchive
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteOutlinedIcon />}
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  deleteMutation.reset();
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                startIcon={<ArchiveOutlinedIcon />}
+                disabled={archiveMutation.isPending}
+                onClick={() => {
+                  archiveMutation.reset();
+                  setArchiveOpen(true);
+                }}
+              >
+                Archive
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                startIcon={<DeleteOutlinedIcon />}
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  deleteMutation.reset();
+                  setDeleteOpen(true);
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          )}
           {prNumber != null ? (
             <Button
               size="small"
@@ -230,6 +318,18 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         </Stack>
       </Stack>
 
+      {(unarchiveMutation.error || deleteMutation.error) && (
+        <Alert
+          severity="error"
+          onClose={() => {
+            unarchiveMutation.reset();
+            deleteMutation.reset();
+          }}
+        >
+          {((unarchiveMutation.error ?? deleteMutation.error) as Error).message}
+        </Alert>
+      )}
+
       <Paper
         sx={{
           p: 0,
@@ -254,7 +354,12 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
         {tab === 0 && (
           <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <ChatPanel agent={agent} archived={archived} initialPrompt={initialPrompt} />
+            <ChatPanel
+              agent={agent}
+              archived={archived}
+              initialPrompt={initialPrompt}
+              initialTemplate={initialTemplate}
+            />
           </Box>
         )}
 
@@ -306,6 +411,20 @@ function AgentPageContent({ agentId }: { agentId: string }) {
                       </IconButton>
                     </span>
                   </Tooltip>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<UploadOutlinedIcon />}
+                    disabled={archived || !diffQuery.data?.patch}
+                    onClick={() => {
+                      commitMutation.reset();
+                      setCommitMessage('');
+                      setCommitPush(true);
+                      setCommitOpen(true);
+                    }}
+                  >
+                    Commit & push
+                  </Button>
                 </Stack>
               </Stack>
 
@@ -387,6 +506,76 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         }}
         onConfirm={(deleteWorktree) => archiveMutation.mutate(deleteWorktree)}
       />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title={`Delete ${agent.name}?`}
+        description="This permanently deletes the agent and its chat history. The git worktree is kept on disk."
+        confirmLabel="Delete agent"
+        loading={deleteMutation.isPending}
+        onCancel={() => {
+          setDeleteOpen(false);
+          deleteMutation.reset();
+        }}
+        onConfirm={() => deleteMutation.mutate()}
+      />
+
+      <ResponsiveDialog
+        open={commitOpen}
+        onClose={() => {
+          if (commitMutation.isPending) return;
+          setCommitOpen(false);
+          commitMutation.reset();
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Commit changes</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Commit message"
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              fullWidth
+              required
+              autoFocus
+              multiline
+              minRows={2}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={commitPush}
+                  onChange={(event) => setCommitPush(event.target.checked)}
+                />
+              }
+              label="Push to origin after committing"
+            />
+            {commitMutation.error ? (
+              <Alert severity="error">{(commitMutation.error as Error).message}</Alert>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setCommitOpen(false);
+              commitMutation.reset();
+            }}
+            disabled={commitMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!commitMessage.trim() || commitMutation.isPending}
+            onClick={() => commitMutation.mutate()}
+          >
+            {commitMutation.isPending ? 'Working…' : commitPush ? 'Commit and push' : 'Commit'}
+          </Button>
+        </DialogActions>
+      </ResponsiveDialog>
     </Stack>
   );
 }

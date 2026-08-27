@@ -1,4 +1,5 @@
-import { Avatar, Box, Link, Stack, Typography } from '@mui/material';
+import { useState } from 'react';
+import { Alert, Avatar, Box, Button, Link, Stack, TextField, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { PullRequestComment } from '@agent-orchestrator/shared';
 import { MarkdownContent } from '../chat/MarkdownContent';
@@ -11,14 +12,25 @@ export interface PullRequestConversationTabProps {
   comments?: PullRequestComment[];
   loading: boolean;
   error: unknown;
+  canWrite?: boolean;
+  submitting?: boolean;
+  submitError?: string | null;
+  onSubmitComment?: (body: string) => void;
 }
 
 export function PullRequestConversationTab({
   comments,
   loading,
   error,
+  canWrite,
+  submitting,
+  submitError,
+  onSubmitComment,
 }: PullRequestConversationTabProps) {
+  const [body, setBody] = useState('');
+
   return (
+    <Stack spacing={2}>
     <TabState
       loading={loading}
       error={error}
@@ -64,5 +76,34 @@ export function PullRequestConversationTab({
         ))}
       </ListPanel>
     </TabState>
+
+      {canWrite && onSubmitComment ? (
+        <Stack spacing={1.25}>
+          <Typography variant="subtitle2">Add a comment</Typography>
+          <TextField
+            label="Comment"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            fullWidth
+            multiline
+            minRows={3}
+            placeholder="Leave a conversation comment on this pull request"
+          />
+          {submitError ? <Alert severity="error">{submitError}</Alert> : null}
+          <Box>
+            <Button
+              variant="contained"
+              disabled={submitting || !body.trim()}
+              onClick={() => {
+                onSubmitComment(body.trim());
+                setBody('');
+              }}
+            >
+              {submitting ? 'Posting…' : 'Comment'}
+            </Button>
+          </Box>
+        </Stack>
+      ) : null}
+    </Stack>
   );
 }

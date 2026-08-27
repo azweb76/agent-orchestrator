@@ -873,3 +873,51 @@ test('createPullRequest still posts through the shared request helper', async (t
   });
   assert.deepEqual(result, { number: 7, htmlUrl: 'https://github.com/azweb76/agent-orchestrator/pull/7' });
 });
+
+test('createPullRequestReview posts the event and maps the review', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    assert.equal(new URL(url).pathname, '/repos/azweb76/agent-orchestrator/pulls/9/reviews');
+    assert.equal(init?.method, 'POST');
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      event: 'APPROVE',
+      body: 'LGTM',
+    });
+    return jsonResponse({
+      id: 11,
+      user: { login: 'dan', avatar_url: 'https://example.com/d.png' },
+      state: 'APPROVED',
+      body: 'LGTM',
+      html_url: 'https://github.com/azweb76/agent-orchestrator/pull/9#pullrequestreview-11',
+      submitted_at: '2026-08-27T12:00:00Z',
+    });
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const review = await service.createPullRequestReview('azweb76', 'agent-orchestrator', 9, {
+    event: 'APPROVE',
+    body: 'LGTM',
+  });
+  assert.equal(review.id, '11');
+  assert.equal(review.state, 'APPROVED');
+  assert.equal(review.author?.login, 'dan');
+});
+
+test('createPullRequestComment posts to the issues comments endpoint', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+    assert.equal(new URL(url).pathname, '/repos/azweb76/agent-orchestrator/issues/9/comments');
+    assert.equal(init?.method, 'POST');
+    assert.deepEqual(JSON.parse(String(init?.body)), { body: 'Thanks' });
+    return jsonResponse({
+      id: 22,
+      user: { login: 'dan' },
+      body: 'Thanks',
+      html_url: 'https://github.com/azweb76/agent-orchestrator/pull/9#issuecomment-22',
+      created_at: '2026-08-27T12:00:00Z',
+    });
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const comment = await service.createPullRequestComment('azweb76', 'agent-orchestrator', 9, 'Thanks');
+  assert.equal(comment.id, '22');
+  assert.equal(comment.body, 'Thanks');
+});

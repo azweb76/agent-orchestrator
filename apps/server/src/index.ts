@@ -7,8 +7,10 @@ import { initDatabase, createRepositories } from './db/index.js';
 import { ClaudeService, GitService } from './services/git.js';
 import { GitHubService } from './services/github.js';
 import { AnthropicService } from './services/anthropic.js';
+import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
+import { optionalBearerAuth } from './auth.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config();
@@ -17,6 +19,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '../../..');
 const dataDir = path.resolve(process.env.DATA_DIR ?? path.join(rootDir, 'data'));
 const port = Number(process.env.PORT ?? 3001);
+const host = process.env.HOST?.trim() || '127.0.0.1';
+const authToken = process.env.AUTH_TOKEN?.trim() || undefined;
 const claudeBin = process.env.CLAUDE_BIN ?? 'claude';
 
 const db = initDatabase(dataDir);
@@ -29,11 +33,19 @@ const ctx: AppContext = {
   claude: new ClaudeService(claudeBin, path.join(dataDir, 'runs')),
   anthropic: new AnthropicService(),
   dataDir,
+  notifier: new Notifier(),
 };
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '12mb' }));
+app.use('/api', (req, res, next) => {
+  if (req.method === 'POST' && req.path === '/auth') {
+    next();
+    return;
+  }
+  optionalBearerAuth(authToken)(req, res, next);
+});
 app.use('/api', createRouter(ctx));
 app.use(errorHandler);
 
@@ -43,8 +55,8 @@ app.get('{*splat}', (_req, res) => {
   res.sendFile(path.join(webDist, 'index.html'));
 });
 
-const server = app.listen(port, () => {
-  console.log(`Agent Orchestrator running at http://localhost:${port}`);
+const server = app.listen(port, host, () => {
+  console.log(`Agent Orchestrator running at http://${host}:${port}`);
   console.log(`Data directory: ${dataDir}`);
   recoverRunningAgents(ctx);
 });

@@ -101,6 +101,23 @@ export interface AgentEvent {
   createdAt: string;
 }
 
+/** Live app-state change pushed over the global SSE stream (`/api/events/stream`). */
+export type AppEventType =
+  | 'agent_changed'
+  | 'run_finished'
+  | 'permission_request'
+  | 'queue_changed'
+  | 'workspaces_changed';
+
+export interface AppEvent {
+  id: string;
+  type: AppEventType;
+  agentId: string | null;
+  sessionId: string | null;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface GitHubBranch {
   name: string;
   sha: string;
@@ -290,6 +307,18 @@ export interface PullRequestComment {
   createdAt: string;
 }
 
+export const PULL_REQUEST_REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as const;
+export type PullRequestReviewEvent = (typeof PULL_REQUEST_REVIEW_EVENTS)[number];
+
+export interface SubmitPullRequestReviewRequest {
+  event: PullRequestReviewEvent;
+  body?: string;
+}
+
+export interface CreatePullRequestCommentRequest {
+  body: string;
+}
+
 export interface MergePullRequestRequest {
   method: PullRequestMergeMethod;
   commitTitle?: string;
@@ -393,6 +422,29 @@ export interface ArchiveAgentResponse {
   deletedWorktree: boolean;
 }
 
+export interface DeleteAgentRequest {
+  /** When true, also remove the agent's git worktree from disk. */
+  deleteWorktree?: boolean;
+}
+
+export interface DeleteAgentResponse {
+  deleted: boolean;
+  deletedWorktree: boolean;
+}
+
+export interface CommitAgentChangesRequest {
+  message: string;
+  /** When false, stage and commit without pushing. Defaults to true. */
+  push?: boolean;
+}
+
+export interface CommitAgentChangesResponse {
+  committed: boolean;
+  pushed: boolean;
+  branch: string;
+  message: string;
+}
+
 export interface PruneArchivedAgentsResponse {
   /** Number of archived agent rows removed. */
   prunedAgents: number;
@@ -411,6 +463,25 @@ export interface ChatRequest {
   message: string;
   /** When true, stop any in-flight Claude run before starting this message. */
   force?: boolean;
+  images?: ChatImageAttachment[];
+}
+
+/**
+ * Follow-up persisted server-side while a session is busy. The server sends
+ * queued messages in order as soon as the running reply finishes, even if no
+ * browser is attached.
+ */
+export interface QueuedChatMessage {
+  id: string;
+  agentId: string;
+  sessionId: string;
+  content: string;
+  attachments: MessageAttachment[];
+  createdAt: string;
+}
+
+export interface EnqueueChatMessageRequest {
+  message: string;
   images?: ChatImageAttachment[];
 }
 
@@ -528,11 +599,45 @@ export interface AgentDetail extends Agent {
 /** Agent summary for sidebar navigation (includes worktree context). */
 export interface SidebarAgent extends Agent {
   worktree: Pick<Worktree, 'id' | 'name' | 'branch' | 'prNumber'>;
+  /** Pending interactive prompts (AskUserQuestion / tool permissions) across sessions. */
+  pendingPermissionCount: number;
 }
 
 /** Workspace with nested agents for the app sidebar tree. */
 export interface SidebarWorkspace extends Workspace {
   agents: SidebarAgent[];
+}
+
+/** Spend/turn rollup computed from persisted assistant turns. */
+export interface UsageRollup {
+  costUsd: number;
+  assistantTurns: number;
+  /** ISO timestamp of the most recent assistant turn included, if any. */
+  lastActivityAt: string | null;
+}
+
+export interface SessionUsage extends UsageRollup {
+  sessionId: string;
+  title: string;
+}
+
+export interface AgentUsage extends UsageRollup {
+  agentId: string;
+  agentName: string;
+  workspaceId: string;
+  workspaceName: string;
+  archived: boolean;
+  sessions: SessionUsage[];
+}
+
+/** Fleet-wide cost rollup for the dashboard (`GET /api/usage`). */
+export interface UsageSummary {
+  totalCostUsd: number;
+  /** Cost of assistant turns recorded since local midnight. */
+  todayCostUsd: number;
+  totalAssistantTurns: number;
+  /** Per-agent rollups sorted by total cost, highest first. */
+  agents: AgentUsage[];
 }
 
 export const CLAUDE_MODELS = [
