@@ -24,6 +24,7 @@ import {
   mergeChatMessages,
   parseAskUserQuestions,
   visibleAssistantContent,
+  visibleSubagentItems,
   chatSessionTemplateById,
   type AgentDetail,
   type ChatSession,
@@ -105,19 +106,17 @@ function upsertAgentSession(
 
 function MessageTimeline({ message, onRetry }: { message: Message; onRetry?: () => void }) {
   const streaming = Boolean(message.metadata?.streaming);
-  const parts = streaming
-    ? (message.metadata?.timeline ?? [])
-    : completeRunningTools(message.metadata?.timeline ?? []);
+  const timeline = message.metadata?.timeline ?? [];
+  const parts = streaming ? timeline : completeRunningTools(timeline);
   const toolItems = parts.filter(
     (part): part is Extract<(typeof parts)[number], { type: 'tool' }> =>
       part.type === 'tool',
   );
-  const subagents = toolItems.filter((item) => isSubagentItem(item));
+  // Live timeline so parent Ready does not force-complete running Task rows.
+  const subagents = visibleSubagentItems(timeline, streaming);
   const otherTools = toolItems.filter((item) => !isSubagentItem(item));
   const otherRunning = otherTools.some((item) => item.status === 'running');
   const lastPart = parts[parts.length - 1];
-  // Keep Task/Explore cards after the parent turn ends (status becomes done).
-  // Running-only gating hid the subagent the moment Claude returned Ready.
   const showSubagents = subagents.length > 0;
   const showToolProgress =
     streaming &&

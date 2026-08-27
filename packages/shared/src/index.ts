@@ -757,6 +757,7 @@ export {
   parentToolUseId,
   runningSubagentItems,
   visibleAssistantContent,
+  visibleSubagentItems,
   type StreamPart,
   type ToolActivityItem,
   type ToolTaskInfo,
