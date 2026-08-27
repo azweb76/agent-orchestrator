@@ -634,6 +634,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       void queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       void queryClient.invalidateQueries({ queryKey: ['queue', agentId, stream.sessionId] });
+      void queryClient.invalidateQueries({ queryKey: ['session-context', agentId, stream.sessionId] });
       releaseSessionAbort(stream.sessionId, controller);
       endSending(stream.sessionId);
     }
@@ -665,6 +666,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sid] });
+    queryClient.invalidateQueries({ queryKey: ['session-context', agentId, sid] });
   };
 
   const removePermission = (requestId: string) => {

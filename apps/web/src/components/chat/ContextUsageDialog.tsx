@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -14,7 +14,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SessionContextTurn, SessionContextUsage, TokenUsageBreakdown } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { formatTokenCount } from '../../utils/format';
@@ -539,6 +539,7 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
 
 export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextUsageButtonProps) {
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['session-context', agentId, sessionId],
     queryFn: () => api.getSessionContext(agentId, sessionId),
@@ -546,6 +547,17 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
     refetchInterval: isStreaming || open ? 2000 : false,
     staleTime: 4_000,
   });
+
+  // After stop / run end, pull one fresh sample so the chip and modal keep the
+  // last real occupancy instead of a stale mid-stream zero.
+  const wasStreamingRef = useRef(Boolean(isStreaming));
+  useEffect(() => {
+    const wasStreaming = wasStreamingRef.current;
+    wasStreamingRef.current = Boolean(isStreaming);
+    if (wasStreaming && !isStreaming && agentId && sessionId) {
+      void queryClient.invalidateQueries({ queryKey: ['session-context', agentId, sessionId] });
+    }
+  }, [agentId, sessionId, isStreaming, queryClient]);
 
   const data = query.data;
   const percent = data?.percent ?? null;

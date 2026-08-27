@@ -282,6 +282,41 @@ describe('parseClaudeSessionContext', () => {
     assert.equal(parsed.history[0]?.contextTokens, 250);
     assert.equal(parsed.billed.outputTokens, 10);
   });
+
+  it('ignores output-only interrupted stubs so context does not drop to zero', () => {
+    const parsed = parseClaudeSessionContext(
+      [
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            model: 'claude-sonnet-4-20250514',
+            content: [{ type: 'text', text: 'Working' }],
+            usage: {
+              input_tokens: 100,
+              output_tokens: 20,
+              cache_read_input_tokens: 4000,
+            },
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [{ type: 'text', text: 'partial' }],
+            usage: { input_tokens: 0, output_tokens: 12 },
+          },
+        }),
+        JSON.stringify({
+          type: 'result',
+          usage: { input_tokens: 0, output_tokens: 12 },
+        }),
+        '',
+      ].join('\n'),
+    );
+
+    assert.equal(parsed.history.length, 1);
+    assert.equal(parsed.history[0]?.contextTokens, 4100);
+    assert.equal(parsed.model, 'claude-sonnet-4-20250514');
+  });
 });
 
 describe('buildSessionContextUsage', () => {
@@ -377,6 +412,46 @@ describe('buildSessionContextUsage', () => {
       ],
     });
     assert.equal(half.percent, 50);
+  });
+
+  it('keeps the last real occupancy when a trailing turn reports zero context', () => {
+    const usage = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: [
+        {
+          turn: 1,
+          createdAt: null,
+          model: 'claude-sonnet-4-20250514',
+          usage: {
+            inputTokens: 200,
+            outputTokens: 10,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 1800,
+          },
+          contextTokens: 2000,
+          compacted: false,
+          tools: [],
+        },
+        {
+          turn: 2,
+          createdAt: null,
+          model: null,
+          usage: {
+            inputTokens: 0,
+            outputTokens: 8,
+            cacheCreationInputTokens: 0,
+            cacheReadInputTokens: 0,
+          },
+          contextTokens: 0,
+          compacted: false,
+          tools: [],
+        },
+      ],
+    });
+    assert.equal(usage.currentContextTokens, 2000);
+    assert.equal(usage.usage?.cacheReadInputTokens, 1800);
+    assert.equal(usage.model, 'claude-sonnet-4-20250514');
+    assert.ok(usage.percent != null && usage.percent > 0);
   });
 });
 
