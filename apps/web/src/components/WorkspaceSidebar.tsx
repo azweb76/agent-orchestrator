@@ -170,11 +170,13 @@ export function WorkspaceSidebar({
   const sidebarQuery = useQuery({
     queryKey: ['sidebar'],
     queryFn: api.listSidebar,
+    // The SSE event stream invalidates this cache on changes; polling is a
+    // slow fallback for missed events.
     refetchInterval: (query) => {
       const tree = query.state.data;
-      if (!tree) return 10_000;
+      if (!tree) return 15_000;
       const hasRunning = tree.some((ws) => ws.agents.some((a) => a.status === 'running'));
-      return hasRunning ? 2_000 : 10_000;
+      return hasRunning ? 10_000 : 30_000;
     },
   });
 

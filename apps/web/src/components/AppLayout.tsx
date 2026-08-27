@@ -22,6 +22,7 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useAppEventStream } from '../api/events';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_EXPANDED_WIDTH,
@@ -51,6 +52,9 @@ export function AppLayout() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Live cache invalidation + notification fan-out over one SSE connection.
+  useAppEventStream();
 
   const { data: status } = useQuery({
     queryKey: ['status'],

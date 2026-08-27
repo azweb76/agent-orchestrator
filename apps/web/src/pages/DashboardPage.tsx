@@ -180,7 +180,8 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ['sidebar'],
     queryFn: api.listSidebar,
-    refetchInterval: 5_000,
+    // SSE invalidation keeps this fresh; the interval is a fallback.
+    refetchInterval: 30_000,
   });
 
   const { data: workspaces, isLoading: workspacesLoading } = useQuery({

@@ -87,6 +87,38 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
+  // Global live-update stream: agent/session status, permission prompts, queue
+  // and workspace changes. The web client uses it to invalidate caches and
+  // raise notifications instead of polling every endpoint.
+  router.get('/events/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write(': connected\n\n');
+
+    const unsubscribe = ctx.notifier?.subscribe((event) => {
+      try {
+        res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      } catch {
+        // dropped below via close
+      }
+    });
+    const ping = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        // close handler cleans up
+      }
+    }, 25_000);
+    ping.unref?.();
+
+    req.on('close', () => {
+      clearInterval(ping);
+      unsubscribe?.();
+    });
+  });
+
   router.get(
     '/workspaces',
     asyncHandler(async (_req, res) => {

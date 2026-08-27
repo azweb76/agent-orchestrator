@@ -101,6 +101,23 @@ export interface AgentEvent {
   createdAt: string;
 }
 
+/** Live app-state change pushed over the global SSE stream (`/api/events/stream`). */
+export type AppEventType =
+  | 'agent_changed'
+  | 'run_finished'
+  | 'permission_request'
+  | 'queue_changed'
+  | 'workspaces_changed';
+
+export interface AppEvent {
+  id: string;
+  type: AppEventType;
+  agentId: string | null;
+  sessionId: string | null;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface GitHubBranch {
   name: string;
   sha: string;

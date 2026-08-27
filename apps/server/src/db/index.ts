@@ -776,8 +776,9 @@ export class QueuedMessageRepository {
   }
 
   listBySession(sessionId: string): QueuedChatMessage[] {
+    // rowid preserves insertion order even when created_at timestamps tie.
     return this.db
-      .prepare('SELECT * FROM queued_messages WHERE session_id = ? ORDER BY created_at ASC, id ASC')
+      .prepare('SELECT * FROM queued_messages WHERE session_id = ? ORDER BY rowid ASC')
       .all(sessionId)
       .map(rowToQueuedMessage);
   }

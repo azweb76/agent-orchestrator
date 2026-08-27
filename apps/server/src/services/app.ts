@@ -62,7 +62,9 @@ import {
   chatSessionTemplateById,
   uniqueSessionTitle,
 } from '@agent-orchestrator/shared';
+import type { AppEventType } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
+import type { Notifier } from './notifier.js';
 import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService, fallbackTitleFromPrompt, sanitizeChatTitle } from '../services/anthropic.js';
@@ -98,10 +100,20 @@ export interface AppContext {
   claude: ClaudeService;
   anthropic: AnthropicService;
   dataDir: string;
+  /** Live pub/sub for the global SSE stream; optional so tests can omit it. */
+  notifier?: Notifier;
 }
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function notify(
+  ctx: AppContext,
+  type: AppEventType,
+  fields: { agentId?: string; sessionId?: string; data?: Record<string, unknown> } = {},
+): void {
+  ctx.notifier?.emit(type, fields);
 }
 
 async function createAgentForWorktree(
@@ -274,7 +286,7 @@ function syncAgentFromSessions(ctx: AppContext, agentId: string): Agent {
   const anyRunning = sessions.some((item) => item.status === 'running');
   const active =
     sessions.find((item) => item.id === agent.activeSessionId) ?? sessions[0] ?? null;
-  return ctx.repos.agents.update({
+  const updated = ctx.repos.agents.update({
     ...agent,
     status: agent.archivedAt ? 'archived' : anyRunning ? 'running' : 'idle',
     pid: active?.pid ?? null,
@@ -286,6 +298,8 @@ function syncAgentFromSessions(ctx: AppContext, agentId: string): Agent {
     activeSessionId: active?.id ?? agent.activeSessionId,
     updatedAt: nowIso(),
   });
+  notify(ctx, 'agent_changed', { agentId, data: { status: updated.status } });
+  return updated;
 }
 
 function clearSessionRunFields(
@@ -360,6 +374,7 @@ export async function createWorkspace(ctx: AppContext, body: CreateWorkspaceRequ
     createdAt: nowIso(),
   });
 
+  notify(ctx, 'workspaces_changed');
   return workspace;
 }
 
@@ -373,6 +388,7 @@ export async function deleteWorkspace(ctx: AppContext, workspaceId: string) {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
   ctx.repos.workspaces.delete(workspaceId);
+  notify(ctx, 'workspaces_changed');
 }
 
 // Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
@@ -450,6 +466,7 @@ export async function createWorktreeFromBranch(
   });
 
   const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`);
+  notify(ctx, 'workspaces_changed');
   return { worktree, agent };
 }
 
@@ -499,6 +516,7 @@ export async function createWorktreeFromPr(
   });
 
   const agent = await createAgentForWorktree(ctx, worktree.id, `PR #${pr.number} agent`);
+  notify(ctx, 'workspaces_changed');
   return { worktree, agent };
 }
 
@@ -515,6 +533,7 @@ export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
 
   await ctx.git.removeWorktree(workspace.repoPath, worktree.path);
   ctx.repos.worktrees.delete(worktreeId);
+  notify(ctx, 'workspaces_changed');
 }
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
@@ -1143,6 +1162,7 @@ export async function enqueueChatMessage(
   ctx.repos.events.create(
     makeEvent(agentId, 'message_queued', { queuedId: queued.id, sessionId: session.id }),
   );
+  notify(ctx, 'queue_changed', { agentId, sessionId: session.id });
 
   // If the session finished while the message was in flight, deliver right away.
   const latest = ctx.repos.sessions.getById(session.id);
@@ -1172,6 +1192,7 @@ export async function removeQueuedMessage(
   if (!queued || queued.agentId !== agentId) return { removed: false };
   await cleanupAttachmentFiles(queued.attachments);
   ctx.repos.queued.delete(queuedId);
+  notify(ctx, 'queue_changed', { agentId, sessionId: queued.sessionId });
   return { removed: true };
 }
 
@@ -1200,6 +1221,7 @@ export async function drainSessionQueue(
       ctx.repos.events.create(
         makeEvent(agentId, 'queued_message_sent', { queuedId: next.id, sessionId }),
       );
+      notify(ctx, 'queue_changed', { agentId, sessionId });
       try {
         await streamAgentChat(ctx, agentId, { message: next.content }, null, sessionId, {
           attachments: next.attachments,
@@ -1604,6 +1626,14 @@ function finalizeSessionRun(
       }),
     );
     syncAgentFromSessions(ctx, session.agentId);
+    notify(ctx, 'run_finished', {
+      agentId: session.agentId,
+      sessionId: session.id,
+      data: {
+        stopped: Boolean(result.stopped),
+        error: result.error ?? null,
+      },
+    });
   }
 
   const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;
@@ -1917,6 +1947,11 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
       ctx.repos.events.create(
         makeEvent(session.agentId, 'permission_request', payload as unknown as Record<string, unknown>),
       );
+      notify(ctx, 'permission_request', {
+        agentId: session.agentId,
+        sessionId: session.id,
+        data: { requestId: request.requestId, toolName: request.toolName },
+      });
     }
   };
 
@@ -2118,6 +2153,11 @@ export async function streamAgentChat(
             sessionId: runningSession.id,
           } as unknown as Record<string, unknown>),
         );
+        notify(ctx, 'permission_request', {
+          agentId,
+          sessionId: runningSession.id,
+          data: { requestId: request.requestId, toolName: request.toolName },
+        });
         send('permission_request', payload);
       },
       onEvent: (event) => {

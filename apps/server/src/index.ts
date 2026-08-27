@@ -7,6 +7,7 @@ import { initDatabase, createRepositories } from './db/index.js';
 import { ClaudeService, GitService } from './services/git.js';
 import { GitHubService } from './services/github.js';
 import { AnthropicService } from './services/anthropic.js';
+import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
 
@@ -29,6 +30,7 @@ const ctx: AppContext = {
   claude: new ClaudeService(claudeBin, path.join(dataDir, 'runs')),
   anthropic: new AnthropicService(),
   dataDir,
+  notifier: new Notifier(),
 };
 
 const app = express();
