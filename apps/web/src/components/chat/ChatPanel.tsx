@@ -112,11 +112,12 @@ function MessageTimeline({ message }: { message: Message }) {
       part.type === 'tool',
   );
   const subagents = toolItems.filter((item) => isSubagentItem(item));
-  const runningSubagents = subagents.filter((item) => item.status === 'running');
   const otherTools = toolItems.filter((item) => !isSubagentItem(item));
   const otherRunning = otherTools.some((item) => item.status === 'running');
   const lastPart = parts[parts.length - 1];
-  const showSubagents = runningSubagents.length > 0;
+  // Keep Task/Explore cards after the parent turn ends (status becomes done).
+  // Running-only gating hid the subagent the moment Claude returned Ready.
+  const showSubagents = subagents.length > 0;
   const showToolProgress =
     streaming &&
     otherTools.length > 0 &&

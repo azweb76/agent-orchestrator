@@ -320,17 +320,20 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
 }
 
 /**
- * One card per Task/Agent (and background bash) so parallel subagents stay visible.
+ * One card per Task/Agent (and background bash) so parallel subagents stay visible,
+ * including after they finish (Done/Failed) under the parent turn.
  */
 export function SubagentActivityList({ items }: { items: ToolActivityItem[] }) {
   if (items.length === 0) return null;
   const runningCount = items.filter((item) => item.status === 'running').length;
 
   return (
-    <Stack spacing={0.85} sx={{ mt: 1, maxWidth: 560 }} aria-label="Running subagents">
+    <Stack spacing={0.85} sx={{ mt: 1, maxWidth: 560 }} aria-label="Subagents">
       {items.length > 1 ? (
         <Typography variant="caption" color="text.secondary">
-          {runningCount} running
+          {runningCount > 0
+            ? `${runningCount} running`
+            : `${items.length} subagents`}
         </Typography>
       ) : null}
       {items.map((item) => (

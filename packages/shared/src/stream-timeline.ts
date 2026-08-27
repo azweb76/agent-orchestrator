@@ -217,6 +217,19 @@ export function completeRunningTools(parts: StreamPart[]): StreamPart[] {
   return completeTools(parts);
 }
 
+/**
+ * On a parent `result`, finish ordinary tools but leave Task/Agent (and other
+ * subagent rows) running until their own tool_result / task_notification.
+ * Finalize still calls `completeRunningTools` once the process exits.
+ */
+function completeNonSubagentTools(parts: StreamPart[]): StreamPart[] {
+  return parts.map((part) => {
+    if (part.type !== 'tool' || part.status !== 'running') return part;
+    if (isSubagentItem(toolItemFields(part))) return part;
+    return { ...part, status: 'done' as const };
+  });
+}
+
 function completeToolIds(parts: StreamPart[], ids: string[]): StreamPart[] {
   if (ids.length === 0) return parts;
   const wanted = new Set(ids);
@@ -626,7 +639,7 @@ export function applyStreamEvent(
   }
 
   if (isTopLevelClaudeResult(event, parentSessionId)) {
-    next = completeTools(next);
+    next = completeNonSubagentTools(next);
   }
 
   return next;
