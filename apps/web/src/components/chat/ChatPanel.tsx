@@ -23,9 +23,12 @@ import {
   isTopLevelClaudeResult,
   parseAskUserQuestions,
   visibleAssistantContent,
+  chatSessionTemplateById,
   type AgentDetail,
   type ChatSession,
   type ChatSessionTemplate,
+  type ChatSessionTemplateId,
+  type EffortLevel,
   type Message,
   type PermissionRequest,
   type UpdateChatSessionRequest,
@@ -50,6 +53,8 @@ interface ChatPanelProps {
   archived: boolean;
   /** When set on a fresh agent (e.g. from-idea), send as the first chat prompt. */
   initialPrompt?: string;
+  /** When set, create a new session from this template after mount. */
+  initialTemplate?: ChatSessionTemplateId;
 }
 
 /** Distance from the bottom (px) still treated as "stuck" for auto-scroll. */
@@ -150,7 +155,7 @@ function MessageTimeline({ message }: { message: Message }) {
   );
 }
 
-export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
+export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: ChatPanelProps) {
   const agentId = agent.id;
   const queryClient = useQueryClient();
   const sessions = agent.sessions ?? [];
@@ -956,6 +961,14 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
     }
   };
 
+  useEffect(() => {
+    if (!initialTemplate || archived || autoStartedRef.current) return;
+    const template = chatSessionTemplateById(initialTemplate);
+    if (!template) return;
+    autoStartedRef.current = true;
+    void createSessionFromTemplate(template);
+  }, [archived, initialTemplate]);
+
   return (
     <Box
       sx={{
@@ -1167,11 +1180,13 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
             archived={archived}
             isStreaming={sessionBusy}
             model={session?.model ?? agent.model}
+            effort={session?.effort ?? agent.effort}
             permissionMode={session?.permissionMode ?? agent.permissionMode ?? 'plan'}
             queue={queue}
             draft={draft}
             onDraftChange={setDraft}
             onModelChange={(model) => updateMutation.mutate({ model })}
+            onEffortChange={(effort: EffortLevel) => updateMutation.mutate({ effort })}
             onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
             onSend={(text, images, force) => void runChat(text, images, force)}
             onStop={() => void stopStreaming()}

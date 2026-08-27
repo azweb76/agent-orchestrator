@@ -9,14 +9,18 @@ import type {
   ArchiveAgentResponse,
   BuildPlanRequest,
   ChatSession,
+  CommitAgentChangesRequest,
+  CommitAgentChangesResponse,
   CreateAgentFromPrRequest,
   CreateChatSessionRequest,
   CreatePrRequest,
+  CreatePullRequestCommentRequest,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromIdeaRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   DenyPermissionRequest,
+  DeleteAgentResponse,
   GenerateInstructionDraftRequest,
   ApplyInstructionFileRequest,
   ApplyInstructionFileResponse,
@@ -44,6 +48,7 @@ import type {
   SessionContextUsage,
   SidebarWorkspace,
   SlashCommand,
+  SubmitPullRequestReviewRequest,
   UsageSummary,
   SuggestBranchNameResponse,
   UpdateAgentRequest,
@@ -57,16 +62,51 @@ import type {
 } from '@agent-orchestrator/shared';
 
 const API_BASE = '/api';
+const AUTH_STORAGE_KEY = 'ao.authToken';
+
+export function getAuthToken(): string {
+  try {
+    return localStorage.getItem(AUTH_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function setAuthToken(token: string): void {
+  try {
+    if (token) localStorage.setItem(AUTH_STORAGE_KEY, token);
+    else localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // private mode
+  }
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+  };
+  const extra = init?.headers;
+  if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+    Object.assign(headers, extra as Record<string, string>);
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
+    headers,
+    credentials: 'include',
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(body.error ?? 'Request failed');
+    const error = new Error(body.error ?? 'Request failed') as Error & { authRequired?: boolean };
+    if (body.authRequired || response.status === 401) error.authRequired = true;
+    throw error;
   }
 
   if (response.status === 204) {
@@ -83,11 +123,15 @@ export interface SystemStatus {
   claudeInstalled: boolean;
   claudeBin: string;
   githubTokenConfigured: boolean;
+  githubLogin: string | null;
   archivedAgentCount: number;
+  dataDirBytes: number;
 }
 
 export const api = {
   getStatus: () => request<SystemStatus>('/status'),
+  submitAuth: (token: string) =>
+    request<{ ok?: true } | void>('/auth', { method: 'POST', body: JSON.stringify({ token }) }),
   getUsageSummary: () => request<UsageSummary>('/usage'),
   listSidebar: () => request<SidebarWorkspace[]>('/sidebar'),
   listWorkspaces: () => request<WorkspaceWithCounts[]>('/workspaces'),
@@ -145,6 +189,26 @@ export const api = {
     request<PullRequestCommit[]>(`${prBase(owner, repo, prNumber)}/commits`),
   getPullRequestComments: (owner: string, repo: string, prNumber: number) =>
     request<PullRequestComment[]>(`${prBase(owner, repo, prNumber)}/comments`),
+  submitPullRequestReview: (
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: SubmitPullRequestReviewRequest,
+  ) =>
+    request<PullRequestReview>(`${prBase(owner, repo, prNumber)}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  createPullRequestComment: (
+    owner: string,
+    repo: string,
+    prNumber: number,
+    body: CreatePullRequestCommentRequest,
+  ) =>
+    request<PullRequestComment>(`${prBase(owner, repo, prNumber)}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   mergePullRequest: (
     owner: string,
     repo: string,
@@ -180,6 +244,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  unarchiveAgent: (agentId: string) =>
+    request<Agent>(`/agents/${agentId}/unarchive`, { method: 'POST' }),
+  deleteAgent: (agentId: string, deleteWorktree = false) =>
+    request<DeleteAgentResponse>(
+      `/agents/${agentId}${deleteWorktree ? '?deleteWorktree=true' : ''}`,
+      { method: 'DELETE' },
+    ),
   pruneArchivedAgents: () =>
     request<PruneArchivedAgentsResponse>('/agents/prune-archived', { method: 'POST' }),
   listSessions: (agentId: string) => request<ChatSession[]>(`/agents/${agentId}/sessions`),
@@ -271,6 +342,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  commitChanges: (agentId: string, body: CommitAgentChangesRequest) =>
+    request<CommitAgentChangesResponse>(`/agents/${agentId}/commit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 };
 
 export interface ChatStreamHandlers {
@@ -357,7 +433,8 @@ export async function streamChat(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    credentials: 'include',
     body: JSON.stringify({
       message: options.message,
       force: options.force,
@@ -381,7 +458,8 @@ export async function streamBuildPlan(
     `${API_BASE}/agents/${agentId}/sessions/${sessionId}/permissions/build`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      credentials: 'include',
       body: JSON.stringify(body),
       signal,
     },

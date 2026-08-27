@@ -69,7 +69,18 @@ export function useAppEventStream(): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const source = new EventSource('/api/events/stream');
+    const token = (() => {
+      try {
+        return localStorage.getItem('ao.authToken') ?? '';
+      } catch {
+        return '';
+      }
+    })();
+    const source = new EventSource(
+      token
+        ? `/api/events/stream?access_token=${encodeURIComponent(token)}`
+        : '/api/events/stream',
+    );
 
     const handle = (raw: MessageEvent) => {
       let event: AppEvent;

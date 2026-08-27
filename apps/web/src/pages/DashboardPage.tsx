@@ -24,7 +24,7 @@ import { api } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
-import { formatUsd, statusLabel } from '../utils/format';
+import { formatBytes, formatUsd, statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
 
 function greetingForHour(hour: number): string {
@@ -305,7 +305,8 @@ export function DashboardPage() {
                 mb: 0.75,
               }}
             >
-              {greetingForHour(now.getHours())}, Dan
+              {greetingForHour(now.getHours())}
+              {status?.githubLogin ? `, ${status.githubLogin}` : ''}
             </Typography>
             <Typography color="text.secondary" sx={{ maxWidth: 520, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
               {systemsOk
@@ -697,6 +698,16 @@ export function DashboardPage() {
                       setPruneOpen(true);
                     }}
                     sx={{ cursor: 'pointer' }}
+                  />
+                </Stack>
+              ) : null}
+              {typeof status?.dataDirBytes === 'number' ? (
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="body2">Data directory</Typography>
+                  <Chip
+                    size="small"
+                    label={formatBytes(status.dataDirBytes)}
+                    variant="outlined"
                   />
                 </Stack>
               ) : null}
