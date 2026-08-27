@@ -201,6 +201,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'archived_at', 'TEXT');
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
+  ensureColumn(db, 'queued_messages', 'mentions', "TEXT NOT NULL DEFAULT '[]'");
   migrateChatSessions(db);
   ensureColumn(db, 'chat_sessions', 'grade_score', 'INTEGER');
   ensureColumn(db, 'chat_sessions', 'grade_comment', 'TEXT');
@@ -794,8 +795,8 @@ export class QueuedMessageRepository {
   create(message: QueuedChatMessage): QueuedChatMessage {
     this.db
       .prepare(
-        `INSERT INTO queued_messages (id, agent_id, session_id, content, attachments, created_at)
-         VALUES (@id, @agentId, @sessionId, @content, @attachments, @createdAt)`,
+        `INSERT INTO queued_messages (id, agent_id, session_id, content, attachments, mentions, created_at)
+         VALUES (@id, @agentId, @sessionId, @content, @attachments, @mentions, @createdAt)`,
       )
       .run({
         id: message.id,
@@ -803,6 +804,7 @@ export class QueuedMessageRepository {
         sessionId: message.sessionId,
         content: message.content,
         attachments: JSON.stringify(message.attachments ?? []),
+        mentions: JSON.stringify(message.mentions ?? []),
         createdAt: message.createdAt,
       });
     return message;
@@ -1049,6 +1051,7 @@ function rowToQueuedMessage(row: unknown): QueuedChatMessage {
     sessionId: String(r.session_id),
     content: String(r.content),
     attachments,
+    mentions: parseJson<QueuedChatMessage['mentions']>(String(r.mentions ?? '[]'), []),
     createdAt: String(r.created_at),
   };
 }

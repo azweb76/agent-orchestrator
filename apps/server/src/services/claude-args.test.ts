@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildClaudeArgs,
   buildPromptWithImages,
+  buildPromptWithMentionContext,
   buildStreamUserMessage,
   DEFAULT_ALLOWED_TOOLS,
   INTERACTIVE_TOOLS,
@@ -18,6 +19,12 @@ test('buildPromptWithImages appends image paths for the Read tool', () => {
   assert.match(prompt, /\/tmp\/a\.png/);
   assert.match(prompt, /\/tmp\/b\.jpg/);
   assert.match(prompt, /Read tool/);
+});
+
+test('buildPromptWithMentionContext appends resolved mention text', () => {
+  const prompt = buildPromptWithMentionContext('Review this', 'Attached @-mention context:\n\n### @src/a.ts');
+  assert.match(prompt, /Review this/);
+  assert.match(prompt, /Attached @-mention context/);
 });
 
 test('buildClaudeArgs enables stdio permission prompts and interactive tools', () => {

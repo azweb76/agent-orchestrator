@@ -273,6 +273,8 @@ export interface ClaudeRunOptions {
   permissionMode?: ClaudePermissionMode;
   /** Absolute image paths to reference in the prompt for Claude's Read tool. */
   imagePaths?: string[];
+  /** Resolved @-mention file/diff context appended to the prompt. */
+  mentionContext?: string;
   onEvent?: (event: ClaudeStreamEvent, meta?: ClaudeEventMeta) => void;
   /** Interactive tool permission / AskUserQuestion / ExitPlanMode requests. */
   onPermissionRequest?: (request: ClaudePermissionRequest) => void;
@@ -350,6 +352,13 @@ export function buildPromptWithImages(prompt: string, imagePaths: string[]): str
   if (imagePaths.length === 0) return prompt;
   const list = imagePaths.map((p) => `- ${p}`).join('\n');
   return `${prompt}\n\nAttached images (read these files with the Read tool):\n${list}`;
+}
+
+export function buildPromptWithMentionContext(prompt: string, mentionContext: string): string {
+  const trimmed = mentionContext.trim();
+  if (!trimmed) return prompt;
+  if (!prompt.trim()) return trimmed;
+  return `${prompt}\n\n${trimmed}`;
 }
 
 /** Initial user message written to Claude stdin in stream-json mode. */
@@ -800,7 +809,10 @@ export class ClaudeService {
       throw new Error('This chat session already has a running Claude process');
     }
 
-    const prompt = buildPromptWithImages(options.prompt, options.imagePaths ?? []);
+    const prompt = buildPromptWithMentionContext(
+      buildPromptWithImages(options.prompt, options.imagePaths ?? []),
+      options.mentionContext ?? '',
+    );
     const permissionMode = options.permissionMode ?? 'plan';
     const args = buildClaudeArgs({
       model: options.model,

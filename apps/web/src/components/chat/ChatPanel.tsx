@@ -42,6 +42,7 @@ import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
+import { pendingMentionToChatMention, createPendingMention, type PendingMention } from './mentionComposer';
 import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
 import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
@@ -202,7 +203,11 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
   const [permissionBusy, setPermissionBusy] = useState(false);
-  const [lastFailed, setLastFailed] = useState<{ text: string; images: PendingImage[] } | null>(
+  const [lastFailed, setLastFailed] = useState<{
+    text: string;
+    images: PendingImage[];
+    mentions: PendingMention[];
+  } | null>(
     null,
   );
   const abortBySessionRef = useRef(new Map<string, AbortController>());
@@ -227,7 +232,13 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const [improveOpen, setImproveOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const runChatRef = useRef<
-    (text: string, images: PendingImage[], force: boolean, sessionId?: string) => Promise<void>
+    (
+      text: string,
+      images: PendingImage[],
+      mentions: PendingMention[],
+      force: boolean,
+      sessionId?: string,
+    ) => Promise<void>
   >(async () => undefined);
 
   sessionIdRef.current = activeSessionId;
@@ -268,6 +279,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     id: item.id,
     text: item.content,
     images: [],
+    mentions: (item.mentions ?? []).map((mention) => createPendingMention(mention)),
   }));
 
   const messagesQuery = useQuery({
@@ -486,7 +498,12 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     });
   };
 
-  const enqueueForSession = async (sid: string, text: string, images: PendingImage[]) => {
+  const enqueueForSession = async (
+    sid: string,
+    text: string,
+    images: PendingImage[],
+    mentions: PendingMention[],
+  ) => {
     try {
       await api.enqueueMessage(agentId, sid, {
         message: text,
@@ -495,6 +512,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           mimeType: image.mimeType,
           dataBase64: image.dataBase64,
         })),
+        mentions: mentions.map((mention) => pendingMentionToChatMention(mention)),
       });
     } catch (error) {
       if (sid === sessionIdRef.current) setChatError((error as Error).message);
@@ -517,6 +535,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const runChat = async (
     text: string,
     images: PendingImage[],
+    mentions: PendingMention[],
     force: boolean,
     targetSessionId = sessionIdRef.current,
   ) => {
@@ -527,7 +546,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       (targetSessionId === activeSessionId && session?.status === 'running');
 
     if (targetBusy && !force) {
-      await enqueueForSession(targetSessionId, text, images);
+      await enqueueForSession(targetSessionId, text, images, mentions);
       return;
     }
 
@@ -566,6 +585,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
             mimeType: image.mimeType,
             dataBase64: image.dataBase64,
           })),
+          mentions: mentions.map((mention) => pendingMentionToChatMention(mention)),
         },
         {
           onSession: (nextSession) => {
@@ -653,7 +673,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
             if (!mountedRef.current) return;
             if (viewed(stream.sessionId)) {
               setChatError(err);
-              setLastFailed({ text, images });
+              setLastFailed({ text, images, mentions });
             }
             queryClient.invalidateQueries({
               queryKey: ['messages', agentId, stream.sessionId],
@@ -666,7 +686,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       if (mountedRef.current && (error as Error).name !== 'AbortError') {
         if (viewed(stream.sessionId)) {
           setChatError((error as Error).message);
-          setLastFailed({ text, images });
+          setLastFailed({ text, images, mentions });
         }
       }
       if (mountedRef.current) {
@@ -813,7 +833,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       return;
     }
     autoStartedRef.current = true;
-    void runChatRef.current(initialPrompt, [], false);
+    void runChatRef.current(initialPrompt, [], [], false);
   }, [initialPrompt, archived, messagesQuery.isLoading, messagesQuery.data]);
 
   const stopStreaming = async () => {
@@ -1116,7 +1136,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       setSessionId(result.session.id);
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       if (result.kickoffPrompt) {
-        void runChatRef.current(result.kickoffPrompt, [], false, result.session.id);
+        void runChatRef.current(result.kickoffPrompt, [], [], false, result.session.id);
       }
     } catch (error) {
       setChatError((error as Error).message);
@@ -1216,7 +1236,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                       message={message}
                       onRetry={
                         message.metadata?.error && priorUser && priorUser.attachments.length === 0
-                          ? () => void runChat(priorUser.content, [], true)
+                          ? () => void runChat(priorUser.content, [], [], true)
                           : undefined
                       }
                     />
@@ -1230,7 +1250,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                     onRewind={!archived ? () => requestRewind(message) : undefined}
                     onRetry={
                       message.metadata?.error && lastFailed
-                        ? () => void runChat(lastFailed.text, lastFailed.images, true)
+                        ? () => void runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true)
                         : undefined
                     }
                   />
@@ -1321,7 +1341,9 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                   <Button
                     color="inherit"
                     size="small"
-                    onClick={() => void runChat(lastFailed.text, lastFailed.images, true)}
+                    onClick={() =>
+                      void runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true)
+                    }
                   >
                     Retry
                   </Button>
@@ -1365,7 +1387,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
             onModelChange={(model) => updateMutation.mutate({ model })}
             onEffortChange={(effort: EffortLevel) => updateMutation.mutate({ effort })}
             onPermissionModeChange={(permissionMode) => updateMutation.mutate({ permissionMode })}
-            onSend={(text, images, force) => void runChat(text, images, force)}
+            onSend={(text, images, mentions, force) => void runChat(text, images, mentions, force)}
             onStop={() => void stopStreaming()}
             onClear={requestClear}
             onRewind={requestRewindLast}
