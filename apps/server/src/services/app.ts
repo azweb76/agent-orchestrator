@@ -2056,6 +2056,24 @@ function writeSse(res: Response, event: string, data: unknown): boolean {
   }
 }
 
+/**
+ * Comment-line heartbeat so proxies do not drop a chat SSE during long silent
+ * stretches (e.g. a slow tool call or a background task emitting no events).
+ * Returns a stop function; safe to call more than once.
+ */
+function startSseHeartbeat(res: Response, isOpen: () => boolean, intervalMs = 15_000): () => void {
+  const timer = setInterval(() => {
+    if (!isOpen() || res.writableEnded) return;
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      // close handling elsewhere marks the client gone
+    }
+  }, intervalMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+
 async function resolveRunHandle(
   ctx: AppContext,
   sessionId: string,
@@ -2357,11 +2375,13 @@ export async function streamAgentChat(
   ctx.repos.messages.create(assistantMessage);
 
   let clientOpen = res != null;
+  let stopHeartbeat = () => {};
   if (res) {
     attachChatSse(res);
     res.on('close', () => {
       clientOpen = false;
     });
+    stopHeartbeat = startSseHeartbeat(res, () => clientOpen);
   }
 
   const send = (event: string, data: unknown) => {
@@ -2523,6 +2543,7 @@ export async function streamAgentChat(
       send('error', { message: errMessage });
     }
   } finally {
+    stopHeartbeat();
     await titleTask;
     if (res && clientOpen && !res.writableEnded) {
       res.end();
@@ -2549,8 +2570,11 @@ export async function followAgentSession(
   attachChatSse(res);
   let clientOpen = true;
   const ac = new AbortController();
+  const stopHeartbeat = startSseHeartbeat(res, () => clientOpen);
+  // 'close' also fires after a normal end, so this reclaims the heartbeat too.
   res.on('close', () => {
     clientOpen = false;
+    stopHeartbeat();
     ac.abort();
   });
 

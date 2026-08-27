@@ -19,8 +19,12 @@ import {
   extractPlanFilePath,
   extractPlanFilePathsFromLog,
   adoptParentClaudeSessionId,
+  applyStreamEvent,
   claudeResultErrorMessage,
+  isNestedSubagentEvent,
   isTopLevelClaudeResult,
+  runningSubagentItems,
+  type StreamPart,
 } from '@agent-orchestrator/shared';
 import {
   allowedToolsForPermissionMode,
@@ -389,6 +393,16 @@ interface TrackedRun {
   permissionMode: ClaudePermissionMode;
 }
 
+/** True for the parent session's own model output (not nested subagent traffic). */
+function isParentTurnActivity(
+  event: Record<string, unknown>,
+  parentSessionId: string | null,
+): boolean {
+  const type = String(event.type ?? '');
+  if (type !== 'assistant' && type !== 'stream_event') return false;
+  return !isNestedSubagentEvent(event, parentSessionId);
+}
+
 export function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -637,11 +651,18 @@ export async function followClaudeLog(
 
 export class ClaudeService {
   private running = new Map<string, TrackedRun>();
+  /**
+   * After a deferred `result` (background task still running) settles, how long
+   * to wait for the CLI to wake the model before closing the run anyway.
+   */
+  private wakeGraceMs: number;
 
   constructor(
     private claudeBin: string,
     private runsDir: string,
+    options: { wakeGraceMs?: number } = {},
   ) {
+    this.wakeGraceMs = options.wakeGraceMs ?? 20_000;
     mkdirSync(this.runsDir, { recursive: true });
   }
 
@@ -962,31 +983,85 @@ export class ClaudeService {
       handleAbort();
     }
 
+    // Mirrors the UI timeline so the run lifecycle knows when background
+    // Task/Explore subagents are still running. The CLI emits the parent turn's
+    // `result` while a background task is pending and — as long as stdin stays
+    // open — wakes the model with a follow-up turn once the task settles.
+    // Closing stdin / reaping at the first `result` would kill the subagent
+    // mid-flight and silently end the chat.
+    let lifecycleTimeline: StreamPart[] = [];
+    let resultDeferred = false;
+    let wakeTimer: NodeJS.Timeout | null = null;
+
+    const clearWakeTimer = () => {
+      if (wakeTimer) {
+        clearTimeout(wakeTimer);
+        wakeTimer = null;
+      }
+    };
+    const endRunAfterResult = () => {
+      const tracked = this.running.get(agentId);
+      if (tracked?.pid !== handle.pid) return;
+      // End stdin after the turn completes so the CLI can exit (stream-json keeps
+      // the process open while stdin is still writable). Only touch this run —
+      // Build may already have started a replacement process under the same agentId.
+      this.closeStdinForRun(agentId, handle.pid);
+      this.reapAfterResult(agentId, handle.pid);
+    };
+    const armWakeTimer = () => {
+      if (wakeTimer) return;
+      // Every background task settled after a deferred result. Give the CLI a
+      // grace window to wake the model; close the run if no follow-up starts.
+      wakeTimer = setTimeout(() => {
+        wakeTimer = null;
+        if (!resultDeferred || runningSubagentItems(lifecycleTimeline).length > 0) return;
+        resultDeferred = false;
+        endRunAfterResult();
+      }, this.wakeGraceMs);
+      wakeTimer.unref?.();
+    };
+
     const processLine = (line: string, replay: boolean) => {
       try {
         const event = JSON.parse(line) as ClaudeStreamEvent;
         events.push(event);
         options.onEvent?.(event, { replay });
 
-        sessionId = adoptParentClaudeSessionId(sessionId, event as Record<string, unknown>);
+        const record = event as Record<string, unknown>;
+        sessionId = adoptParentClaudeSessionId(sessionId, record);
+        lifecycleTimeline = applyStreamEvent(lifecycleTimeline, record, sessionId);
+        const tasksRunning = runningSubagentItems(lifecycleTimeline).length > 0;
 
         if (isTopLevelClaudeResult(event, sessionId)) {
-          if (typeof event.result === 'string') {
-            result = event.result;
+          if (typeof event.result === 'string' && event.result) {
+            // A wake turn (after a background task) adds its own result on top
+            // of the deferred one; keep both for the persisted assistant turn.
+            result = result ? `${result}\n\n${event.result}` : event.result;
           }
-          resultError = claudeResultErrorMessage(event as Record<string, unknown>) ?? resultError;
+          resultError = claudeResultErrorMessage(record) ?? resultError;
           const trackedForResult = this.running.get(agentId);
           if (trackedForResult?.pid === handle.pid) {
             trackedForResult.pendingPermissions.clear();
-            // End stdin after the turn completes so the CLI can exit (stream-json keeps
-            // the process open while stdin is still writable). Only touch this run —
-            // Build may already have started a replacement process under the same agentId.
-            this.closeStdinForRun(agentId, handle.pid);
-            this.reapAfterResult(agentId, handle.pid);
+            if (tasksRunning) {
+              resultDeferred = true;
+            } else {
+              resultDeferred = false;
+              clearWakeTimer();
+              endRunAfterResult();
+            }
           }
+        } else if (resultDeferred && isParentTurnActivity(record, sessionId)) {
+          // The CLI woke the model after a task settled; the follow-up turn's
+          // own result decides when the run ends.
+          resultDeferred = false;
+          clearWakeTimer();
         }
 
-        this.handleControlEvent(agentId, handle.pid, event as Record<string, unknown>, options, {
+        if (resultDeferred && !tasksRunning) {
+          armWakeTimer();
+        }
+
+        this.handleControlEvent(agentId, handle.pid, record, options, {
           replay,
         });
       } catch {
@@ -1007,6 +1082,7 @@ export class ClaudeService {
         signal,
       });
     } finally {
+      clearWakeTimer();
       signal?.removeEventListener('abort', handleAbort);
       const tracked = this.running.get(agentId);
       if (tracked?.pid === handle.pid) {

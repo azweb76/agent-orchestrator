@@ -22,6 +22,7 @@ import {
   isSubagentItem,
   isTopLevelClaudeResult,
   mergeChatMessages,
+  runningSubagentItems,
   parseAskUserQuestions,
   visibleAssistantContent,
   chatSessionTemplateById,
@@ -81,6 +82,33 @@ function setMessagesCache(
   updater: (prev: Message[] | undefined) => Message[],
 ): void {
   queryClient.setQueryData<Message[]>(['messages', agentId, sessionId], (prev) => updater(prev));
+}
+
+/**
+ * Fold a live stream event into the streaming assistant message. A top-level
+ * `result` only ends the visual stream when no background Task/Explore
+ * subagent is still running: the backend keeps that run open and wakes Claude
+ * when the task settles, and later events can only be applied while the local
+ * copy is still marked streaming (`patchStreamingAssistant` skips completed
+ * messages, and a completed local copy wins over the server's still-streaming
+ * snapshot in `mergeChatMessages`).
+ */
+function applyEventToAssistant(
+  message: Message,
+  event: Record<string, unknown>,
+  parentSessionId: string | null,
+): Message {
+  const timeline = applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId);
+  const turnEnded =
+    isTopLevelClaudeResult(event, parentSessionId) && runningSubagentItems(timeline).length === 0;
+  return {
+    ...message,
+    metadata: {
+      ...message.metadata,
+      streaming: !turnEnded,
+      timeline,
+    },
+  };
 }
 
 function upsertAgentSession(
@@ -185,6 +213,10 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const sendingSessionsRef = useRef(new Set<string>());
   const followingRef = useRef(new Set<string>());
+  // Bumped whenever a follow stream settles so the effect re-evaluates and can
+  // re-attach when the backend still reports the session running (its deps
+  // alone do not change when a stream drops mid-run).
+  const [followEpoch, setFollowEpoch] = useState(0);
   const mountedRef = useRef(true);
   const autoStartedRef = useRef(false);
   const sessionIdRef = useRef(activeSessionId);
@@ -583,14 +615,9 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           onEvent: (event) => {
             if (!mountedRef.current) return;
             const parentSessionId = parentSessionForEvent(stream.sessionId, event);
-            patchStreamingAssistant(stream.sessionId, (message) => ({
-              ...message,
-              metadata: {
-                ...message.metadata,
-                streaming: !isTopLevelClaudeResult(event, parentSessionId),
-                timeline: applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId),
-              },
-            }));
+            patchStreamingAssistant(stream.sessionId, (message) =>
+              applyEventToAssistant(message, event, parentSessionId),
+            );
           },
           onPermissionRequest: (request) => {
             if (!mountedRef.current || !viewed(stream.sessionId)) return;
@@ -708,14 +735,9 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       onEvent: (event) => {
         if (!mountedRef.current) return;
         const parentSessionId = parentSessionForEvent(stream.sessionId, event);
-        patchStreamingAssistant(stream.sessionId, (message) => ({
-          ...message,
-          metadata: {
-            ...message.metadata,
-            streaming: !isTopLevelClaudeResult(event, parentSessionId),
-            timeline: applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId),
-          },
-        }));
+        patchStreamingAssistant(stream.sessionId, (message) =>
+          applyEventToAssistant(message, event, parentSessionId),
+        );
       },
       onPermissionRequest: (request) => {
         if (!mountedRef.current || !viewed(stream.sessionId)) return;
@@ -764,6 +786,12 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       .finally(() => {
         followingRef.current.delete(sid);
         releaseSessionAbort(sid, controller);
+        // Re-evaluate shortly after the stream settles: if the session is
+        // still running (dropped SSE, proxy timeout), the effect re-attaches;
+        // otherwise its guards make this a no-op.
+        window.setTimeout(() => {
+          if (mountedRef.current) setFollowEpoch((n) => n + 1);
+        }, 1_000);
       });
 
     return () => {
@@ -772,7 +800,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     };
     // createLiveHandlers closes over the latest patch helpers; session status
     // and the local send flag decide when a follow subscription is needed.
-  }, [archived, agentId, activeSessionId, isSending, session?.status, hasStreamingMessage]);
+  }, [archived, agentId, activeSessionId, isSending, session?.status, hasStreamingMessage, followEpoch]);
 
   // From-idea: auto-send the idea as the first plan-mode prompt once messages load empty.
   useEffect(() => {
@@ -977,14 +1005,9 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           onEvent: (event) => {
             if (!mountedRef.current) return;
             const parentSessionId = parentSessionForEvent(stream.sessionId, event);
-            patchStreamingAssistant(stream.sessionId, (message) => ({
-              ...message,
-              metadata: {
-                ...message.metadata,
-                streaming: !isTopLevelClaudeResult(event, parentSessionId),
-                timeline: applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId),
-              },
-            }));
+            patchStreamingAssistant(stream.sessionId, (message) =>
+              applyEventToAssistant(message, event, parentSessionId),
+            );
           },
           onPermissionRequest: (nextRequest) => {
             if (!mountedRef.current || !viewed(stream.sessionId)) return;
