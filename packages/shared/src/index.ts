@@ -307,6 +307,18 @@ export interface PullRequestComment {
   createdAt: string;
 }
 
+export const PULL_REQUEST_REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as const;
+export type PullRequestReviewEvent = (typeof PULL_REQUEST_REVIEW_EVENTS)[number];
+
+export interface SubmitPullRequestReviewRequest {
+  event: PullRequestReviewEvent;
+  body?: string;
+}
+
+export interface CreatePullRequestCommentRequest {
+  body: string;
+}
+
 export interface MergePullRequestRequest {
   method: PullRequestMergeMethod;
   commitTitle?: string;
@@ -408,6 +420,29 @@ export interface ArchiveAgentResponse {
   /** Null when the agent was removed along with its worktree. */
   agent: Agent | null;
   deletedWorktree: boolean;
+}
+
+export interface DeleteAgentRequest {
+  /** When true, also remove the agent's git worktree from disk. */
+  deleteWorktree?: boolean;
+}
+
+export interface DeleteAgentResponse {
+  deleted: boolean;
+  deletedWorktree: boolean;
+}
+
+export interface CommitAgentChangesRequest {
+  message: string;
+  /** When false, stage and commit without pushing. Defaults to true. */
+  push?: boolean;
+}
+
+export interface CommitAgentChangesResponse {
+  committed: boolean;
+  pushed: boolean;
+  branch: string;
+  message: string;
 }
 
 export interface PruneArchivedAgentsResponse {

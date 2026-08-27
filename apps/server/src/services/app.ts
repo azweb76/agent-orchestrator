@@ -11,6 +11,12 @@ import type {
   AnswerAskUserQuestionRequest,
   ArchiveAgentRequest,
   ArchiveAgentResponse,
+  CommitAgentChangesRequest,
+  CommitAgentChangesResponse,
+  CreatePullRequestCommentRequest,
+  DeleteAgentRequest,
+  DeleteAgentResponse,
+  SubmitPullRequestReviewRequest,
   BuildPlanRequest,
   ChatImageAttachment,
   ChatRequest,
@@ -480,7 +486,19 @@ export async function getWorkspace(ctx: AppContext, workspaceId: string) {
 export async function deleteWorkspace(ctx: AppContext, workspaceId: string) {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
+
+  const worktrees = ctx.repos.worktrees.listByWorkspace(workspaceId);
+  for (const worktree of worktrees) {
+    try {
+      await deleteWorktree(ctx, worktree.id);
+    } catch {
+      // continue so the clone and remaining rows still get cleaned up
+    }
+  }
+
   ctx.repos.workspaces.delete(workspaceId);
+  await fs.rm(workspace.repoPath, { recursive: true, force: true });
+  await fs.rm(path.join(ctx.dataDir, 'worktrees', workspaceId), { recursive: true, force: true });
   notify(ctx, 'workspaces_changed');
 }
 
@@ -757,7 +775,47 @@ export async function archiveAgent(
   };
   ctx.repos.agents.update(updated);
   ctx.repos.events.create(makeEvent(agentId, 'agent_archived', {}));
+  notify(ctx, 'agent_changed', { agentId, data: { status: 'archived' } });
   return { agent: updated, deletedWorktree: false };
+}
+
+export async function unarchiveAgent(ctx: AppContext, agentId: string): Promise<Agent> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+  if (!agent.archivedAt) throw new Error('Agent is not archived');
+  ctx.repos.agents.update({
+    ...agent,
+    archivedAt: null,
+    status: 'idle',
+    updatedAt: nowIso(),
+  });
+  const updated = syncAgentFromSessions(ctx, agentId);
+  ctx.repos.events.create(makeEvent(agentId, 'agent_unarchived', {}));
+  notify(ctx, 'agent_changed', { agentId, data: { status: updated.status } });
+  return updated;
+}
+
+export async function deleteAgent(
+  ctx: AppContext,
+  agentId: string,
+  body: DeleteAgentRequest = {},
+): Promise<DeleteAgentResponse> {
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  await stopAllSessions(ctx, agent);
+  for (const session of ctx.repos.sessions.listByAgent(agentId)) {
+    await clearSessionQueue(ctx, session.id);
+  }
+
+  if (body.deleteWorktree) {
+    await deleteWorktree(ctx, agent.worktreeId);
+    return { deleted: true, deletedWorktree: true };
+  }
+
+  ctx.repos.agents.delete(agentId);
+  notify(ctx, 'workspaces_changed');
+  return { deleted: true, deletedWorktree: false };
 }
 
 /**
@@ -1673,6 +1731,44 @@ export async function createAgentPullRequest(
   return pr;
 }
 
+export async function commitAgentChanges(
+  ctx: AppContext,
+  agentId: string,
+  body: CommitAgentChangesRequest,
+): Promise<CommitAgentChangesResponse> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot commit changes for an archived agent');
+  const message = body.message.trim();
+  if (!message) throw new Error('Commit message is required');
+
+  const detail = await getAgentDetail(ctx, agentId);
+  const branch = await ctx.git.getCurrentBranch(detail.worktree.path);
+  const hasChanges = await ctx.git.hasChanges(detail.worktree.path);
+  if (hasChanges) {
+    await ctx.git.commitAll(detail.worktree.path, message);
+  }
+
+  const shouldPush = body.push !== false;
+  if (shouldPush) {
+    await ctx.git.pushBranch(detail.worktree.path, branch);
+  }
+
+  ctx.repos.events.create(
+    makeEvent(agentId, 'changes_committed', {
+      committed: hasChanges,
+      pushed: shouldPush,
+      branch,
+    }),
+  );
+  notify(ctx, 'agent_changed', { agentId });
+  return {
+    committed: hasChanges,
+    pushed: shouldPush,
+    branch,
+    message: hasChanges ? message : 'No local changes to commit',
+  };
+}
+
 function extractCostUsd(
   events: Array<Record<string, unknown>>,
   parentSessionId?: string | null,
@@ -2506,6 +2602,46 @@ export async function getPullRequestComments(
   return ctx.github.listPullRequestComments(owner, repo, prNumber);
 }
 
+export async function submitPullRequestReview(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: SubmitPullRequestReviewRequest,
+) {
+  const text = body.body?.trim() ?? '';
+  if (body.event !== 'APPROVE' && !text) {
+    throw new Error('A review body is required when requesting changes or commenting');
+  }
+  const review = await ctx.github.createPullRequestReview(owner, repo, prNumber, {
+    event: body.event,
+    body: text || undefined,
+  });
+  recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_reviewed', {
+    number: prNumber,
+    event: body.event,
+    reviewId: review.id,
+  });
+  return review;
+}
+
+export async function createPullRequestComment(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: CreatePullRequestCommentRequest,
+) {
+  const text = body.body.trim();
+  if (!text) throw new Error('Comment body is required');
+  const comment = await ctx.github.createPullRequestComment(owner, repo, prNumber, text);
+  recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_commented', {
+    number: prNumber,
+    commentId: comment.id,
+  });
+  return comment;
+}
+
 export async function mergePullRequest(
   ctx: AppContext,
   owner: string,
@@ -2646,10 +2782,50 @@ export async function createWorktreeFromIdea(
 
 export async function getSystemStatus(ctx: AppContext) {
   const claudeInstalled = await ctx.claude.checkInstalled();
+  let githubLogin: string | null = null;
+  if (process.env.GITHUB_TOKEN || process.env.GITHUB_LOGIN?.trim()) {
+    try {
+      githubLogin = await ctx.github.getAuthenticatedLogin();
+    } catch {
+      githubLogin = null;
+    }
+  }
   return {
     claudeInstalled,
     claudeBin: process.env.CLAUDE_BIN ?? 'claude',
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
+    githubLogin,
     archivedAgentCount: ctx.repos.agents.countArchived(),
+    dataDirBytes: await directorySizeBytes(ctx.dataDir),
   };
+}
+
+async function directorySizeBytes(root: string): Promise<number> {
+  let total = 0;
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    let entries;
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      try {
+        const stat = await fs.stat(full);
+        total += stat.size;
+      } catch {
+        // skipped
+      }
+    }
+  }
+  return total;
 }

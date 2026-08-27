@@ -39,7 +39,7 @@ packages/shared/src/      types and helpers used by both apps
 data/                     clones, worktrees, SQLite, run logs (gitignored)
 ```
 
-Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`) are documented in `README.md` and `.env.example`. The server loads `.env` from the repo root.
+Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOST`, `AUTH_TOKEN`) are documented in `README.md` and `.env.example`. The server loads `.env` from the repo root.
 
 ## Architecture
 

@@ -168,9 +168,9 @@ rl.on('line', (line) => {
   return { ctx, agent: repos.agents.getById(agent.id)! };
 }
 
-test('listed templates include Create draft PR and Review', () => {
+test('listed templates include Create draft PR, Review, Address review, and Fix CI', () => {
   const ids = LISTED_CHAT_SESSION_TEMPLATES.map((item) => item.id);
-  assert.deepEqual(ids, ['chat', 'create-draft-pr', 'review']);
+  assert.deepEqual(ids, ['chat', 'create-draft-pr', 'review', 'address-review', 'fix-ci']);
   for (const template of CHAT_SESSION_TEMPLATES) {
     assert.ok(!template.prompt?.includes('ExitPlanMode'));
     assert.ok(!template.prompt?.includes('AskUserQuestion'));
