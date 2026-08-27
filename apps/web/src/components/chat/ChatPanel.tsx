@@ -634,6 +634,18 @@ export function ChatPanel({ agent, archived, initialPrompt }: ChatPanelProps) {
 
   runChatRef.current = runChat;
 
+  // Flush queued messages once the session goes idle. The send loop in runChat
+  // only dequeues after a locally-run stream finishes; when the running reply
+  // belongs to a detached run (page reload, another tab, recovered process),
+  // queued items would otherwise sit forever after that run completes.
+  useEffect(() => {
+    if (archived || sessionBusy || !activeSessionId) return;
+    if (sendingSessionsRef.current.has(activeSessionId)) return;
+    if ((queueRef.current[activeSessionId] ?? []).length === 0) return;
+    const next = shiftQueue(activeSessionId);
+    if (next) void runChatRef.current(next.text, next.images, false, activeSessionId);
+  }, [archived, sessionBusy, activeSessionId, queues]);
+
   // From-idea: auto-send the idea as the first plan-mode prompt once messages load empty.
   useEffect(() => {
     if (!initialPrompt || archived || autoStartedRef.current) return;
