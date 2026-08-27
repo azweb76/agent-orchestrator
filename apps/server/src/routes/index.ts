@@ -64,6 +64,7 @@ import {
   stopAgent,
   stopAgentSession,
   streamAgentChat,
+  followAgentSession,
   submitPullRequestReview,
   suggestBranchNameForWorkspace,
   unarchiveAgent,
@@ -117,8 +118,14 @@ export function createRouter(ctx: AppContext): express.Router {
   // raise notifications instead of polling every endpoint.
   router.get('/events/stream', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    try {
+      res.socket?.setTimeout(0);
+    } catch {
+      // ignore
+    }
     res.flushHeaders?.();
     res.write(': connected\n\n');
 
@@ -807,6 +814,18 @@ export function createRouter(ctx: AppContext): express.Router {
         body,
         res,
         param(req.params.sessionId),
+      );
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/sessions/:sessionId/stream',
+    asyncHandler(async (req, res) => {
+      await followAgentSession(
+        ctx,
+        param(req.params.agentId),
+        param(req.params.sessionId),
+        res,
       );
     }),
   );

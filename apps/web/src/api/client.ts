@@ -446,6 +446,23 @@ export async function streamChat(
   await consumeChatSse(response, handlers);
 }
 
+/** Attach to an already-running (or just-finished) session without sending a prompt. */
+export async function streamSessionFollow(
+  agentId: string,
+  sessionId: string,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/stream`, {
+    method: 'GET',
+    headers: authHeaders(),
+    credentials: 'include',
+    signal,
+  });
+
+  await consumeChatSse(response, handlers);
+}
+
 /** Stash the plan session, create a Build session, and stream implementation. */
 export async function streamBuildPlan(
   agentId: string,

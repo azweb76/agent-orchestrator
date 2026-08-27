@@ -75,7 +75,16 @@ import {
 import type { AppEventType } from '@agent-orchestrator/shared';
 import type { AppRepositories } from '../db/index.js';
 import type { Notifier } from './notifier.js';
-import { ClaudeService, GitService, enrichPermissionInput, isPidAlive, parseGitHubUrl, slugify } from '../services/git.js';
+import {
+  ClaudeService,
+  GitService,
+  enrichPermissionInput,
+  followClaudeLog,
+  isPidAlive,
+  parseGitHubUrl,
+  readClaudeLogSnapshot,
+  slugify,
+} from '../services/git.js';
 import { GitHubService, type SearchedPullRequest } from '../services/github.js';
 import { AnthropicService, fallbackTitleFromPrompt, sanitizeChatTitle } from '../services/anthropic.js';
 import { discoverSlashCommands } from '../services/slash-commands.js';
@@ -2023,6 +2032,73 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function attachChatSse(res: Response): void {
+  try {
+    res.socket?.setTimeout(0);
+    res.socket?.setNoDelay?.(true);
+  } catch {
+    // ignore — some test doubles have no socket
+  }
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+}
+
+function writeSse(res: Response, event: string, data: unknown): boolean {
+  if (res.writableEnded) return false;
+  try {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveRunHandle(
+  ctx: AppContext,
+  sessionId: string,
+  timeoutMs = 8_000,
+): Promise<{ pid: number; logPath: string } | null> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const session = ctx.repos.sessions.getById(sessionId);
+    const tracked = ctx.claude.getRunningProcess(sessionId);
+    const pid = tracked?.pid ?? session?.pid ?? null;
+    const logPath = tracked?.logPath ?? session?.runLogPath ?? null;
+    if (pid != null && logPath) return { pid, logPath };
+    if (!session || session.status !== 'running') return null;
+    await sleep(80);
+  }
+  const session = ctx.repos.sessions.getById(sessionId);
+  const tracked = ctx.claude.getRunningProcess(sessionId);
+  const pid = tracked?.pid ?? session?.pid ?? null;
+  const logPath = tracked?.logPath ?? session?.runLogPath ?? null;
+  if (pid != null && logPath) return { pid, logPath };
+  return null;
+}
+
+async function waitForSettledAssistant(
+  ctx: AppContext,
+  sessionId: string,
+  timeoutMs = 5_000,
+): Promise<Message | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const session = ctx.repos.sessions.getById(sessionId);
+    const messages = ctx.repos.messages.listBySession(sessionId);
+    const last = messages[messages.length - 1];
+    const streaming = last?.role === 'assistant' && Boolean(last.metadata?.streaming);
+    if (session?.status !== 'running' && !streaming) {
+      return last?.role === 'assistant' ? last : undefined;
+    }
+    await sleep(50);
+  }
+  const last = ctx.repos.messages.listBySession(sessionId).at(-1);
+  return last?.role === 'assistant' ? last : undefined;
+}
+
 /**
  * Stop a Claude run and wait until the OS process is gone.
  * Used by Build / Keep planning so a hung ExitPlanMode stdio wait cannot leak.
@@ -2282,10 +2358,7 @@ export async function streamAgentChat(
 
   let clientOpen = res != null;
   if (res) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders?.();
+    attachChatSse(res);
     res.on('close', () => {
       clientOpen = false;
     });
@@ -2320,6 +2393,7 @@ export async function streamAgentChat(
   };
   runningSession = persistSessionRuntime(ctx, runningSession);
   syncAgentFromSessions(ctx, agentId);
+  send('session', runningSession);
 
   let assistantText = '';
   let timeline: StreamPart[] = [];
@@ -2456,6 +2530,167 @@ export async function streamAgentChat(
     // Deliver any follow-ups queued while this run was busy.
     void drainSessionQueue(ctx, agentId, session.id);
   }
+}
+
+/**
+ * Re-attach a UI client to an in-flight (or just-finished) session without
+ * taking over Claude stdin. Used after reload, tab switch, or a queued drain
+ * that started with no POST SSE client.
+ */
+export async function followAgentSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+  res: Response,
+): Promise<void> {
+  requireAgent(ctx, agentId);
+  let session = requireSession(ctx, agentId, sessionId);
+
+  attachChatSse(res);
+  let clientOpen = true;
+  const ac = new AbortController();
+  res.on('close', () => {
+    clientOpen = false;
+    ac.abort();
+  });
+
+  const send = (event: string, data: unknown) => {
+    if (!clientOpen) return;
+    if (!writeSse(res, event, data)) clientOpen = false;
+  };
+
+  send('session', session);
+
+  const finishWithAssistant = (message: Message | undefined, current: ChatSession) => {
+    if (message) {
+      send('done', {
+        message,
+        sessionId: current.claudeSessionId,
+        chatSessionId: current.id,
+      });
+    }
+    if (clientOpen && !res.writableEnded) res.end();
+  };
+
+  const healIdleStreaming = (current: ChatSession): Message | undefined => {
+    const pid = current.pid;
+    const live = Boolean(pid != null && isPidAlive(pid)) || Boolean(ctx.claude.getRunningProcess(current.id));
+    if (current.status === 'running' || live) return undefined;
+    const last = ctx.repos.messages.listBySession(current.id).at(-1);
+    if (last?.role === 'assistant' && last.metadata?.streaming) {
+      ctx.repos.messages.update({
+        ...last,
+        metadata: { ...last.metadata, streaming: false },
+      });
+    }
+    const next = ctx.repos.messages.listBySession(current.id).at(-1);
+    return next?.role === 'assistant' ? next : undefined;
+  };
+
+  if (session.status !== 'running') {
+    const healed = healIdleStreaming(session);
+    const last =
+      healed ??
+      [...ctx.repos.messages.listBySession(session.id)].reverse().find((item) => item.role === 'assistant');
+    finishWithAssistant(last, session);
+    return;
+  }
+
+  const handle = await resolveRunHandle(ctx, session.id);
+  session = ctx.repos.sessions.getById(session.id) ?? session;
+  send('session', session);
+
+  if (ac.signal.aborted || !clientOpen) {
+    if (!res.writableEnded) res.end();
+    return;
+  }
+
+  if (!handle) {
+    finishWithAssistant(
+      (await waitForSettledAssistant(ctx, session.id)) ?? healIdleStreaming(session),
+      ctx.repos.sessions.getById(session.id) ?? session,
+    );
+    return;
+  }
+
+  const messages = ctx.repos.messages.listBySession(session.id);
+  for (const item of messages) {
+    if (item.role === 'user') send('user_message', item);
+  }
+
+  let assistantMessage = [...messages].reverse().find((item) => item.role === 'assistant');
+  let assistantText = assistantMessage?.content ?? '';
+  let timeline: StreamPart[] = assistantMessage?.metadata.timeline ?? [];
+  let parentClaudeSessionId: string | null = session.claudeSessionId;
+
+  const applyEvent = (event: Record<string, unknown>, live: boolean) => {
+    parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, event);
+    const token = parentStreamTextDelta(event, parentClaudeSessionId);
+    if (token) {
+      assistantText += token;
+      timeline = appendStreamText(timeline, token);
+      if (live) send('token', { text: token });
+    } else if (String(event.type ?? '') !== 'stderr') {
+      timeline = applyStreamEvent(timeline, event, parentClaudeSessionId);
+      if (live) send('event', event);
+    }
+  };
+
+  const snapshot = await readClaudeLogSnapshot(handle.logPath);
+  assistantText = '';
+  timeline = [];
+  for (const line of snapshot.lines) {
+    try {
+      applyEvent(JSON.parse(line) as Record<string, unknown>, false);
+    } catch {
+      // ignore malformed historical lines
+    }
+  }
+
+  if (assistantMessage) {
+    assistantMessage = {
+      ...assistantMessage,
+      content: assistantText || assistantMessage.content,
+      metadata: {
+        ...assistantMessage.metadata,
+        streaming: true,
+        timeline: timeline.length > 0 ? timeline : assistantMessage.metadata.timeline,
+      },
+    };
+    send('assistant_message', assistantMessage);
+  }
+
+  for (const pending of ctx.claude.listPendingPermissions(session.id)) {
+    send('permission_request', {
+      requestId: pending.requestId,
+      toolName: pending.toolName,
+      input: pending.input,
+      toolUseId: pending.toolUseId,
+      createdAt: nowIso(),
+    });
+  }
+
+  try {
+    await followClaudeLog(handle.pid, handle.logPath, (line) => {
+      try {
+        applyEvent(JSON.parse(line) as Record<string, unknown>, true);
+      } catch {
+        // ignore malformed live lines
+      }
+    }, { startPosition: snapshot.position, signal: ac.signal });
+  } catch {
+    // abort or log read failure — settle from DB below
+  }
+
+  if (ac.signal.aborted || !clientOpen) {
+    if (!res.writableEnded) res.end();
+    return;
+  }
+
+  const settled =
+    (await waitForSettledAssistant(ctx, session.id)) ??
+    healIdleStreaming(ctx.repos.sessions.getById(session.id) ?? session);
+  finishWithAssistant(settled, ctx.repos.sessions.getById(session.id) ?? session);
 }
 
 function makeEvent(agentId: string, type: string, data: Record<string, unknown>): AgentEvent {

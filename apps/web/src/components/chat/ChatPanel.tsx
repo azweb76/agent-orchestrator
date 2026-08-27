@@ -21,6 +21,7 @@ import {
   extractPlanFromInput,
   isSubagentItem,
   isTopLevelClaudeResult,
+  mergeChatMessages,
   parseAskUserQuestions,
   visibleAssistantContent,
   chatSessionTemplateById,
@@ -33,7 +34,7 @@ import {
   type PermissionRequest,
   type UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
-import { api, streamBuildPlan, streamChat } from '../../api/client';
+import { api, streamBuildPlan, streamChat, streamSessionFollow, type ChatStreamHandlers } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
@@ -183,6 +184,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const stickToBottomRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const sendingSessionsRef = useRef(new Set<string>());
+  const followingRef = useRef(new Set<string>());
   const mountedRef = useRef(true);
   const autoStartedRef = useRef(false);
   const sessionIdRef = useRef(activeSessionId);
@@ -236,10 +238,21 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
 
   const messagesQuery = useQuery({
     queryKey: ['messages', agentId, activeSessionId],
-    queryFn: () => api.getMessages(agentId, activeSessionId),
+    queryFn: async () => {
+      const remote = await api.getMessages(agentId, activeSessionId);
+      const local = queryClient.getQueryData<Message[]>(['messages', agentId, activeSessionId]);
+      return mergeChatMessages(local, remote);
+    },
     enabled: Boolean(activeSessionId),
-    refetchInterval: () =>
-      session?.status === 'running' || isSending || queue.length > 0 ? 1000 : false,
+    refetchOnWindowFocus: true,
+    refetchInterval: () => {
+      if (sendingSessionsRef.current.has(activeSessionId)) return false;
+      if (followingRef.current.has(activeSessionId)) return false;
+      const cached = queryClient.getQueryData<Message[]>(['messages', agentId, activeSessionId]);
+      const streaming = cached?.some((item) => item.metadata?.streaming);
+      if (session?.status === 'running' || streaming || queue.length > 0) return 1000;
+      return false;
+    },
   });
 
   const updateMutation = useMutation({
@@ -589,6 +602,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           onDone: (payload) => {
             if (!mountedRef.current) return;
             const sid = payload.chatSessionId ?? stream.sessionId;
+            void queryClient.cancelQueries({ queryKey: ['messages', agentId, sid] });
             setMessagesCache(queryClient, agentId, sid, (prev) =>
               upsertMessage(prev, payload.message),
             );
@@ -641,6 +655,124 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   };
 
   runChatRef.current = runChat;
+
+  // Re-attach to a backend run this tab is not currently POSTing (reload, Changes
+  // tab, queued drain, dropped SSE). Live tokens keep the composer in sync.
+  useEffect(() => {
+    if (archived || !activeSessionId) return;
+    if (isSending) return;
+    if (session?.status !== 'running' && !hasStreamingMessage) return;
+
+    const sid = activeSessionId;
+    const stream = { sessionId: sid };
+    const controller = startSessionAbort(sid);
+    followingRef.current.add(sid);
+
+    const handlers: ChatStreamHandlers = {
+      onSession: (nextSession) => {
+        if (!mountedRef.current) return;
+        const previousId = stream.sessionId;
+        const switched = nextSession.id !== previousId;
+        if (switched) {
+          stream.sessionId = nextSession.id;
+          sessionIdRef.current = nextSession.id;
+          setSessionId(nextSession.id);
+        }
+        upsertAgentSession(queryClient, agentId, nextSession, { activate: switched });
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      },
+      onUserMessage: (message) => {
+        if (!mountedRef.current) return;
+        setMessagesCache(queryClient, agentId, stream.sessionId, (prev) =>
+          upsertMessage(prev, message),
+        );
+      },
+      onAssistantMessage: (message) => {
+        if (!mountedRef.current) return;
+        setMessagesCache(queryClient, agentId, stream.sessionId, (prev) =>
+          upsertMessage(prev, message),
+        );
+      },
+      onToken: (token) => {
+        if (!mountedRef.current) return;
+        patchStreamingAssistant(stream.sessionId, (message) => ({
+          ...message,
+          content: message.content + token,
+          metadata: {
+            ...message.metadata,
+            streaming: true,
+            timeline: appendStreamText(message.metadata.timeline ?? [], token),
+          },
+        }));
+      },
+      onEvent: (event) => {
+        if (!mountedRef.current) return;
+        const parentSessionId = parentSessionForEvent(stream.sessionId, event);
+        patchStreamingAssistant(stream.sessionId, (message) => ({
+          ...message,
+          metadata: {
+            ...message.metadata,
+            streaming: !isTopLevelClaudeResult(event, parentSessionId),
+            timeline: applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId),
+          },
+        }));
+      },
+      onPermissionRequest: (request) => {
+        if (!mountedRef.current || !viewed(stream.sessionId)) return;
+        setPermissionRequests((prev) => {
+          if (prev.some((item) => item.requestId === request.requestId)) return prev;
+          return [...prev, request];
+        });
+      },
+      onDone: (payload) => {
+        if (!mountedRef.current) return;
+        const doneSid = payload.chatSessionId ?? stream.sessionId;
+        void queryClient.cancelQueries({ queryKey: ['messages', agentId, doneSid] });
+        setMessagesCache(queryClient, agentId, doneSid, (prev) =>
+          upsertMessage(prev, payload.message),
+        );
+        void queryClient
+          .invalidateQueries({ queryKey: ['permissions', agentId, doneSid] })
+          .then(() => api.listPendingPermissions(agentId, doneSid))
+          .then((pending) => {
+            if (mountedRef.current && viewed(doneSid)) setPermissionRequests(pending);
+          })
+          .catch(() => {
+            if (mountedRef.current && viewed(doneSid)) setPermissionRequests([]);
+          });
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId, doneSid] });
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['events', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['queue', agentId, doneSid] });
+      },
+      onError: () => {
+        if (!mountedRef.current) return;
+        queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      },
+    };
+
+    void streamSessionFollow(agentId, sid, handlers, controller.signal)
+      .catch((error: unknown) => {
+        if ((error as Error).name === 'AbortError') return;
+        if (mountedRef.current) {
+          queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
+          queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+        }
+      })
+      .finally(() => {
+        followingRef.current.delete(sid);
+        releaseSessionAbort(sid, controller);
+      });
+
+    return () => {
+      followingRef.current.delete(sid);
+      controller.abort();
+    };
+    // createLiveHandlers closes over the latest patch helpers; session status
+    // and the local send flag decide when a follow subscription is needed.
+  }, [archived, agentId, activeSessionId, isSending, session?.status, hasStreamingMessage]);
 
   // From-idea: auto-send the idea as the first plan-mode prompt once messages load empty.
   useEffect(() => {
@@ -864,6 +996,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           onDone: (payload) => {
             if (!mountedRef.current) return;
             const sid = payload.chatSessionId ?? stream.sessionId;
+            void queryClient.cancelQueries({ queryKey: ['messages', agentId, sid] });
             setMessagesCache(queryClient, agentId, sid, (prev) =>
               upsertMessage(prev, payload.message),
             );
