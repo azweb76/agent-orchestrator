@@ -40,6 +40,9 @@ import type {
   PruneArchivedAgentsResponse,
   QueuedChatMessage,
   EnqueueChatMessageRequest,
+  UsageSummary,
+  AgentUsage,
+  SessionUsage,
   PullRequestChecks,
   PullRequestDetail,
   PullRequestInbox,
@@ -356,6 +359,88 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
     });
     return { ...workspace, agents };
   });
+}
+
+/** Fleet-wide cost rollup from persisted assistant turns, grouped per agent and session. */
+export function getUsageSummary(ctx: AppContext): UsageSummary {
+  const rows = ctx.repos.messages.listCostRows();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayMs = startOfToday.getTime();
+
+  const round = (value: number) => Number(value.toFixed(4));
+
+  type SessionAccumulator = { costUsd: number; assistantTurns: number; lastActivityAt: string | null };
+  const byAgent = new Map<string, Map<string, SessionAccumulator>>();
+  let totalCostUsd = 0;
+  let todayCostUsd = 0;
+  let totalAssistantTurns = 0;
+
+  for (const row of rows) {
+    if (!Number.isFinite(row.costUsd)) continue;
+    totalCostUsd += row.costUsd;
+    totalAssistantTurns += 1;
+    if (Date.parse(row.createdAt) >= todayMs) todayCostUsd += row.costUsd;
+
+    const sessions = byAgent.get(row.agentId) ?? new Map<string, SessionAccumulator>();
+    byAgent.set(row.agentId, sessions);
+    const key = row.sessionId ?? '';
+    const acc = sessions.get(key) ?? { costUsd: 0, assistantTurns: 0, lastActivityAt: null };
+    acc.costUsd += row.costUsd;
+    acc.assistantTurns += 1;
+    if (!acc.lastActivityAt || row.createdAt > acc.lastActivityAt) acc.lastActivityAt = row.createdAt;
+    sessions.set(key, acc);
+  }
+
+  const agents: AgentUsage[] = [];
+  for (const workspace of ctx.repos.workspaces.list()) {
+    for (const agent of ctx.repos.agents.listByWorkspace(workspace.id)) {
+      const sessions = byAgent.get(agent.id);
+      if (!sessions) continue;
+      const titleById = new Map(
+        ctx.repos.sessions.listByAgent(agent.id).map((session) => [session.id, session.title]),
+      );
+      const sessionUsages: SessionUsage[] = [...sessions.entries()]
+        .map(([sessionId, acc]) => ({
+          sessionId,
+          title: titleById.get(sessionId) ?? 'Deleted session',
+          costUsd: round(acc.costUsd),
+          assistantTurns: acc.assistantTurns,
+          lastActivityAt: acc.lastActivityAt,
+        }))
+        .sort((a, b) => b.costUsd - a.costUsd);
+      const agentTotal = sessionUsages.reduce(
+        (sum, session) => ({
+          costUsd: sum.costUsd + session.costUsd,
+          assistantTurns: sum.assistantTurns + session.assistantTurns,
+          lastActivityAt:
+            session.lastActivityAt && (!sum.lastActivityAt || session.lastActivityAt > sum.lastActivityAt)
+              ? session.lastActivityAt
+              : sum.lastActivityAt,
+        }),
+        { costUsd: 0, assistantTurns: 0, lastActivityAt: null as string | null },
+      );
+      agents.push({
+        agentId: agent.id,
+        agentName: agent.name,
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        archived: Boolean(agent.archivedAt),
+        costUsd: round(agentTotal.costUsd),
+        assistantTurns: agentTotal.assistantTurns,
+        lastActivityAt: agentTotal.lastActivityAt,
+        sessions: sessionUsages,
+      });
+    }
+  }
+  agents.sort((a, b) => b.costUsd - a.costUsd);
+
+  return {
+    totalCostUsd: round(totalCostUsd),
+    todayCostUsd: round(todayCostUsd),
+    totalAssistantTurns,
+    agents,
+  };
 }
 
 export async function createWorkspace(ctx: AppContext, body: CreateWorkspaceRequest) {

@@ -573,6 +573,38 @@ export interface SidebarWorkspace extends Workspace {
   agents: SidebarAgent[];
 }
 
+/** Spend/turn rollup computed from persisted assistant turns. */
+export interface UsageRollup {
+  costUsd: number;
+  assistantTurns: number;
+  /** ISO timestamp of the most recent assistant turn included, if any. */
+  lastActivityAt: string | null;
+}
+
+export interface SessionUsage extends UsageRollup {
+  sessionId: string;
+  title: string;
+}
+
+export interface AgentUsage extends UsageRollup {
+  agentId: string;
+  agentName: string;
+  workspaceId: string;
+  workspaceName: string;
+  archived: boolean;
+  sessions: SessionUsage[];
+}
+
+/** Fleet-wide cost rollup for the dashboard (`GET /api/usage`). */
+export interface UsageSummary {
+  totalCostUsd: number;
+  /** Cost of assistant turns recorded since local midnight. */
+  todayCostUsd: number;
+  totalAssistantTurns: number;
+  /** Per-agent rollups sorted by total cost, highest first. */
+  agents: AgentUsage[];
+}
+
 export const CLAUDE_MODELS = [
   { id: 'sonnet', label: 'Claude Sonnet' },
   { id: 'opus', label: 'Claude Opus' },

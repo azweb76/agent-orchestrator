@@ -44,6 +44,7 @@ import type {
   SessionContextUsage,
   SidebarWorkspace,
   SlashCommand,
+  UsageSummary,
   SuggestBranchNameResponse,
   UpdateAgentRequest,
   UpdateChatSessionRequest,
@@ -87,6 +88,7 @@ export interface SystemStatus {
 
 export const api = {
   getStatus: () => request<SystemStatus>('/status'),
+  getUsageSummary: () => request<UsageSummary>('/usage'),
   listSidebar: () => request<SidebarWorkspace[]>('/sidebar'),
   listWorkspaces: () => request<WorkspaceWithCounts[]>('/workspaces'),
   createWorkspace: (body: CreateWorkspaceRequest) =>

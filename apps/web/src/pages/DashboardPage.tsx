@@ -24,7 +24,7 @@ import { api } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
-import { statusLabel } from '../utils/format';
+import { formatUsd, statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
 
 function greetingForHour(hour: number): string {
@@ -194,6 +194,12 @@ export function DashboardPage() {
     queryKey: ['pulls-inbox'],
     queryFn: api.getPullRequestInbox,
     enabled: Boolean(status?.githubTokenConfigured),
+    refetchInterval: 60_000,
+  });
+
+  const usageQuery = useQuery({
+    queryKey: ['usage'],
+    queryFn: api.getUsageSummary,
     refetchInterval: 60_000,
   });
 
@@ -401,7 +407,7 @@ export function DashboardPage() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
+          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(5, 1fr)' },
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 2,
@@ -429,6 +435,12 @@ export function DashboardPage() {
           value={status?.githubTokenConfigured ? prCount : '—'}
           hint={status?.githubTokenConfigured ? 'Authored + reviews' : 'GitHub not connected'}
           accent="secondary.main"
+        />
+        <MetricTile
+          label="Spend today"
+          value={usageQuery.data ? formatUsd(usageQuery.data.todayCostUsd) : '—'}
+          hint={usageQuery.data ? `${formatUsd(usageQuery.data.totalCostUsd)} all-time` : 'Loading…'}
+          accent="warning.main"
         />
       </Box>
 
@@ -690,6 +702,74 @@ export function DashboardPage() {
               ) : null}
             </Stack>
           </HudPanel>
+
+          {usageQuery.data && usageQuery.data.agents.length > 0 ? (
+            <HudPanel>
+              <Stack
+                direction="row"
+                sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}
+              >
+                <Box>
+                  <SectionLabel>Usage</SectionLabel>
+                  <Typography variant="h6">Top spend</Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{ fontFamily: '"IBM Plex Mono", monospace', color: 'text.secondary' }}
+                >
+                  {formatUsd(usageQuery.data.totalCostUsd)} · {usageQuery.data.totalAssistantTurns}{' '}
+                  turns
+                </Typography>
+              </Stack>
+              <Stack spacing={0}>
+                {usageQuery.data.agents.slice(0, 5).map((agent) => (
+                  <Box
+                    key={agent.agentId}
+                    component={RouterLink}
+                    to={`/agents/${agent.agentId}`}
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      textDecoration: 'none',
+                      color: 'inherit',
+                      py: 0.9,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:last-child': { borderBottom: 'none' },
+                      '&:hover .usage-name': { color: 'secondary.main' },
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        className="usage-name"
+                        variant="body2"
+                        noWrap
+                        sx={{ fontWeight: 600 }}
+                      >
+                        {agent.agentName}
+                        {agent.archived ? ' (archived)' : ''}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {agent.workspaceName} · {agent.assistantTurns} turns
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontFamily: '"IBM Plex Mono", monospace',
+                        color: 'warning.main',
+                        flexShrink: 0,
+                        alignSelf: 'center',
+                      }}
+                    >
+                      {formatUsd(agent.costUsd)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </HudPanel>
+          ) : null}
 
           <HudPanel>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>

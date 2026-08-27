@@ -38,6 +38,7 @@ import {
   getPullRequestInbox,
   getPullRequestReviews,
   getSystemStatus,
+  getUsageSummary,
   getWorkspace,
   gradeAgentSession,
   generateAgentInstructionDraft,
@@ -117,6 +118,10 @@ export function createRouter(ctx: AppContext): express.Router {
       clearInterval(ping);
       unsubscribe?.();
     });
+  });
+
+  router.get('/usage', (_req, res) => {
+    res.json(getUsageSummary(ctx));
   });
 
   router.get(

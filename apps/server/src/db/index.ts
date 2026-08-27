@@ -714,6 +714,28 @@ export class MessageRepository {
     return row ? rowToMessage(row) : null;
   }
 
+  /** Assistant turns that recorded a cost, without deserializing full metadata. */
+  listCostRows(): Array<{
+    agentId: string;
+    sessionId: string | null;
+    createdAt: string;
+    costUsd: number;
+  }> {
+    return this.db
+      .prepare(
+        `SELECT agent_id AS agentId, session_id AS sessionId, created_at AS createdAt,
+                CAST(json_extract(metadata, '$.costUsd') AS REAL) AS costUsd
+         FROM messages
+         WHERE role = 'assistant' AND json_extract(metadata, '$.costUsd') IS NOT NULL`,
+      )
+      .all() as Array<{
+      agentId: string;
+      sessionId: string | null;
+      createdAt: string;
+      costUsd: number;
+    }>;
+  }
+
   /**
    * Delete the given message and every later message in the same session
    * (ordered by created_at, then insertion order).

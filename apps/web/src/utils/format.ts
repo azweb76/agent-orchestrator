@@ -32,6 +32,12 @@ export function formatRelativeTime(iso: string | number | Date): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+/** Dollar amounts for spend rollups ($0.42, $12.30). */
+export function formatUsd(value: number): string {
+  if (value > 0 && value < 0.01) return '<$0.01';
+  return `$${value.toFixed(2)}`;
+}
+
 /** Compact token counts for chips and tables (1200 → 1.2k). */
 export function formatTokenCount(value: number): string {
   const abs = Math.abs(value);
