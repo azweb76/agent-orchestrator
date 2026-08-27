@@ -15,6 +15,7 @@ import {
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import NotificationImportantOutlinedIcon from '@mui/icons-material/NotificationImportantOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -203,6 +204,10 @@ export function DashboardPage() {
   );
   const runningCount = activeAgents.filter((a) => a.status === 'running').length;
   const idleCount = activeAgents.filter((a) => a.status === 'idle').length;
+  const blockedAgents = useMemo(
+    () => activeAgents.filter((agent) => (agent.pendingPermissionCount ?? 0) > 0),
+    [activeAgents],
+  );
 
   const prCount =
     (inboxQuery.data?.authored.length ?? 0) + (inboxQuery.data?.reviewRequested.length ?? 0);
@@ -214,9 +219,15 @@ export function DashboardPage() {
     const q = query.trim().toLowerCase();
     if (!q) {
       return [...activeAgents].sort((a, b) => {
+        const blocked = (agent: (typeof activeAgents)[number]) =>
+          (agent.pendingPermissionCount ?? 0) > 0 ? 0 : 1;
         const rank = (s: AgentStatus) =>
           s === 'running' ? 0 : s === 'idle' ? 1 : s === 'stopped' ? 2 : 3;
-        return rank(a.status) - rank(b.status) || a.name.localeCompare(b.name);
+        return (
+          blocked(a) - blocked(b) ||
+          rank(a.status) - rank(b.status) ||
+          a.name.localeCompare(b.name)
+        );
       });
     }
     return activeAgents.filter((agent) => {
@@ -424,6 +435,76 @@ export function DashboardPage() {
       {(sidebarError as Error | undefined) && (
         <Alert severity="error">{(sidebarError as Error).message}</Alert>
       )}
+
+      {blockedAgents.length > 0 ? (
+        <HudPanel
+          sx={{
+            borderColor: 'rgba(255,183,77,0.4)',
+            '&::before': {
+              background:
+                'linear-gradient(135deg, rgba(255,183,77,0.08) 0%, transparent 45%, rgba(255,183,77,0.04) 100%)',
+            },
+          }}
+        >
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1.5 }}>
+            <NotificationImportantOutlinedIcon sx={{ color: 'warning.main' }} />
+            <Box>
+              <SectionLabel>Needs attention</SectionLabel>
+              <Typography variant="h6">
+                {blockedAgents.length === 1
+                  ? '1 agent is waiting on you'
+                  : `${blockedAgents.length} agents are waiting on you`}
+              </Typography>
+            </Box>
+          </Stack>
+          <Stack spacing={0.75}>
+            {blockedAgents.map((agent) => (
+              <Box
+                key={agent.id}
+                component={RouterLink}
+                to={`/agents/${agent.id}`}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  border: '1px solid',
+                  borderColor: 'rgba(255,183,77,0.25)',
+                  borderRadius: 1.5,
+                  px: 1.75,
+                  py: 1,
+                  transition: 'border-color 0.2s ease, background-color 0.2s ease',
+                  '&:hover': {
+                    borderColor: 'rgba(255,183,77,0.55)',
+                    bgcolor: 'rgba(255,183,77,0.06)',
+                  },
+                }}
+              >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                    {agent.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                    {agent.workspaceName} · {agent.worktree.branch}
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  label={
+                    agent.pendingPermissionCount === 1
+                      ? '1 pending prompt'
+                      : `${agent.pendingPermissionCount} pending prompts`
+                  }
+                  sx={{ flexShrink: 0 }}
+                />
+              </Box>
+            ))}
+          </Stack>
+        </HudPanel>
+      ) : null}
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}>
         <HudPanel sx={{ flex: 1.4, minWidth: 0 }}>
