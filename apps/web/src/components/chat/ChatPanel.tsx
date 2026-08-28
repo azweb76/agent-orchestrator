@@ -36,11 +36,19 @@ import {
   type PermissionRequest,
   type UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
-import { api, streamBuildPlan, streamChat, streamSessionFollow, type ChatStreamHandlers } from '../../api/client';
+import {
+  api,
+  streamBuildPlan,
+  streamChat,
+  streamCompactSession,
+  streamSessionFollow,
+  type ChatStreamHandlers,
+} from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
+import { CompactContinueBanner } from './CompactContinueBanner';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { pendingMentionToChatMention, createPendingMention, type PendingMention } from './mentionComposer';
 import { CONTEXT_SLASH_CHIP_COMMANDS } from './slashComposer';
@@ -232,6 +240,9 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const activationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const latestActivationRef = useRef(0);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [compacting, setCompacting] = useState(false);
+  /** Session whose last run the user stopped (offers compact while the meter is hot). */
+  const [stoppedSessionId, setStoppedSessionId] = useState<string | null>(null);
   const [gradeOpen, setGradeOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
@@ -586,6 +597,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       setChatError(null);
       setLastFailed(null);
       setPermissionRequests([]);
+      setStoppedSessionId(null);
       stickToBottomRef.current = true;
       setShowJumpToLatest(false);
     }
@@ -865,6 +877,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     } catch {
       // ignore
     }
+    setStoppedSessionId(sid);
     setPermissionRequests([]);
     queryClient.invalidateQueries({ queryKey: ['messages', agentId, sid] });
     queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
@@ -970,33 +983,38 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     }
   };
 
-  const buildPlan = async (request: PermissionRequest) => {
+  /**
+   * Run a handoff stream that stashes the current session and switches the UI
+   * to a server-created replacement (Build, compact-and-continue).
+   */
+  const runSessionHandoff = async (
+    start: (
+      fromSessionId: string,
+      handlers: ChatStreamHandlers,
+      signal: AbortSignal,
+    ) => Promise<void>,
+  ) => {
     if (archived || !mountedRef.current) return;
-    const planSessionId = sessionIdRef.current;
-    setPermissionBusy(true);
+    const fromSessionId = sessionIdRef.current;
     setChatError(null);
 
-    abortBySessionRef.current.get(planSessionId)?.abort();
+    abortBySessionRef.current.get(fromSessionId)?.abort();
     await new Promise((r) => setTimeout(r, 150));
     if (!mountedRef.current) return;
 
-    // The server drops queued follow-ups on the stashed plan session.
-    queryClient.invalidateQueries({ queryKey: ['queue', agentId, planSessionId] });
+    // The server drops queued follow-ups on the stashed session.
+    queryClient.invalidateQueries({ queryKey: ['queue', agentId, fromSessionId] });
     setPermissionRequests([]);
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
 
-    const stream = { sessionId: planSessionId };
-    const controller = startSessionAbort(planSessionId);
-    beginSending(planSessionId);
-
-    const plan = extractPlanFromInput(request.input);
+    const stream = { sessionId: fromSessionId };
+    const controller = startSessionAbort(fromSessionId);
+    beginSending(fromSessionId);
 
     try {
-      await streamBuildPlan(
-        agentId,
-        planSessionId,
-        { requestId: request.requestId, plan: plan || undefined },
+      await start(
+        fromSessionId,
         {
           onSession: (nextSession) => {
             if (!mountedRef.current) return;
@@ -1098,10 +1116,42 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     } finally {
       void queryClient.invalidateQueries({ queryKey: ['messages', agentId, stream.sessionId] });
       void queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['session-context', agentId, stream.sessionId] });
       releaseSessionAbort(stream.sessionId, controller);
       endSending(stream.sessionId);
-      if (!mountedRef.current) return;
-      setPermissionBusy(false);
+    }
+  };
+
+  const buildPlan = async (request: PermissionRequest) => {
+    if (archived || !mountedRef.current) return;
+    setPermissionBusy(true);
+    const plan = extractPlanFromInput(request.input);
+    try {
+      await runSessionHandoff((fromSessionId, handlers, signal) =>
+        streamBuildPlan(
+          agentId,
+          fromSessionId,
+          { requestId: request.requestId, plan: plan || undefined },
+          handlers,
+          signal,
+        ),
+      );
+    } finally {
+      if (mountedRef.current) setPermissionBusy(false);
+    }
+  };
+
+  /** Compact-and-continue: summarize the hot session and continue in a fresh one. */
+  const compactAndContinue = async () => {
+    if (archived || !mountedRef.current) return;
+    setCompacting(true);
+    setStoppedSessionId(null);
+    try {
+      await runSessionHandoff((fromSessionId, handlers, signal) =>
+        streamCompactSession(agentId, fromSessionId, handlers, signal),
+      );
+    } finally {
+      if (mountedRef.current) setCompacting(false);
     }
   };
 
@@ -1353,6 +1403,17 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
         }}
       >
         <Box sx={{ maxWidth: CHAT_COLUMN_MAX_WIDTH, mx: 'auto', px: { xs: 1.25, sm: 2.5 }, py: { xs: 1.25, sm: 1.5 }, pb: { xs: 'calc(10px + env(safe-area-inset-bottom, 0px))', sm: 1.5 } }}>
+          {!archived && activeSessionId ? (
+            <CompactContinueBanner
+              agentId={agentId}
+              sessionId={activeSessionId}
+              isStreaming={sessionBusy}
+              stopped={stoppedSessionId === activeSessionId}
+              compacting={compacting}
+              onCompact={() => void compactAndContinue()}
+            />
+          ) : null}
+
           {chatError && (
             <Alert
               severity="error"
