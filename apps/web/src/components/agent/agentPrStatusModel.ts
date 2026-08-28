@@ -5,6 +5,11 @@ import type {
   PullRequestChecksRollup,
   PullRequestDetail,
 } from '@agent-orchestrator/shared';
+import {
+  PULL_REQUEST_STATUS_LABELS,
+  resolvePullRequestStatus,
+  type PullRequestStatusKind,
+} from '../pr/pullRequestStatus';
 
 const CHECKS_LABEL: Record<PullRequestChecksRollup, string> = {
   success: 'Checks passing',
@@ -15,6 +20,7 @@ const CHECKS_LABEL: Record<PullRequestChecksRollup, string> = {
 };
 
 export interface AgentPrStripModel {
+  prStatus: PullRequestStatusKind;
   stateLabel: string;
   checksLabel: string | null;
   checksTone: 'success' | 'error' | 'warning' | 'default';
@@ -59,11 +65,8 @@ export function buildAgentPrStripModel(input: {
   const { pr, checks = null, archived = false } = input;
   const open = pr.state === 'open' && !pr.merged;
   const readiness = evaluateMergeReadiness(pr);
-
-  let stateLabel = 'Open';
-  if (pr.merged) stateLabel = 'Merged';
-  else if (pr.state !== 'open') stateLabel = 'Closed';
-  else if (pr.draft) stateLabel = 'Draft';
+  const prStatus = resolvePullRequestStatus(pr);
+  const stateLabel = PULL_REQUEST_STATUS_LABELS[prStatus];
 
   const rollup = checks?.rollup ?? null;
   const checksLabel =
@@ -97,6 +100,7 @@ export function buildAgentPrStripModel(input: {
 
   const canAct = open && !archived;
   return {
+    prStatus,
     stateLabel,
     checksLabel,
     checksTone,

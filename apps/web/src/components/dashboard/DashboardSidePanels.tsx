@@ -14,6 +14,8 @@ import { pullRequestPath } from '../../utils/paths';
 import type { SystemStatus } from '../../api/client';
 import { HudPanel } from './HudPanel';
 import { SectionLabel } from './SectionLabel';
+import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
+import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
 
 interface DashboardSidePanelsProps {
   status?: SystemStatus;
@@ -269,9 +271,15 @@ export function DashboardSidePanels({
                   '&:hover .pr-title': { color: 'secondary.main' },
                 }}
               >
-                <Typography className="pr-title" variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                  #{pr.number} {pr.title}
-                </Typography>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                  <PullRequestStatusIcon
+                    status={resolvePullRequestStatus(pr)}
+                    sx={{ fontSize: 16, flexShrink: 0 }}
+                  />
+                  <Typography className="pr-title" variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                    #{pr.number} {pr.title}
+                  </Typography>
+                </Stack>
                 <Typography variant="caption" color="text.secondary">
                   {pr.owner}/{pr.repo} · {pr.category === 'authored' ? 'authored' : 'review'}
                 </Typography>

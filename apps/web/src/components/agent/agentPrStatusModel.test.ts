@@ -64,6 +64,7 @@ describe('buildAgentPrStripModel', () => {
     });
 
     expect(model.stateLabel).toBe('Open');
+    expect(model.prStatus).toBe('open');
     expect(model.showFixCi).toBe(true);
     expect(model.showAddressReview).toBe(true);
     expect(model.checksLabel).toBe('Checks failing (1/2)');
@@ -94,6 +95,7 @@ describe('buildAgentPrStripModel', () => {
     });
 
     expect(model.stateLabel).toBe('Draft');
+    expect(model.prStatus).toBe('draft');
     expect(model.showFixCi).toBe(false);
     expect(model.mergeHint).toBe('Mark ready when you are happy');
   });

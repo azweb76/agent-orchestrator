@@ -4,7 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Paper,
   Stack,
@@ -27,6 +26,7 @@ import { PullRequestConversationTab } from '../components/pr/PullRequestConversa
 import { PullRequestFilesTab } from '../components/pr/PullRequestFilesTab';
 import { PullRequestOverviewTab } from '../components/pr/PullRequestOverviewTab';
 import { PullRequestReviewsTab } from '../components/pr/PullRequestReviewsTab';
+import { PullRequestStatusChip } from '../components/pr/PullRequestStatusChip';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -53,10 +53,7 @@ export function PullRequestDetailPage() {
 }
 
 function statusChip(pr: PullRequestDetail) {
-  if (pr.merged) return <Chip size="small" label="Merged" color="secondary" variant="outlined" />;
-  if (pr.state === 'closed') return <Chip size="small" label="Closed" color="error" variant="outlined" />;
-  if (pr.draft) return <Chip size="small" label="Draft" variant="outlined" />;
-  return <Chip size="small" label="Open" color="success" variant="outlined" />;
+  return <PullRequestStatusChip pr={pr} />;
 }
 
 function PullRequestDetailContent({

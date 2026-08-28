@@ -3,7 +3,6 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
   Box,
-  Chip,
   CircularProgress,
   IconButton,
   InputAdornment,
@@ -23,6 +22,7 @@ import { pullRequestPath } from '../../utils/paths';
 import { EmptyState } from '../ui/EmptyState';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../ui/ListPanel';
+import { PullRequestStatusChip } from './PullRequestStatusChip';
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -272,10 +272,7 @@ function PrPickerRow({
             <ListRowTitle>
               #{pr.number} {pr.title}
             </ListRowTitle>
-            {pr.draft ? <Chip size="small" label="Draft" variant="outlined" /> : null}
-            {pr.state !== 'open' ? (
-              <Chip size="small" label={pr.state} color="default" variant="outlined" />
-            ) : null}
+            <PullRequestStatusChip pr={pr} />
           </Stack>
           {meta ? <ListRowMeta>{meta}</ListRowMeta> : null}
         </Box>
