@@ -56,8 +56,8 @@ const lightPalette = {
   action: {
     hover: 'rgba(15,23,42,0.04)',
     selected: 'rgba(13,148,136,0.1)',
-    disabled: 'rgba(15,23,42,0.48)',
-    disabledBackground: 'rgba(15,23,42,0.1)',
+    disabled: 'rgba(15,23,42,0.55)',
+    disabledBackground: 'rgba(15,23,42,0.14)',
   },
 };
 

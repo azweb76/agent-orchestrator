@@ -34,8 +34,8 @@ describe('createAppTheme light contrast', () => {
   it('keeps disabled contained button text readable on light fills', () => {
     const light = createAppTheme('light');
     expect(light.palette.primary.contrastText).toBe('#ffffff');
-    expect(light.palette.action.disabled).toBe('rgba(15,23,42,0.48)');
-    expect(light.palette.action.disabledBackground).toBe('rgba(15,23,42,0.1)');
+    expect(light.palette.action.disabled).toBe('rgba(15,23,42,0.55)');
+    expect(light.palette.action.disabledBackground).toBe('rgba(15,23,42,0.14)');
   });
 
   it('uses dark on-accent contrast for dark pastel primaries', () => {
