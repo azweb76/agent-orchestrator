@@ -11,7 +11,6 @@ import type {
   CommitAgentChangesResponse,
   CreateChatSessionRequest,
   CreatePrRequest,
-  DeleteAgentResponse,
   DenyPermissionRequest,
   EnqueueChatMessageRequest,
   GenerateInstructionDraftRequest,
@@ -48,11 +47,6 @@ export const apiAgents = {
     }),
   unarchiveAgent: (agentId: string) =>
     request<Agent>(`/agents/${agentId}/unarchive`, { method: 'POST' }),
-  deleteAgent: (agentId: string, deleteWorktree = false) =>
-    request<DeleteAgentResponse>(
-      `/agents/${agentId}${deleteWorktree ? '?deleteWorktree=true' : ''}`,
-      { method: 'DELETE' },
-    ),
   pruneArchivedAgents: () =>
     request<PruneArchivedAgentsResponse>('/agents/prune-archived', { method: 'POST' }),
   createSession: (agentId: string, body: CreateChatSessionRequest = {}) =>
