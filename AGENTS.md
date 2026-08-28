@@ -1,78 +1,115 @@
-# Agent Orchestrator
+---
+name: agents-md
+description: Project-level instructions for working on this multi-agent chat platform codebase
+---
 
-Local web app for managing GitHub workspaces, git worktrees, and one Claude Code agent per worktree. Human setup lives in `README.md`; this file is for coding agents.
+# Project Instructions: Multi-Agent Chat Platform
 
-## Commands
+This is a TypeScript monorepo (web frontend + Node.js server) for a multi-agent chat platform. You are working with a human developer who approves plans before implementation.
 
-Run from the repo root. Node 20+ and pnpm 10+ are required.
+## Repository Structure
 
-```bash
-cp .env.example .env          # set GITHUB_TOKEN (repo scope)
-pnpm install
-pnpm dev                      # API :3001 + Vite :5173 (proxies /api)
-pnpm build && pnpm start      # production: server serves apps/web/dist
-pnpm lint                     # ESLint across all packages
-pnpm typecheck                # all packages
-pnpm --filter @agent-orchestrator/server test
-pnpm --filter @agent-orchestrator/server test -- src/services/git.test.ts
-pnpm --filter @agent-orchestrator/web test # Vitest suite for web helpers
+- `apps/web/` — React (Vite) frontend with Tanstack Query for data fetching
+- `apps/server/` — Node.js backend serving SSE-based chat streams
+- Shared packages in `packages/` (if present)
+
+## Development Workflow
+
+1. **Plan approval required**: When given a task, present a plan and wait for explicit approval before implementing.
+2. **Auto mode after approval**: Once approved, implement in auto mode—make progress with sensible defaults, don't ask clarifying questions unless truly blocked.
+3. **Named-branch worktrees**: Work is typically done in git worktrees tracking named branches off `origin/main`.
+4. **Verification before commit**: Always run tests, typecheck, and lint before committing. Run `semgrep` (via `/semgrep` skill) as a final security/quality gate.
+5. **Integration options**: After committing, present three options: (1) merge to main locally, (2) push and create PR, (3) leave as-is.
+
+## Key Technical Patterns
+
+### Frontend (apps/web)
+
+- **State management**: Tanstack Query (`queryClient`) for server state; React hooks for local UI state.
+- **Chat streaming**: SSE connection per session in `useChatStreaming.ts`. Incoming frames route through `createChatStreamHandlers.ts` → `streamingPatchBuffer.ts` → cache updates.
+- **Message identity**: Every assistant message has a stable `id` from the server. Use this id (not heuristics or scanning) to target streaming updates.
+- **Rendering**: One `Message` object = one chat bubble. No grouping logic for consecutive messages—each renders independently (`ChatTranscriptList.tsx` → `useChatPanelRenderers.tsx` → `MessageTimeline.tsx`/`ChatBubble.tsx`).
+
+### Backend (apps/server)
+
+- **SSE streams**: `chat-stream.ts` and `chat-follow.ts` emit structured frames: `assistant_message` (stub with id), `token`, `event`, `error`, `done`.
+- **Message id contract**: Server emits `assistant_message` frame with stable `id` *before* any `token`/`event` frames for that turn. Frontend must use this id to route subsequent frames.
+
+## Common Pitfalls (Learned from This Session)
+
+### Avoid Scanning/Heuristics for Message Targeting
+
+**Anti-pattern**: Scanning backward through a messages array with a permissive predicate to find "the currently streaming assistant message."
+
+```ts
+// BAD: finds the last assistant message matching a heuristic
+for (let i = messages.length - 1; i >= 0; i--) {
+  if (messages[i].role === 'assistant' && someHeuristic(messages[i])) {
+    messages[i] = mutate(messages[i]);
+    break;
+  }
+}
 ```
 
-Shared types compile to `packages/shared/dist`. After changing `@agent-orchestrator/shared`, rebuild it (`pnpm --filter @agent-orchestrator/shared build`) or the full `pnpm build` before server tests that import the package.
+**Why it fails**: Under concurrent streams (e.g., aborting old stream + new stream starting) or rapid consecutive turns, the scan finds the wrong (earlier, completed) message and appends new text to it.
 
-`pnpm lint` runs ESLint (typescript-eslint flat config at the repo root) across web, server, and shared. `pnpm typecheck` is the cross-package type check; add or update `apps/server` tests for server behavior you change. Web helper tests run with Vitest and are colocated as `*.test.ts` in `apps/web/src`.
+**Correct pattern**: Track the exact message id in the SSE handler closure; pass it explicitly to every patch function.
 
-## Layout
+```ts
+// GOOD: track id from assistant_message frame, patch strictly by id
+let currentAssistantMessageId: string | undefined;
 
-```
-apps/server/src/          Express API, SQLite, git/GitHub/Claude services
-  index.ts                HTTP server, static web dist, graceful shutdown
-  routes/index.ts         REST + SSE; Zod request bodies
-  db/index.ts             better-sqlite3 schema + repositories
-  services/app.ts         orchestration (workspaces, agents, chat, PRs)
-  services/git.ts         git + detached Claude Code process
-  services/*.test.ts      node:test suites (colocated)
-apps/web/src/             Vite + React 19 + MUI v9 + TanStack Query
-  api/client.ts           fetch wrapper + SSE chat helpers
-  pages/                  routes in App.tsx
-  components/ui/          PageHeader, EmptyState, ListPanel, ResponsiveDialog, …
-  components/chat/        agent transcript, composer, permission cards
-packages/shared/src/      types and helpers used by both apps
-data/                     clones, worktrees, SQLite, run logs (gitignored)
+onAssistantMessage: (msg) => {
+  currentAssistantMessageId = msg.id;
+},
+onToken: (token) => {
+  if (currentAssistantMessageId) {
+    patchById(currentAssistantMessageId, (m) => appendToken(m, token));
+  }
+}
 ```
 
-Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOST`, `AUTH_TOKEN`) are documented in `README.md` and `.env.example`. The server loads `.env` from the repo root.
+### Minimize Redundant File Reads and Verification Cycles
 
-## Architecture
+**Observed inefficiency**: This session consumed ~5.9M tokens over 67 turns for a 6-file fix. Root causes:
 
-- One worktree maps to one Claude Code agent. An agent can have multiple chat sessions; chat is `claude` with `stream-json` I/O; follow-ups use `--resume <session_id>`.
-- Claude processes are **detached**. App shutdown must not kill in-flight runs (`releaseAll` drops write handles only; a FIFO holder keeps stdin open). Logs live under `data/runs/`; startup reattaches via `recoverRunningAgents`. Do not kill a reattached run just because the log contains a historical `control_request`. A top-level `result` must not end the run while a background Task/Explore subagent is still running — the CLI wakes Claude when the task settles (`monitorRun` defers the stdin close/reap; the UI keeps the message streaming while subagent rows run).
-- New sessions start in **plan** mode unless a template says otherwise. `AskUserQuestion` and `ExitPlanMode` always prompt in the UI and must **never** appear in `--allowedTools` (that flag auto-approves). See `allowedToolsForPermissionMode` and `shouldAutoAllowToolPermission`.
-- **Build** stashes the current plan session (keeps its messages and Claude session) and creates a new auto-mode session to implement. Do not delete the plan transcript.
-- Shared DTOs and stream/permission helpers belong in `packages/shared`. Keep `apps/web/src/api/client.ts` aligned with `apps/server/src/routes/index.ts`.
-- From-idea kickoff sends the raw idea; do not append extra instructions there.
-- Session grades persist on `chat_sessions` (`grade_score` / comment / transcript snapshot). Instruction drafts write only allowed paths: `CLAUDE.md`, `AGENTS.md`, `.claude/CLAUDE.md`, and `.claude/skills/<slug>/SKILL.md`.
+1. **Repeated file reads**: Re-reading large unchanged files (e.g., `useChatStreaming.ts`, `createChatStreamHandlers.ts`) multiple times after edits.
+2. **Redundant verification**: Running tests/lint 3+ times after the first green result.
+3. **Environmental noise**: Spending multiple turns on missing `node_modules` warnings before installing dependencies.
 
-## Conventions
+**Best practices**:
 
-- **Server / shared:** ESM `NodeNext`. Relative imports keep the `.js` suffix (`import { x } from './git.js'`).
-- **Web:** bundler resolution, no file suffixes, `import type` for type-only imports (`verbatimModuleSyntax`).
-- Prefer existing MUI components and `sx` over custom CSS. Reuse `components/ui/*`; use `ResponsiveDialog` for form dialogs (full-screen on `sm` down). Theme is dark (`theme.ts`); do not introduce a second styling system.
-- Validate API bodies with Zod in the router. Persist via repositories in `db/`; put process/git/GitHub/Claude I/O in services.
-- Colocate server tests as `*.test.ts` next to the module. Use `node:test` + `node:assert/strict`.
-- Keep every source file at most **400 lines**. Split modules, components, or helpers when a file grows past that limit.
-- When designing code, always prefer reuse: extend or compose existing helpers, components, and services before adding parallel implementations.
+- After editing a file, **do not re-read it** unless you need to verify a specific detail.
+- After tests pass once, **do not re-run** unless you make further changes.
+- **Batch verifications**: Run `npm test && npm run typecheck && npm run lint` in one turn, not separately across multiple turns.
+- **Install dependencies early**: If you see import errors, run `npm install` immediately—don't spend turns theorizing.
 
-## Do / don't
+### Scope Instruction Files to Relevant Work
 
-- Do add or update tests for server behavior you change; run the affected suite and `pnpm typecheck` before finishing.
-- Do keep UI changes responsive (phone and desktop). Verify chat, workspaces, and dashboard if you touch shared layout or state.
-- Do keep new and edited files within the 400-line limit; extract shared pieces instead of duplicating logic.
-- Do not commit `.env`, `data/`, SQLite files, or secrets.
-- Do not auto-approve `AskUserQuestion` or `ExitPlanMode`.
-- Do not stop detached Claude processes on orchestrator shutdown.
-- Do not add dependencies or new packages unless the task needs them.
+**Observed bloat**: 22 instruction files (~192k chars) loaded per turn, but only 3 were relevant (superpowers:executing-plans, superpowers:finishing-a-development-branch, /semgrep). The other 18 (~150k chars)—AWS, GHA, Playwright, MUI, etc.—were unrelated to a React/TypeScript frontend bug fix.
 
-## Git
+**Recommendation**: Use `.claudeignore` or per-session skill scoping to exclude backend/infra/platform skills when working on focused frontend tasks. Load only what's needed for the current context.
 
-Use [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`. Scope with `(web)` / `(server)` when the change is package-specific (e.g. `feat(web): …`).
+## Verification Checklist (Before Every Commit)
+
+1. **Tests**: `npm test` (or workspace-specific command) — all green.
+2. **Typecheck**: `npm run typecheck` (or `tsc --noEmit`) — no errors.
+3. **Lint**: `npm run lint` — no errors (or only pre-existing warnings).
+4. **Semgrep**: Run `/semgrep` skill — no new high/medium findings in your changed files.
+5. **Manual spot-check** (optional but recommended): For UI changes, describe what you'd verify in a browser (e.g., "two consecutive assistant turns now render as separate bubbles").
+
+## Skills Used in This Session
+
+- `superpowers:executing-plans` — load approved plan, set up todos, drive implementation.
+- `superpowers:finishing-a-development-branch` — verify tests, detect worktree, present integration options.
+- `/semgrep` — scan codebase for security/quality issues before committing.
+
+## When to Write AGENTS.md Updates
+
+Update this file when:
+
+- A new anti-pattern is discovered (like the message-targeting bug).
+- A workflow convention changes (e.g., new pre-commit hooks, different test commands).
+- A major architectural pattern emerges (e.g., how to handle WebSocket reconnects).
+
+Do not update for one-off implementation details or API-specific fixes.

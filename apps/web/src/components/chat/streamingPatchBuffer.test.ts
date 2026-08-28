@@ -33,13 +33,13 @@ describe('createStreamingPatchBuffer', () => {
 
   it('coalesces token appends into one patch per animation frame', () => {
     const patches: string[] = [];
-    const buffer = createStreamingPatchBuffer((_sessionId, mutate) => {
+    const buffer = createStreamingPatchBuffer((_sessionId, _messageId, mutate) => {
       const next = mutate(streamingAssistant(patches.at(-1) ?? ''));
       patches.push(next.content);
     });
 
-    buffer.appendToken('s1', 'hel');
-    buffer.appendToken('s1', 'lo');
+    buffer.appendToken('s1', 'assistant-1', 'hel');
+    buffer.appendToken('s1', 'assistant-1', 'lo');
     expect(patches).toEqual([]);
 
     vi.runAllTimers();
@@ -49,12 +49,12 @@ describe('createStreamingPatchBuffer', () => {
 
   it('flushes buffered tokens before timeline event patches', () => {
     const contents: string[] = [];
-    const buffer = createStreamingPatchBuffer((_sessionId, mutate) => {
+    const buffer = createStreamingPatchBuffer((_sessionId, _messageId, mutate) => {
       contents.push(mutate(streamingAssistant(contents.at(-1) ?? '')).content);
     });
 
-    buffer.appendToken('s1', 'hi');
-    buffer.patchStreaming('s1', (message) => ({
+    buffer.appendToken('s1', 'assistant-1', 'hi');
+    buffer.patchStreaming('s1', 'assistant-1', (message) => ({
       ...message,
       content: `${message.content}!`,
     }));
@@ -65,13 +65,34 @@ describe('createStreamingPatchBuffer', () => {
 
   it('flushAll applies any remaining buffered text immediately', () => {
     const patches: string[] = [];
-    const buffer = createStreamingPatchBuffer((_sessionId, mutate) => {
+    const buffer = createStreamingPatchBuffer((_sessionId, _messageId, mutate) => {
       patches.push(mutate(streamingAssistant()).content);
     });
 
-    buffer.appendToken('s1', 'done');
+    buffer.appendToken('s1', 'assistant-1', 'done');
     buffer.flushAll('s1');
     expect(patches).toEqual(['done']);
+    buffer.dispose();
+  });
+
+  it('flushes the previous message buffer before buffering a different messageId', () => {
+    const patches: Array<{ messageId: string; content: string }> = [];
+    const buffer = createStreamingPatchBuffer((_sessionId, messageId, mutate) => {
+      const next = mutate(streamingAssistant());
+      patches.push({ messageId, content: next.content });
+    });
+
+    buffer.appendToken('s1', 'assistant-1', 'hel');
+    buffer.appendToken('s1', 'assistant-1', 'lo');
+    buffer.appendToken('s1', 'assistant-2', 'hi');
+
+    expect(patches).toEqual([{ messageId: 'assistant-1', content: 'hello' }]);
+
+    vi.runAllTimers();
+    expect(patches).toEqual([
+      { messageId: 'assistant-1', content: 'hello' },
+      { messageId: 'assistant-2', content: 'hi' },
+    ]);
     buffer.dispose();
   });
 });
