@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS queued_messages (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS automation_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agents_worktree ON agents(worktree_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);

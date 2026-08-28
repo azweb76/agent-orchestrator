@@ -1,4 +1,5 @@
 export * from './types/entities.js';
+export * from './types/automation.js';
 export * from './types/github.js';
 export * from './types/requests.js';
 export * from './types/views.js';

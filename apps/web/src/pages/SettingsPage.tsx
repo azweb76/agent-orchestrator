@@ -23,6 +23,7 @@ import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useNotificationSettings, permissionStatusLabel } from '../notifications';
 import type { ThemePreference } from '../themePrefs';
+import { AutomationSettingsSection } from '../components/settings/AutomationSettingsSection';
 
 function SettingsSection({
   title,
@@ -157,6 +158,13 @@ export function SettingsPage() {
             ) : null}
           </Stack>
         )}
+      </SettingsSection>
+
+      <SettingsSection
+        title="GitHub automations"
+        description="Opt-in server-side polling for CI failures, review feedback, and merged PRs on agents you track. All features default off."
+      >
+        <AutomationSettingsSection />
       </SettingsSection>
 
       <SettingsSection

@@ -9,6 +9,8 @@ const EVENT_TYPES: AppEventType[] = [
   'queue_changed',
   'workspaces_changed',
   'instruction_draft_offer',
+  'github_pr_changed',
+  'automation_triggered',
 ];
 
 type AppEventListener = (event: AppEvent) => void;
@@ -117,6 +119,18 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
       break;
     case 'instruction_draft_offer':
       // The offer banner renders from the session grade on the agent detail.
+      if (agentId) {
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      }
+      break;
+    case 'github_pr_changed':
+      queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
+      if (agentId) {
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      }
+      break;
+    case 'automation_triggered':
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }

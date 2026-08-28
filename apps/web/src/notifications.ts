@@ -142,7 +142,7 @@ export function useAppNotifications(): {
   useEffect(() => {
     return onAppEvent((event) => {
       if (!event.agentId) return;
-      if (event.type !== 'run_finished' && event.type !== 'permission_request') return;
+      if (event.type !== 'run_finished' && event.type !== 'permission_request' && event.type !== 'automation_triggered') return;
 
       const tree = queryClient.getQueryData<SidebarWorkspace[]>(['sidebar']);
       const name = agentNameFromSidebar(tree, event.agentId);
