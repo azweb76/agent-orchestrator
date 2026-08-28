@@ -797,6 +797,71 @@ test('setPullRequestState sends PATCH with the new state', async (t) => {
   assert.equal(pr.state, 'closed');
 });
 
+test('markPullRequestReadyForReview sends the GraphQL mutation and returns the refreshed PR', async (t) => {
+  let prCalls = 0;
+  const graphqlCalls: Array<{ url: string; init: RequestInit }> = [];
+  routeFetch(t, [
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+    [
+      /\/pulls\/42$/,
+      () => {
+        prCalls++;
+        return jsonResponse(rawPrDetail({ node_id: 'PR_node42', draft: prCalls === 1 }));
+      },
+    ],
+  ]);
+  const original = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    if (new URL(url).pathname === '/graphql') {
+      graphqlCalls.push({ url, init });
+      return jsonResponse({ data: { markPullRequestReadyForReview: { pullRequest: { number: 42 } } } });
+    }
+    return original(url as never, init as never);
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  const pr = await service.markPullRequestReadyForReview('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(graphqlCalls.length, 1);
+  assert.equal(graphqlCalls[0].init.method, 'POST');
+  const body = JSON.parse(String(graphqlCalls[0].init.body)) as {
+    query: string;
+    variables: { id: string };
+  };
+  assert.match(body.query, /markPullRequestReadyForReview/);
+  assert.equal(body.variables.id, 'PR_node42');
+  assert.equal(prCalls, 2);
+  assert.equal(pr.draft, false);
+});
+
+test('markPullRequestReadyForReview short-circuits when the PR is not a draft', async (t) => {
+  const fetchMock = routeFetch(t, [
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail({ node_id: 'PR_node42', draft: false }))],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  const pr = await service.markPullRequestReadyForReview('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(pr.draft, false);
+  const urls = fetchMock.mock.calls.map((call) => new URL(String(call.arguments[0])).pathname);
+  assert.ok(!urls.includes('/graphql'), 'must not call GraphQL for a non-draft PR');
+});
+
+test('markPullRequestReadyForReview surfaces GraphQL errors from a 200 response', async (t) => {
+  routeFetch(t, [
+    [/^\/repos\/azweb76\/agent-orchestrator$/, () => jsonResponse(REPO_SETTINGS)],
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail({ node_id: 'PR_node42', draft: true }))],
+    [/^\/graphql$/, () => jsonResponse({ errors: [{ message: 'Pull request is in unstable status' }] })],
+  ]);
+
+  const service = new GitHubService({ token: 'tok' });
+  await assert.rejects(
+    () => service.markPullRequestReadyForReview('azweb76', 'agent-orchestrator', 42),
+    /unstable status/,
+  );
+});
+
 test('listPullRequestFiles tolerates a missing patch on binary files', async (t) => {
   t.mock.method(globalThis, 'fetch', async () =>
     jsonResponse([
@@ -872,6 +937,24 @@ test('createPullRequest still posts through the shared request helper', async (t
     base: 'main',
   });
   assert.deepEqual(result, { number: 7, htmlUrl: 'https://github.com/azweb76/agent-orchestrator/pull/7' });
+});
+
+test('createPullRequest forwards the draft flag to GitHub', async (t) => {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  t.mock.method(globalThis, 'fetch', async (url: string, init: RequestInit) => {
+    calls.push({ url, init });
+    return jsonResponse({ number: 8, html_url: 'https://github.com/azweb76/agent-orchestrator/pull/8' });
+  });
+
+  const service = new GitHubService({ token: 'tok' });
+  await service.createPullRequest('azweb76', 'agent-orchestrator', {
+    title: 'Add feature',
+    head: 'feature/foo',
+    base: 'main',
+    draft: true,
+  });
+
+  assert.equal(JSON.parse(String(calls[0].init.body)).draft, true);
 });
 
 test('createPullRequestReview posts the event and maps the review', async (t) => {

@@ -55,6 +55,7 @@ import {
   listSidebarTree,
   listWorkspaces,
   listWorktrees,
+  markPullRequestReady,
   mergePullRequest,
   pruneArchivedAgents,
   rewindAgentChat,
@@ -429,6 +430,14 @@ export function createRouter(ctx: AppContext): express.Router {
       const { owner, repo, prNumber } = prRef(req);
       const body = z.object({ state: z.enum(['open', 'closed']) }).parse(req.body);
       res.json(await setPullRequestState(ctx, owner, repo, prNumber, body));
+    }),
+  );
+
+  router.post(
+    `${prPath}/ready`,
+    asyncHandler(async (req, res) => {
+      const { owner, repo, prNumber } = prRef(req);
+      res.json(await markPullRequestReady(ctx, owner, repo, prNumber));
     }),
   );
 
@@ -1003,6 +1012,7 @@ export function createRouter(ctx: AppContext): express.Router {
           title: z.string().min(1),
           body: z.string().optional(),
           base: z.string().optional(),
+          draft: z.boolean().optional(),
         })
         .parse(req.body);
       res.status(201).json(await createAgentPullRequest(ctx, param(req.params.agentId), body));

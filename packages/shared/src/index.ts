@@ -573,6 +573,8 @@ export interface CreatePrRequest {
   title: string;
   body?: string;
   base?: string;
+  /** Open the pull request as a draft. Defaults to true. */
+  draft?: boolean;
 }
 
 /** Diff view scope for an agent's worktree. */

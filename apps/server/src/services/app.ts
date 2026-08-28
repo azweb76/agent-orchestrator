@@ -1610,6 +1610,8 @@ export async function createAgentPullRequest(
       body: body.body,
       head: branch,
       base,
+      // Default to a draft so the idea→plan→build flow ships reviewable PRs.
+      draft: body.draft ?? true,
     },
   );
 
@@ -2915,6 +2917,19 @@ export async function setPullRequestState(
     body.state === 'closed' ? 'pr_closed' : 'pr_reopened',
     { number: prNumber },
   );
+
+  return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
+}
+
+export async function markPullRequestReady(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<PullRequestDetail> {
+  const pr = await ctx.github.markPullRequestReadyForReview(owner, repo, prNumber);
+
+  recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_ready_for_review', { number: prNumber });
 
   return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
 }

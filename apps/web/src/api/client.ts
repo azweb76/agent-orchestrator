@@ -227,6 +227,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ state }),
     }),
+  markPullRequestReady: (owner: string, repo: string, prNumber: number) =>
+    request<PullRequestDetail>(`${prBase(owner, repo, prNumber)}/ready`, { method: 'POST' }),
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
   archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>
     request<ArchiveAgentResponse>(`/agents/${agentId}/archive`, {
