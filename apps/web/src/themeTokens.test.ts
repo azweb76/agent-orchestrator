@@ -12,6 +12,9 @@ describe('buildAoPalette', () => {
     expect(dark.diff.backdrop).not.toBe(light.diff.backdrop);
     expect(dark.action.onAccent).toBe('#0b0f17');
     expect(light.action.onAccent).toBe('#ffffff');
+    expect(dark.chart.cacheRead).toBe('#5eead4');
+    expect(light.chart.cacheRead).toBe('#0d9488');
+    expect(dark.chart.cacheWrite).not.toBe(light.chart.cacheWrite);
   });
 });
 
@@ -24,5 +27,19 @@ describe('createAppTheme', () => {
     expect(light.palette.ao.surface.panel).toBeTruthy();
     expect(dark.palette.mode).toBe('dark');
     expect(light.palette.mode).toBe('light');
+  });
+});
+
+describe('createAppTheme light contrast', () => {
+  it('keeps disabled contained button text readable on light fills', () => {
+    const light = createAppTheme('light');
+    expect(light.palette.primary.contrastText).toBe('#ffffff');
+    expect(light.palette.action.disabled).toBe('rgba(15,23,42,0.55)');
+    expect(light.palette.action.disabledBackground).toBe('rgba(15,23,42,0.14)');
+  });
+
+  it('uses dark on-accent contrast for dark pastel primaries', () => {
+    const dark = createAppTheme('dark');
+    expect(dark.palette.primary.contrastText).toBe('#0b0f17');
   });
 });

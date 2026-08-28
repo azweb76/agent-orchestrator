@@ -23,10 +23,10 @@ import {
 } from './flattenFileTree';
 
 const STATUS_COLOR: Record<DiffFileStatus, string> = {
-  added: 'success.light',
-  deleted: 'error.light',
-  modified: 'warning.light',
-  renamed: 'info.light',
+  added: 'success.main',
+  deleted: 'error.main',
+  modified: 'warning.main',
+  renamed: 'info.main',
 };
 
 const STATUS_LETTER: Record<DiffFileStatus, string> = {
@@ -76,7 +76,7 @@ function DirRow({
       ) : (
         <ChevronRightIcon sx={{ fontSize: 16, opacity: 0.7 }} />
       )}
-      <FolderOutlinedIcon sx={{ fontSize: 15, color: 'secondary.light', opacity: 0.9 }} />
+      <FolderOutlinedIcon sx={{ fontSize: 15, color: 'secondary.main', opacity: 0.9 }} />
       <Typography variant="body2" noWrap sx={{ fontSize: 13, fontWeight: 500 }}>
         {node.name}
       </Typography>
@@ -116,7 +116,7 @@ function FileRow({
           borderLeft: '2px solid',
           borderColor: selected ? 'secondary.main' : 'transparent',
           bgcolor: selected ? 'ao.surface.selectedStrong' : 'transparent',
-          color: selected ? 'secondary.light' : 'text.primary',
+          color: selected ? 'secondary.main' : 'text.primary',
           cursor: 'pointer',
           textAlign: 'left',
           borderRadius: 1,
@@ -286,10 +286,10 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
       <Typography variant="subtitle2" color="text.secondary" sx={{ flexShrink: 0 }}>
         {files.length} {files.length === 1 ? 'file' : 'files'}
         {' · '}
-        <Box component="span" sx={{ color: 'success.light' }}>
+        <Box component="span" sx={{ color: 'success.main' }}>
           +{totalAdditions}
         </Box>{' '}
-        <Box component="span" sx={{ color: 'error.light' }}>
+        <Box component="span" sx={{ color: 'error.main' }}>
           −{totalDeletions}
         </Box>
       </Typography>
@@ -359,10 +359,10 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
                     ? `${selected.previousPath} → ${selected.path}`
                     : selected.path}
                 </Typography>
-                <Typography variant="caption" color="success.light">
+                <Typography variant="caption" color="success.main">
                   +{selected.additions}
                 </Typography>
-                <Typography variant="caption" color="error.light">
+                <Typography variant="caption" color="error.main">
                   −{selected.deletions}
                 </Typography>
               </Stack>

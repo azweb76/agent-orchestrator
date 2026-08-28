@@ -1,15 +1,17 @@
-import { Box, Chip, LinearProgress, Stack, Typography } from '@mui/material';
+import { Box, Chip, LinearProgress, Stack, Typography, useTheme } from '@mui/material';
 import type { SessionContextUsage } from '@agent-orchestrator/shared';
-import { CACHE_READ, CACHE_WRITE, FRESH_INPUT, percentChipColor, percentFillColor } from './contextUsageColors';
+import { percentChipColor, percentFillColor } from './contextUsageColors';
 import { ContextFillBar } from './ContextHistoryBar';
 import { ContextHistoryChart } from './ContextHistoryChart';
 import { ContextUsageLegendItem } from './ContextUsageLegend';
 import { formatPercent, formatTokenCount } from './contextUsageChart';
 
 export function ContextUsageBody({ data }: { data: SessionContextUsage }) {
+  const theme = useTheme();
+  const { cacheRead, cacheWrite, freshInput } = theme.palette.ao.chart;
   const hasUsage = data.currentContextTokens > 0 && data.usage;
   const color = percentChipColor(data.percent);
-  const fill = percentFillColor(data.percent);
+  const fill = percentFillColor(data.percent, theme.palette.mode);
   const remaining = Math.max(0, data.compactThresholdTokens - data.currentContextTokens);
 
   return (
@@ -55,9 +57,9 @@ export function ContextUsageBody({ data }: { data: SessionContextUsage }) {
               gap: 0.75,
             }}
           >
-            <ContextUsageLegendItem color={CACHE_READ} label="Cache read" tokens={data.usage!.cacheReadInputTokens} />
-            <ContextUsageLegendItem color={CACHE_WRITE} label="Cache write" tokens={data.usage!.cacheCreationInputTokens} />
-            <ContextUsageLegendItem color={FRESH_INPUT} label="Input" tokens={data.usage!.inputTokens} />
+            <ContextUsageLegendItem color={cacheRead} label="Cache read" tokens={data.usage!.cacheReadInputTokens} />
+            <ContextUsageLegendItem color={cacheWrite} label="Cache write" tokens={data.usage!.cacheCreationInputTokens} />
+            <ContextUsageLegendItem color={freshInput} label="Input" tokens={data.usage!.inputTokens} />
             <ContextUsageLegendItem color="ao.chart.muted" label="Output" tokens={data.usage!.outputTokens} />
           </Box>
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>

@@ -224,7 +224,7 @@ const AgentListItem = memo(function AgentListItem({
           <Typography
             variant="caption"
             sx={{ display: 'block', textTransform: 'capitalize' }}
-            color={needsInput || stalled ? 'warning.light' : undefined}
+            color={needsInput || stalled ? 'warning.main' : undefined}
           >
             {statusHint}
           </Typography>

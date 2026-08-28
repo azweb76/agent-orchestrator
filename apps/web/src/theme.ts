@@ -11,12 +11,12 @@ const sharedTypography = {
 
 const darkPalette = {
   mode: 'dark' as const,
-  primary: { main: '#8ba4ff', light: '#a8b8ff', dark: '#6b84e8' },
-  secondary: { main: '#5eead4', light: '#7ef0de', dark: '#3dd4bc' },
-  success: { main: '#4ade80', light: '#86efac' },
-  error: { main: '#f87171', light: '#fca5a5' },
-  warning: { main: '#ffb74d', light: '#ffcc80' },
-  info: { main: '#7c9cff', light: '#9cb4ff' },
+  primary: { main: '#8ba4ff', light: '#a8b8ff', dark: '#6b84e8', contrastText: '#0b0f17' },
+  secondary: { main: '#5eead4', light: '#7ef0de', dark: '#3dd4bc', contrastText: '#0b0f17' },
+  success: { main: '#4ade80', light: '#86efac', contrastText: '#0b0f17' },
+  error: { main: '#f87171', light: '#fca5a5', contrastText: '#0b0f17' },
+  warning: { main: '#ffb74d', light: '#ffcc80', contrastText: '#0b0f17' },
+  info: { main: '#7c9cff', light: '#9cb4ff', contrastText: '#0b0f17' },
   background: {
     default: '#0b0f17',
     paper: '#141c2e',
@@ -30,19 +30,19 @@ const darkPalette = {
   action: {
     hover: 'rgba(255,255,255,0.06)',
     selected: 'rgba(94,234,212,0.12)',
-    disabled: 'rgba(255,255,255,0.28)',
-    disabledBackground: 'rgba(255,255,255,0.08)',
+    disabled: 'rgba(255,255,255,0.42)',
+    disabledBackground: 'rgba(255,255,255,0.12)',
   },
 };
 
 const lightPalette = {
   mode: 'light' as const,
-  primary: { main: '#3f5fd6', light: '#6280e8', dark: '#2f4bb0' },
-  secondary: { main: '#0d9488', light: '#14b8a6', dark: '#0f766e' },
-  success: { main: '#16a34a', light: '#22c55e' },
-  error: { main: '#dc2626', light: '#ef4444' },
-  warning: { main: '#d97706', light: '#f59e0b' },
-  info: { main: '#4f6fd6', light: '#6b8ae8' },
+  primary: { main: '#3f5fd6', light: '#6280e8', dark: '#2f4bb0', contrastText: '#ffffff' },
+  secondary: { main: '#0d9488', light: '#14b8a6', dark: '#0f766e', contrastText: '#ffffff' },
+  success: { main: '#16a34a', light: '#22c55e', contrastText: '#ffffff' },
+  error: { main: '#dc2626', light: '#ef4444', contrastText: '#ffffff' },
+  warning: { main: '#d97706', light: '#f59e0b', contrastText: '#ffffff' },
+  info: { main: '#4f6fd6', light: '#6b8ae8', contrastText: '#ffffff' },
   background: {
     default: '#f6f8fc',
     paper: '#ffffff',
@@ -56,8 +56,8 @@ const lightPalette = {
   action: {
     hover: 'rgba(15,23,42,0.04)',
     selected: 'rgba(13,148,136,0.1)',
-    disabled: 'rgba(15,23,42,0.32)',
-    disabledBackground: 'rgba(15,23,42,0.06)',
+    disabled: 'rgba(15,23,42,0.55)',
+    disabledBackground: 'rgba(15,23,42,0.14)',
   },
 };
 
@@ -142,6 +142,14 @@ export function createAppTheme(mode: PaletteMode) {
           sizeSmall: {
             paddingInline: 12,
           },
+          contained: ({ theme }) => ({
+            // Keep disabled fills readable in light mode (white contrastText on a pale
+            // disabledBackground is otherwise nearly invisible).
+            '&.Mui-disabled': {
+              color: theme.palette.action.disabled,
+              backgroundColor: theme.palette.action.disabledBackground,
+            },
+          }),
         },
       },
       MuiChip: {
