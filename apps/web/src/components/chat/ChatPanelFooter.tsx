@@ -1,6 +1,7 @@
 import { Alert, Box, Button } from '@mui/material';
-import type { UseMutationResult } from '@tanstack/react-query';
+import { useQuery, type UseMutationResult } from '@tanstack/react-query';
 import type { AgentDetail, ChatSession, EffortLevel } from '@agent-orchestrator/shared';
+import { api } from '../../api/client';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
@@ -87,6 +88,7 @@ export function ChatPanelFooter({
   creatingDraftPr,
 }: ChatPanelFooterProps) {
   const keyboardInset = useVisualViewportInset();
+  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings });
 
   return (
     <Box
@@ -195,8 +197,8 @@ export function ChatPanelFooter({
           onClear={onClear}
           onRewind={onRewind}
           grade={session?.grade}
-          canGrade={displayMessageCount > 0 || Boolean(session?.grade)}
-          onGrade={onGradeOpen}
+          canGrade={Boolean(settings?.analyzeSessionEnabled) && (displayMessageCount > 0 || Boolean(session?.grade))}
+          onGrade={settings?.analyzeSessionEnabled ? onGradeOpen : undefined}
           onRemoveQueued={onRemoveQueued}
         />
       </Box>

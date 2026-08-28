@@ -6,7 +6,6 @@ import {
   isTopLevelClaudeResult,
   type StreamPart,
 } from '@agent-orchestrator/shared';
-import { offerInstructionDraftAfterRun } from './instruction-offer.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { clearSessionRunFields, syncAgentFromSessions } from './agent-core.js';
 import { refreshSessionSearchIndex } from './session-search-index.js';
@@ -65,12 +64,6 @@ export function finalizeSessionRun(
         error: result.error ?? null,
       },
     });
-    void offerInstructionDraftAfterRun(
-      ctx,
-      latest,
-      { stopped: result.stopped, error: result.error },
-      async () => (await import('./sessions.js')).gradeAgentSession(ctx, latest.agentId, latest.id),
-    );
     void import('./autopilot.js').then(({ maybeAutopilotAfterBuild }) =>
       maybeAutopilotAfterBuild(ctx, latest, {
         stopped: result.stopped,

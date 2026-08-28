@@ -15,6 +15,8 @@ export interface AppSettings {
   watchdogStreamIdleMinutes: number;
   /** Correct DB status when pid is dead but session still marked running. */
   watchdogStaleRunEnabled: boolean;
+  /** When true, the "Analyze this session" chat action is available. */
+  analyzeSessionEnabled: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -24,6 +26,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   watchdogPermissionMinutes: 30,
   watchdogStreamIdleMinutes: 15,
   watchdogStaleRunEnabled: true,
+  analyzeSessionEnabled: false,
 };
 
 /** Spend cap snapshot for dashboard / gating. */

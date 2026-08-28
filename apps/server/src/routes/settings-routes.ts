@@ -27,6 +27,7 @@ const appSettingsBody = z.object({
   watchdogPermissionMinutes: z.number().int().min(1).optional(),
   watchdogStreamIdleMinutes: z.number().int().min(1).optional(),
   watchdogStaleRunEnabled: z.boolean().optional(),
+  analyzeSessionEnabled: z.boolean().optional(),
 });
 
 export function registerSettingsRoutes(router: express.Router, ctx: AppContext): void {
