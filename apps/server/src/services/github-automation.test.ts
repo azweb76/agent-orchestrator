@@ -9,6 +9,7 @@ import { FIX_CI_RETRY_CAP } from '@agent-orchestrator/shared';
 import { Notifier } from './notifier.js';
 import { setAutomationSettings } from './automation-settings.js';
 import {
+  getCachedPrStatus,
   handleAutomationEvents,
   pollTargetState,
   type GithubPrChangeEvent,
@@ -125,6 +126,11 @@ test('pollTargetState emits github_pr_changed when checks transition to failure'
     const polled = await pollTargetState(ctx, target());
     assert.equal(polled.some((item) => item.kind === 'checks' && item.checksRollup === 'failure'), true);
     assert.equal(events.filter((item) => item.type === 'github_pr_changed').length, 2);
+
+    const cachedStatus = getCachedPrStatus(ctx, 'example', 'demo', 42);
+    assert.equal(cachedStatus?.checksRollup, 'failure');
+    assert.equal(cachedStatus?.state, 'open');
+    assert.equal(cachedStatus?.merged, false);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

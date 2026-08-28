@@ -1,4 +1,4 @@
-import type { PullRequestChecksRollup } from '@agent-orchestrator/shared';
+import type { PrStatusSnapshot, PullRequestChecksRollup } from '@agent-orchestrator/shared';
 import { FIX_CI_RETRY_CAP } from '@agent-orchestrator/shared';
 import { GitHubApiError } from './github/errors.js';
 import type { AppContext } from './app-context.js';
@@ -38,6 +38,25 @@ function fixCiAttemptsKey(agentId: string, headSha: string): string {
 
 function mergedStateKey(target: PollTarget): string {
   return `merged:${pollTargetKey(target)}`;
+}
+
+function statusStateKey(target: PollTarget): string {
+  return `status:${pollTargetKey(target)}`;
+}
+
+export function getCachedPrStatus(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  number: number,
+): PrStatusSnapshot | null {
+  const raw = ctx.repos.automationState.get(`status:${pollTargetKey({ owner, repo, number })}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PrStatusSnapshot;
+  } catch {
+    return null;
+  }
 }
 
 function emitPrChanged(ctx: AppContext, event: GithubPrChangeEvent): void {
@@ -92,6 +111,17 @@ export async function pollTargetState(
       events.push(event);
       emitPrChanged(ctx, event);
     }
+    const prevStatus = getCachedPrStatus(ctx, target.owner, target.repo, target.number);
+    ctx.repos.automationState.set(
+      statusStateKey(target),
+      JSON.stringify({
+        state: detail.state as 'open' | 'closed',
+        draft: detail.draft,
+        merged: detail.merged,
+        checksRollup: prevStatus?.checksRollup ?? 'none',
+        updatedAt: new Date().toISOString(),
+      }),
+    );
     return events;
   }
 
@@ -99,6 +129,16 @@ export async function pollTargetState(
     target.owner,
     target.repo,
     detail.headSha,
+  );
+  ctx.repos.automationState.set(
+    statusStateKey(target),
+    JSON.stringify({
+      state: detail.state as 'open' | 'closed',
+      draft: detail.draft,
+      merged: detail.merged,
+      checksRollup: checks.rollup,
+      updatedAt: new Date().toISOString(),
+    }),
   );
   const checksKey = checksStateKey(target);
   const prevChecks = ctx.repos.automationState.get(checksKey);
