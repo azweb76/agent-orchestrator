@@ -4,6 +4,7 @@ import { AgentPage } from './pages/AgentPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { PullRequestDetailPage } from './pages/PullRequestDetailPage';
 import { PullRequestsPage } from './pages/PullRequestsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { WorkspaceDetailPage } from './pages/WorkspaceDetailPage';
 
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="pull-requests/:owner/:repo/:number" element={<PullRequestDetailPage />} />
         <Route path="workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
         <Route path="agents/:agentId" element={<AgentPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

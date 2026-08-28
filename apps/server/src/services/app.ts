@@ -3043,6 +3043,7 @@ export async function getSystemStatus(ctx: AppContext) {
     claudeBin: process.env.CLAUDE_BIN ?? 'claude',
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
     githubLogin,
+    authRequired: Boolean(process.env.AUTH_TOKEN?.trim()),
     archivedAgentCount: ctx.repos.agents.countArchived(),
     dataDirBytes: await directorySizeBytes(ctx.dataDir),
   };

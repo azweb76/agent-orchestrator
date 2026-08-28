@@ -122,6 +122,7 @@ export interface SystemStatus {
   claudeBin: string;
   githubTokenConfigured: boolean;
   githubLogin: string | null;
+  authRequired: boolean;
   archivedAgentCount: number;
   dataDirBytes: number;
 }

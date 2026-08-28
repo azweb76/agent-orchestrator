@@ -18,13 +18,22 @@ function loadEnabled(): boolean {
   }
 }
 
+function currentPermission(): NotificationPermission | 'unsupported' {
+  if (!notificationsSupported()) return 'unsupported';
+  return Notification.permission;
+}
+
 /** Bell toggle state; enabling requests browser permission when needed. */
 export function useNotificationSettings(): {
   supported: boolean;
   enabled: boolean;
+  permission: NotificationPermission | 'unsupported';
   toggle: () => Promise<void>;
+  requestPermission: () => Promise<NotificationPermission | 'unsupported'>;
+  setEnabled: (value: boolean) => void;
 } {
   const [enabled, setEnabled] = useState(loadEnabled);
+  const [permission, setPermission] = useState(currentPermission);
 
   const persist = (value: boolean) => {
     setEnabled(value);
@@ -35,20 +44,39 @@ export function useNotificationSettings(): {
     }
   };
 
+  const requestPermission = useCallback(async () => {
+    if (!notificationsSupported()) return 'unsupported';
+    if (Notification.permission === 'granted') {
+      setPermission('granted');
+      return 'granted';
+    }
+    const next = await Notification.requestPermission();
+    setPermission(next);
+    return next;
+  }, []);
+
   const toggle = useCallback(async () => {
     if (!notificationsSupported()) return;
     if (enabled) {
       persist(false);
       return;
     }
-    let permission = Notification.permission;
-    if (permission === 'default') {
-      permission = await Notification.requestPermission();
-    }
-    persist(permission === 'granted');
-  }, [enabled]);
+    const next = await requestPermission();
+    persist(next === 'granted');
+  }, [enabled, requestPermission]);
 
-  return { supported: notificationsSupported(), enabled, toggle };
+  const setEnabledValue = useCallback((value: boolean) => {
+    persist(value);
+  }, []);
+
+  return {
+    supported: notificationsSupported(),
+    enabled,
+    permission,
+    toggle,
+    requestPermission,
+    setEnabled: setEnabledValue,
+  };
 }
 
 function agentName(tree: SidebarWorkspace[] | undefined, agentId: string | null): string {

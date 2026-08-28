@@ -18,6 +18,7 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import SearchIcon from '@mui/icons-material/Search';
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
@@ -185,6 +186,20 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
             sx={{ mr: 0.5 }}
           >
             <SearchIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title="Settings">
+          <IconButton
+            component={RouterLink}
+            to="/settings"
+            size="small"
+            color={location.pathname === '/settings' ? 'secondary' : 'inherit'}
+            aria-label="Settings"
+            aria-current={location.pathname === '/settings' ? 'page' : undefined}
+            sx={{ mr: 0.5 }}
+          >
+            <SettingsOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
 
