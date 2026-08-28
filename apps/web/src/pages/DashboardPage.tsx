@@ -80,6 +80,8 @@ export function DashboardPage() {
           githubConfigured={Boolean(data.status?.githubTokenConfigured)}
           inboxLoading={data.inboxQuery.isLoading}
           recentPrs={data.recentPrs}
+          issuesLoading={data.issueInboxQuery.isLoading}
+          recentIssues={data.recentIssues}
         />
       </Stack>
 

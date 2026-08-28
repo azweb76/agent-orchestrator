@@ -48,6 +48,17 @@ export class WorktreeRepository {
     return row ? rowToWorktree(row) : null;
   }
 
+  getByWorkspaceAndBranch(workspaceId: string, branch: string): Worktree | null {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM worktrees
+         WHERE workspace_id = ? AND branch = ?
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(workspaceId, branch);
+    return row ? rowToWorktree(row) : null;
+  }
+
   update(worktree: Worktree): Worktree {
     this.db
       .prepare(

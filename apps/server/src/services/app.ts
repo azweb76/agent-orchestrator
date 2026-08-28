@@ -29,6 +29,7 @@ export {
   createWorktreeFromPr,
   deleteWorktree,
   createWorktreeFromIdea,
+  createWorktreeFromIssue,
 } from './worktrees.js';
 
 export {
@@ -100,6 +101,11 @@ export {
   updatePullRequestBranch,
   createAgentFromPullRequest,
 } from './pull-requests.js';
+
+export {
+  getIssueInbox,
+  createAgentFromIssue,
+} from './github-issues.js';
 
 export {
   listGitHubBranches,

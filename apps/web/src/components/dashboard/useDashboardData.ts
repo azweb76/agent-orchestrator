@@ -54,6 +54,13 @@ export function useDashboardData(query: string) {
     refetchInterval: sseFallback,
   });
 
+  const issueInboxQuery = useQuery({
+    queryKey: ['issues-inbox'],
+    queryFn: api.getIssueInbox,
+    enabled: Boolean(status?.githubTokenConfigured),
+    refetchInterval: sseFallback,
+  });
+
   const usageQuery = useQuery({
     queryKey: ['usage'],
     queryFn: api.getUsageSummary,
@@ -88,6 +95,7 @@ export function useDashboardData(query: string) {
     ...(inboxQuery.data?.authored ?? []).slice(0, 3),
     ...(inboxQuery.data?.reviewRequested ?? []).slice(0, 2),
   ].slice(0, 5);
+  const recentIssues = (issueInboxQuery.data?.assigned ?? []).slice(0, 5);
   const archivedCount = status?.archivedAgentCount ?? 0;
 
   return {
@@ -97,6 +105,7 @@ export function useDashboardData(query: string) {
     sidebarError,
     workspacesLoading,
     inboxQuery,
+    issueInboxQuery,
     usageQuery,
     activeAgents,
     runningCount,
@@ -108,6 +117,7 @@ export function useDashboardData(query: string) {
     filteredAgents,
     recentWorkspaces,
     recentPrs,
+    recentIssues,
     archivedCount,
     workspaces,
   };

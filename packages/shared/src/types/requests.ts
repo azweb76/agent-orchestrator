@@ -20,6 +20,18 @@ export interface CreateWorktreeFromPrRequest {
   name?: string;
 }
 
+export interface CreateWorktreeFromIssueRequest {
+  /** Issue number in the workspace repository. */
+  issueNumber?: number;
+  /** `owner/repo#n` or a GitHub issue URL (overrides issueNumber when set). */
+  reference?: string;
+  name?: string;
+  baseBranch?: string;
+  model?: string;
+  effort?: EffortLevel;
+  permissionMode?: PermissionMode;
+}
+
 /** Create a new branch + agent from a free-form idea (branch name is suggested server-side). */
 export interface CreateWorktreeFromIdeaRequest {
   idea: string;

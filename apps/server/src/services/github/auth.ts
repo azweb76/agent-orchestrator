@@ -1,5 +1,5 @@
 import { GitHubApiError } from './errors.js';
-import type { GitHubSearchIssue, SearchedPullRequest } from './raw-types.js';
+import type { GitHubSearchIssue, SearchedIssue, SearchedPullRequest } from './raw-types.js';
 import type { GitHubClientContext } from './client.js';
 import { request, requireToken } from './client.js';
 
@@ -59,6 +59,36 @@ export async function searchPullRequests(
         state: item.state,
         htmlUrl: item.html_url,
         draft: Boolean(item.draft),
+        owner,
+        repo,
+        authorLogin: item.user.login,
+        updatedAt: item.updated_at,
+      };
+    });
+}
+
+export async function searchIssues(
+  ctx: GitHubClientContext,
+  query: string,
+): Promise<SearchedIssue[]> {
+  requireToken(ctx);
+  const encoded = encodeURIComponent(query);
+  const data = await request<{ items: GitHubSearchIssue[] }>(
+    ctx,
+    `https://api.github.com/search/issues?q=${encoded}&sort=updated&order=desc&per_page=50`,
+  );
+
+  return data.items
+    .filter((item) => !item.pull_request)
+    .map((item) => {
+      const match = item.repository_url.match(/repos\/([^/]+)\/([^/]+)$/);
+      const owner = match?.[1] ?? '';
+      const repo = match?.[2] ?? '';
+      return {
+        number: item.number,
+        title: item.title,
+        state: item.state,
+        htmlUrl: item.html_url,
         owner,
         repo,
         authorLogin: item.user.login,

@@ -1,5 +1,8 @@
 import type {
   GitHubBranch,
+  GitHubIssue,
+  GitHubIssueComment,
+  GitHubIssueDetail,
   GitHubPullRequest,
   GitHubRepository,
   MergePullRequestRequest,
@@ -20,6 +23,12 @@ import {
 } from './auth.js';
 import type { GitHubApiOptions, GitHubClientContext } from './client.js';
 import { createGitHubClientContext, resetTokenCaches } from './client.js';
+import {
+  getIssue,
+  getIssueDetail,
+  listAssignedOpenIssues,
+  listIssueComments,
+} from './issues-read.js';
 import {
   getBranchHeadSha,
   getOpenPullRequestForBranch,
@@ -47,7 +56,7 @@ import {
   updatePullRequestBranch,
 } from './pulls-write.js';
 import { searchRepositories } from './repos.js';
-import type { SearchedPullRequest } from './raw-types.js';
+import type { SearchedIssue, SearchedPullRequest } from './raw-types.js';
 
 export class GitHubService {
   private ctx: GitHubClientContext;
@@ -71,6 +80,22 @@ export class GitHubService {
 
   listReviewRequestedPullRequests(): Promise<SearchedPullRequest[]> {
     return listReviewRequestedPullRequests(this.ctx);
+  }
+
+  listAssignedOpenIssues(): Promise<SearchedIssue[]> {
+    return listAssignedOpenIssues(this.ctx);
+  }
+
+  getIssue(owner: string, repo: string, issueNumber: number): Promise<GitHubIssue> {
+    return getIssue(this.ctx, owner, repo, issueNumber);
+  }
+
+  listIssueComments(owner: string, repo: string, issueNumber: number): Promise<GitHubIssueComment[]> {
+    return listIssueComments(this.ctx, owner, repo, issueNumber);
+  }
+
+  getIssueDetail(owner: string, repo: string, issueNumber: number): Promise<GitHubIssueDetail> {
+    return getIssueDetail(this.ctx, owner, repo, issueNumber);
   }
 
   listBranches(owner: string, repo: string): Promise<GitHubBranch[]> {

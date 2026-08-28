@@ -2,8 +2,10 @@ import express from 'express';
 import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
+  createAgentFromIssue,
   createAgentFromPullRequest,
   createPullRequestComment,
+  getIssueInbox,
   getPullRequestChecks,
   getPullRequestComments,
   getPullRequestCommits,
@@ -37,6 +39,29 @@ export function registerGitHubRoutes(router: express.Router, ctx: AppContext): v
     }),
   );
 
+  router.get(
+    '/github/issues/inbox',
+    asyncHandler(async (_req, res) => {
+      res.json(await getIssueInbox(ctx));
+    }),
+  );
+
+  router.post(
+    '/github/issues/create-agent',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          owner: z.string().min(1),
+          repo: z.string().min(1),
+          issueNumber: z.number().int().positive(),
+          name: z.string().optional(),
+        })
+        .parse(req.body);
+      const result = await createAgentFromIssue(ctx, body);
+      res.status(201).json(result);
+    }),
+  );
+
   router.post(
     '/github/pulls/create-agent',
     asyncHandler(async (req, res) => {
@@ -46,6 +71,7 @@ export function registerGitHubRoutes(router: express.Router, ctx: AppContext): v
           repo: z.string().min(1),
           prNumber: z.number().int().positive(),
           name: z.string().optional(),
+          template: z.enum(['fix-ci', 'address-review']).optional(),
         })
         .parse(req.body);
       const result = await createAgentFromPullRequest(ctx, body);

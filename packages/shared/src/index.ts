@@ -120,3 +120,10 @@ export {
   rollupChecks,
   type MergeReadiness,
 } from './pull-request.js';
+
+export {
+  buildIssueKickoffPrompt,
+  parseIssueReference,
+  type IssueKickoffComment,
+  type ParsedIssueReference,
+} from './github-issue.js';

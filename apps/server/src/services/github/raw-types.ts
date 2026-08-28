@@ -34,6 +34,17 @@ export interface SearchedPullRequest {
   updatedAt: string;
 }
 
+export interface SearchedIssue {
+  number: number;
+  title: string;
+  state: string;
+  htmlUrl: string;
+  owner: string;
+  repo: string;
+  authorLogin: string;
+  updatedAt: string;
+}
+
 export interface RawUser {
   login: string;
   avatar_url?: string | null;

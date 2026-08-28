@@ -21,16 +21,15 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  CLAUDE_EFFORT_LEVELS,
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
-  PERMISSION_MODES,
   type EffortLevel,
   type PermissionMode,
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { PullRequestPicker } from './pr/PullRequestPicker';
+import { CreateWorktreeIssueFields, CreateWorktreePlannerFields } from './CreateWorktreePlannerFields';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
@@ -49,7 +48,7 @@ export function CreateWorktreeDialog({
 }: CreateWorktreeDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'branch' | 'pr' | 'idea'>('idea');
+  const [tab, setTab] = useState<'branch' | 'pr' | 'idea' | 'issue'>('idea');
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
@@ -60,6 +59,7 @@ export function CreateWorktreeDialog({
   const [ideaPermissionMode, setIdeaPermissionMode] =
     useState<PermissionMode>(DEFAULT_PERMISSION_MODE);
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
+  const [issueReference, setIssueReference] = useState('');
 
   const workspaceQuery = useQuery({
     queryKey: ['workspace', workspaceId],
@@ -93,6 +93,7 @@ export function CreateWorktreeDialog({
     setIdeaEffort(DEFAULT_EFFORT_LEVEL);
     setIdeaPermissionMode(DEFAULT_PERMISSION_MODE);
     setSelectedPr('');
+    setIssueReference('');
   };
 
   const handleClose = () => {
@@ -145,9 +146,28 @@ export function CreateWorktreeDialog({
     },
   });
 
+  const createFromIssue = useMutation({
+    mutationFn: () =>
+      api.createWorktreeFromIssue(workspaceId, {
+        reference: issueReference.trim(),
+        baseBranch: resolvedDefaultBranch || undefined,
+        model: ideaModel,
+        effort: ideaEffort,
+        permissionMode: ideaPermissionMode,
+      }),
+    onSuccess: (data) => {
+      invalidateAfterCreate();
+      handleClose();
+      navigate(`/agents/${data.agent.id}`, {
+        state: { initialPrompt: data.prompt },
+      });
+    },
+  });
+
   const createPending =
-    createFromBranch.isPending || createFromPr.isPending || createFromIdea.isPending;
-  const createError = createFromBranch.error ?? createFromPr.error ?? createFromIdea.error;
+    createFromBranch.isPending || createFromPr.isPending || createFromIdea.isPending || createFromIssue.isPending;
+  const createError =
+    createFromBranch.error ?? createFromPr.error ?? createFromIdea.error ?? createFromIssue.error;
   const canCreateBranch =
     branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
   const canCreate =
@@ -155,7 +175,9 @@ export function CreateWorktreeDialog({
       ? canCreateBranch
       : tab === 'pr'
         ? selectedPr !== ''
-        : Boolean(ideaText.trim());
+        : tab === 'issue'
+          ? Boolean(issueReference.trim())
+          : Boolean(ideaText.trim());
 
   return (
     <ResponsiveDialog open={open} onClose={handleClose} maxWidth={tab === 'pr' ? 'md' : 'sm'} fullWidth>
@@ -170,6 +192,7 @@ export function CreateWorktreeDialog({
           sx={{ mb: 2 }}
         >
           <Tab value="idea" label="From idea" />
+          <Tab value="issue" label="From issue" />
           <Tab value="branch" label="From branch" />
           <Tab value="pr" label="From PR" />
         </Tabs>
@@ -188,61 +211,27 @@ export function CreateWorktreeDialog({
                 autoFocus
               />
             </ControlTooltip>
-            <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              <ControlTooltip title="Claude model for the planning session">
-                <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
-                  <InputLabel>Model</InputLabel>
-                  <Select
-                    label="Model"
-                    value={ideaModel}
-                    onChange={(e) => setIdeaModel(e.target.value)}
-                  >
-                    {CLAUDE_MODELS.map((item) => (
-                      <MenuItem key={item.id} value={item.id}>
-                        {item.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </ControlTooltip>
-              <ControlTooltip title="How much reasoning effort the model should use">
-                <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
-                  <InputLabel>Effort</InputLabel>
-                  <Select
-                    label="Effort"
-                    value={ideaEffort}
-                    onChange={(e) => setIdeaEffort(e.target.value as EffortLevel)}
-                  >
-                    {CLAUDE_EFFORT_LEVELS.map((item) => (
-                      <MenuItem key={item.id} value={item.id}>
-                        {item.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </ControlTooltip>
-              <ControlTooltip title="How much tool access the agent has during planning">
-                <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
-                  <InputLabel>Permissions</InputLabel>
-                  <Select
-                    label="Permissions"
-                    value={ideaPermissionMode}
-                    onChange={(e) => setIdeaPermissionMode(e.target.value as PermissionMode)}
-                  >
-                    {PERMISSION_MODES.map((item) => (
-                      <MenuItem key={item.id} value={item.id}>
-                        {item.label}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </ControlTooltip>
-            </Stack>
+            <CreateWorktreePlannerFields
+              model={ideaModel}
+              effort={ideaEffort}
+              permissionMode={ideaPermissionMode}
+              onModelChange={setIdeaModel}
+              onEffortChange={setIdeaEffort}
+              onPermissionModeChange={setIdeaPermissionMode}
+            />
             <Typography variant="body2" color="text.secondary">
               A branch name is suggested automatically. Your idea is sent as the first message using
               the selected permission mode.
             </Typography>
           </Stack>
+        )}
+
+        {tab === 'issue' && (
+          <CreateWorktreeIssueFields
+            issueReference={issueReference}
+            placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149`}
+            onIssueReferenceChange={setIssueReference}
+          />
         )}
 
         {tab === 'branch' && (
@@ -359,6 +348,7 @@ export function CreateWorktreeDialog({
             onClick={() => {
               if (tab === 'branch') createFromBranch.mutate();
               else if (tab === 'pr') createFromPr.mutate();
+              else if (tab === 'issue') createFromIssue.mutate();
               else createFromIdea.mutate();
             }}
           >

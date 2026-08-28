@@ -244,6 +244,53 @@ export interface CreateAgentFromPrRequest {
   repo: string;
   prNumber: number;
   name?: string;
+  /** When an agent already exists for this PR, start this template on it instead of creating a worktree. */
+  template?: 'fix-ci' | 'address-review';
+}
+
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  htmlUrl: string;
+  authorLogin: string;
+  updatedAt: string;
+}
+
+export interface GitHubIssueComment {
+  id: string;
+  authorLogin: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface GitHubIssueDetail extends GitHubIssue {
+  comments: GitHubIssueComment[];
+}
+
+export interface InboxIssue {
+  number: number;
+  title: string;
+  state: string;
+  htmlUrl: string;
+  owner: string;
+  repo: string;
+  authorLogin: string;
+  updatedAt: string;
+  /** Existing local workspace for this repo, if any. */
+  workspaceId: string | null;
+}
+
+export interface IssueInbox {
+  assigned: InboxIssue[];
+}
+
+export interface CreateAgentFromIssueRequest {
+  owner: string;
+  repo: string;
+  issueNumber: number;
+  name?: string;
 }
 
 export interface GitHubRepository {

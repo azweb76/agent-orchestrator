@@ -14,13 +14,15 @@ import type { SearchedPullRequest } from './github.js';
 import { type AppContext, makeEvent } from './app-context.js';
 import { createWorkspace } from './workspaces.js';
 import { createWorktreeFromPr } from './worktrees.js';
+import { resolveLocalPrContext } from './pr-agent-lookup.js';
+import { startAutomationTemplate } from './automation-templates.js';
 
 function enrichInboxPullRequest(
   ctx: AppContext,
   pr: SearchedPullRequest,
   category: InboxPullRequest['category'],
 ): InboxPullRequest {
-  const local = resolveLocalPrContext(ctx, pr.owner, pr.repo, pr.number);
+  const local = resolveLocalPrContextForInbox(ctx, pr.owner, pr.repo, pr.number);
 
   return {
     number: pr.number,
@@ -54,20 +56,14 @@ export async function getPullRequestInbox(ctx: AppContext): Promise<PullRequestI
  * Local workspace/agent overlay for a GitHub PR, if this app already tracks it.
  * Shared by the inbox and the PR detail page so there is one lookup path.
  */
-function resolveLocalPrContext(
+function resolveLocalPrContextForInbox(
   ctx: AppContext,
   owner: string,
   repo: string,
   prNumber: number,
 ): { workspaceId: string | null; agentId: string | null } {
-  const workspace = ctx.repos.workspaces.getByOwnerRepo(owner, repo);
-  if (!workspace) {
-    return { workspaceId: null, agentId: null };
-  }
-
-  const worktree = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, prNumber);
-  const agentId = worktree ? (ctx.repos.agents.getByWorktreeId(worktree.id)?.id ?? null) : null;
-  return { workspaceId: workspace.id, agentId };
+  const local = resolveLocalPrContext(ctx, owner, repo, prNumber);
+  return { workspaceId: local.workspaceId, agentId: local.agentId };
 }
 
 /** Record a PR lifecycle event on the local agent for this PR, when there is one. */
@@ -79,7 +75,7 @@ function recordPullRequestEvent(
   type: string,
   data: Record<string, unknown>,
 ): void {
-  const { agentId } = resolveLocalPrContext(ctx, owner, repo, prNumber);
+  const { agentId } = resolveLocalPrContextForInbox(ctx, owner, repo, prNumber);
   if (!agentId) return;
   ctx.repos.events.create(makeEvent(agentId, type, data));
 }
@@ -91,7 +87,10 @@ export async function getPullRequestDetail(
   prNumber: number,
 ): Promise<PullRequestDetail> {
   const pr = await ctx.github.getPullRequestDetail(owner, repo, prNumber);
-  return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
+  return {
+    ...pr,
+    ...resolveLocalPrContext(ctx, owner, repo, prNumber, pr.headRef),
+  };
 }
 
 export async function getPullRequestChecks(
@@ -222,7 +221,10 @@ export async function setPullRequestState(
     { number: prNumber },
   );
 
-  return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
+  return {
+    ...pr,
+    ...resolveLocalPrContext(ctx, owner, repo, prNumber, pr.headRef),
+  };
 }
 
 export async function markPullRequestReady(
@@ -235,7 +237,10 @@ export async function markPullRequestReady(
 
   recordPullRequestEvent(ctx, owner, repo, prNumber, 'pr_ready_for_review', { number: prNumber });
 
-  return { ...pr, ...resolveLocalPrContext(ctx, owner, repo, prNumber) };
+  return {
+    ...pr,
+    ...resolveLocalPrContext(ctx, owner, repo, prNumber, pr.headRef),
+  };
 }
 
 export async function updatePullRequestBranch(
@@ -258,17 +263,25 @@ export async function createAgentFromPullRequest(ctx: AppContext, body: CreateAg
     });
   }
 
-  const existingWorktree = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, body.prNumber);
-  if (existingWorktree) {
-    const existingAgent = ctx.repos.agents.getByWorktreeId(existingWorktree.id);
-    if (existingAgent) {
-      return {
-        workspace,
-        worktree: existingWorktree,
-        agent: existingAgent,
-        created: false as const,
-      };
+  const pr = await ctx.github.getPullRequest(body.owner, body.repo, body.prNumber);
+  const local = resolveLocalPrContext(ctx, body.owner, body.repo, body.prNumber, pr.headRef);
+
+  if (local.agentId && local.worktreeId) {
+    const worktree = ctx.repos.worktrees.getById(local.worktreeId)!;
+    const agent = ctx.repos.agents.getById(local.agentId)!;
+    let sessionId: string | null = null;
+    if (body.template) {
+      const session = await startAutomationTemplate(ctx, agent.id, body.template);
+      sessionId = session?.id ?? null;
     }
+    return {
+      workspace,
+      worktree,
+      agent,
+      created: false as const,
+      reused: true as const,
+      sessionId,
+    };
   }
 
   const { worktree, agent } = await createWorktreeFromPr(ctx, workspace.id, {
@@ -276,10 +289,18 @@ export async function createAgentFromPullRequest(ctx: AppContext, body: CreateAg
     name: body.name,
   });
 
+  let sessionId: string | null = null;
+  if (body.template) {
+    const session = await startAutomationTemplate(ctx, agent.id, body.template);
+    sessionId = session?.id ?? null;
+  }
+
   return {
     workspace,
     worktree,
     agent,
     created: true as const,
+    reused: false as const,
+    sessionId,
   };
 }
