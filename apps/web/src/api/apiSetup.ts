@@ -1,0 +1,21 @@
+import type { UsageSummary } from '@agent-orchestrator/shared';
+import { request } from './request';
+import type { SetupInfo, SystemStatus } from './types';
+
+export const apiSetup = {
+  getStatus: () => request<SystemStatus>('/status'),
+  getSetupInfo: () => request<SetupInfo>('/setup'),
+  configureGithubToken: (token: string) =>
+    request<{ githubLogin: string }>('/setup/github-token', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
+  configureClaudeBin: (claudeBin: string) =>
+    request<{ ok: true }>('/setup/claude-bin', {
+      method: 'POST',
+      body: JSON.stringify({ claudeBin }),
+    }),
+  submitAuth: (token: string) =>
+    request<{ ok?: true } | void>('/auth', { method: 'POST', body: JSON.stringify({ token }) }),
+  getUsageSummary: () => request<UsageSummary>('/usage'),
+};
