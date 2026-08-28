@@ -73,8 +73,9 @@ async function resolveArchivedRepos(
       const [owner, repo] = key.split('/');
       try {
         if (await ctx.github.isRepoArchived(owner, repo)) archived.add(key);
-      } catch {
+      } catch (error) {
         // Fail open: an inaccessible/flaky repo should not drop other PRs from the inbox.
+        console.warn('[pull-requests] failed to check archived status for', key, error);
       }
     }),
   );

@@ -69,3 +69,24 @@ test('getPullRequestInbox fails open when a per-repo archived lookup errors', as
   const repos = inbox.authored.map((pr) => pr.repo).sort();
   assert.deepEqual(repos, ['flaky-repo', 'ok-repo']);
 });
+
+test('getPullRequestInbox dedupes archived lookups for PRs in the same repo', async () => {
+  const firstPr = makePr({ owner: 'acme', repo: 'shared-repo', number: 1 });
+  const secondPr = makePr({ owner: 'acme', repo: 'shared-repo', number: 2 });
+
+  let callCount = 0;
+  const ctx = await makeCtx({
+    listAuthoredOpenPullRequests: async () => [firstPr, secondPr],
+    listReviewRequestedPullRequests: async () => [],
+    isRepoArchived: async () => {
+      callCount += 1;
+      return false;
+    },
+  });
+
+  const inbox = await getPullRequestInbox(ctx);
+
+  assert.equal(callCount, 1);
+  const numbers = inbox.authored.map((pr) => pr.number).sort();
+  assert.deepEqual(numbers, [1, 2]);
+});
