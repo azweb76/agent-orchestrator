@@ -7,6 +7,7 @@ import {
   setAutomationSettings,
 } from '../services/automation-settings.js';
 import { getAppSettings, updateAppSettings } from '../services/app-settings.js';
+import { triggerGithubPollNow } from '../services/github-poll-bus.js';
 
 const automationBody = z.object({
   enabled: z.boolean().optional(),
@@ -56,6 +57,13 @@ export function registerSettingsRoutes(router: express.Router, ctx: AppContext):
     asyncHandler(async (req, res) => {
       const body = automationBody.parse(req.body ?? {});
       res.json(setAutomationSettings(ctx, body));
+    }),
+  );
+
+  router.post(
+    '/settings/automation/poll-now',
+    asyncHandler(async (_req, res) => {
+      res.json(await triggerGithubPollNow(ctx));
     }),
   );
 }
