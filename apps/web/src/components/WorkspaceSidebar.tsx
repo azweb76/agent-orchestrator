@@ -22,9 +22,9 @@ import {
   isSidebarFilterActive,
   type SidebarStatusFilter,
 } from './sidebar/sidebarFilter';
-import { resolveInitialSidebarCollapsed } from './sidebar/sidebarPrefs';
+import { resolveInitialSidebarCollapsed, SIDEBAR_DEFAULT_WIDTH } from './sidebar/sidebarPrefs';
 
-export const SIDEBAR_EXPANDED_WIDTH = 232;
+export const SIDEBAR_EXPANDED_WIDTH = SIDEBAR_DEFAULT_WIDTH;
 export const SIDEBAR_COLLAPSED_WIDTH = 72;
 /** Mobile drawer overlays content, so it keeps a comfortable width. */
 export const SIDEBAR_DRAWER_WIDTH = 280;

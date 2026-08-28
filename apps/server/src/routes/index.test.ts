@@ -56,7 +56,7 @@ async function withServer(
   }
 }
 
-test('GET /api/status returns system fields including disk usage', async () => {
+test('GET /api/status returns system readiness fields', async () => {
   await withServer(async (url) => {
     const res = await fetch(`${url}/api/status`);
     assert.equal(res.status, 200);
@@ -65,13 +65,13 @@ test('GET /api/status returns system fields including disk usage', async () => {
       githubTokenConfigured: boolean;
       githubLogin: string | null;
       archivedAgentCount: number;
-      dataDirBytes: number;
+      dataDirBytes?: number;
     };
     assert.equal(body.claudeInstalled, false);
     assert.equal(body.githubTokenConfigured, false);
     assert.equal(body.githubLogin, null);
     assert.equal(body.archivedAgentCount, 0);
-    assert.equal(typeof body.dataDirBytes, 'number');
+    assert.equal(body.dataDirBytes, undefined);
   });
 });
 

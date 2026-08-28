@@ -1,6 +1,4 @@
-import path from 'node:path';
-import fs from 'node:fs/promises';
-import { cachedClaudeInstalled, cachedDataDirBytes } from './status-cache.js';
+import { cachedClaudeInstalled } from './status-cache.js';
 import {
   CLAUDE_DOCS_URL,
   SETUP_DOCS_URL,
@@ -59,7 +57,6 @@ export async function getSystemStatus(ctx: AppContext) {
     githubLogin,
     authRequired: Boolean(process.env.AUTH_TOKEN?.trim()),
     archivedAgentCount: ctx.repos.agents.countArchived(),
-    dataDirBytes: await cachedDataDirBytes(ctx.dataDir, directorySizeBytes),
     setupDocsUrl: SETUP_DOCS_URL,
     claudeDocsUrl: CLAUDE_DOCS_URL,
   };
@@ -75,36 +72,6 @@ export async function getSetupInfo(ctx: AppContext) {
     setupDocsUrl: SETUP_DOCS_URL,
     claudeDocsUrl: CLAUDE_DOCS_URL,
   };
-}
-
-async function directorySizeBytes(root: string): Promise<number> {
-  let total = 0;
-  const stack = [root];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (!current) continue;
-    let entries;
-    try {
-      entries = await fs.readdir(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(full);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      try {
-        const stat = await fs.stat(full);
-        total += stat.size;
-      } catch {
-        // skipped
-      }
-    }
-  }
-  return total;
 }
 
 export { configureGithubToken, configureClaudeBin };
