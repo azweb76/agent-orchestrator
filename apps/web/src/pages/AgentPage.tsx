@@ -37,6 +37,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [commitPush, setCommitPush] = useState(true);
+  const [commitHasPending, setCommitHasPending] = useState(true);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [prDraft, setPrDraft] = useState(true);
@@ -85,10 +86,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     },
   });
 
-  const openCommitDialog = () => {
+  const openCommitDialog = (hasPendingChanges: boolean) => {
     commitMutation.reset();
     setCommitMessage('');
     setCommitPush(true);
+    setCommitHasPending(hasPendingChanges);
     setCommitOpen(true);
   };
 
@@ -261,6 +263,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         open={commitOpen}
         message={commitMessage}
         push={commitPush}
+        hasPendingChanges={commitHasPending}
         mutation={commitMutation}
         onClose={() => {
           setCommitOpen(false);

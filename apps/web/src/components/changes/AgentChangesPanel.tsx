@@ -25,7 +25,7 @@ export interface AgentChangesPanelProps {
   archived: boolean;
   diffScope: AgentDiffScope;
   onDiffScopeChange: (scope: AgentDiffScope) => void;
-  onCommitClick: () => void;
+  onCommitClick: (hasPendingChanges: boolean) => void;
   enabled?: boolean;
 }
 
@@ -39,11 +39,17 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
   onCommitClick,
   enabled = true,
 }: AgentChangesPanelProps) {
+  const pendingQuery = useQuery({
+    queryKey: ['diff', agentId, 'pending'],
+    queryFn: () => api.getDiff(agentId, 'pending'),
+    enabled: Boolean(agentId) && enabled,
+  });
   const diffQuery = useQuery({
     queryKey: ['diff', agentId, diffScope],
     queryFn: () => api.getDiff(agentId, diffScope),
     enabled: Boolean(agentId) && enabled,
   });
+  const hasPendingChanges = Boolean(pendingQuery.data?.patch);
 
   return (
     <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0, p: { xs: 1.5, md: 1.25 } }}>
@@ -97,21 +103,21 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
           <ControlTooltip
             title={
               archived
-                ? 'Archived agents cannot commit changes'
-                : !diffQuery.data?.patch
-                  ? 'No changes to commit'
-                  : 'Commit pending changes and push to origin'
+                ? 'Archived agents cannot commit or push'
+                : hasPendingChanges
+                  ? 'Commit pending changes and push to origin'
+                  : 'No local changes — push the current branch to origin'
             }
-            disabled={archived || !diffQuery.data?.patch}
+            disabled={archived}
           >
             <Button
               size="small"
               variant="outlined"
               startIcon={<UploadOutlinedIcon />}
-              disabled={archived || !diffQuery.data?.patch}
-              onClick={onCommitClick}
+              disabled={archived}
+              onClick={() => onCommitClick(hasPendingChanges)}
             >
-              Commit & push
+              {hasPendingChanges ? 'Commit & push' : 'Push'}
             </Button>
           </ControlTooltip>
         </Stack>

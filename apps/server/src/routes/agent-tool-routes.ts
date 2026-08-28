@@ -77,7 +77,7 @@ export function registerAgentToolRoutes(router: express.Router, ctx: AppContext)
     asyncHandler(async (req, res) => {
       const body = z
         .object({
-          message: z.string().trim().min(1).max(4000),
+          message: z.string().trim().max(4000).optional(),
           push: z.boolean().optional(),
         })
         .parse(req.body ?? {});

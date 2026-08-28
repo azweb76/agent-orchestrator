@@ -68,7 +68,8 @@ export interface DeleteAgentResponse {
 }
 
 export interface CommitAgentChangesRequest {
-  message: string;
+  /** Required when the worktree has local changes; ignored for push-only. */
+  message?: string;
   /** When false, stage and commit without pushing. Defaults to true. */
   push?: boolean;
 }

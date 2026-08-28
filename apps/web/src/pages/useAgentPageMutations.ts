@@ -46,7 +46,10 @@ export function useAgentPageMutations(agentId: string) {
 
   const commitMutation = useMutation({
     mutationFn: ({ message, push }: { message: string; push: boolean }) =>
-      api.commitChanges(agentId, { message, push }),
+      api.commitChanges(agentId, {
+        ...(message ? { message } : {}),
+        push,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
