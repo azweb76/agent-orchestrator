@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PullRequestChecks, PullRequestDetail } from '@agent-orchestrator/shared';
-import { buildAgentPrStripModel } from './agentPrStatusModel';
+import { buildAgentPrActionOffers, buildAgentPrStripModel } from './agentPrStatusModel';
 
 function basePr(overrides: Partial<PullRequestDetail> = {}): PullRequestDetail {
   return {
@@ -96,5 +96,41 @@ describe('buildAgentPrStripModel', () => {
     expect(model.stateLabel).toBe('Draft');
     expect(model.showFixCi).toBe(false);
     expect(model.mergeHint).toBe('Mark ready when you are happy');
+  });
+});
+
+describe('buildAgentPrActionOffers', () => {
+  it('prioritizes Fix CI over review when checks are red', () => {
+    const offers = buildAgentPrActionOffers({
+      pr: basePr({ draft: false, reviewCommentCount: 2 }),
+      checks: checks(),
+    });
+    expect(offers).toHaveLength(1);
+    expect(offers[0]?.kind).toBe('fix_ci');
+  });
+
+  it('offers Address review when checks are green and comments exist', () => {
+    const offers = buildAgentPrActionOffers({
+      pr: basePr({ draft: false, reviewCommentCount: 2 }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+    });
+    expect(offers.map((item) => item.kind)).toEqual(['address_review']);
+  });
+
+  it('offers Mark ready for a green draft with no review backlog', () => {
+    const offers = buildAgentPrActionOffers({
+      pr: basePr({ draft: true, reviewCommentCount: 0 }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+    });
+    expect(offers.map((item) => item.kind)).toEqual(['mark_ready']);
+  });
+
+  it('skips Fix CI when a fix-ci session is already running', () => {
+    const offers = buildAgentPrActionOffers({
+      pr: basePr({ draft: false }),
+      checks: checks(),
+      sessions: [{ template: 'fix-ci', status: 'running' }],
+    });
+    expect(offers.some((item) => item.kind === 'fix_ci')).toBe(false);
   });
 });
