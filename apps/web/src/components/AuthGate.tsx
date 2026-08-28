@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { api, setAuthToken } from '../api/client';
+import { ControlTooltip } from './ui/ControlTooltip';
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const statusQuery = useQuery({
@@ -51,18 +52,22 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <Typography color="text.secondary">
             This instance requires the shared <code>AUTH_TOKEN</code>. Paste it to continue.
           </Typography>
-          <TextField
-            label="Auth token"
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            autoFocus
-            fullWidth
-          />
+          <ControlTooltip title="Shared AUTH_TOKEN for this instance">
+            <TextField
+              label="Auth token"
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              autoFocus
+              fullWidth
+            />
+          </ControlTooltip>
           {error ? <Alert severity="error">{error}</Alert> : null}
-          <Button type="submit" variant="contained" disabled={!token.trim() || submitting}>
-            {submitting ? 'Checking…' : 'Continue'}
-          </Button>
+          <ControlTooltip title="Unlock orchestrator" disabled={!token.trim() || submitting}>
+            <Button type="submit" variant="contained" disabled={!token.trim() || submitting}>
+              {submitting ? 'Checking…' : 'Continue'}
+            </Button>
+          </ControlTooltip>
         </Stack>
       </Box>
     );

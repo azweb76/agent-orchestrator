@@ -1,6 +1,7 @@
 import { Chip, IconButton, InputAdornment, Stack, TextField } from '@mui/material';
 import ClearIcon from '@mui/icons-material/Clear';
 import SearchIcon from '@mui/icons-material/Search';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import type { SidebarStatusFilter } from './sidebarFilter';
 import { SIDEBAR_STATUS_FILTERS } from './sidebarFilter';
 
@@ -27,57 +28,62 @@ export function SidebarFilterBar({
       spacing={0.5}
       sx={{ px: 1, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}
     >
-      <TextField
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Search agents…"
-        size="small"
-        fullWidth
-        onKeyDown={(e) => {
-          if (e.key === 'Escape' && query) {
-            e.stopPropagation();
-            onQueryChange('');
-          }
-        }}
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-            endAdornment: query ? (
-              <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  edge="end"
-                  aria-label="Clear search"
-                  onClick={() => onQueryChange('')}
-                >
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ) : undefined,
-            sx: { fontSize: 13, '& .MuiInputBase-input': { py: 0.6 } },
-          },
-          htmlInput: { 'aria-label': 'Search workspaces and agents' },
-        }}
-      />
+      <ControlTooltip title="Search workspaces and agents" sidebar>
+        <TextField
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search agents…"
+          size="small"
+          fullWidth
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && query) {
+              e.stopPropagation();
+              onQueryChange('');
+            }
+          }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+              endAdornment: query ? (
+                <InputAdornment position="end">
+                  <ControlTooltip title="Clear search" sidebar>
+                    <IconButton
+                      size="small"
+                      edge="end"
+                      aria-label="Clear search"
+                      onClick={() => onQueryChange('')}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </ControlTooltip>
+                </InputAdornment>
+              ) : undefined,
+              sx: { fontSize: 13, '& .MuiInputBase-input': { py: 0.6 } },
+            },
+            htmlInput: { 'aria-label': 'Search workspaces and agents' },
+          }}
+        />
+      </ControlTooltip>
       <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
         {SIDEBAR_STATUS_FILTERS.map(({ id, label }) => {
           const selected = statuses.has(id);
           return (
-            <Chip
-              key={id}
-              label={label}
-              size="small"
-              clickable
-              color={selected ? 'secondary' : 'default'}
-              variant={selected ? 'filled' : 'outlined'}
-              onClick={() => toggleStatus(id)}
-              aria-pressed={selected}
-              sx={{ fontSize: 12 }}
-            />
+            <ControlTooltip key={id} title={`Filter by ${label}`} sidebar>
+              <Chip
+                label={label}
+                size="small"
+                clickable
+                color={selected ? 'secondary' : 'default'}
+                variant={selected ? 'filled' : 'outlined'}
+                onClick={() => toggleStatus(id)}
+                aria-pressed={selected}
+                sx={{ fontSize: 12 }}
+              />
+            </ControlTooltip>
           );
         })}
       </Stack>

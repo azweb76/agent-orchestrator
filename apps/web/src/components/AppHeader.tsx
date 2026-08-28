@@ -7,7 +7,6 @@ import {
   IconButton,
   Stack,
   Toolbar,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
@@ -26,6 +25,7 @@ import { useSseConnectionState } from '../api/events';
 import { useSsePollingFallback } from '../api/ssePolling';
 import { useNotificationSettings } from '../notifications';
 import { paletteShortcutLabel } from './commandPalette/paletteCommands';
+import { ControlTooltip } from './ui/ControlTooltip';
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Command', icon: <DashboardOutlinedIcon />, match: (path: string) => path === '/' },
@@ -56,19 +56,21 @@ export function StatusChips({ sx }: { sx?: SxProps<Theme> }) {
   return (
     <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', ...sx }}>
       {sseState === 'disconnected' ? (
-        <Tooltip title="Live updates paused — reconnecting…">
+        <ControlTooltip title="Live updates paused — reconnecting…">
           <Chip size="small" label="Offline" color="warning" variant="outlined" />
-        </Tooltip>
+        </ControlTooltip>
       ) : null}
-      <Tooltip title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}>
+      <ControlTooltip
+        title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}
+      >
         <Chip
           size="small"
           label={status?.claudeInstalled ? 'Claude ready' : 'Claude missing'}
           color={status?.claudeInstalled ? 'success' : 'warning'}
           variant="outlined"
         />
-      </Tooltip>
-      <Tooltip
+      </ControlTooltip>
+      <ControlTooltip
         title={
           status?.githubTokenConfigured
             ? 'GitHub token configured'
@@ -81,7 +83,7 @@ export function StatusChips({ sx }: { sx?: SxProps<Theme> }) {
           color={status?.githubTokenConfigured ? 'success' : 'default'}
           variant="outlined"
         />
-      </Tooltip>
+      </ControlTooltip>
     </Stack>
   );
 }
@@ -111,15 +113,17 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
     >
       <Toolbar sx={{ gap: 1, minHeight: { xs: 56, sm: 64 }, px: { xs: 1, sm: 2 }, overflow: 'hidden' }}>
         {isMobile ? (
-          <IconButton
-            edge="start"
-            color="inherit"
-            aria-label="Open navigation"
-            onClick={onOpenMobileNav}
-            sx={{ mr: 0.5 }}
-          >
-            <MenuIcon />
-          </IconButton>
+          <ControlTooltip title="Open navigation">
+            <IconButton
+              edge="start"
+              color="inherit"
+              aria-label="Open navigation"
+              onClick={onOpenMobileNav}
+              sx={{ mr: 0.5 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </ControlTooltip>
         ) : null}
 
         <SmartToyOutlinedIcon sx={{ color: 'secondary.main', display: { xs: 'none', sm: 'block' } }} />
@@ -151,34 +155,35 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
             {NAV_ITEMS.map((item) => {
               const active = item.match(location.pathname);
               return (
-                <Button
-                  key={item.to}
-                  component={RouterLink}
-                  to={item.to}
-                  size="small"
-                  startIcon={item.icon}
-                  color={active ? 'secondary' : 'inherit'}
-                  aria-current={active ? 'page' : undefined}
-                  sx={{
-                    fontWeight: active ? 700 : 500,
-                    px: 1.5,
-                    position: 'relative',
-                    '&::after': active
-                      ? {
-                          content: '""',
-                          position: 'absolute',
-                          left: 12,
-                          right: 12,
-                          bottom: 4,
-                          height: 2,
-                          borderRadius: 1,
-                          bgcolor: 'secondary.main',
-                        }
-                      : undefined,
-                  }}
-                >
-                  {item.label}
-                </Button>
+                <ControlTooltip key={item.to} title={`Go to ${item.label}`}>
+                  <Button
+                    component={RouterLink}
+                    to={item.to}
+                    size="small"
+                    startIcon={item.icon}
+                    color={active ? 'secondary' : 'inherit'}
+                    aria-current={active ? 'page' : undefined}
+                    sx={{
+                      fontWeight: active ? 700 : 500,
+                      px: 1.5,
+                      position: 'relative',
+                      '&::after': active
+                        ? {
+                            content: '""',
+                            position: 'absolute',
+                            left: 12,
+                            right: 12,
+                            bottom: 4,
+                            height: 2,
+                            borderRadius: 1,
+                            bgcolor: 'secondary.main',
+                          }
+                        : undefined,
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                </ControlTooltip>
               );
             })}
           </Stack>
@@ -186,7 +191,7 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
 
         <Box sx={{ flexGrow: 1 }} />
 
-        <Tooltip title={`Command palette (${paletteShortcutLabel()})`}>
+        <ControlTooltip title={`Command palette (${paletteShortcutLabel()})`}>
           <IconButton
             size="small"
             color="inherit"
@@ -196,9 +201,9 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
           >
             <SearchIcon fontSize="small" />
           </IconButton>
-        </Tooltip>
+        </ControlTooltip>
 
-        <Tooltip title="Settings">
+        <ControlTooltip title="Settings">
           <IconButton
             component={RouterLink}
             to="/settings"
@@ -210,10 +215,10 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
           >
             <SettingsOutlinedIcon fontSize="small" />
           </IconButton>
-        </Tooltip>
+        </ControlTooltip>
 
         {notifications.supported ? (
-          <Tooltip
+          <ControlTooltip
             title={
               notifications.enabled
                 ? 'Notifications on — you will be alerted when agents finish or need input'
@@ -233,7 +238,7 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
                 <NotificationsNoneIcon fontSize="small" />
               )}
             </IconButton>
-          </Tooltip>
+          </ControlTooltip>
         ) : null}
 
         <StatusChips sx={{ display: { xs: 'none', sm: 'flex' }, flexShrink: 0 }} />

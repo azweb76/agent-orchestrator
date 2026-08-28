@@ -5,6 +5,7 @@ import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RemoveCircleOutlinedIcon from '@mui/icons-material/RemoveCircleOutlined';
 import type { PullRequestCheck, PullRequestChecks } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../ui/ListPanel';
 import { TabState } from './TabState';
@@ -58,9 +59,11 @@ export function PullRequestChecksTab({
           <Alert
             severity="error"
             action={
-              <Button color="inherit" size="small" disabled={fixing} onClick={onFixCi}>
-                {fixing ? 'Starting…' : 'Fix CI'}
-              </Button>
+              <ControlTooltip title="Start a Claude agent to fix failing CI checks" disabled={fixing}>
+                <Button color="inherit" size="small" disabled={fixing} onClick={onFixCi}>
+                  {fixing ? 'Starting…' : 'Fix CI'}
+                </Button>
+              </ControlTooltip>
             }
           >
             {checks.failing === 1 ? '1 check is failing.' : `${checks.failing} checks are failing.`}

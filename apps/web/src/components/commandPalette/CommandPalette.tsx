@@ -21,6 +21,7 @@ import {
   paletteShortcutLabel,
   type PaletteCommandAction,
 } from './paletteCommands';
+import { ControlTooltip } from '../ui/ControlTooltip';
 
 const MAX_RESULTS = 24;
 
@@ -138,39 +139,41 @@ export function CommandPalette({
       }}
     >
       <Box sx={{ px: 1.5, pt: 1.25, pb: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <TextField
-          fullWidth
-          autoFocus
-          inputRef={inputRef}
-          variant="standard"
-          placeholder="Jump to an agent, workspace, or PR — or run an action…"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setHighlight(0);
-          }}
-          slotProps={{
-            input: {
-              disableUnderline: true,
-              'aria-label': 'Search commands',
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                </InputAdornment>
-              ),
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Typography
-                    variant="caption"
-                    sx={{ fontFamily: '"IBM Plex Mono", monospace', color: 'text.disabled' }}
-                  >
-                    {paletteShortcutLabel()}
-                  </Typography>
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
+        <ControlTooltip title="Jump to agent, workspace, PR, or run an action">
+          <TextField
+            fullWidth
+            autoFocus
+            inputRef={inputRef}
+            variant="standard"
+            placeholder="Jump to an agent, workspace, or PR — or run an action…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setHighlight(0);
+            }}
+            slotProps={{
+              input: {
+                disableUnderline: true,
+                'aria-label': 'Search commands',
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography
+                      variant="caption"
+                      sx={{ fontFamily: '"IBM Plex Mono", monospace', color: 'text.disabled' }}
+                    >
+                      {paletteShortcutLabel()}
+                    </Typography>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        </ControlTooltip>
       </Box>
 
       {filtered.length === 0 ? (

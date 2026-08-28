@@ -1,5 +1,6 @@
 import { Box, Chip, IconButton, Stack } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import type { PendingImage } from './ChatComposer';
 import type { PendingMention } from './mentionComposer';
 
@@ -51,21 +52,23 @@ export function ComposerPendingAttachments({
                   borderColor: 'divider',
                 }}
               />
-              <IconButton
-                size="small"
-                onClick={() => onRemoveImage(image.id)}
-                aria-label={`Remove ${image.name}`}
-                sx={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <CloseIcon fontSize="inherit" />
-              </IconButton>
+              <ControlTooltip title={`Remove ${image.name}`}>
+                <IconButton
+                  size="small"
+                  onClick={() => onRemoveImage(image.id)}
+                  aria-label={`Remove ${image.name}`}
+                  sx={{
+                    position: 'absolute',
+                    top: -8,
+                    right: -8,
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <CloseIcon fontSize="inherit" />
+                </IconButton>
+              </ControlTooltip>
             </Box>
           ))}
         </Stack>

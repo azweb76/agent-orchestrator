@@ -17,6 +17,7 @@ import {
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { PullRequestReview, PullRequestReviewEvent } from '@agent-orchestrator/shared';
 import { MarkdownContent } from '../chat/MarkdownContent';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowTitle } from '../ui/ListPanel';
 import { formatRelativeTime } from '../../utils/format';
@@ -118,41 +119,50 @@ export function PullRequestReviewsTab({
         <Stack spacing={1.25} sx={{ pt: 0.5 }}>
           <Typography variant="subtitle2">Submit a review</Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <FormControl size="small" sx={{ minWidth: { sm: 200 } }}>
-              <InputLabel id="review-event-label">Action</InputLabel>
-              <Select
-                labelId="review-event-label"
-                label="Action"
-                value={event}
-                onChange={(e) => setEvent(e.target.value as PullRequestReviewEvent)}
-              >
-                <MenuItem value="COMMENT">Comment</MenuItem>
-                <MenuItem value="APPROVE">Approve</MenuItem>
-                <MenuItem value="REQUEST_CHANGES">Request changes</MenuItem>
-              </Select>
-            </FormControl>
+            <ControlTooltip title="Choose whether to comment, approve, or request changes">
+              <FormControl size="small" sx={{ minWidth: { sm: 200 } }}>
+                <InputLabel id="review-event-label">Action</InputLabel>
+                <Select
+                  labelId="review-event-label"
+                  label="Action"
+                  value={event}
+                  onChange={(e) => setEvent(e.target.value as PullRequestReviewEvent)}
+                >
+                  <MenuItem value="COMMENT">Comment</MenuItem>
+                  <MenuItem value="APPROVE">Approve</MenuItem>
+                  <MenuItem value="REQUEST_CHANGES">Request changes</MenuItem>
+                </Select>
+              </FormControl>
+            </ControlTooltip>
           </Stack>
-          <TextField
-            label={event === 'APPROVE' ? 'Comment (optional)' : 'Comment'}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            fullWidth
-            multiline
-            minRows={3}
-            placeholder="What should the author know?"
-          />
+          <ControlTooltip title="What should the author know?">
+            <TextField
+              label={event === 'APPROVE' ? 'Comment (optional)' : 'Comment'}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              fullWidth
+              multiline
+              minRows={3}
+              placeholder="What should the author know?"
+            />
+          </ControlTooltip>
           {submitError ? <Alert severity="error">{submitError}</Alert> : null}
           <Box>
-            <Button
-              variant="contained"
+            <ControlTooltip
+              title="Submit review"
               disabled={submitting || (event !== 'APPROVE' && !body.trim())}
-              onClick={() => {
-                onSubmitReview(event, body.trim());
-                setBody('');
-              }}
             >
-              {submitting ? 'Submitting…' : 'Submit review'}
-            </Button>
+              <Button
+                variant="contained"
+                disabled={submitting || (event !== 'APPROVE' && !body.trim())}
+                onClick={() => {
+                  onSubmitReview(event, body.trim());
+                  setBody('');
+                }}
+              >
+                {submitting ? 'Submitting…' : 'Submit review'}
+              </Button>
+            </ControlTooltip>
           </Box>
         </Stack>
       ) : null}

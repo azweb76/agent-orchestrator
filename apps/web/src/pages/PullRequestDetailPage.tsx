@@ -27,6 +27,7 @@ import { PullRequestConversationTab } from '../components/pr/PullRequestConversa
 import { PullRequestFilesTab } from '../components/pr/PullRequestFilesTab';
 import { PullRequestOverviewTab } from '../components/pr/PullRequestOverviewTab';
 import { PullRequestReviewsTab } from '../components/pr/PullRequestReviewsTab';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { PageHeader } from '../components/ui/PageHeader';
 
@@ -210,60 +211,83 @@ function PullRequestDetailContent({
         actions={
           <>
             {pr.state === 'open' && !pr.merged && (checksQuery.data?.failing ?? 0) > 0 ? (
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<BugReportOutlinedIcon />}
+              <ControlTooltip
+                title="Start a Claude agent to fix failing CI checks"
                 disabled={startTemplate.isPending}
-                onClick={() => startTemplate.mutate('fix-ci')}
               >
-                Fix CI
-              </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<BugReportOutlinedIcon />}
+                  disabled={startTemplate.isPending}
+                  onClick={() => startTemplate.mutate('fix-ci')}
+                >
+                  Fix CI
+                </Button>
+              </ControlTooltip>
             ) : null}
             {pr.state === 'open' && !pr.merged ? (
-              <Button
-                variant="outlined"
-                startIcon={<ReplyOutlinedIcon />}
+              <ControlTooltip
+                title="Start a Claude agent to address review feedback"
                 disabled={startTemplate.isPending}
-                onClick={() => startTemplate.mutate('address-review')}
               >
-                Address review
-              </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<ReplyOutlinedIcon />}
+                  disabled={startTemplate.isPending}
+                  onClick={() => startTemplate.mutate('address-review')}
+                >
+                  Address review
+                </Button>
+              </ControlTooltip>
             ) : null}
             {pr.agentId ? (
-              <Button
-                component={RouterLink}
-                to={`/agents/${pr.agentId}`}
-                variant="outlined"
-                startIcon={<SmartToyOutlinedIcon />}
-              >
-                Open agent
-              </Button>
+              <ControlTooltip title="Open the agent working on this pull request">
+                <Button
+                  component={RouterLink}
+                  to={`/agents/${pr.agentId}`}
+                  variant="outlined"
+                  startIcon={<SmartToyOutlinedIcon />}
+                >
+                  Open agent
+                </Button>
+              </ControlTooltip>
             ) : (
-              <Button
-                variant="outlined"
-                startIcon={
-                  createAgent.isPending ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <SmartToyOutlinedIcon />
-                  )
+              <ControlTooltip
+                title={
+                  pr.workspaceId
+                    ? 'Create a worktree and Claude agent for this pull request'
+                    : 'Clone the repository and start a Claude agent for this pull request'
                 }
                 disabled={createAgent.isPending}
-                onClick={() => createAgent.mutate()}
               >
-                {pr.workspaceId ? 'Create agent' : 'Start agent'}
-              </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={
+                    createAgent.isPending ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <SmartToyOutlinedIcon />
+                    )
+                  }
+                  disabled={createAgent.isPending}
+                  onClick={() => createAgent.mutate()}
+                >
+                  {pr.workspaceId ? 'Create agent' : 'Start agent'}
+                </Button>
+              </ControlTooltip>
             )}
-            <Button
-              variant="outlined"
-              startIcon={<OpenInNewIcon />}
-              href={pr.htmlUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              GitHub
-            </Button>
+            <ControlTooltip title="Open this pull request on GitHub">
+              <Button
+                variant="outlined"
+                startIcon={<OpenInNewIcon />}
+                href={pr.htmlUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                GitHub
+              </Button>
+            </ControlTooltip>
           </>
         }
       />

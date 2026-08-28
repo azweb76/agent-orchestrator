@@ -17,6 +17,7 @@ import { api } from '../api/client';
 import { CreateWorkspaceDialog } from '../components/CreateWorkspaceDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageHeader } from '../components/ui/PageHeader';
 
 export function WorkspacesPage() {
@@ -44,9 +45,11 @@ export function WorkspacesPage() {
         title="Workspaces"
         description="Clone GitHub repos locally, then spin up worktrees and Claude agents from each one."
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-            Add workspace
-          </Button>
+          <ControlTooltip title="Clone a GitHub repository to create a workspace">
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+              Add workspace
+            </Button>
+          </ControlTooltip>
         }
       />
 
@@ -62,31 +65,35 @@ export function WorkspacesPage() {
           title="No workspaces yet"
           description="Clone a GitHub repository to create your first workspace."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-              Add workspace
-            </Button>
+            <ControlTooltip title="Clone a GitHub repository to create a workspace">
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+                Add workspace
+              </Button>
+            </ControlTooltip>
           }
         />
       ) : (
         <Stack spacing={1.5}>
           {(workspaces?.length ?? 0) > 4 ? (
-            <TextField
-              size="small"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter workspaces…"
-              sx={{ maxWidth: 360, width: '100%' }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                    </InputAdornment>
-                  ),
-                  'aria-label': 'Filter workspaces',
-                },
-              }}
-            />
+            <ControlTooltip title="Filter by workspace name or repository">
+              <TextField
+                size="small"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter workspaces…"
+                sx={{ maxWidth: 360, width: '100%' }}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                      </InputAdornment>
+                    ),
+                    'aria-label': 'Filter workspaces',
+                  },
+                }}
+              />
+            </ControlTooltip>
           ) : null}
 
           {filtered.length === 0 ? (
