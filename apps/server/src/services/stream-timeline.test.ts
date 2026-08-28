@@ -431,6 +431,19 @@ describe('visible subagent cards', () => {
     assert.equal(visible.length, 4);
     assert.equal(visible.some((item) => item.status === 'running'), true);
   });
+
+  it('hides every subagent card once all rows finish', () => {
+    const parts: StreamPart[] = [
+      {
+        type: 'tool',
+        id: 'task_1',
+        name: 'Task',
+        status: 'done',
+        task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
+      },
+    ];
+    assert.equal(visibleSubagentItems(parts, false).length, 0);
+  });
 });
 
 describe('task events', () => {

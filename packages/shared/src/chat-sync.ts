@@ -1,9 +1,15 @@
+import { runningSubagentItems, type StreamPart } from './stream-timeline.js';
+
 type MergeableChatMessage = {
   id: string;
   role: string;
   content: string;
   metadata: { streaming?: boolean; timeline?: unknown[] };
 };
+
+function timelineParts(message: MergeableChatMessage): StreamPart[] {
+  return (message.metadata?.timeline ?? []) as StreamPart[];
+}
 
 function streamWeight(message: MergeableChatMessage): number {
   return (message.content?.length ?? 0) + (message.metadata?.timeline?.length ?? 0);
@@ -31,7 +37,10 @@ export function mergeChatMessages<T extends MergeableChatMessage>(
     const prev = localById.get(remoteMsg.id);
     if (!prev) return remoteMsg;
     if (!remoteMsg.metadata?.streaming) return remoteMsg;
-    if (prev.role === 'assistant' && !prev.metadata?.streaming) return prev;
+    if (prev.role === 'assistant' && !prev.metadata?.streaming) {
+      if (runningSubagentItems(timelineParts(remoteMsg)).length > 0) return remoteMsg;
+      return prev;
+    }
     if (
       prev.role === 'assistant' &&
       prev.metadata?.streaming &&

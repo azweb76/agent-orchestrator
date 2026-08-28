@@ -14,17 +14,9 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   adoptParentClaudeSessionId,
-  applyStreamEvent,
-  coalesceTimelineText,
-  completeRunningTools,
   extractPlanFromInput,
-  isSubagentItem,
-  isTopLevelClaudeResult,
   mergeChatMessages,
-  runningSubagentItems,
   parseAskUserQuestions,
-  visibleAssistantContent,
-  visibleSubagentItems,
   chatSessionTemplateById,
   type AgentDetail,
   type ChatSession,
@@ -61,6 +53,11 @@ import { InstructionDraftOfferBanner } from './InstructionDraftOfferBanner';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { ChatTranscriptList, CHAT_COLUMN_MAX_WIDTH, type ChatTranscriptHandle } from './ChatTranscriptList';
+import {
+  applyEventToAssistant,
+  buildMessageTimelineView,
+  shouldPatchAssistantTimeline,
+} from './messageTimeline';
 import { createStreamingPatchBuffer } from './streamingPatchBuffer';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
 
@@ -98,33 +95,6 @@ function setMessagesCache(
   queryClient.setQueryData<Message[]>(['messages', agentId, sessionId], (prev) => updater(prev));
 }
 
-/**
- * Fold a live stream event into the streaming assistant message. A top-level
- * `result` only ends the visual stream when no background Task/Explore
- * subagent is still running: the backend keeps that run open and wakes Claude
- * when the task settles, and later events can only be applied while the local
- * copy is still marked streaming (`patchStreamingAssistant` skips completed
- * messages, and a completed local copy wins over the server's still-streaming
- * snapshot in `mergeChatMessages`).
- */
-function applyEventToAssistant(
-  message: Message,
-  event: Record<string, unknown>,
-  parentSessionId: string | null,
-): Message {
-  const timeline = applyStreamEvent(message.metadata.timeline ?? [], event, parentSessionId);
-  const turnEnded =
-    isTopLevelClaudeResult(event, parentSessionId) && runningSubagentItems(timeline).length === 0;
-  return {
-    ...message,
-    metadata: {
-      ...message.metadata,
-      streaming: !turnEnded,
-      timeline,
-    },
-  };
-}
-
 function upsertAgentSession(
   queryClient: QueryClient,
   agentId: string,
@@ -148,29 +118,25 @@ function upsertAgentSession(
   }
 }
 
-function MessageTimeline({ message, onRetry }: { message: Message; onRetry?: () => void }) {
-  const streaming = Boolean(message.metadata?.streaming);
-  const timeline = message.metadata?.timeline ?? [];
-  const parts = streaming ? timeline : completeRunningTools(timeline);
-  const toolItems = parts.filter(
-    (part): part is Extract<(typeof parts)[number], { type: 'tool' }> =>
-      part.type === 'tool',
-  );
-  // Live timeline so parent Ready does not force-complete running Task rows.
-  const subagents = visibleSubagentItems(timeline, streaming);
-  const otherTools = toolItems.filter((item) => !isSubagentItem(item));
-  const otherRunning = otherTools.some((item) => item.status === 'running');
-  const lastPart = parts[parts.length - 1];
-  const showSubagents = subagents.length > 0;
-  const showToolProgress =
-    streaming &&
-    otherTools.length > 0 &&
-    (otherRunning || (lastPart?.type === 'tool' && !isSubagentItem(lastPart)));
-  // One bubble per assistant turn — never split text across tool boundaries.
-  const rawContent = visibleAssistantContent(message.content);
-  const textContent = rawContent || coalesceTimelineText(parts);
-  const showText = Boolean(textContent);
-  const showThinking = streaming && !showText && !showToolProgress && !showSubagents;
+function MessageTimeline({
+  message,
+  permissionRequests,
+  onRetry,
+}: {
+  message: Message;
+  permissionRequests: PermissionRequest[];
+  onRetry?: () => void;
+}) {
+  const {
+    streaming,
+    subagents,
+    showSubagents,
+    showToolProgress,
+    showThinking,
+    showText,
+    textContent,
+    otherTools,
+  } = buildMessageTimelineView(message, permissionRequests);
 
   return (
     <Box sx={{ mb: 2 }}>
@@ -233,6 +199,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const transcriptRef = useRef<ChatTranscriptHandle>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
+  const prevPermissionCountRef = useRef(0);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const sendingSessionsRef = useRef(new Set<string>());
   const followingRef = useRef(new Set<string>());
@@ -481,9 +448,20 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   }, [activeSessionId]);
 
   useEffect(() => {
+    const count = permissionRequests.length;
+    if (count > prevPermissionCountRef.current) {
+      transcriptRef.current?.scrollToBottom();
+      stickToBottomRef.current = false;
+      setShowJumpToLatest(true);
+    }
+    prevPermissionCountRef.current = count;
+  }, [permissionRequests.length]);
+
+  useEffect(() => {
     if (!stickToBottomRef.current) return;
+    if (permissionRequests.length > 0) return;
     transcriptRef.current?.scrollToBottom();
-  }, [messagesQuery.data, permissionRequests]);
+  }, [messagesQuery.data, permissionRequests.length]);
 
   const handleChatScroll = () => {
     const el = chatScrollRef.current;
@@ -522,12 +500,19 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     sid: string,
     mutate: (message: Message) => Message,
   ) => {
+    const sessionRunActive =
+      sessions.find((item) => item.id === sid)?.status === 'running' ||
+      sendingSessionsRef.current.has(sid) ||
+      followingRef.current.has(sid);
     setMessagesCache(queryClient, agentId, sid, (prev) => {
       if (!prev?.length) return prev ?? [];
       const next = [...prev];
       for (let i = next.length - 1; i >= 0; i -= 1) {
         const item = next[i]!;
-        if (item.role === 'assistant' && item.metadata?.streaming) {
+        if (
+          item.role === 'assistant' &&
+          shouldPatchAssistantTimeline(item, sid, sid, sessionRunActive)
+        ) {
           next[i] = mutate(item);
           break;
         }
@@ -1355,6 +1340,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                   return (
                     <MessageTimeline
                       message={message}
+                      permissionRequests={permissionRequests}
                       onRetry={
                         message.metadata?.error && priorUser && priorUser.attachments.length === 0
                           ? () => void runChat(priorUser.content, [], [], true)
