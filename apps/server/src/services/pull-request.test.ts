@@ -51,6 +51,7 @@ function detail(overrides: Partial<PullRequestDetail> = {}): PullRequestDetail {
     mergeCommitSha: null,
     allowedMergeMethods: ['merge', 'squash', 'rebase'],
     deleteBranchOnMerge: false,
+    archived: false,
     workspaceId: null,
     agentId: null,
     ...overrides,

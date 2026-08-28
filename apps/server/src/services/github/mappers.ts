@@ -129,6 +129,7 @@ export function mapPullRequestDetail(
     mergeCommitSha: pr.merge_commit_sha,
     allowedMergeMethods: mergeMethodsFor(settings),
     deleteBranchOnMerge: Boolean(settings.delete_branch_on_merge),
+    archived: Boolean(settings.archived),
     workspaceId: null,
     agentId: null,
   };
