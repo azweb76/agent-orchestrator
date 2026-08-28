@@ -4,7 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Paper,
   Stack,
@@ -17,10 +16,11 @@ import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { evaluateMergeReadiness } from '@agent-orchestrator/shared';
-import type { ChatSessionTemplateId, PullRequestDetail } from '@agent-orchestrator/shared';
+import type { ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { MergeActions } from '../components/pr/MergeActions';
 import { MergeReadinessPanel } from '../components/pr/MergeReadinessPanel';
+import { PrStatusChip } from '../components/pr/PrStatusChip';
 import { PullRequestChecksTab } from '../components/pr/PullRequestChecksTab';
 import { PullRequestCommitsTab } from '../components/pr/PullRequestCommitsTab';
 import { PullRequestConversationTab } from '../components/pr/PullRequestConversationTab';
@@ -50,13 +50,6 @@ export function PullRequestDetailPage() {
       prNumber={prNumber}
     />
   );
-}
-
-function statusChip(pr: PullRequestDetail) {
-  if (pr.merged) return <Chip size="small" label="Merged" color="secondary" variant="outlined" />;
-  if (pr.state === 'closed') return <Chip size="small" label="Closed" color="error" variant="outlined" />;
-  if (pr.draft) return <Chip size="small" label="Draft" variant="outlined" />;
-  return <Chip size="small" label="Open" color="success" variant="outlined" />;
 }
 
 function PullRequestDetailContent({
@@ -212,7 +205,12 @@ function PullRequestDetailContent({
             <Box component="span">
               #{pr.number} {pr.title}
             </Box>
-            {statusChip(pr)}
+            <PrStatusChip
+              state={pr.state}
+              draft={pr.draft}
+              merged={pr.merged}
+              checksRollup={checksQuery.data?.rollup}
+            />
           </Stack>
         }
         actions={
