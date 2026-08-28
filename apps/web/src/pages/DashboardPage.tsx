@@ -32,6 +32,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
 import { formatBytes, formatUsd, statusLabel } from '../utils/format';
 import { CommandCenterHero } from '../components/dashboard/CommandCenterHero';
+import { JarvisBriefing } from '../components/dashboard/JarvisBriefing';
 import { pullRequestPath } from '../utils/paths';
 
 function flattenAgents(
@@ -254,12 +255,6 @@ export function DashboardPage() {
   ].slice(0, 5);
   const archivedCount = status?.archivedAgentCount ?? 0;
 
-  const systemsMessage = systemsOk
-    ? 'All systems nominal. Jump into an agent or scan your PR inbox.'
-    : systemsPartial
-      ? 'Partial systems online — check Claude Code and GitHub connectivity.'
-      : 'Configure Claude Code and a GitHub token to get started.';
-
   const theme = useTheme();
   const ao = theme.palette.ao;
 
@@ -283,7 +278,21 @@ export function DashboardPage() {
           background: ao.gradient.hero,
         }}
       >
-        <CommandCenterHero githubLogin={status?.githubLogin} systemsMessage={systemsMessage} />
+        <CommandCenterHero githubLogin={status?.githubLogin} />
+
+        <JarvisBriefing
+          systemsOk={systemsOk}
+          systemsPartial={systemsPartial}
+          githubConfigured={Boolean(status?.githubTokenConfigured)}
+          agents={activeAgents.map((agent) => ({
+            id: agent.id,
+            name: agent.name,
+            workspaceName: agent.workspaceName,
+            status: agent.status,
+            pendingPermissionCount: agent.pendingPermissionCount ?? 0,
+          }))}
+          inbox={inboxQuery.data}
+        />
 
         <Box component="form" onSubmit={onCommandSubmit} sx={{ mt: 2.5, maxWidth: 640 }}>
           <ControlTooltip title="Search agents by name, workspace, or branch">
