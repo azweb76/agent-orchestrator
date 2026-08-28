@@ -9,6 +9,7 @@ import { FIX_CI_RETRY_CAP } from '@agent-orchestrator/shared';
 import { Notifier } from './notifier.js';
 import { setAutomationSettings } from './automation-settings.js';
 import {
+  getCachedPrStatus,
   handleAutomationEvents,
   pollTargetState,
   type GithubPrChangeEvent,
@@ -126,6 +127,66 @@ test('pollTargetState emits github_pr_changed when checks transition to failure'
     const polled = await pollTargetState(ctx, target());
     assert.equal(polled.some((item) => item.kind === 'checks' && item.checksRollup === 'failure'), true);
     assert.equal(events.filter((item) => item.type === 'github_pr_changed').length, 2);
+
+    const cachedStatus = getCachedPrStatus(ctx, 'example', 'demo', 42);
+    assert.equal(cachedStatus?.checksRollup, 'failure');
+    assert.equal(cachedStatus?.state, 'open');
+    assert.equal(cachedStatus?.merged, false);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('pollTargetState emits github_pr_changed with kind "state" when draft status changes', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-state-'));
+  try {
+    const { ctx } = await seedAgent(tmp);
+    const notifier = new Notifier();
+    ctx.notifier = notifier;
+    const events = captureEvents(notifier);
+
+    let draft = true;
+    ctx.github = mockGithub({
+      getPullRequestDetail: async () => prDetail({ draft }),
+    } as unknown as Partial<GitHubService>);
+
+    await pollTargetState(ctx, target());
+    assert.equal(
+      events.some((item) => item.type === 'github_pr_changed' && item.data.kind === 'state'),
+      false,
+    );
+
+    draft = false;
+    await pollTargetState(ctx, target());
+    assert.equal(
+      events.filter((item) => item.type === 'github_pr_changed' && item.data.kind === 'state').length,
+      1,
+    );
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('pollTargetState clears checksRollup to none once a PR merges', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-merge-checks-'));
+  try {
+    const { ctx } = await seedAgent(tmp);
+    const notifier = new Notifier();
+    ctx.notifier = notifier;
+    captureEvents(notifier);
+
+    let merged = false;
+    ctx.github = mockGithub({
+      getPullRequestDetail: async () => prDetail({ merged }),
+      getPullRequestChecks: async () => checksResult('pending'),
+    } as unknown as Partial<GitHubService>);
+
+    await pollTargetState(ctx, target());
+    assert.equal(getCachedPrStatus(ctx, 'example', 'demo', 42)?.checksRollup, 'pending');
+
+    merged = true;
+    await pollTargetState(ctx, target());
+    assert.equal(getCachedPrStatus(ctx, 'example', 'demo', 42)?.checksRollup, 'none');
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
@@ -304,6 +365,7 @@ test('auto-archive skips dirty worktree unless allowDirty is enabled', async () 
 
 test('auto-archive retries pollTargetState merged event until archive succeeds', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-archive-retry-'));
+  const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-archive-retry-repo-'));
   try {
     const { ctx } = await seedAgent(tmp);
     const notifier = new Notifier();
@@ -312,6 +374,7 @@ test('auto-archive retries pollTargetState merged event until archive succeeds',
 
     ctx.repos.worktrees.update({
       ...ctx.repos.worktrees.getById('wt-1')!,
+      path: repoDir,
       prNumber: 42,
     });
     setAutomationSettings(ctx, { enabled: true, autoArchiveOnMerge: true });
@@ -319,10 +382,10 @@ test('auto-archive retries pollTargetState merged event until archive succeeds',
       getPullRequestDetail: async () => prDetail({ merged: true }),
     });
 
-    execSync('git init', { cwd: tmp });
-    execSync('git config user.email "test@test.com"', { cwd: tmp });
-    execSync('git config user.name "Test"', { cwd: tmp });
-    await fs.writeFile(path.join(tmp, 'dirty.txt'), 'wip\n');
+    execSync('git init', { cwd: repoDir });
+    execSync('git config user.email "test@test.com"', { cwd: repoDir });
+    execSync('git config user.name "Test"', { cwd: repoDir });
+    await fs.writeFile(path.join(repoDir, 'dirty.txt'), 'wip\n');
 
     // Cycle 1: merged PR, dirty worktree -> merged event fires, archive skipped.
     const cycle1 = await pollTargetState(ctx, target());
@@ -342,8 +405,8 @@ test('auto-archive retries pollTargetState merged event until archive succeeds',
     );
 
     // Clean the tree (commit everything so git status is clean), poll again -> archive completes.
-    execSync('git add -A', { cwd: tmp });
-    execSync('git commit -m "clean"', { cwd: tmp });
+    execSync('git add -A', { cwd: repoDir });
+    execSync('git commit -m "clean"', { cwd: repoDir });
     const cycle3 = await pollTargetState(ctx, target());
     assert.equal(cycle3.some((item) => item.kind === 'merged'), true);
     await handleAutomationEvents(ctx, target(), cycle3);
@@ -356,6 +419,7 @@ test('auto-archive retries pollTargetState merged event until archive succeeds',
     assert.equal(events.filter((item) => item.data.action === 'archive_completed').length, 1);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
+    await fs.rm(repoDir, { recursive: true, force: true });
   }
 });
 

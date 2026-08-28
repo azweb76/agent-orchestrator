@@ -126,6 +126,7 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
       break;
     case 'github_pr_changed':
       queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }

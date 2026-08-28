@@ -144,6 +144,14 @@ export interface PullRequestChecks {
   checks: PullRequestCheck[];
 }
 
+export interface PrStatusSnapshot {
+  state: 'open' | 'closed';
+  draft: boolean;
+  merged: boolean;
+  checksRollup: PullRequestChecksRollup;
+  updatedAt: string;
+}
+
 export interface PullRequestReview {
   id: string;
   author: PullRequestUser | null;

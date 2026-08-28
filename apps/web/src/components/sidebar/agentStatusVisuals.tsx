@@ -1,6 +1,6 @@
 import { Box } from '@mui/material';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import type { AgentStatus } from '@agent-orchestrator/shared';
+import type { AgentStatus, PrStatusSnapshot } from '@agent-orchestrator/shared';
 
 function statusDotColor(status: AgentStatus): string {
   switch (status) {
@@ -56,6 +56,35 @@ export function AgentStatusDot({
             },
           },
         };
+      }}
+    />
+  );
+}
+
+function prStatusDotColor(status: PrStatusSnapshot): string {
+  if (status.merged) return 'secondary.main';
+  if (status.state === 'closed') return 'error.main';
+  switch (status.checksRollup) {
+    case 'failure':
+      return 'error.main';
+    case 'pending':
+      return 'warning.main';
+    case 'success':
+      return 'success.main';
+    default:
+      return status.draft ? 'text.disabled' : 'success.main';
+  }
+}
+
+export function PrStatusDot({ status, size = 8 }: { status: PrStatusSnapshot; size?: number }) {
+  return (
+    <Box
+      sx={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        bgcolor: prStatusDotColor(status),
+        flexShrink: 0,
       }}
     />
   );
