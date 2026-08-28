@@ -246,6 +246,115 @@ describe('session grade analysis', () => {
     assert.equal(parsed.score, 2);
   });
 
+  it('parses a valid recommended action through for warning/issue findings', () => {
+    const parsed = parseSessionGradeResponse(
+      JSON.stringify({
+        score: 2,
+        summary: 'Missing skill and stale instructions.',
+        findings: [
+          {
+            category: 'skills',
+            severity: 'issue',
+            title: 'No retry skill',
+            detail: 'A skill would have helped.',
+            action: { kind: 'skill', scope: 'personal' },
+          },
+          {
+            category: 'instruction_files',
+            severity: 'warning',
+            title: 'Stale CLAUDE.md',
+            detail: 'Out of date.',
+            action: { kind: 'claude_md' },
+          },
+        ],
+      }),
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.deepEqual(
+      parsed.findings.find((item) => item.category === 'skills')?.recommendedAction,
+      { kind: 'skill', scope: 'personal' },
+    );
+    assert.deepEqual(
+      parsed.findings.find((item) => item.category === 'instruction_files')?.recommendedAction,
+      { kind: 'claude_md', scope: undefined },
+    );
+  });
+
+  it('falls back to a project skill action when the action is missing or invalid', () => {
+    const parsed = parseSessionGradeResponse(
+      JSON.stringify({
+        score: 2,
+        summary: 'Too many turns.',
+        findings: [
+          { category: 'excessive_turns', severity: 'issue', title: 'Long', detail: 'Many turns' },
+          {
+            category: 'wasted_tokens',
+            severity: 'warning',
+            title: 'Rereads',
+            detail: 'Read loop',
+            action: { kind: 'not_a_kind', scope: 'not_a_scope' },
+          },
+        ],
+      }),
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.deepEqual(
+      parsed.findings.find((item) => item.category === 'excessive_turns')?.recommendedAction,
+      { kind: 'skill', scope: 'project' },
+    );
+    assert.deepEqual(
+      parsed.findings.find((item) => item.category === 'wasted_tokens')?.recommendedAction,
+      { kind: 'skill', scope: 'project' },
+    );
+  });
+
+  it('leaves recommendedAction undefined for ok findings', () => {
+    const parsed = parseSessionGradeResponse(
+      JSON.stringify({
+        score: 4,
+        summary: 'Mostly efficient.',
+        findings: [
+          {
+            category: 'bloated_context',
+            severity: 'ok',
+            title: 'Fine',
+            detail: 'No issues.',
+            action: { kind: 'skill', scope: 'project' },
+          },
+        ],
+      }),
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.equal(
+      parsed.findings.find((item) => item.category === 'bloated_context')?.recommendedAction,
+      undefined,
+    );
+  });
+
   it('rejects a response without a summary', () => {
     assert.throws(
       () =>

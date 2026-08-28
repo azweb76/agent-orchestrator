@@ -182,6 +182,7 @@ describe('session grading and instruction files', () => {
       } as unknown as AnthropicService,
       dataDir,
     };
+    ctx.repos.settings.set('analyze_session_enabled', '1');
   });
 
   afterEach(() => {
@@ -193,6 +194,15 @@ describe('session grading and instruction files', () => {
     await assert.rejects(
       () => gradeAgentSession(ctx, 'ag-1', 'sess-2', {}),
       /empty session/,
+    );
+  });
+
+  it('rejects grading when session analysis is disabled', async () => {
+    seed();
+    ctx.repos.settings.set('analyze_session_enabled', '0');
+    await assert.rejects(
+      () => gradeAgentSession(ctx, 'ag-1', 'sess-1', {}),
+      /Session analysis is disabled/,
     );
   });
 

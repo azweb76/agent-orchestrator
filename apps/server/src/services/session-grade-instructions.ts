@@ -20,6 +20,7 @@ import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionC
 import { discoverSlashCommands } from './slash-commands.js';
 import { type AppContext, makeEvent, nowIso } from './app-context.js';
 import { requireAgent, requireSession } from './agent-core.js';
+import { getAppSettings } from './app-settings.js';
 
 function instructionRoots(ctx: AppContext, agentId: string): InstructionFileRoots {
   const agent = requireAgent(ctx, agentId);
@@ -34,6 +35,9 @@ export async function gradeAgentSession(
   sessionId: string,
   body: GradeChatSessionRequest = {},
 ): Promise<ChatSession> {
+  if (!getAppSettings(ctx.repos).analyzeSessionEnabled) {
+    throw new Error('Session analysis is disabled. Enable it in Settings.');
+  }
   const session = requireSession(ctx, agentId, sessionId);
   const dbMessages = ctx.repos.messages.listBySession(session.id);
   const roots = instructionRoots(ctx, agentId);

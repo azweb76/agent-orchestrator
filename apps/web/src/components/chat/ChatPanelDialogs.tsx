@@ -1,5 +1,10 @@
 import type { UseMutationResult } from '@tanstack/react-query';
-import type { ChatSession } from '@agent-orchestrator/shared';
+import type {
+  ChatSession,
+  InstructionFileKind,
+  InstructionFileScope,
+  SessionGradeFinding,
+} from '@agent-orchestrator/shared';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { GradeSessionDialog } from './GradeSessionDialog';
 import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
@@ -14,6 +19,7 @@ interface ChatPanelDialogsProps {
   deleteTarget: ChatSession | null;
   gradeOpen: boolean;
   improveOpen: boolean;
+  improveSeed?: { kind: InstructionFileKind; scope?: InstructionFileScope; extraNotes: string } | null;
   clearMutation: UseMutationResult<{ cleared: number }, Error, void>;
   rewindMutation: UseMutationResult<
     { draft: string },
@@ -29,6 +35,7 @@ interface ChatPanelDialogsProps {
   onImproveClose: () => void;
   onImproveApplied: () => void;
   onImproveFromGrade: () => void;
+  onImproveFinding?: (finding: SessionGradeFinding) => void;
 }
 
 export function ChatPanelDialogs({
@@ -41,6 +48,7 @@ export function ChatPanelDialogs({
   deleteTarget,
   gradeOpen,
   improveOpen,
+  improveSeed,
   clearMutation,
   rewindMutation,
   deleteSessionMutation,
@@ -52,6 +60,7 @@ export function ChatPanelDialogs({
   onImproveClose,
   onImproveApplied,
   onImproveFromGrade,
+  onImproveFinding,
 }: ChatPanelDialogsProps) {
   return (
     <>
@@ -108,6 +117,7 @@ export function ChatPanelDialogs({
         onClose={onGradeClose}
         onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
         onImprove={onImproveFromGrade}
+        onImproveFinding={onImproveFinding}
       />
 
       {activeSessionId ? (
@@ -117,6 +127,9 @@ export function ChatPanelDialogs({
           sessionId={activeSessionId}
           onClose={onImproveClose}
           onApplied={onImproveApplied}
+          initialKind={improveSeed?.kind}
+          initialScope={improveSeed?.scope}
+          initialExtraNotes={improveSeed?.extraNotes}
         />
       ) : null}
     </>

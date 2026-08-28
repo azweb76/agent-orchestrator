@@ -5,6 +5,8 @@ import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined';
 import {
   Alert,
   Box,
+  Button,
+  CircularProgress,
   FormControlLabel,
   Slider,
   Stack,
@@ -42,7 +44,7 @@ function AutomationToggle({
 }
 
 export function AutomationSettingsSection() {
-  const { settings, loading, update } = useAutomationSettings();
+  const { settings, loading, update, checking, checkError, checkNow } = useAutomationSettings();
 
   const patch = (partial: Partial<AutomationSettings>) => {
     void update(partial);
@@ -55,6 +57,18 @@ export function AutomationSettingsSection() {
         PRs for CI, review, and merge events. Each action may start a Claude session and spend
         tokens.
       </Alert>
+      <Box>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={checking ? <CircularProgress size={16} /> : undefined}
+          disabled={checking}
+          onClick={() => void checkNow()}
+        >
+          Check now
+        </Button>
+      </Box>
+      {checkError && <Alert severity="warning">{checkError}</Alert>}
       <AutomationToggle
         checked={settings.enabled}
         onChange={(enabled) => patch({ enabled })}

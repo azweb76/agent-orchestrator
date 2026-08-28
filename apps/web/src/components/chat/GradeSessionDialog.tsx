@@ -39,6 +39,13 @@ interface GradeSessionDialogProps {
   onAnalyze: (notes: string) => void;
   /** Open the instruction-improvement flow seeded from this session. */
   onImprove?: () => void;
+  /** Open the instruction-improvement flow seeded from a single flagged finding. */
+  onImproveFinding?: (finding: SessionGradeFinding) => void;
+}
+
+/** Notes prefilled into the improve dialog when acting on a single finding. */
+export function buildFindingNotes(finding: SessionGradeFinding): string {
+  return `${SESSION_GRADE_FINDING_LABELS[finding.category]} — ${finding.title}\n${finding.detail}`;
 }
 
 function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warning' | 'error' {
@@ -47,7 +54,13 @@ function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warn
   return 'warning';
 }
 
-function FindingCard({ finding }: { finding: SessionGradeFinding }) {
+function FindingCard({
+  finding,
+  onAct,
+}: {
+  finding: SessionGradeFinding;
+  onAct?: (finding: SessionGradeFinding) => void;
+}) {
   return (
     <Stack
       spacing={0.5}
@@ -75,6 +88,15 @@ function FindingCard({ finding }: { finding: SessionGradeFinding }) {
         <Typography variant="body2" color="text.secondary">
           {finding.detail}
         </Typography>
+      ) : null}
+      {finding.severity !== 'ok' && onAct ? (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <ControlTooltip title="Open the instruction improvement flow for this finding">
+            <Button size="small" onClick={() => onAct(finding)}>
+              Improve
+            </Button>
+          </ControlTooltip>
+        </Box>
       ) : null}
     </Stack>
   );
@@ -139,6 +161,7 @@ export function GradeSessionDialog({
   onClose,
   onAnalyze,
   onImprove,
+  onImproveFinding,
 }: GradeSessionDialogProps) {
   const [notes, setNotes] = useState('');
   const analysis = current?.analysis;
@@ -203,7 +226,9 @@ export function GradeSessionDialog({
                 <Stack spacing={1}>
                   {SESSION_GRADE_FINDING_CATEGORIES.map((category) => {
                     const finding = analysis.findings.find((item) => item.category === category);
-                    return finding ? <FindingCard key={category} finding={finding} /> : null;
+                    return finding ? (
+                      <FindingCard key={category} finding={finding} onAct={onImproveFinding} />
+                    ) : null;
                   })}
                 </Stack>
               ) : null}
