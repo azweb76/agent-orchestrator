@@ -152,39 +152,41 @@ export function ChatSessionBar({
                     />
                   ) : null}
                   {editing ? (
-                    <TextField
-                      inputRef={inputRef}
-                      size="small"
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          commitRename(session);
-                        } else if (event.key === 'Escape') {
-                          event.preventDefault();
-                          cancelRename();
-                        }
-                      }}
-                      onBlur={() => commitRename(session)}
-                      slotProps={{
-                        htmlInput: {
-                          maxLength: CHAT_TITLE_MAX_LENGTH,
-                          'aria-label': 'Session name',
-                        },
-                      }}
-                      sx={{
-                        width: { xs: 132, sm: 168 },
-                        '& .MuiInputBase-root': { height: 22 },
-                        '& .MuiInputBase-input': {
-                          py: 0,
-                          px: 0.5,
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                        },
-                      }}
-                    />
+                    <ControlTooltip title="Edit session name">
+                      <TextField
+                        inputRef={inputRef}
+                        size="small"
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            commitRename(session);
+                          } else if (event.key === 'Escape') {
+                            event.preventDefault();
+                            cancelRename();
+                          }
+                        }}
+                        onBlur={() => commitRename(session)}
+                        slotProps={{
+                          htmlInput: {
+                            maxLength: CHAT_TITLE_MAX_LENGTH,
+                            'aria-label': 'Session name',
+                          },
+                        }}
+                        sx={{
+                          width: { xs: 132, sm: 168 },
+                          '& .MuiInputBase-root': { height: 22 },
+                          '& .MuiInputBase-input': {
+                            py: 0,
+                            px: 0.5,
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                          },
+                        }}
+                      />
+                    </ControlTooltip>
                   ) : (
                     <Typography component="span" variant="caption" sx={{ fontWeight: 600 }}>
                       {session.title}
@@ -273,20 +275,21 @@ export function ChatSessionBar({
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         {LISTED_CHAT_SESSION_TEMPLATES.map((template) => (
-          <MenuItem
-            key={template.id}
-            onClick={() => {
-              setAnchor(null);
-              onCreate(template);
-            }}
-          >
-            <ListItemIcon>{templateIcon(template.id)}</ListItemIcon>
-            <ListItemText
-              primary={template.title}
-              secondary={template.description}
-              slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
-            />
-          </MenuItem>
+          <ControlTooltip key={template.id} title={template.description}>
+            <MenuItem
+              onClick={() => {
+                setAnchor(null);
+                onCreate(template);
+              }}
+            >
+              <ListItemIcon>{templateIcon(template.id)}</ListItemIcon>
+              <ListItemText
+                primary={template.title}
+                secondary={template.description}
+                slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
+              />
+            </MenuItem>
+          </ControlTooltip>
         ))}
       </Menu>
       <Menu
@@ -297,30 +300,34 @@ export function ChatSessionBar({
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
       >
         {canRename ? (
-          <MenuItem
-            onClick={() => {
-              if (sessionMenu) beginRename(sessionMenu.session);
-            }}
-          >
-            <ListItemIcon>
-              <DriveFileRenameOutlineIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText primary="Rename" />
-          </MenuItem>
+          <ControlTooltip title="Rename session">
+            <MenuItem
+              onClick={() => {
+                if (sessionMenu) beginRename(sessionMenu.session);
+              }}
+            >
+              <ListItemIcon>
+                <DriveFileRenameOutlineIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Rename" />
+            </MenuItem>
+          </ControlTooltip>
         ) : null}
         {canDelete && sessionMenu ? (
-          <MenuItem
-            onClick={() => {
-              const target = sessionMenu.session;
-              setSessionMenu(null);
-              onDelete?.(target);
-            }}
-          >
-            <ListItemIcon>
-              <DeleteOutlinedIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText primary="Delete" />
-          </MenuItem>
+          <ControlTooltip title="Delete session">
+            <MenuItem
+              onClick={() => {
+                const target = sessionMenu.session;
+                setSessionMenu(null);
+                onDelete?.(target);
+              }}
+            >
+              <ListItemIcon>
+                <DeleteOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Delete" />
+            </MenuItem>
+          </ControlTooltip>
         ) : null}
       </Menu>
     </Stack>
