@@ -116,7 +116,7 @@ export async function createWorktreeFromPr(
     }
     return { worktree: existing, agent };
   }
-  const localBranch = `pr-${body.prNumber}`;
+  const localBranch = pr.headRef;
   const name = body.name ?? slugify(pr.headRef);
   const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
   const id = uuidv4();
