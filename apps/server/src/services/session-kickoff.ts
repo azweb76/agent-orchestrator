@@ -143,7 +143,7 @@ async function buildFixCiKickoff(
 ): Promise<string> {
   const resolved = await resolveOpenPullRequest(github, workspace, worktree);
   let headSha = resolved?.headSha ?? null;
-  let prLabel = resolved ? `PR #${resolved.summary.number}` : null;
+  const prLabel = resolved ? `PR #${resolved.summary.number}` : null;
 
   if (!headSha) {
     headSha = await github.getBranchHeadSha(

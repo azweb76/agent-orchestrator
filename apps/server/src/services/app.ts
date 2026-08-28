@@ -1152,9 +1152,8 @@ export async function getAgentSessionContext(
     });
   }
 
-  let bestPath: string | null = null;
   let best = await readClaudeSessionContext(candidates[0]!);
-  bestPath = candidates[0]!;
+  let bestPath: string | null = candidates[0]!;
   // Prefer a source that actually reports prompt occupancy. After stop, the Claude
   // JSONL can exist but still lack usage while the orchestrator run log has it.
   if (!best.history.some((turn) => turn.contextTokens > 0)) {
@@ -2224,7 +2223,7 @@ export async function streamAgentChat(
     detail.worktree ? { branch: detail.worktree.branch } : null,
     rawMessage,
   );
-  let activeSession = slash.sessionSwitch ?? session;
+  const activeSession = slash.sessionSwitch ?? session;
   if (slash.sessionSwitch && agent.activeSessionId !== slash.sessionSwitch.id) {
     ctx.repos.agents.update({
       ...agent,
@@ -2688,7 +2687,7 @@ export async function listGitHubPullRequests(ctx: AppContext, workspaceId: strin
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
 
-  let viewerLogin: string | null = null;
+  let viewerLogin: string | null;
   try {
     viewerLogin = await ctx.github.getAuthenticatedLogin();
   } catch {

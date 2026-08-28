@@ -932,7 +932,7 @@ export class ClaudeService {
       killStdinHolder(holderPid);
       cleanupStdinSidecars(logPath);
       const detail = error instanceof Error ? error.message : 'unknown spawn error';
-      throw new Error(`Failed to start Claude process: ${detail}`);
+      throw new Error(`Failed to start Claude process: ${detail}`, { cause: error });
     }
 
     return this.monitorRun(agentId, handle, options.sessionId ?? null, options, options.signal);

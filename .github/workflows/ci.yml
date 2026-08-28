@@ -28,6 +28,9 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
 

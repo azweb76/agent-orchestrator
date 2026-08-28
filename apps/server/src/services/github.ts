@@ -206,6 +206,7 @@ export class GitHubService {
       if (status === 401 || status === 403) {
         throw new Error(
           'GITHUB_TOKEN must be a personal access token for a user account (not a GitHub App installation token). Optionally set GITHUB_LOGIN.',
+          { cause: error },
         );
       }
       throw error;
