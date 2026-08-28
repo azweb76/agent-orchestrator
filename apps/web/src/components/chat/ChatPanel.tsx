@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Box,
@@ -63,8 +63,10 @@ import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './Tool
 import type { AgentAttentionFocus } from '../../notifications';
 
 interface ChatPanelProps {
-  agent: AgentDetail;
+  agentId: string;
   archived: boolean;
+  /** When false (e.g. Changes tab visible), pause follow streams and polling. */
+  active?: boolean;
   /** When set on a fresh agent (e.g. from-idea), send as the first chat prompt. */
   initialPrompt?: string;
   /** When set, create a new session from this template after mount. */
@@ -149,7 +151,7 @@ function upsertAgentSession(
   }
 }
 
-function MessageTimeline({
+const MessageTimeline = memo(function MessageTimeline({
   message,
   permissionRequests,
   onRetry,
@@ -196,27 +198,39 @@ function MessageTimeline({
       {showToolProgress ? <ToolProgressBar items={otherTools} /> : null}
     </Box>
   );
-}
+});
 
-export function ChatPanel({
-  agent,
+export const ChatPanel = memo(function ChatPanel({
+  agentId,
   archived,
+  active = true,
   initialPrompt,
   initialTemplate,
   focusAttention,
   focusSessionId,
 }: ChatPanelProps) {
-  const agentId = agent.id;
   const sseState = useSseConnectionState();
   const keyboardInset = useVisualViewportInset();
   const queryClient = useQueryClient();
-  const sessions = agent.sessions ?? [];
-  const [sessionId, setSessionId] = useState(
-    () => agent.activeSessionId ?? sessions[0]?.id ?? '',
-  );
+  const agentDetailQuery = useQuery({
+    queryKey: ['agent', agentId],
+    queryFn: () => api.getAgent(agentId),
+    select: (data) => ({
+      sessions: data.sessions ?? [],
+      activeSessionId: data.activeSessionId,
+      model: data.model,
+      effort: data.effort,
+      permissionMode: data.permissionMode ?? 'plan',
+    }),
+  });
+  const sessions = agentDetailQuery.data?.sessions ?? [];
+  const agentDefaults = agentDetailQuery.data;
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const resolvedSessionId =
+    sessionId ?? agentDefaults?.activeSessionId ?? agentDefaults?.sessions[0]?.id ?? '';
   const session: ChatSession | undefined =
-    sessions.find((item) => item.id === sessionId) ?? sessions[0];
-  const activeSessionId = session?.id ?? sessionId;
+    sessions.find((item) => item.id === resolvedSessionId) ?? sessions[0];
+  const activeSessionId = session?.id ?? resolvedSessionId;
   const [draft, setDraft] = useState('');
   const [sendingSessionIds, setSendingSessionIds] = useState<string[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
@@ -299,7 +313,7 @@ export function ChatPanel({
   const queueQuery = useQuery({
     queryKey: ['queue', agentId, activeSessionId],
     queryFn: () => api.listQueuedMessages(agentId, activeSessionId),
-    enabled: Boolean(activeSessionId),
+    enabled: active && Boolean(activeSessionId),
     refetchInterval: (query) => {
       if (sseState === 'connected') return false;
       return session?.status === 'running' ||
@@ -324,9 +338,10 @@ export function ChatPanel({
       const local = queryClient.getQueryData<Message[]>(['messages', agentId, activeSessionId]);
       return mergeChatMessages(local, remote);
     },
-    enabled: Boolean(activeSessionId),
+    enabled: active && Boolean(activeSessionId),
     refetchOnWindowFocus: true,
     refetchInterval: () => {
+      if (!active) return false;
       if (sseState === 'connected') return false;
       if (sendingSessionsRef.current.has(activeSessionId)) return false;
       if (followingRef.current.has(activeSessionId)) return false;
@@ -446,9 +461,11 @@ export function ChatPanel({
     queryKey: ['permissions', agentId, activeSessionId],
     queryFn: () => api.listPendingPermissions(agentId, activeSessionId),
     enabled:
+      active &&
       Boolean(activeSessionId) &&
       (sessionBusy || permissionRequests.length > 0 || awaitingPermissionFocus),
     refetchInterval: () => {
+      if (!active) return false;
       if (sseState === 'connected') return false;
       return sessionBusy || permissionRequests.length > 0 ? SSE_FALLBACK_ACTIVE_POLL_MS : false;
     },
@@ -507,14 +524,6 @@ export function ChatPanel({
     transcriptRef.current?.scrollToBottom();
   }, [messagesQuery.data, permissionRequests.length]);
 
-  const handleChatScroll = () => {
-    const el = chatScrollRef.current;
-    if (!el) return;
-    const near = isNearBottom(el);
-    stickToBottomRef.current = near;
-    setShowJumpToLatest(!near);
-  };
-
   const jumpToLatest = () => {
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
@@ -522,6 +531,29 @@ export function ChatPanel({
   };
 
   const displayMessages = messagesQuery.data ?? [];
+
+  const priorUserByIndex = useMemo(() => {
+    const map = new Map<number, Message | undefined>();
+    let lastUser: Message | undefined;
+    for (let index = 0; index < displayMessages.length; index += 1) {
+      map.set(index, lastUser);
+      const message = displayMessages[index];
+      if (message?.role === 'user') lastUser = message;
+    }
+    return map;
+  }, [displayMessages]);
+
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const near = isNearBottom(el);
+    stickToBottomRef.current = near;
+    setShowJumpToLatest(!near);
+  }, []);
+
+  const assignChatScrollerRef = useCallback((element: HTMLDivElement | null) => {
+    chatScrollRef.current = element;
+  }, []);
 
   useEffect(() => {
     const root = chatScrollRef.current;
@@ -780,7 +812,7 @@ export function ChatPanel({
   // Re-attach to a backend run this tab is not currently POSTing (reload, Changes
   // tab, queued drain, dropped SSE). Live tokens keep the composer in sync.
   useEffect(() => {
-    if (archived || !activeSessionId) return;
+    if (archived || !active || !activeSessionId) return;
     if (isSending) return;
     if (session?.status !== 'running' && !hasStreamingMessage) return;
 
@@ -887,7 +919,7 @@ export function ChatPanel({
     };
     // createLiveHandlers closes over the latest patch helpers; session status
     // and the local send flag decide when a follow subscription is needed.
-  }, [archived, agentId, activeSessionId, isSending, session?.status, hasStreamingMessage, followEpoch]);
+  }, [active, archived, agentId, activeSessionId, isSending, session?.status, hasStreamingMessage, followEpoch]);
 
   // From-idea: auto-send the idea as the first plan-mode prompt once messages load empty.
   useEffect(() => {
@@ -1287,42 +1319,77 @@ export function ChatPanel({
     void createSessionFromTemplate(template);
   }, [archived, initialTemplate]);
 
-  const renderPermissionRequest = (request: PermissionRequest) => {
-    const card =
-      request.toolName === 'AskUserQuestion' ? (
-        <AskUserQuestionCard
-          key={request.requestId}
-          request={request}
-          questions={parseAskUserQuestions(request.input)}
-          submitting={permissionBusy}
-          onSubmit={(answers, response) => void submitAnswers(request, answers, response)}
-          onDismiss={() => void skipAskUserQuestion(request)}
-        />
-      ) : request.toolName === 'ExitPlanMode' ? (
-        <ExitPlanModeCard
-          key={request.requestId}
-          request={request}
-          plan={extractPlanFromInput(request.input)}
-          submitting={permissionBusy}
-          onBuild={() => void buildPlan(request)}
-          onKeepPlanning={() => void keepPlanning(request)}
-        />
-      ) : (
-        <ToolPermissionCard
-          key={request.requestId}
-          request={request}
-          submitting={permissionBusy}
-          onAllow={() => void allowTool(request)}
-          onDeny={() => void denyTool(request)}
+  const renderPermissionRequest = useCallback(
+    (request: PermissionRequest) => {
+      const card =
+        request.toolName === 'AskUserQuestion' ? (
+          <AskUserQuestionCard
+            key={request.requestId}
+            request={request}
+            questions={parseAskUserQuestions(request.input)}
+            submitting={permissionBusy}
+            onSubmit={(answers, response) => void submitAnswers(request, answers, response)}
+            onDismiss={() => void skipAskUserQuestion(request)}
+          />
+        ) : request.toolName === 'ExitPlanMode' ? (
+          <ExitPlanModeCard
+            key={request.requestId}
+            request={request}
+            plan={extractPlanFromInput(request.input)}
+            submitting={permissionBusy}
+            onBuild={() => void buildPlan(request)}
+            onKeepPlanning={() => void keepPlanning(request)}
+          />
+        ) : (
+          <ToolPermissionCard
+            key={request.requestId}
+            request={request}
+            submitting={permissionBusy}
+            onAllow={() => void allowTool(request)}
+            onDeny={() => void denyTool(request)}
+          />
+        );
+
+      return (
+        <FocusablePermissionShell key={request.requestId} highlight={focusPermissions}>
+          {card}
+        </FocusablePermissionShell>
+      );
+    },
+    [focusPermissions, permissionBusy],
+  );
+
+  const renderMessage = useCallback(
+    (message: Message, index: number) => {
+      if (message.role === 'assistant') {
+        const priorUser = priorUserByIndex.get(index);
+        return (
+          <MessageTimeline
+            message={message}
+            permissionRequests={permissionRequests}
+            onRetry={
+              message.metadata?.error && priorUser && priorUser.attachments.length === 0
+                ? () => void runChat(priorUser.content, [], [], true)
+                : undefined
+            }
+          />
+        );
+      }
+      return (
+        <ChatBubble
+          message={message}
+          onCopy={() => void navigator.clipboard.writeText(message.content)}
+          onRewind={!archived ? () => requestRewind(message) : undefined}
+          onRetry={
+            message.metadata?.error && lastFailed
+              ? () => void runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true)
+              : undefined
+          }
         />
       );
-
-    return (
-      <FocusablePermissionShell key={request.requestId} highlight={focusPermissions}>
-        {card}
-      </FocusablePermissionShell>
-    );
-  };
+    },
+    [archived, lastFailed, permissionRequests, priorUserByIndex],
+  );
 
   return (
     <Box
@@ -1407,44 +1474,13 @@ export function ChatPanel({
               ref={transcriptRef}
               messages={displayMessages}
               permissionRequests={permissionRequests}
-              scrollerRef={(element) => {
-                chatScrollRef.current = element;
-              }}
+              scrollerRef={assignChatScrollerRef}
               bottomSentinelRef={bottomSentinelRef}
               stickToBottomRef={stickToBottomRef}
               onShowJumpToLatestChange={setShowJumpToLatest}
               onScroll={handleChatScroll}
-              renderMessage={(message, index) => {
-                if (message.role === 'assistant') {
-                  const priorUser = [...displayMessages.slice(0, index)]
-                    .reverse()
-                    .find((item) => item.role === 'user');
-                  return (
-                    <MessageTimeline
-                      message={message}
-                      permissionRequests={permissionRequests}
-                      onRetry={
-                        message.metadata?.error && priorUser && priorUser.attachments.length === 0
-                          ? () => void runChat(priorUser.content, [], [], true)
-                          : undefined
-                      }
-                    />
-                  );
-                }
-                return (
-                  <ChatBubble
-                    message={message}
-                    onCopy={() => void navigator.clipboard.writeText(message.content)}
-                    onRewind={!archived ? () => requestRewind(message) : undefined}
-                    onRetry={
-                      message.metadata?.error && lastFailed
-                        ? () => void runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true)
-                        : undefined
-                    }
-                  />
-                );
-              }}
-              renderPermissionRequest={(request) => renderPermissionRequest(request)}
+              renderMessage={renderMessage}
+              renderPermissionRequest={renderPermissionRequest}
             />
           </Box>
         )}
@@ -1559,9 +1595,9 @@ export function ChatPanel({
             sessionId={activeSessionId}
             archived={archived}
             isStreaming={sessionBusy}
-            model={session?.model ?? agent.model}
-            effort={session?.effort ?? agent.effort}
-            permissionMode={session?.permissionMode ?? agent.permissionMode ?? 'plan'}
+            model={session?.model ?? agentDefaults?.model ?? 'sonnet'}
+            effort={session?.effort ?? agentDefaults?.effort ?? 'high'}
+            permissionMode={session?.permissionMode ?? agentDefaults?.permissionMode ?? 'plan'}
             queue={queue}
             draft={draft}
             onDraftChange={setDraft}
@@ -1672,4 +1708,4 @@ export function ChatPanel({
       ) : null}
     </Box>
   );
-}
+});

@@ -12,6 +12,9 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      // SSE invalidation keeps fleet data fresh; a short stale window avoids
+      // immediate refetch storms when unrelated UI state changes.
+      staleTime: 5_000,
     },
   },
 });

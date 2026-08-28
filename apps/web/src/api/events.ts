@@ -70,17 +70,17 @@ function dispatchAppEvent(event: AppEvent): void {
   }
 }
 
-function invalidateForEvent(queryClient: QueryClient, event: AppEvent): void {
+/** Invalidate only the query keys that need fresh data for this SSE event. */
+export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): void {
   const { agentId, sessionId } = event;
   switch (event.type) {
     case 'agent_changed':
+      // Fleet sidebar shows status; agent detail covers the open agent page.
+      // Do not invalidate messages/permissions/queue prefixes — chat streams
+      // and session-scoped events keep those caches current.
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      queryClient.invalidateQueries({ queryKey: ['status'] });
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-        queryClient.invalidateQueries({ queryKey: ['messages', agentId] });
-        queryClient.invalidateQueries({ queryKey: ['permissions', agentId] });
-        queryClient.invalidateQueries({ queryKey: ['queue', agentId] });
       }
       break;
     case 'run_finished':
@@ -101,7 +101,8 @@ function invalidateForEvent(queryClient: QueryClient, event: AppEvent): void {
       if (agentId && sessionId) {
         queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionId] });
       }
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      // Sidebar badge updates on run_finished; avoid refetching the full tree
+      // on every permission prompt while the chat panel handles the card.
       break;
     case 'queue_changed':
       if (agentId && sessionId) {
@@ -167,11 +168,9 @@ export function useAppEventStream(): void {
         openedOnce = true;
         return;
       }
-      void queryClient.invalidateQueries({ queryKey: ['agent'] });
-      void queryClient.invalidateQueries({ queryKey: ['messages'] });
-      void queryClient.invalidateQueries({ queryKey: ['permissions'] });
-      void queryClient.invalidateQueries({ queryKey: ['queue'] });
       void queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      void queryClient.invalidateQueries({ queryKey: ['status'] });
+      void queryClient.invalidateQueries({ queryKey: ['agent'] });
       void queryClient.invalidateQueries({ queryKey: ['usage'] });
     };
 

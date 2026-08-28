@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import {
   Alert,
   Box,
@@ -29,7 +30,7 @@ export interface AgentChangesPanelProps {
 }
 
 /** Pending / PR diff viewer for an agent worktree. */
-export function AgentChangesPanel({
+export const AgentChangesPanel = memo(function AgentChangesPanel({
   agentId,
   worktreePath,
   archived,
@@ -137,4 +138,4 @@ export function AgentChangesPanel({
       )}
     </Stack>
   );
-}
+});

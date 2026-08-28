@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Badge,
@@ -201,7 +202,13 @@ export function ExpandedWorkspaceTree({
   );
 }
 
-function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boolean }) {
+const AgentListItem = memo(function AgentListItem({
+  agent,
+  selected,
+}: {
+  agent: SidebarAgent;
+  selected: boolean;
+}) {
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   return (
     <ControlTooltip
@@ -257,4 +264,4 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
       </ListItemButton>
     </ControlTooltip>
   );
-}
+});
