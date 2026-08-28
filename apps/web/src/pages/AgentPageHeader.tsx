@@ -8,6 +8,7 @@ import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { resolveAutopilotEnabled } from '@agent-orchestrator/shared';
 import { useAutomationSettings } from '../automation/useAutomationSettings';
+import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { statusColor } from '../theme';
@@ -77,6 +78,7 @@ export function AgentPageHeader({
               color={statusColor(agent.status)}
               variant="outlined"
             />
+            <AgentDeliveryPhaseChip agent={agent} archived={archived} />
             {prNumber != null && (
               <Chip
                 size="small"
