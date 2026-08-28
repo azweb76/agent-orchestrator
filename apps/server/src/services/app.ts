@@ -1198,7 +1198,6 @@ export async function clearAgentChat(
     ...session,
     claudeSessionId: null,
     runLogPath: null,
-    permissionMode: 'plan',
     status: session.status === 'queued' ? 'idle' : session.status,
     updatedAt: nowIso(),
   });

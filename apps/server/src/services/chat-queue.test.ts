@@ -230,6 +230,40 @@ test('removing a queued message cannot target another session', async () => {
   }
 });
 
+test('clearAgentChat preserves permission mode', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-clear-mode-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    ctx.repos.sessions.update({
+      ...ctx.repos.sessions.getById('sess-1')!,
+      permissionMode: 'auto',
+      claudeSessionId: 'claude-sess-keep-mode',
+      runLogPath: path.join(tmp, 'run.log'),
+      updatedAt: new Date().toISOString(),
+    });
+    ctx.repos.messages.create({
+      id: 'msg-1',
+      agentId: agent.id,
+      sessionId: 'sess-1',
+      role: 'user',
+      content: 'hello',
+      attachments: [],
+      metadata: {},
+      createdAt: '2026-01-01T00:00:01.000Z',
+    });
+
+    await clearAgentChat(ctx, agent.id, 'sess-1');
+
+    const session = ctx.repos.sessions.getById('sess-1');
+    assert.equal(session?.permissionMode, 'auto');
+    assert.equal(session?.claudeSessionId, null);
+    assert.equal(session?.runLogPath, null);
+    assert.equal(ctx.repos.messages.listBySession('sess-1').length, 0);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('clearAgentChat drops queued messages', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-queue-clear-'));
   try {

@@ -1552,7 +1552,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       <ConfirmDialog
         open={clearOpen}
         title="Clear chat?"
-        description="This clears this session's chat history, resets its Claude session, and returns it to plan mode. Other sessions are left as they are."
+        description="This clears this session's chat history and resets its Claude session. Your permission mode is kept. Other sessions are left as they are."
         confirmLabel="Clear"
         loading={clearMutation.isPending}
         onCancel={() => setClearOpen(false)}
