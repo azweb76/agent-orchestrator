@@ -54,7 +54,6 @@ import type {
   PullRequestInbox,
   SessionContextUsage,
   SetPullRequestStateRequest,
-  UpdateAgentRequest,
   UpdateChatSessionRequest,
   UpdatePullRequestBranchRequest,
   SidebarWorkspace,
@@ -704,38 +703,6 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
   };
 }
 
-export async function updateAgent(ctx: AppContext, agentId: string, body: UpdateAgentRequest) {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
-  if (agent.archivedAt) throw new Error('Cannot update archived agent');
-
-  const updated: Agent = {
-    ...agent,
-    name: body.name ?? agent.name,
-    model: body.model ?? agent.model,
-    effort: body.effort ?? agent.effort,
-    permissionMode: body.permissionMode ?? agent.permissionMode,
-    updatedAt: nowIso(),
-  };
-
-  ctx.repos.agents.update(updated);
-
-  // Composer model / permission changes apply to the active session.
-  if (body.model || body.effort || body.permissionMode) {
-    const session = requireSession(ctx, agentId);
-    ctx.repos.sessions.update({
-      ...session,
-      model: body.model ?? session.model,
-      effort: body.effort ?? session.effort,
-      permissionMode: body.permissionMode ?? session.permissionMode,
-      updatedAt: nowIso(),
-    });
-    return syncAgentFromSessions(ctx, agentId);
-  }
-
-  return updated;
-}
-
 async function stopAllSessions(ctx: AppContext, agent: Agent): Promise<void> {
   const sessions = ctx.repos.sessions.listByAgent(agent.id);
   for (const session of sessions) {
@@ -749,16 +716,6 @@ async function stopAllSessions(ctx: AppContext, agent: Agent): Promise<void> {
       markStreamingAssistantStopped(ctx, agent.id, session.id);
     }
   }
-}
-
-export async function stopAgent(ctx: AppContext, agentId: string) {
-  const agent = ctx.repos.agents.getById(agentId);
-  if (!agent) throw new Error('Agent not found');
-
-  await stopAllSessions(ctx, agent);
-  const updated = syncAgentFromSessions(ctx, agentId);
-  ctx.repos.events.create(makeEvent(agentId, 'agent_stopped', {}));
-  return updated;
 }
 
 export async function stopAgentSession(ctx: AppContext, agentId: string, sessionId: string) {
@@ -885,11 +842,6 @@ export async function pruneArchivedAgents(ctx: AppContext): Promise<PruneArchive
   }
 
   return { prunedAgents, deletedWorktrees };
-}
-
-export function listAgentSessions(ctx: AppContext, agentId: string): ChatSession[] {
-  requireAgent(ctx, agentId);
-  return ctx.repos.sessions.listByAgent(agentId);
 }
 
 export async function createAgentSession(
@@ -1594,10 +1546,6 @@ export function getAgentAttachment(
   const attachment = ctx.repos.messages.findAttachment(agentId, attachmentId);
   if (!attachment) throw new Error('Attachment not found');
   return attachment;
-}
-
-export function getAgentEvents(ctx: AppContext, agentId: string): AgentEvent[] {
-  return ctx.repos.events.listByAgent(agentId);
 }
 
 export async function getAgentDiff(
@@ -3018,7 +2966,7 @@ export async function createAgentFromPullRequest(ctx: AppContext, body: CreateAg
   };
 }
 
-export async function suggestBranchNameForWorkspace(
+async function suggestBranchNameForWorkspace(
   ctx: AppContext,
   workspaceId: string,
   idea: string,

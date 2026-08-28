@@ -114,6 +114,29 @@ test('GET unknown agent returns 404', async () => {
   });
 });
 
+// #87: endpoints removed after #74 dropped their web client callers. Unrouted
+// paths skip the JSON error handler, so Express answers with its HTML 404.
+test('dead endpoints from #74 are no longer routed', async () => {
+  await withServer(async (url) => {
+    const removed = [
+      { method: 'GET', path: '/api/agents/ag-1/events' },
+      { method: 'GET', path: '/api/agents/ag-1/sessions' },
+      { method: 'POST', path: '/api/agents/ag-1/stop' },
+      { method: 'PATCH', path: '/api/agents/ag-1' },
+      { method: 'POST', path: '/api/workspaces/ws-1/worktrees/suggest-branch-name' },
+    ];
+    for (const { method, path: routePath } of removed) {
+      const res = await fetch(`${url}${routePath}`, { method });
+      assert.equal(res.status, 404, `${method} ${routePath}`);
+      assert.match(
+        res.headers.get('content-type') ?? '',
+        /text\/html/,
+        `${method} ${routePath} should fall through to the default 404`,
+      );
+    }
+  });
+});
+
 test('POST review with a missing body for REQUEST_CHANGES is a 400', async () => {
   await withServer(async (url) => {
     const res = await fetch(`${url}/api/github/repos/ex/demo/pulls/1/reviews`, {
