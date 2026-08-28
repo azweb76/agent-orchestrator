@@ -20,6 +20,11 @@ import {
   parseSessionGradeResponse,
   type SessionGradeContext,
 } from './session-grade.js';
+import {
+  buildCompactSummaryPrompt,
+  parseCompactSummaryResponse,
+  type CompactSummaryInput,
+} from './compact-session.js';
 
 const execAsync = promisify(exec);
 
@@ -153,6 +158,26 @@ export class AnthropicService {
       .join('');
 
     return sanitizeChatTitle(text, prompt);
+  }
+
+  /** Continuation summary for compact-and-continue (seeds the fresh session). */
+  async summarizeSessionForContinuation(input: CompactSummaryInput): Promise<string> {
+    const { apiKey, baseUrl } = await resolveCredentials();
+    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const { system, user } = buildCompactSummaryPrompt(input);
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 4000,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+
+    return parseCompactSummaryResponse(text);
   }
 
   async analyzeSessionGrade(

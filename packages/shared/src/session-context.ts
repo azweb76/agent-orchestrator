@@ -110,6 +110,24 @@ export function compactThresholdTokensForWindow(contextWindowTokens: number): nu
   return Math.max(1, effective - AUTOCOMPACT_BUFFER_TOKENS);
 }
 
+/** Percent of the compact threshold at which the meter counts as "hot". */
+export const CONTEXT_USAGE_HOT_PERCENT = 80;
+
+/** True once reported occupancy has reached the auto-compact threshold. */
+export function hasCrossedCompactThreshold(
+  usage: Pick<SessionContextUsage, 'currentContextTokens' | 'compactThresholdTokens'>,
+): boolean {
+  return (
+    usage.currentContextTokens > 0 &&
+    usage.currentContextTokens >= usage.compactThresholdTokens
+  );
+}
+
+/** True when the meter is hot enough to offer compact-and-continue (e.g. after Stop). */
+export function isContextUsageHot(usage: Pick<SessionContextUsage, 'percent'>): boolean {
+  return usage.percent != null && usage.percent >= CONTEXT_USAGE_HOT_PERCENT;
+}
+
 /** Latest turn that still reports prompt occupancy (skips output-only / interrupted stubs). */
 export function latestContextTurn(
   history: SessionContextTurn[] | null | undefined,

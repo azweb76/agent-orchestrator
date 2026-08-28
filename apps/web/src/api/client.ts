@@ -454,6 +454,26 @@ export async function streamSessionFollow(
   await consumeChatSse(response, handlers);
 }
 
+/**
+ * Compact-and-continue: summarize the hot session, stash it, and stream the
+ * continuation session seeded with the summary and files in play.
+ */
+export async function streamCompactSession(
+  agentId: string,
+  sessionId: string,
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/compact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    credentials: 'include',
+    signal,
+  });
+
+  await consumeChatSse(response, handlers);
+}
+
 /** Stash the plan session, create a Build session, and stream implementation. */
 export async function streamBuildPlan(
   agentId: string,

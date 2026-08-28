@@ -73,6 +73,7 @@ import {
   updateAgentSession,
   updatePullRequestBranch,
 } from '../services/app.js';
+import { compactAndContinueSession } from '../services/compact-continue.js';
 
 function param(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
@@ -764,6 +765,18 @@ export function createRouter(ctx: AppContext): express.Router {
           body,
           param(req.params.sessionId),
         ),
+      );
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/sessions/:sessionId/compact',
+    asyncHandler(async (req, res) => {
+      await compactAndContinueSession(
+        ctx,
+        param(req.params.agentId),
+        res,
+        param(req.params.sessionId),
       );
     }),
   );

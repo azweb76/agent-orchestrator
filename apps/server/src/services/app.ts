@@ -244,7 +244,7 @@ function persistSessionRuntime(ctx: AppContext, session: ChatSession): ChatSessi
   return next;
 }
 
-function createSessionForAgent(
+export function createSessionForAgent(
   ctx: AppContext,
   agent: Agent,
   options: {
@@ -290,13 +290,13 @@ function createSessionForAgent(
   return session;
 }
 
-function requireAgent(ctx: AppContext, agentId: string): Agent {
+export function requireAgent(ctx: AppContext, agentId: string): Agent {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent) throw new Error('Agent not found');
   return agent;
 }
 
-function requireSession(ctx: AppContext, agentId: string, sessionId?: string | null): ChatSession {
+export function requireSession(ctx: AppContext, agentId: string, sessionId?: string | null): ChatSession {
   const agent = requireAgent(ctx, agentId);
   let id = sessionId || agent.activeSessionId;
   if (!id) {
@@ -2035,7 +2035,7 @@ async function waitForSettledAssistant(
  * Stop a Claude run and wait until the OS process is gone.
  * Used by Build / Keep planning so a hung ExitPlanMode stdio wait cannot leak.
  */
-async function stopClaudeRun(ctx: AppContext, session: ChatSession): Promise<void> {
+export async function stopClaudeRun(ctx: AppContext, session: ChatSession): Promise<void> {
   // Prefer the tracked process pid — the session row may not have one yet
   // (stop can race the startup window before onStarted persists the handle).
   const pid = ctx.claude.getRunningProcess(session.id)?.pid ?? session.pid;
@@ -2713,7 +2713,7 @@ export async function followAgentSession(
   finishWithAssistant(settled, ctx.repos.sessions.getById(session.id) ?? session);
 }
 
-function makeEvent(agentId: string, type: string, data: Record<string, unknown>): AgentEvent {
+export function makeEvent(agentId: string, type: string, data: Record<string, unknown>): AgentEvent {
   return {
     id: uuidv4(),
     agentId,
