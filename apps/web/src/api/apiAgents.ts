@@ -28,12 +28,18 @@ import type {
   SessionContextUsage,
   SlashCommand,
   UpdateChatSessionRequest,
+  UpdateAgentRequest,
   WorktreeFileEntry,
 } from '@agent-orchestrator/shared';
 import { request } from './request';
 
 export const apiAgents = {
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
+  updateAgent: (agentId: string, body: UpdateAgentRequest) =>
+    request<AgentDetail>(`/agents/${agentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>
     request<ArchiveAgentResponse>(`/agents/${agentId}/archive`, {
       method: 'POST',

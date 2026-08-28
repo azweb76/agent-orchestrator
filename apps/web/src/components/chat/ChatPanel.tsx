@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  CHAT_SESSION_TEMPLATES,
   mergeChatMessages,
   type ChatSessionTemplateId,
   type EffortLevel,
@@ -57,6 +58,7 @@ export const ChatPanel = memo(function ChatPanel({
       model: data.model,
       effort: data.effort,
       permissionMode: data.permissionMode ?? 'plan',
+      draftPrOffer: data.draftPrOffer ?? null,
     }),
   });
 
@@ -296,6 +298,7 @@ export const ChatPanel = memo(function ChatPanel({
 
       <ChatPanelFooter
         agentId={agentId}
+        agent={agentDefaults ? { draftPrOffer: agentDefaults.draftPrOffer } : undefined}
         archived={archived}
         activeSessionId={activeSessionId}
         session={session}
@@ -346,6 +349,11 @@ export const ChatPanel = memo(function ChatPanel({
             void streaming.runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true);
           }
         }}
+        onCreateDraftPr={() => {
+          const template = CHAT_SESSION_TEMPLATES.find((item) => item.id === 'create-draft-pr');
+          if (template) void sessionActions.createSessionFromTemplate(template);
+        }}
+        creatingDraftPr={sessionActions.creatingSession}
       />
 
       <ChatPanelDialogs

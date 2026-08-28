@@ -69,6 +69,12 @@ export function describeNotificationEvent(
           : `Claude wants to use ${tool}.`;
     return { title: `${name} needs your input`, body };
   }
+  if (event.type === 'draft_pr_offer') {
+    return {
+      title: `${name}: ready for draft PR`,
+      body: 'Build finished with changes. Open a draft PR when you are ready.',
+    };
+  }
   if (event.type === 'automation_triggered') {
     const action = typeof event.data.action === 'string' ? event.data.action : '';
     const pr =
@@ -97,6 +103,21 @@ export function describeNotificationEvent(
             event.data.reason === 'dirty_worktree'
               ? 'Uncommitted changes in the worktree.'
               : 'No linked pull request.',
+        };
+      case 'autopilot_build_started':
+        return { title: `${name}: Autopilot build started`, body: 'Implementing the approved plan.' };
+      case 'autopilot_draft_pr_started':
+        return {
+          title: `${name}: Autopilot draft PR started`,
+          body: 'Creating a draft pull request for this branch.',
+        };
+      case 'autopilot_blocked':
+        return {
+          title: `${name}: Autopilot blocked`,
+          body:
+            typeof event.data.message === 'string' && event.data.message
+              ? event.data.message.slice(0, 140)
+              : 'Autopilot could not continue the plan → build → draft PR chain.',
         };
       default:
         return null;
@@ -156,7 +177,7 @@ export function navigationStateForEvent(event: AppEvent): AgentAttentionNavigati
       sessionId: event.sessionId ?? undefined,
     };
   }
-  if (event.type === 'run_finished' || event.type === 'automation_triggered') {
+  if (event.type === 'run_finished' || event.type === 'automation_triggered' || event.type === 'draft_pr_offer') {
     return {
       focusAttention: 'run-finished',
       sessionId: event.sessionId ?? undefined,

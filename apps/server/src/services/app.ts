@@ -45,6 +45,7 @@ export {
   listAgentMentionFiles,
   createAgentPullRequest,
   commitAgentChanges,
+  updateAgent,
 } from './agents-lifecycle.js';
 
 export {

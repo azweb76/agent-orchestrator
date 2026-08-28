@@ -70,6 +70,14 @@ export function finalizeSessionRun(
       { stopped: result.stopped, error: result.error },
       async () => (await import('./sessions.js')).gradeAgentSession(ctx, latest.agentId, latest.id),
     );
+    void import('./autopilot.js').then(({ maybeAutopilotAfterBuild }) =>
+      maybeAutopilotAfterBuild(ctx, latest, {
+        stopped: result.stopped,
+        error: result.error,
+      }).catch((error) => {
+        console.warn(`[autopilot] post-build hook failed for session ${latest.id}:`, error);
+      }),
+    );
   }
 
   const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;

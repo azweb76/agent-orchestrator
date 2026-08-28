@@ -87,6 +87,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'grade_analysis', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'graded_at', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'title_source', "TEXT NOT NULL DEFAULT 'default'");
+  ensureColumn(db, 'agents', 'autopilot_enabled', 'INTEGER');
 }
 
 function applySchema(db: Database.Database): void {

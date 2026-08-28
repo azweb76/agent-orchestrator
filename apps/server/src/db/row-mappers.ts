@@ -79,6 +79,8 @@ export function rowToAgent(row: unknown): Agent {
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
     archivedAt: r.archived_at == null ? null : String(r.archived_at),
+    autopilot:
+      r.autopilot_enabled == null ? null : Number(r.autopilot_enabled) === 1,
   };
 }
 

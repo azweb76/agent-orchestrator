@@ -97,6 +97,12 @@ export {
   type TokenUsageBreakdown,
 } from './session-context.js';
 
+export {
+  isBuildReadyForDraftPrStep,
+  resolveAutopilotEnabled,
+  shouldOfferDraftPr,
+} from './autopilot.js';
+
 export type {
   ApplyInstructionFileRequest,
   ApplyInstructionFileResponse,

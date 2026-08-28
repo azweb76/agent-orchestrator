@@ -1,16 +1,18 @@
 import { Alert, Box, Button } from '@mui/material';
 import type { UseMutationResult } from '@tanstack/react-query';
-import type { ChatSession, EffortLevel } from '@agent-orchestrator/shared';
+import type { AgentDetail, ChatSession, EffortLevel } from '@agent-orchestrator/shared';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { CompactContinueBanner } from './CompactContinueBanner';
+import { DraftPrOfferBanner } from './DraftPrOfferBanner';
 import { InstructionDraftOfferBanner } from './InstructionDraftOfferBanner';
 import { CHAT_COLUMN_MAX_WIDTH } from './ChatTranscriptList';
 import type { PendingMention } from './mentionComposer';
 
 interface ChatPanelFooterProps {
   agentId: string;
+  agent?: Pick<AgentDetail, 'draftPrOffer'>;
   archived: boolean;
   activeSessionId: string;
   session?: ChatSession;
@@ -45,10 +47,13 @@ interface ChatPanelFooterProps {
   onRemoveQueued: (id: string) => void;
   onChatErrorClose: () => void;
   onRetryFailed: () => void;
+  onCreateDraftPr?: () => void;
+  creatingDraftPr?: boolean;
 }
 
 export function ChatPanelFooter({
   agentId,
+  agent,
   archived,
   activeSessionId,
   session,
@@ -78,6 +83,8 @@ export function ChatPanelFooter({
   onRemoveQueued,
   onChatErrorClose,
   onRetryFailed,
+  onCreateDraftPr,
+  creatingDraftPr,
 }: ChatPanelFooterProps) {
   const keyboardInset = useVisualViewportInset();
 
@@ -108,6 +115,16 @@ export function ChatPanelFooter({
             session={session}
             isStreaming={sessionBusy}
             onReview={onImproveOpen}
+          />
+        ) : null}
+
+        {!archived && agent && session ? (
+          <DraftPrOfferBanner
+            agent={agent}
+            session={session}
+            isStreaming={sessionBusy}
+            onCreateDraftPr={() => onCreateDraftPr?.()}
+            creating={creatingDraftPr}
           />
         ) : null}
 

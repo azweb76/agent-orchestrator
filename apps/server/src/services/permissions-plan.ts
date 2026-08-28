@@ -227,7 +227,7 @@ export async function buildApprovedPlan(
   ctx: AppContext,
   agentId: string,
   body: BuildPlanRequest,
-  res: Response,
+  res: Response | null,
   sessionId?: string,
 ): Promise<void> {
   const detail = await getAgentDetail(ctx, agentId);
@@ -254,6 +254,9 @@ export async function buildApprovedPlan(
     permissionMode: 'auto',
     activate: true,
   });
+
+  const { markAutopilotBuildHandoff } = await import('./autopilot.js');
+  markAutopilotBuildHandoff(ctx, agentId);
 
   ctx.repos.events.create(
     makeEvent(agentId, 'plan_build_started', {

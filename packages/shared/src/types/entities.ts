@@ -57,6 +57,11 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /**
+   * Per-agent autopilot override. `null`/`undefined` inherits the global default from
+   * automation settings.
+   */
+  autopilot?: boolean | null;
 }
 
 export interface MessageAttachment {
@@ -109,7 +114,8 @@ export type AppEventType =
   | 'workspaces_changed'
   | 'instruction_draft_offer'
   | 'github_pr_changed'
-  | 'automation_triggered';
+  | 'automation_triggered'
+  | 'draft_pr_offer';
 
 export interface AppEvent {
   id: string;
