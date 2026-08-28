@@ -15,7 +15,6 @@ import { createChatStreamHandlers } from './createChatStreamHandlers';
 import { setMessagesCache } from './chatQueryCache';
 import type { PendingImage } from './composerTypes';
 import { pendingMentionToChatMention, createPendingMention, type PendingMention } from './mentionComposer';
-import { shouldPatchAssistantTimeline } from './messageTimelineItems';
 import { createStreamingPatchBuffer } from './streamingPatchBuffer';
 import type { QueuedChatItem } from './composerTypes';
 import { useChatFollowStream } from './useChatFollowStream';
@@ -113,31 +112,24 @@ export function useChatStreaming({
     mentions: (item.mentions ?? []).map((mention) => createPendingMention(mention)),
   }));
 
-  const patchStreamingAssistant = (sid: string, mutate: (message: Message) => Message) => {
-    const sessionRunActive =
-      sessions.find((item) => item.id === sid)?.status === 'running' ||
-      abortRegistry.sendingSessionsRef.current.has(sid) ||
-      abortRegistry.followingRef.current.has(sid);
+  const patchStreamingAssistant = (
+    sid: string,
+    messageId: string,
+    mutate: (message: Message) => Message,
+  ) => {
     setMessagesCache(queryClient, agentId, sid, (prev) => {
       if (!prev?.length) return prev ?? [];
+      const index = prev.findIndex((item) => item.role === 'assistant' && item.id === messageId);
+      if (index === -1) return prev;
       const next = [...prev];
-      for (let i = next.length - 1; i >= 0; i -= 1) {
-        const item = next[i]!;
-        if (
-          item.role === 'assistant' &&
-          shouldPatchAssistantTimeline(item, sid, sid, sessionRunActive)
-        ) {
-          next[i] = mutate(item);
-          break;
-        }
-      }
+      next[index] = mutate(next[index]!);
       return next;
     });
   };
 
   const streamingPatches = useMemo(
     () => createStreamingPatchBuffer(patchStreamingAssistant),
-    [queryClient, agentId, sessions],
+    [queryClient, agentId],
   );
 
   useEffect(() => () => streamingPatches.dispose(), [streamingPatches]);
