@@ -786,6 +786,7 @@ export {
 } from './permission-tools.js';
 
 export {
+  buildCompactContinuePrompt,
   buildImplementPlanPrompt,
   chatSessionTemplateById,
   isGitMutatingSessionTemplate,
@@ -832,7 +833,10 @@ export {
   compactThresholdTokensForWindow,
   contextTokensFromUsage,
   emptyTokenUsage,
+  hasCrossedCompactThreshold,
+  isContextUsageHot,
   totalTokensFromUsage,
+  CONTEXT_USAGE_HOT_PERCENT,
   type SessionContextTurn,
   type SessionContextUsage,
   type TokenUsageBreakdown,
