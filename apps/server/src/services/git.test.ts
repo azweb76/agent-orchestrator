@@ -783,7 +783,7 @@ setInterval(() => {}, 1000);
     onPermissionRequest: (request) => firstRequests.push(request.toolName),
   });
 
-  await new Promise((r) => setTimeout(r, 120));
+  await waitFor(() => firstRequests.length === 1 && firstRequests[0] === 'ExitPlanMode');
   assert.deepEqual(firstRequests, ['ExitPlanMode']);
   const firstPid = service.getRunningProcess('agent-plan')?.pid;
   assert.ok(firstPid);
@@ -845,6 +845,14 @@ test('getDiff pending includes unstaged and untracked files; base ref shows bran
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
+
+async function assertSamePath(actual: string | null, expected: string | null): Promise<void> {
+  if (actual === null || expected === null) {
+    assert.equal(actual, expected);
+    return;
+  }
+  assert.equal(await fs.realpath(actual), await fs.realpath(expected));
+}
 
 async function execGit(cwd: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('git', ['-C', cwd, ...args], {
@@ -928,7 +936,7 @@ test('fetchPullRequest succeeds when local PR branch is already checked out in a
   // First fetch + worktree — the real-world state that triggered the bug
   await git.fetchPullRequest(main, 33, 'pr-33');
   await git.addWorktree(main, worktreePath, 'pr-33');
-  assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
+  await assertSamePath(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
 
   // Advance the remote PR head so a direct fetch into refs/heads/pr-33 would refuse
   const updater = path.join(tmp, 'updater');
@@ -947,7 +955,7 @@ test('fetchPullRequest succeeds when local PR branch is already checked out in a
   // This used to throw: refusing to fetch into branch 'refs/heads/pr-33' checked out at ...
   await assert.doesNotReject(() => git.fetchPullRequest(main, 33, 'pr-33'));
 
-  assert.equal(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
+  await assertSamePath(await git.getWorktreePathForBranch(main, 'pr-33'), worktreePath);
   // Local checked-out tip is left alone; local PR ref is updated
   assert.equal(await execGit(worktreePath, ['rev-parse', 'pr-33']), prCommit);
   assert.equal(await execGit(main, ['rev-parse', 'refs/pull/33/head']), newerCommit);

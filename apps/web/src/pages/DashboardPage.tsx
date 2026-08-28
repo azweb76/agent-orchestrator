@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -31,13 +31,8 @@ import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
 import { formatBytes, formatUsd, statusLabel } from '../utils/format';
+import { CommandCenterHero } from '../components/dashboard/CommandCenterHero';
 import { pullRequestPath } from '../utils/paths';
-
-function greetingForHour(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 function flattenAgents(
   workspaces: SidebarWorkspace[],
@@ -157,16 +152,10 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { openPalette } = useCommandPalette();
   const queryClient = useQueryClient();
-  const [now, setNow] = useState(() => new Date());
   const [query, setQuery] = useState('');
   const [pruneOpen, setPruneOpen] = useState(false);
   const sseState = useSseConnectionState();
   const sseFallback = useSsePollingFallback();
-
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(new Date()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const { data: status } = useQuery({
     queryKey: ['status'],
@@ -265,12 +254,11 @@ export function DashboardPage() {
   ].slice(0, 5);
   const archivedCount = status?.archivedAgentCount ?? 0;
 
-  const clock = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dateLabel = now.toLocaleDateString([], {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-  });
+  const systemsMessage = systemsOk
+    ? 'All systems nominal. Jump into an agent or scan your PR inbox.'
+    : systemsPartial
+      ? 'Partial systems online — check Claude Code and GitHub connectivity.'
+      : 'Configure Claude Code and a GitHub token to get started.';
 
   const theme = useTheme();
   const ao = theme.palette.ao;
@@ -295,71 +283,7 @@ export function DashboardPage() {
           background: ao.gradient.hero,
         }}
       >
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          sx={{ justifyContent: 'space-between', alignItems: { md: 'flex-end' } }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography
-              variant="caption"
-              sx={{
-                fontFamily: '"IBM Plex Mono", monospace',
-                letterSpacing: '0.16em',
-                textTransform: 'uppercase',
-                color: 'secondary.main',
-                display: 'block',
-                mb: 1,
-              }}
-            >
-              Command center
-            </Typography>
-            <Typography
-              variant="h3"
-              sx={{
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
-                fontSize: { xs: '1.75rem', md: '2.2rem' },
-                mb: 0.75,
-              }}
-            >
-              {greetingForHour(now.getHours())}
-              {status?.githubLogin ? `, ${status.githubLogin}` : ''}
-            </Typography>
-            <Typography color="text.secondary" sx={{ maxWidth: 520, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
-              {systemsOk
-                ? 'All systems nominal. Jump into an agent or scan your PR inbox.'
-                : systemsPartial
-                  ? 'Partial systems online — check Claude Code and GitHub connectivity.'
-                  : 'Configure Claude Code and a GitHub token to get started.'}
-            </Typography>
-          </Box>
-
-          <Stack spacing={0.5} sx={{ alignItems: { xs: 'flex-start', md: 'flex-end' }, flexShrink: 0 }}>
-            <Typography
-              sx={{
-                fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: { xs: '1.35rem', md: '1.65rem' },
-                fontWeight: 500,
-                color: 'secondary.main',
-                letterSpacing: '0.04em',
-                animation: 'ao-clock-glow 3s ease-in-out infinite',
-                '@keyframes ao-clock-glow': {
-                  '0%, 100%': { opacity: 1 },
-                  '50%': { opacity: 0.72 },
-                },
-              }}
-            >
-              {clock}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ fontFamily: '"IBM Plex Mono", monospace', color: 'text.secondary' }}
-            >
-              {dateLabel}
-            </Typography>
-          </Stack>
-        </Stack>
+        <CommandCenterHero githubLogin={status?.githubLogin} systemsMessage={systemsMessage} />
 
         <Box component="form" onSubmit={onCommandSubmit} sx={{ mt: 2.5, maxWidth: 640 }}>
           <ControlTooltip title="Search agents by name, workspace, or branch">
