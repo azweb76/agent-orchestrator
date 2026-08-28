@@ -1417,7 +1417,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 2,
-                color: '#0b0f17',
+                color: 'ao.action.onAccent',
               }}
             >
               <KeyboardArrowDownIcon />
@@ -1431,7 +1431,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           flexShrink: 0,
           borderTop: 1,
           borderColor: 'divider',
-          bgcolor: 'rgba(18,24,38,0.72)',
+          bgcolor: 'ao.surface.panel',
           backdropFilter: 'blur(12px)',
         }}
       >

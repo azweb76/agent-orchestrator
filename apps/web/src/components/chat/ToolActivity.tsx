@@ -109,7 +109,7 @@ function ActivityIcon({
 }) {
   return (
     <Box
-      sx={{
+      sx={(theme) => ({
         width: 28,
         height: 28,
         borderRadius: 1.5,
@@ -118,13 +118,13 @@ function ActivityIcon({
         justifyContent: 'center',
         flexShrink: 0,
         color: 'info.main',
-        bgcolor: 'rgba(139,164,255,0.12)',
+        bgcolor: theme.palette.ao.accent.primaryTintStrong,
         animation: running ? 'ao-tool-pulse 1.6s ease-in-out infinite' : undefined,
         '@keyframes ao-tool-pulse': {
-          '0%, 100%': { boxShadow: '0 0 0 0 rgba(139,164,255,0.35)' },
-          '50%': { boxShadow: '0 0 0 5px rgba(139,164,255,0)' },
+          '0%, 100%': { boxShadow: `0 0 0 0 ${theme.palette.ao.accent.infoGlow}` },
+          '50%': { boxShadow: '0 0 0 5px transparent' },
         },
-      }}
+      })}
       aria-hidden
     >
       {children}
@@ -151,8 +151,8 @@ export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
         py: 1.15,
         borderRadius: 2,
         border: '1px solid',
-        borderColor: 'rgba(139,164,255,0.28)',
-        bgcolor: 'rgba(139,164,255,0.06)',
+        borderColor: 'ao.accent.primaryBorder',
+        bgcolor: 'ao.accent.primaryTint',
         maxWidth: 560,
       }}
     >
@@ -198,7 +198,7 @@ export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
           mt: 1.1,
           height: 2.5,
           borderRadius: 1,
-          bgcolor: 'rgba(124,156,255,0.14)',
+          bgcolor: 'ao.accent.infoTintStrong',
         }}
       />
     </Box>
@@ -220,15 +220,13 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
         py: 1.05,
         borderRadius: 2,
         border: '1px solid',
-        borderColor: failed
-          ? 'rgba(244,162,97,0.35)'
-          : 'rgba(94,234,212,0.28)',
-        bgcolor: failed ? 'rgba(244,162,97,0.06)' : 'rgba(94,234,212,0.06)',
+        borderColor: failed ? 'ao.accent.warningBorder' : 'ao.accent.secondaryBorder',
+        bgcolor: failed ? 'ao.accent.warningTint' : 'ao.accent.secondaryTint',
       }}
     >
       <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
         <Box
-          sx={{
+          sx={(theme) => ({
             width: 28,
             height: 28,
             borderRadius: 1.5,
@@ -237,13 +235,15 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
             justifyContent: 'center',
             flexShrink: 0,
             color: failed ? 'warning.main' : 'secondary.main',
-            bgcolor: failed ? 'rgba(244,162,97,0.12)' : 'rgba(94,234,212,0.12)',
+            bgcolor: failed
+              ? theme.palette.ao.accent.warningTintStrong
+              : theme.palette.ao.accent.secondaryTintStrong,
             animation: running ? 'ao-subagent-pulse 1.6s ease-in-out infinite' : undefined,
             '@keyframes ao-subagent-pulse': {
-              '0%, 100%': { boxShadow: '0 0 0 0 rgba(94,234,212,0.35)' },
-              '50%': { boxShadow: '0 0 0 5px rgba(94,234,212,0)' },
+              '0%, 100%': { boxShadow: `0 0 0 0 ${theme.palette.ao.accent.secondaryRing}` },
+              '50%': { boxShadow: '0 0 0 5px transparent' },
             },
-          }}
+          })}
           aria-hidden
         >
           {toolIcon(item.name, item.task?.taskType)}
@@ -300,7 +300,7 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
             mt: 1,
             height: 2.5,
             borderRadius: 1,
-            bgcolor: 'rgba(94,234,212,0.14)',
+            bgcolor: 'ao.accent.secondaryTintStrong',
           }}
         />
       ) : null}

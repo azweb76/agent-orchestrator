@@ -78,7 +78,7 @@ export function AppLayout() {
                 '& .MuiDrawer-paper': {
                   width: `min(${SIDEBAR_DRAWER_WIDTH}px, 100vw)`,
                   boxSizing: 'border-box',
-                  bgcolor: 'rgba(18,24,38,0.98)',
+                  bgcolor: 'ao.surface.elevated',
                   backgroundImage: 'none',
                   top: {
                     xs: 'calc(56px + env(safe-area-inset-top, 0px))',
@@ -120,7 +120,7 @@ export function AppLayout() {
                             fontWeight: active ? 700 : 500,
                             justifyContent: 'flex-start',
                             px: 1.25,
-                            bgcolor: active ? 'rgba(94,234,212,0.08)' : 'transparent',
+                            bgcolor: active ? 'ao.accent.secondaryTint' : 'transparent',
                           }}
                         >
                           {item.label}

@@ -147,9 +147,9 @@ export function ChatBubble({
               px: 1.75,
               py: 1.2,
               borderRadius: '16px 16px 5px 16px',
-              bgcolor: 'rgba(139,164,255,0.16)',
+              bgcolor: 'ao.accent.primaryTintStrong',
               border: '1px solid',
-              borderColor: 'rgba(139,164,255,0.26)',
+              borderColor: 'ao.accent.primaryBorder',
             }}
           >
             <Attachments message={message} />
@@ -196,7 +196,7 @@ export function ChatBubble({
             sx={{
               width: 22,
               height: 22,
-              bgcolor: 'rgba(94,234,212,0.14)',
+              bgcolor: 'ao.accent.secondaryTintStrong',
               color: 'secondary.main',
             }}
           >

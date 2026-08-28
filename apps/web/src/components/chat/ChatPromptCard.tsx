@@ -1,23 +1,10 @@
 import type { ReactNode } from 'react';
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 
-const ACCENTS = {
-  info: {
-    border: 'rgba(139,164,255,0.42)',
-    bg: 'rgba(139,164,255,0.07)',
-  },
-  warning: {
-    border: 'rgba(255,183,77,0.48)',
-    bg: 'rgba(255,183,77,0.07)',
-  },
-  success: {
-    border: 'rgba(94,234,212,0.42)',
-    bg: 'rgba(94,234,212,0.07)',
-  },
-} as const;
+type AccentKey = 'info' | 'warning' | 'success';
 
 interface ChatPromptCardProps {
-  accent: keyof typeof ACCENTS;
+  accent: AccentKey;
   icon?: ReactNode;
   title: string;
   description?: ReactNode;
@@ -34,7 +21,15 @@ export function ChatPromptCard({
   children,
   actions,
 }: ChatPromptCardProps) {
-  const colors = ACCENTS[accent];
+  const theme = useTheme();
+  const ao = theme.palette.ao;
+  const colors =
+    accent === 'info'
+      ? { border: ao.accent.primaryBorder, bg: ao.accent.primaryTint }
+      : accent === 'warning'
+        ? { border: ao.accent.warningBorder, bg: ao.accent.warningTint }
+        : { border: ao.accent.secondaryBorder, bg: ao.accent.secondaryTint };
+
   return (
     <Box
       sx={{

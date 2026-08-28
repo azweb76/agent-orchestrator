@@ -1,4 +1,5 @@
-import { createTheme, type PaletteMode } from '@mui/material/styles';
+import { alpha, createTheme, type PaletteMode } from '@mui/material/styles';
+import { buildAoPalette } from './themeTokens';
 
 const sharedTypography = {
   fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
@@ -10,39 +11,80 @@ const sharedTypography = {
 
 const darkPalette = {
   mode: 'dark' as const,
-  primary: { main: '#8ba4ff' },
-  secondary: { main: '#5eead4' },
+  primary: { main: '#8ba4ff', light: '#a8b8ff', dark: '#6b84e8' },
+  secondary: { main: '#5eead4', light: '#7ef0de', dark: '#3dd4bc' },
+  success: { main: '#4ade80', light: '#86efac' },
+  error: { main: '#f87171', light: '#fca5a5' },
+  warning: { main: '#ffb74d', light: '#ffcc80' },
+  info: { main: '#7c9cff', light: '#9cb4ff' },
   background: {
     default: '#0b0f17',
-    paper: '#121826',
+    paper: '#141c2e',
   },
-  divider: 'rgba(255,255,255,0.08)',
+  divider: 'rgba(255,255,255,0.1)',
   text: {
-    primary: 'rgba(255,255,255,0.92)',
-    secondary: 'rgba(255,255,255,0.58)',
+    primary: 'rgba(255,255,255,0.94)',
+    secondary: 'rgba(255,255,255,0.62)',
+    disabled: 'rgba(255,255,255,0.38)',
+  },
+  action: {
+    hover: 'rgba(255,255,255,0.06)',
+    selected: 'rgba(94,234,212,0.12)',
+    disabled: 'rgba(255,255,255,0.28)',
+    disabledBackground: 'rgba(255,255,255,0.08)',
   },
 };
 
 const lightPalette = {
   mode: 'light' as const,
-  primary: { main: '#3f5fd6' },
-  secondary: { main: '#0d9488' },
+  primary: { main: '#3f5fd6', light: '#6280e8', dark: '#2f4bb0' },
+  secondary: { main: '#0d9488', light: '#14b8a6', dark: '#0f766e' },
+  success: { main: '#16a34a', light: '#22c55e' },
+  error: { main: '#dc2626', light: '#ef4444' },
+  warning: { main: '#d97706', light: '#f59e0b' },
+  info: { main: '#4f6fd6', light: '#6b8ae8' },
   background: {
-    default: '#f4f6fb',
+    default: '#f6f8fc',
     paper: '#ffffff',
   },
-  divider: 'rgba(15,23,42,0.1)',
+  divider: 'rgba(15,23,42,0.12)',
   text: {
     primary: 'rgba(15,23,42,0.92)',
-    secondary: 'rgba(15,23,42,0.62)',
+    secondary: 'rgba(15,23,42,0.64)',
+    disabled: 'rgba(15,23,42,0.42)',
+  },
+  action: {
+    hover: 'rgba(15,23,42,0.04)',
+    selected: 'rgba(13,148,136,0.1)',
+    disabled: 'rgba(15,23,42,0.32)',
+    disabledBackground: 'rgba(15,23,42,0.06)',
   },
 };
 
+function scrollbarStyles(isDark: boolean) {
+  const thumb = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.22)';
+  const thumbHover = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(15,23,42,0.32)';
+  const track = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)';
+  return {
+    scrollbarWidth: 'thin' as const,
+    scrollbarColor: `${thumb} ${track}`,
+    '&::-webkit-scrollbar': { width: 8, height: 8 },
+    '&::-webkit-scrollbar-track': { backgroundColor: track, borderRadius: 4 },
+    '&::-webkit-scrollbar-thumb': {
+      backgroundColor: thumb,
+      borderRadius: 4,
+      border: `2px solid ${track}`,
+    },
+    '&::-webkit-scrollbar-thumb:hover': { backgroundColor: thumbHover },
+  };
+}
+
 export function createAppTheme(mode: PaletteMode) {
   const isDark = mode === 'dark';
+  const ao = buildAoPalette(mode);
 
   return createTheme({
-    palette: isDark ? darkPalette : lightPalette,
+    palette: { ...(isDark ? darkPalette : lightPalette), ao },
     typography: sharedTypography,
     shape: { borderRadius: 10 },
     components: {
@@ -54,9 +96,8 @@ export function createAppTheme(mode: PaletteMode) {
           },
           body: {
             overflowX: 'hidden',
-            backgroundImage: isDark
-              ? 'radial-gradient(ellipse 70% 50% at 8% 0%, rgba(94,234,212,0.09), transparent 50%), radial-gradient(ellipse 55% 45% at 100% 0%, rgba(139,164,255,0.08), transparent 45%)'
-              : 'radial-gradient(ellipse 70% 50% at 8% 0%, rgba(13,148,136,0.08), transparent 50%), radial-gradient(ellipse 55% 45% at 100% 0%, rgba(63,95,214,0.07), transparent 45%)',
+            backgroundImage: ao.gradient.body,
+            ...scrollbarStyles(isDark),
           },
           '#root': {
             minHeight: '100dvh',
@@ -77,7 +118,7 @@ export function createAppTheme(mode: PaletteMode) {
             overflowWrap: 'anywhere',
           },
           '::selection': {
-            backgroundColor: isDark ? 'rgba(94,234,212,0.28)' : 'rgba(13,148,136,0.22)',
+            backgroundColor: isDark ? alpha('#5eead4', 0.28) : alpha('#0d9488', 0.22),
           },
         },
       },
@@ -85,7 +126,7 @@ export function createAppTheme(mode: PaletteMode) {
         defaultProps: { elevation: 0 },
         styleOverrides: {
           root: {
-            border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(15,23,42,0.08)',
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'}`,
             backgroundImage: 'none',
           },
         },
@@ -113,6 +154,9 @@ export function createAppTheme(mode: PaletteMode) {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
           },
+          outlined: ({ theme }) => ({
+            borderColor: alpha(theme.palette.text.primary, isDark ? 0.22 : 0.18),
+          }),
         },
       },
       MuiTab: {
@@ -122,6 +166,9 @@ export function createAppTheme(mode: PaletteMode) {
             fontWeight: 600,
             minHeight: 44,
             minWidth: 0,
+            '&.Mui-selected': {
+              color: isDark ? '#5eead4' : '#0d9488',
+            },
           },
         },
       },
@@ -129,6 +176,9 @@ export function createAppTheme(mode: PaletteMode) {
         styleOverrides: {
           root: {
             minWidth: 0,
+          },
+          indicator: {
+            backgroundColor: isDark ? '#5eead4' : '#0d9488',
           },
         },
       },
@@ -166,7 +216,13 @@ export function createAppTheme(mode: PaletteMode) {
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            backgroundColor: isDark ? 'rgba(11,15,23,0.35)' : 'rgba(255,255,255,0.72)',
+            backgroundColor: ao.surface.inset,
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(15,23,42,0.28)',
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: isDark ? '#5eead4' : '#0d9488',
+            },
           },
         },
       },
@@ -174,9 +230,10 @@ export function createAppTheme(mode: PaletteMode) {
         styleOverrides: {
           tooltip: {
             fontSize: '0.75rem',
-            bgcolor: isDark ? '#1a2233' : '#ffffff',
-            color: isDark ? 'rgba(255,255,255,0.92)' : 'rgba(15,23,42,0.92)',
-            border: isDark ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(15,23,42,0.1)',
+            bgcolor: isDark ? '#1e2838' : '#ffffff',
+            color: isDark ? 'rgba(255,255,255,0.94)' : 'rgba(15,23,42,0.92)',
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)'}`,
+            boxShadow: isDark ? 'none' : '0 4px 16px rgba(15,23,42,0.1)',
           },
         },
       },
@@ -185,11 +242,30 @@ export function createAppTheme(mode: PaletteMode) {
           root: {
             borderRadius: 8,
             '&.Mui-selected': {
-              bgcolor: isDark ? 'rgba(94,234,212,0.1)' : 'rgba(13,148,136,0.1)',
+              bgcolor: ao.surface.selected,
               '&:hover': {
-                bgcolor: isDark ? 'rgba(94,234,212,0.14)' : 'rgba(13,148,136,0.14)',
+                bgcolor: ao.surface.selectedStrong,
               },
             },
+            '&:hover': {
+              bgcolor: ao.surface.hover,
+            },
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            '&:hover': {
+              bgcolor: ao.surface.hover,
+            },
+          },
+        },
+      },
+      MuiDivider: {
+        styleOverrides: {
+          root: {
+            borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)',
           },
         },
       },

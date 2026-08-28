@@ -51,8 +51,8 @@ export function MentionMenu({ options, highlight, onHighlight, onSelect }: Menti
             flexDirection: { xs: 'column', sm: 'row' },
             justifyContent: 'space-between',
             gap: { xs: 0.25, sm: 2 },
-            bgcolor: index === highlight ? 'rgba(94,234,212,0.1)' : 'transparent',
-            '&:hover': { bgcolor: 'rgba(94,234,212,0.1)' },
+            bgcolor: index === highlight ? 'ao.surface.selected' : 'transparent',
+            '&:hover': { bgcolor: 'ao.surface.selected' },
           }}
         >
           <Typography

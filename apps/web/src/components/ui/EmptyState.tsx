@@ -19,7 +19,7 @@ export function EmptyState({ icon, title, description, action, compact }: EmptyS
         border: '1px dashed',
         borderColor: 'divider',
         borderRadius: 2,
-        bgcolor: 'rgba(18,24,38,0.4)',
+        bgcolor: 'ao.surface.empty',
       }}
     >
       <Stack spacing={1.5} sx={{ alignItems: 'center', maxWidth: 420, mx: 'auto' }}>

@@ -138,13 +138,13 @@ export function ChatSessionBar({
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                   {running ? (
                     <Box
-                      sx={{
+                      sx={(theme) => ({
                         width: 6,
                         height: 6,
                         borderRadius: '50%',
                         bgcolor: 'secondary.main',
-                        boxShadow: '0 0 0 3px rgba(94,234,212,0.25)',
-                      }}
+                        boxShadow: `0 0 0 3px ${theme.palette.ao.accent.secondaryRing}`,
+                      })}
                     />
                   ) : waiting ? (
                     <ScheduleOutlinedIcon

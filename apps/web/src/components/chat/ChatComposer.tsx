@@ -295,20 +295,20 @@ export function ChatComposer({
       />
 
       <Box
-        sx={{
+        sx={(theme) => ({
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 3,
-          bgcolor: 'rgba(11,15,23,0.55)',
+          bgcolor: 'ao.surface.overlay',
           px: 1.25,
           pt: 0.75,
           pb: 0.75,
           transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
           '&:focus-within': {
             borderColor: 'primary.main',
-            boxShadow: '0 0 0 3px rgba(139,164,255,0.12)',
+            boxShadow: `0 0 0 3px ${theme.palette.ao.accent.primaryTint}`,
           },
-        }}
+        })}
       >
         <ControlTooltip title="Message Claude — Enter to send, Shift+Enter for newline">
           <TextField
@@ -586,7 +586,7 @@ export function ChatComposer({
                 aria-label="Send"
                 sx={{
                   bgcolor: canSend ? 'primary.main' : 'action.disabledBackground',
-                  color: canSend ? '#0b0f17' : 'text.disabled',
+                  color: canSend ? 'ao.action.onAccent' : 'text.disabled',
                   '&:hover': { bgcolor: 'primary.light' },
                   '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
                 }}
