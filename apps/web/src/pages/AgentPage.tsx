@@ -6,6 +6,7 @@ import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
+import { AgentPrActionOffers } from '../components/agent/AgentPrActionOffers';
 import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -133,6 +134,14 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       />
 
       <AgentPrStatusStrip
+        agent={agent}
+        archived={archived}
+        onSessionStarted={(sessionId) => {
+          setFocusSessionId(sessionId);
+          setTab(0);
+        }}
+      />
+      <AgentPrActionOffers
         agent={agent}
         archived={archived}
         onSessionStarted={(sessionId) => {

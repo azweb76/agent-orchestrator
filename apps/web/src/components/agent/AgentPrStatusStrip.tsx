@@ -3,12 +3,13 @@ import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AgentDetail, ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { pullRequestPath } from '../../utils/paths';
 import { buildAgentPrStripModel } from './agentPrStatusModel';
+import { useAgentLinkedPr } from './useAgentLinkedPr';
 
 export interface AgentPrStatusStripProps {
   agent: AgentDetail;
@@ -22,33 +23,8 @@ export interface AgentPrStatusStripProps {
  */
 export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentPrStatusStripProps) {
   const queryClient = useQueryClient();
-  const prNumber = agent.worktree.prNumber;
-  const owner = agent.workspace.githubOwner;
-  const repo = agent.workspace.githubRepo;
-
-  const prKey = ['pr', owner, repo, prNumber];
-  const enabled = prNumber != null && prNumber > 0;
-
-  const prQuery = useQuery({
-    queryKey: prKey,
-    queryFn: () => api.getPullRequest(owner, repo, prNumber!),
-    enabled,
-    staleTime: 15_000,
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || data.merged || data.state !== 'open') return false;
-      return data.mergeableState === 'unknown' ? 3000 : 30_000;
-    },
-  });
-
-  const checksQuery = useQuery({
-    queryKey: [...prKey, 'checks'],
-    queryFn: () => api.getPullRequestChecks(owner, repo, prNumber!),
-    enabled: enabled && Boolean(prQuery.data) && prQuery.data?.state === 'open' && !prQuery.data.merged,
-    staleTime: 15_000,
-    refetchInterval: (query) =>
-      query.state.data?.checks.some((check) => check.status !== 'completed') ? 10_000 : false,
-  });
+  const { enabled, owner, repo, prNumber, prKey, prQuery, checksQuery, pr, checks } =
+    useAgentLinkedPr(agent);
 
   const startTemplate = useMutation({
     mutationFn: async (template: Extract<ChatSessionTemplateId, 'fix-ci' | 'address-review'>) => {
@@ -78,7 +54,7 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
     );
   }
 
-  if (prQuery.error || !prQuery.data) {
+  if (prQuery.error || !pr) {
     return (
       <Alert severity="warning" sx={{ py: 0.5 }}>
         Could not load PR #{prNumber}:{' '}
@@ -87,10 +63,9 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
     );
   }
 
-  const pr = prQuery.data;
   const model = buildAgentPrStripModel({
     pr,
-    checks: checksQuery.data,
+    checks,
     archived,
   });
   const inAppPath = pullRequestPath(owner, repo, pr.number);
