@@ -122,6 +122,70 @@ test('createAgentSession address-review kickoff states plainly when no open PR e
   }
 });
 
+test('createAgentSession address-review kickoff resolves PR by stored prNumber for pr-<n> branches', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-address-pr-number-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const worktree = ctx.repos.worktrees.getById(agent.worktreeId)!;
+    ctx.repos.worktrees.update({
+      ...worktree,
+      branch: 'pr-42',
+      prNumber: 42,
+      prTitle: 'Fix review',
+    });
+    const headSha = 'b'.repeat(40);
+    let branchLookups = 0;
+    ctx.github = {
+      getPullRequest: async () => ({
+        number: 42,
+        title: 'Fix review',
+        state: 'open',
+        headRef: 'feature/foo',
+        baseRef: 'main',
+        htmlUrl: 'https://github.com/example/demo/pull/42',
+        draft: false,
+        authorLogin: 'alice',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }),
+      getOpenPullRequestForBranch: async () => {
+        branchLookups += 1;
+        return null;
+      },
+      getPullRequestDetail: async () => ({
+        headSha,
+        number: 42,
+        title: 'Fix review',
+        state: 'open',
+        headRef: 'feature/foo',
+        baseRef: 'main',
+        htmlUrl: 'https://github.com/example/demo/pull/42',
+      }),
+      listPullRequestReviewComments: async () => [
+        {
+          id: '1',
+          author: { login: 'bob', avatarUrl: null, htmlUrl: null },
+          body: 'Please fix the null check',
+          path: 'src/foo.ts',
+          line: 10,
+          htmlUrl: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          inReplyToId: null,
+          pullRequestReviewId: '9',
+        },
+      ],
+      listPullRequestReviews: async () => [],
+      listPullRequestComments: async () => [],
+    } as unknown as GitHubService;
+
+    const created = await createAgentSession(ctx, agent.id, { template: 'address-review' });
+    assert.equal(branchLookups, 0);
+    assert.ok(created.kickoffPrompt?.includes('PR #42'));
+    assert.ok(created.kickoffPrompt?.includes('null check'));
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('createAgentSession fix-ci kickoff includes failing checks and log excerpts', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-fix-ci-'));
   try {

@@ -55,6 +55,21 @@ describe('describeNotificationEvent', () => {
   it('returns null for unrelated events', () => {
     expect(describeNotificationEvent(makeEvent({ type: 'agent_changed' }), 'Alpha')).toBeNull();
   });
+
+  it('describes address_review_blocked automation events', () => {
+    expect(
+      describeNotificationEvent(
+        makeEvent({
+          type: 'automation_triggered',
+          data: { action: 'address_review_blocked', number: 12, reason: 'worktree_busy' },
+        }),
+        'Alpha',
+      ),
+    ).toEqual({
+      title: 'Alpha: Address review blocked',
+      body: 'Could not auto-start Address review for PR #12; worktree is busy.',
+    });
+  });
 });
 
 describe('isViewingAgent', () => {
