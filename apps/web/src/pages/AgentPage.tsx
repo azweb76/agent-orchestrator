@@ -10,7 +10,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   FormControlLabel,
   Paper,
   Stack,
@@ -18,8 +17,6 @@ import {
   Tabs,
   TextField,
   Typography,
-  useMediaQuery,
-  useTheme,
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
@@ -48,8 +45,6 @@ export function AgentPage() {
 }
 
 function AgentPageContent({ agentId }: { agentId: string }) {
-  const theme = useTheme();
-  const isWide = useMediaQuery(theme.breakpoints.up('lg'));
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -364,7 +359,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           scrollButtons="auto"
           allowScrollButtonsMobile
           sx={{
-            display: { xs: 'flex', lg: 'none' },
             px: { xs: 0.5, sm: 1.5 },
             minHeight: 40,
             borderBottom: 1,
@@ -380,54 +374,37 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           sx={{
             flex: 1,
             minHeight: 0,
-            display: 'flex',
-            flexDirection: { xs: 'column', lg: 'row' },
+            display: tab === 0 ? 'flex' : 'none',
+            flexDirection: 'column',
             overflow: 'hidden',
           }}
         >
-          <Box
-            sx={{
-              flex: { lg: '1 1 55%' },
-              minWidth: 0,
-              minHeight: 0,
-              display: { xs: tab === 0 ? 'flex' : 'none', lg: 'flex' },
-              flexDirection: 'column',
-            }}
-          >
-            <ChatPanel
-              agent={agent}
-              archived={archived}
-              initialPrompt={initialPrompt}
-              initialTemplate={initialTemplate}
-            />
-          </Box>
-
-          <Divider
-            orientation="vertical"
-            flexItem
-            sx={{ display: { xs: 'none', lg: 'block' }, borderColor: 'divider' }}
+          <ChatPanel
+            agent={agent}
+            archived={archived}
+            initialPrompt={initialPrompt}
+            initialTemplate={initialTemplate}
           />
+        </Box>
 
-          <Box
-            sx={{
-              flex: { lg: '1 1 45%' },
-              minWidth: 0,
-              minHeight: 0,
-              overflow: 'hidden',
-              display: { xs: tab === 1 ? 'flex' : 'none', lg: 'flex' },
-              flexDirection: 'column',
-            }}
-          >
-            <AgentChangesPanel
-              agentId={agentId}
-              worktreePath={agent.worktree.path}
-              archived={archived}
-              diffScope={diffScope}
-              onDiffScopeChange={setDiffScope}
-              onCommitClick={openCommitDialog}
-              enabled={isWide || tab === 1}
-            />
-          </Box>
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: tab === 1 ? 'flex' : 'none',
+            flexDirection: 'column',
+          }}
+        >
+          <AgentChangesPanel
+            agentId={agentId}
+            worktreePath={agent.worktree.path}
+            archived={archived}
+            diffScope={diffScope}
+            onDiffScopeChange={setDiffScope}
+            onCommitClick={openCommitDialog}
+            enabled={tab === 1}
+          />
         </Box>
       </Paper>
 
