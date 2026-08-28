@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useLocation, useParams } from 'react-router-dom';
 import {
   Badge,
@@ -20,10 +20,13 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import SearchIcon from '@mui/icons-material/Search';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useQuery } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { useCommandPalette } from './commandPalette/CommandPaletteContext';
+import { paletteShortcutLabel } from './commandPalette/paletteCommands';
 import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 
@@ -163,6 +166,7 @@ export function WorkspaceSidebar({
   hideCollapseControl,
 }: WorkspaceSidebarProps) {
   const location = useLocation();
+  const { openPalette } = useCommandPalette();
   const { workspaceId: routeWorkspaceId, agentId: routeAgentId } = useParams();
   const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(loadExpandedWorkspaces);
   const [createWorkspaceId, setCreateWorkspaceId] = useState<string | null>(null);
@@ -224,15 +228,6 @@ export function WorkspaceSidebar({
     });
   };
 
-  const setCollapsed = (next: boolean) => {
-    onCollapsedChange(next);
-    try {
-      localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
-    } catch {
-      // ignore
-    }
-  };
-
   const allAgents = useMemo(
     () =>
       tree.flatMap((workspace) =>
@@ -291,6 +286,11 @@ export function WorkspaceSidebar({
           </Box>
         )}
         <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', flexShrink: 0 }}>
+          <Tooltip title={`Command palette (${paletteShortcutLabel()})`} placement="right">
+            <IconButton size="small" onClick={openPalette} aria-label="Open command palette">
+              <SearchIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="New workspace" placement="right">
             <IconButton
               size="small"
@@ -305,7 +305,7 @@ export function WorkspaceSidebar({
             <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
               <IconButton
                 size="small"
-                onClick={() => setCollapsed(!collapsed)}
+                onClick={() => onCollapsedChange(!collapsed)}
                 aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
                 {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
@@ -754,5 +754,13 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
 
 export function useSidebarCollapsed(): [boolean, (collapsed: boolean) => void] {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
-  return [collapsed, setCollapsed];
+  const update = useCallback((next: boolean) => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0');
+    } catch {
+      // ignore (private mode)
+    }
+  }, []);
+  return [collapsed, update];
 }

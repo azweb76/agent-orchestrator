@@ -10,6 +10,7 @@ import {
   LinearProgress,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
@@ -21,6 +22,8 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { useCommandPalette } from '../components/commandPalette/CommandPaletteContext';
+import { paletteShortcutLabel } from '../components/commandPalette/paletteCommands';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
@@ -147,6 +150,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { openPalette } = useCommandPalette();
   const queryClient = useQueryClient();
   const [now, setNow] = useState(() => new Date());
   const [query, setQuery] = useState('');
@@ -354,6 +358,26 @@ export function DashboardPage() {
                 startAdornment: (
                   <InputAdornment position="start">
                     <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="Open the command palette">
+                      <Button
+                        size="small"
+                        onClick={openPalette}
+                        aria-label="Open command palette"
+                        sx={{
+                          minWidth: 0,
+                          px: 1,
+                          color: 'text.secondary',
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          fontSize: '0.75rem',
+                        }}
+                      >
+                        {paletteShortcutLabel()}
+                      </Button>
+                    </Tooltip>
                   </InputAdornment>
                 ),
                 'aria-label': 'Search agents',
