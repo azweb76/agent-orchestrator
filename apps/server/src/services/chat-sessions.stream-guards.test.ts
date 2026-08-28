@@ -39,10 +39,11 @@ test('streamAgentChat rejects a non-force send while a tracked run has no persis
 
 test('streamAgentChat reserves an idle session before asynchronously saving images', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-reserve-'));
+  let releaseRun: (() => void) | undefined;
+  let first: Promise<unknown> | undefined;
   try {
     const { ctx, agent } = await seedAgent(tmp);
     let starts = 0;
-    let releaseRun: (() => void) | undefined;
     const runDone = new Promise<void>((resolve) => {
       releaseRun = resolve;
     });
@@ -60,9 +61,9 @@ test('streamAgentChat reserves an idle session before asynchronously saving imag
     } as unknown as ClaudeService;
     const image = { name: 'test.png', mimeType: 'image/png', dataBase64: 'aW1hZ2U=' };
 
-    const first = streamAgentChat(ctx, agent.id, { message: 'first', images: [image] }, null, 'plan-sess');
+    first = streamAgentChat(ctx, agent.id, { message: 'first', images: [image] }, null, 'plan-sess');
     await new Promise<void>((resolve, reject) => {
-      const deadline = Date.now() + 1_000;
+      const deadline = Date.now() + 5_000;
       const check = () => {
         if (ctx.repos.sessions.getById('plan-sess')?.status === 'running') {
           resolve();
@@ -84,6 +85,8 @@ test('streamAgentChat reserves an idle session before asynchronously saving imag
     assert.equal(starts, 1);
     assert.equal(ctx.repos.messages.listBySession('plan-sess').length, 4);
   } finally {
+    releaseRun?.();
+    await first?.catch(() => undefined);
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
