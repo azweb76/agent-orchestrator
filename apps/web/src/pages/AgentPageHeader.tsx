@@ -9,6 +9,7 @@ import { resolveAutopilotEnabled } from '@agent-orchestrator/shared';
 import { useAutomationSettings } from '../automation/useAutomationSettings';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
+import { PrStatusChip } from '../components/pr/PrStatusChip';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
@@ -88,6 +89,14 @@ export function AgentPageHeader({
                 rel="noopener noreferrer"
                 clickable
                 sx={{ maxWidth: { xs: '100%', sm: 360 } }}
+              />
+            )}
+            {agent.prStatus && (
+              <PrStatusChip
+                state={agent.prStatus.state}
+                draft={agent.prStatus.draft}
+                merged={agent.prStatus.merged}
+                checksRollup={agent.prStatus.checksRollup}
               />
             )}
           </Stack>
