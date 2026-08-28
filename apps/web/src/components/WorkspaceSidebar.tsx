@@ -161,7 +161,10 @@ export function WorkspaceSidebar({
     [tree],
   );
 
-  const runningCount = allAgents.filter(({ agent }) => agent.status === 'running').length;
+  const runningCount = useMemo(
+    () => allAgents.filter(({ agent }) => agent.status === 'running').length,
+    [allAgents],
+  );
 
   return (
     <Box

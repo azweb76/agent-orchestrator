@@ -421,7 +421,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           }}
         >
           <ChatPanel
-            agent={agent}
+            agentId={agentId}
+            active={tab === 0}
             archived={archived}
             initialPrompt={initialPrompt}
             initialTemplate={initialTemplate}
