@@ -12,6 +12,9 @@ describe('buildAoPalette', () => {
     expect(dark.diff.backdrop).not.toBe(light.diff.backdrop);
     expect(dark.action.onAccent).toBe('#0b0f17');
     expect(light.action.onAccent).toBe('#ffffff');
+    expect(dark.chart.cacheRead).toBe('#5eead4');
+    expect(light.chart.cacheRead).toBe('#0d9488');
+    expect(dark.chart.cacheWrite).not.toBe(light.chart.cacheWrite);
   });
 });
 

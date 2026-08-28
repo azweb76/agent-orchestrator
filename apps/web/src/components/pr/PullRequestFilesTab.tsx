@@ -81,10 +81,10 @@ export function PullRequestFilesTab({ files, loading, error }: PullRequestFilesT
                     color={STATUS_COLORS[file.status] ?? 'default'}
                     label={file.status}
                   />
-                  <Typography variant="caption" color="success.light">
+                  <Typography variant="caption" color="success.main">
                     +{file.additions}
                   </Typography>
-                  <Typography variant="caption" color="error.light">
+                  <Typography variant="caption" color="error.main">
                     −{file.deletions}
                   </Typography>
                 </Stack>

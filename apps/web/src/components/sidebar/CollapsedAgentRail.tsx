@@ -33,12 +33,12 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
               {workspace.name} · {agent.status}
             </Typography>
             {needsInput && (
-              <Typography variant="caption" color="warning.light">
+              <Typography variant="caption" color="warning.main">
                 Needs your input
               </Typography>
             )}
             {stalled && (
-              <Typography variant="caption" color="warning.light">
+              <Typography variant="caption" color="warning.main">
                 Stalled
               </Typography>
             )}
