@@ -29,3 +29,17 @@ describe('createAppTheme', () => {
     expect(light.palette.mode).toBe('light');
   });
 });
+
+describe('createAppTheme light contrast', () => {
+  it('keeps disabled contained button text readable on light fills', () => {
+    const light = createAppTheme('light');
+    expect(light.palette.primary.contrastText).toBe('#ffffff');
+    expect(light.palette.action.disabled).toBe('rgba(15,23,42,0.48)');
+    expect(light.palette.action.disabledBackground).toBe('rgba(15,23,42,0.1)');
+  });
+
+  it('uses dark on-accent contrast for dark pastel primaries', () => {
+    const dark = createAppTheme('dark');
+    expect(dark.palette.primary.contrastText).toBe('#0b0f17');
+  });
+});
