@@ -6,13 +6,13 @@ import {
   Button,
   IconButton,
   Stack,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import HistoryIcon from '@mui/icons-material/History';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import type { Message } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { MarkdownContent } from './MarkdownContent';
 
 interface ChatBubbleProps {
@@ -53,18 +53,18 @@ function ActionButtons({
       }}
     >
       {onCopy ? (
-        <Tooltip title={copied ? 'Copied' : 'Copy'}>
+        <ControlTooltip title={copied ? 'Copied' : 'Copy'}>
           <IconButton size="small" onClick={onCopy} aria-label="Copy message">
             <ContentCopyIcon sx={{ fontSize: 16 }} />
           </IconButton>
-        </Tooltip>
+        </ControlTooltip>
       ) : null}
       {onRewind ? (
-        <Tooltip title="Rewind to here">
+        <ControlTooltip title="Rewind to here">
           <IconButton size="small" onClick={onRewind} aria-label="Rewind to here">
             <HistoryIcon sx={{ fontSize: 16 }} />
           </IconButton>
-        </Tooltip>
+        </ControlTooltip>
       ) : null}
     </Stack>
   );
@@ -263,9 +263,11 @@ export function ChatBubble({
               sx={{ mt: 1.25 }}
               action={
                 onRetry ? (
-                  <Button color="inherit" size="small" onClick={onRetry}>
-                    Retry
-                  </Button>
+                  <ControlTooltip title="Retry sending this message">
+                    <Button color="inherit" size="small" onClick={onRetry}>
+                      Retry
+                    </Button>
+                  </ControlTooltip>
                 ) : undefined
               }
             >

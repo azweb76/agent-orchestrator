@@ -8,7 +8,6 @@ import {
   Select,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
@@ -30,6 +29,7 @@ import {
 } from '@agent-orchestrator/shared';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ContextUsageButton } from './ContextUsageDialog';
 import { MentionMenu } from './MentionMenu';
 import { SlashCommandMenu } from './SlashCommandMenu';
@@ -310,19 +310,20 @@ export function ChatComposer({
           },
         }}
       >
-        <TextField
-          fullWidth
-          multiline
-          minRows={1}
-          maxRows={8}
-          placeholder={archived ? 'This agent is archived' : 'Message Claude…'}
-          value={draft}
-          disabled={archived}
-          variant="standard"
-          slotProps={{
-            input: { disableUnderline: true },
-          }}
-          onChange={(e) => {
+        <ControlTooltip title="Message Claude — Enter to send, Shift+Enter for newline">
+          <TextField
+            fullWidth
+            multiline
+            minRows={1}
+            maxRows={8}
+            placeholder={archived ? 'This agent is archived' : 'Message Claude…'}
+            value={draft}
+            disabled={archived}
+            variant="standard"
+            slotProps={{
+              input: { disableUnderline: true },
+            }}
+            onChange={(e) => {
             setSlashDismissed(false);
             setMentionDismissed(false);
             onDraftChange(e.target.value);
@@ -397,14 +398,15 @@ export function ChatComposer({
               submit(false);
             }
           }}
-          sx={{
-            '& .MuiInputBase-input': {
-              py: 0.75,
-              px: 0.5,
-              lineHeight: 1.5,
-            },
-          }}
-        />
+            sx={{
+              '& .MuiInputBase-input': {
+                py: 0.75,
+                px: 0.5,
+                lineHeight: 1.5,
+              },
+            }}
+          />
+        </ControlTooltip>
 
         <Stack
           direction="row"
@@ -428,66 +430,70 @@ export function ChatComposer({
               e.target.value = '';
             }}
           />
-          <Tooltip title="Attach image">
-            <span>
-              <IconButton
-                size="small"
-                disabled={archived}
-                onClick={() => fileRef.current?.click()}
-                aria-label="Attach image"
-              >
-                <ImageOutlinedIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
+          <ControlTooltip title="Attach image" disabled={archived}>
+            <IconButton
+              size="small"
+              disabled={archived}
+              onClick={() => fileRef.current?.click()}
+              aria-label="Attach image"
+            >
+              <ImageOutlinedIcon fontSize="small" />
+            </IconButton>
+          </ControlTooltip>
 
-          <Select
-            variant="standard"
-            disableUnderline
-            value={model}
-            disabled={archived}
-            onChange={(e) => onModelChange(e.target.value)}
-            inputProps={{ 'aria-label': 'Model' }}
-            sx={{ ...selectSx, minWidth: { xs: 88, sm: 108 }, ml: 0.25 }}
-          >
-            {CLAUDE_MODELS.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label.replace('Claude ', '')}
-              </MenuItem>
-            ))}
-          </Select>
+          <ControlTooltip title="Choose Claude model" disabled={archived}>
+            <Select
+              variant="standard"
+              disableUnderline
+              value={model}
+              disabled={archived}
+              onChange={(e) => onModelChange(e.target.value)}
+              inputProps={{ 'aria-label': 'Model' }}
+              sx={{ ...selectSx, minWidth: { xs: 88, sm: 108 }, ml: 0.25 }}
+            >
+              {CLAUDE_MODELS.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.label.replace('Claude ', '')}
+                </MenuItem>
+              ))}
+            </Select>
+          </ControlTooltip>
 
-          <Select
-            variant="standard"
-            disableUnderline
-            value={effort}
-            disabled={archived}
-            onChange={(e) => onEffortChange(e.target.value as EffortLevel)}
-            inputProps={{ 'aria-label': 'Effort' }}
-            sx={{ ...selectSx, minWidth: { xs: 72, sm: 92 } }}
-          >
-            {CLAUDE_EFFORT_LEVELS.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </Select>
+          <ControlTooltip title="Choose reasoning effort" disabled={archived}>
+            <Select
+              variant="standard"
+              disableUnderline
+              value={effort}
+              disabled={archived}
+              onChange={(e) => onEffortChange(e.target.value as EffortLevel)}
+              inputProps={{ 'aria-label': 'Effort' }}
+              sx={{ ...selectSx, minWidth: { xs: 72, sm: 92 } }}
+            >
+              {CLAUDE_EFFORT_LEVELS.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </ControlTooltip>
 
-          <Select
-            variant="standard"
-            disableUnderline
-            value={permissionMode}
-            disabled={archived}
-            onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
-            inputProps={{ 'aria-label': 'Permission mode' }}
-            sx={{ ...selectSx, minWidth: { xs: 96, sm: 118 } }}
-          >
-            {PERMISSION_MODES.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </Select>
+          <ControlTooltip title="Choose permission mode" disabled={archived}>
+            <Select
+              variant="standard"
+              disableUnderline
+              value={permissionMode}
+              disabled={archived}
+              onChange={(e) => onPermissionModeChange(e.target.value as PermissionMode)}
+              inputProps={{ 'aria-label': 'Permission mode' }}
+              sx={{ ...selectSx, minWidth: { xs: 96, sm: 118 } }}
+            >
+              {PERMISSION_MODES.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </ControlTooltip>
 
           {sessionId ? (
             <ContextUsageButton agentId={agentId} sessionId={sessionId} isStreaming={isStreaming} />
@@ -496,44 +502,44 @@ export function ChatComposer({
           <Box sx={{ flex: 1 }} />
 
           {onGrade ? (
-            <Tooltip
+            <ControlTooltip
               title={
                 grade
                   ? `Graded ${grade.score}/5 · ${SESSION_GRADE_LABELS[grade.score]}`
                   : 'Analyze this session'
               }
+              disabled={!canGrade}
             >
-              <span>
-                <IconButton
-                  size="small"
-                  color={grade ? 'secondary' : 'inherit'}
-                  disabled={!canGrade}
-                  onClick={onGrade}
-                  aria-label="Analyze this session"
-                >
-                  {grade ? <InsightsIcon fontSize="small" /> : <InsightsOutlinedIcon fontSize="small" />}
-                </IconButton>
-              </span>
-            </Tooltip>
-          ) : null}
-
-          <Tooltip title="Clear chat history and reset session (/clear)">
-            <span>
               <IconButton
                 size="small"
-                color="inherit"
-                disabled={archived || isStreaming}
-                onClick={onClear}
-                aria-label="Clear chat"
+                color={grade ? 'secondary' : 'inherit'}
+                disabled={!canGrade}
+                onClick={onGrade}
+                aria-label="Analyze this session"
               >
-                <DeleteOutlinedIcon fontSize="small" />
+                {grade ? <InsightsIcon fontSize="small" /> : <InsightsOutlinedIcon fontSize="small" />}
               </IconButton>
-            </span>
-          </Tooltip>
+            </ControlTooltip>
+          ) : null}
+
+          <ControlTooltip
+            title="Clear chat history and reset session (/clear)"
+            disabled={archived || isStreaming}
+          >
+            <IconButton
+              size="small"
+              color="inherit"
+              disabled={archived || isStreaming}
+              onClick={onClear}
+              aria-label="Clear chat"
+            >
+              <DeleteOutlinedIcon fontSize="small" />
+            </IconButton>
+          </ControlTooltip>
 
           {isStreaming ? (
             <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', ml: 'auto' }}>
-              <Tooltip title="Stop this reply">
+              <ControlTooltip title="Stop this reply">
                 <Button
                   size="small"
                   variant="outlined"
@@ -544,56 +550,50 @@ export function ChatComposer({
                 >
                   Stop
                 </Button>
-              </Tooltip>
-              <Tooltip title="Interrupt and send now">
-                <span>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="secondary"
-                    startIcon={<BoltIcon />}
-                    disabled={!canSend}
-                    onClick={() => submit(true)}
-                    sx={{ minWidth: 0 }}
-                  >
-                    Force
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title="Send after this reply finishes">
-                <span>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    endIcon={<SendIcon />}
-                    disabled={!canSend}
-                    onClick={() => submit(false)}
-                    sx={{ minWidth: 0 }}
-                  >
-                    Queue
-                  </Button>
-                </span>
-              </Tooltip>
-            </Stack>
-          ) : (
-            <Tooltip title="Send (Enter)">
-              <span>
-                <IconButton
-                  color="primary"
+              </ControlTooltip>
+              <ControlTooltip title="Interrupt and send now" disabled={!canSend}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  startIcon={<BoltIcon />}
+                  disabled={!canSend}
+                  onClick={() => submit(true)}
+                  sx={{ minWidth: 0 }}
+                >
+                  Force
+                </Button>
+              </ControlTooltip>
+              <ControlTooltip title="Send after this reply finishes" disabled={!canSend}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  endIcon={<SendIcon />}
                   disabled={!canSend}
                   onClick={() => submit(false)}
-                  aria-label="Send"
-                  sx={{
-                    bgcolor: canSend ? 'primary.main' : 'action.disabledBackground',
-                    color: canSend ? '#0b0f17' : 'text.disabled',
-                    '&:hover': { bgcolor: 'primary.light' },
-                    '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
-                  }}
+                  sx={{ minWidth: 0 }}
                 >
-                  <SendIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
+                  Queue
+                </Button>
+              </ControlTooltip>
+            </Stack>
+          ) : (
+            <ControlTooltip title="Send (Enter)" disabled={!canSend}>
+              <IconButton
+                color="primary"
+                disabled={!canSend}
+                onClick={() => submit(false)}
+                aria-label="Send"
+                sx={{
+                  bgcolor: canSend ? 'primary.main' : 'action.disabledBackground',
+                  color: canSend ? '#0b0f17' : 'text.disabled',
+                  '&:hover': { bgcolor: 'primary.light' },
+                  '&.Mui-disabled': { bgcolor: 'action.disabledBackground' },
+                }}
+              >
+                <SendIcon fontSize="small" />
+              </IconButton>
+            </ControlTooltip>
           )}
         </Stack>
       </Box>

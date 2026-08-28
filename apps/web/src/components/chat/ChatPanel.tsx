@@ -7,7 +7,6 @@ import {
   CircularProgress,
   Fab,
   Stack,
-  Tooltip,
 } from '@mui/material';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -39,6 +38,7 @@ import { useSseConnectionState } from '../../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../../api/ssePolling';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
 import { ChatBubble } from './ChatBubble';
@@ -1405,7 +1405,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
         )}
 
         {showJumpToLatest ? (
-          <Tooltip title="Jump to latest">
+          <ControlTooltip title="Jump to latest">
             <Fab
               size="small"
               color="primary"
@@ -1422,7 +1422,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
             >
               <KeyboardArrowDownIcon />
             </Fab>
-          </Tooltip>
+          </ControlTooltip>
         ) : null}
       </Box>
 
@@ -1472,15 +1472,17 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
               sx={{ mb: 1 }}
               action={
                 lastFailed ? (
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() =>
-                      void runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true)
-                    }
-                  >
-                    Retry
-                  </Button>
+                  <ControlTooltip title="Retry sending the last message">
+                    <Button
+                      color="inherit"
+                      size="small"
+                      onClick={() =>
+                        void runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true)
+                      }
+                    >
+                      Retry
+                    </Button>
+                  </ControlTooltip>
                 ) : undefined
               }
               onClose={() => setChatError(null)}

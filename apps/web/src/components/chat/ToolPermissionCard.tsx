@@ -1,6 +1,7 @@
 import { Box, Button } from '@mui/material';
 import GppMaybeOutlinedIcon from '@mui/icons-material/GppMaybeOutlined';
 import type { PermissionRequest } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatPromptCard } from './ChatPromptCard';
 import { toolActionLabel } from './toolPresentation';
 
@@ -35,12 +36,16 @@ export function ToolPermissionCard({
       description={`${toolActionLabel(request.toolName)} needs your approval. Review the details, then allow or deny.`}
       actions={
         <>
-          <Button variant="contained" color="warning" disabled={submitting} onClick={onAllow}>
-            Allow
-          </Button>
-          <Button variant="outlined" disabled={submitting} onClick={onDeny}>
-            Deny
-          </Button>
+          <ControlTooltip title="Allow this tool to run" disabled={submitting}>
+            <Button variant="contained" color="warning" disabled={submitting} onClick={onAllow}>
+              Allow
+            </Button>
+          </ControlTooltip>
+          <ControlTooltip title="Deny this tool request" disabled={submitting}>
+            <Button variant="outlined" disabled={submitting} onClick={onDeny}>
+              Deny
+            </Button>
+          </ControlTooltip>
         </>
       }
     >

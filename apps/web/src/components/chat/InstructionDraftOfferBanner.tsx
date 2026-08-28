@@ -7,6 +7,7 @@ import {
   instructionGradeFindings,
   shouldOfferInstructionDraft,
 } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 
 interface InstructionDraftOfferBannerProps {
   session: Pick<ChatSession, 'id' | 'title' | 'template' | 'grade'>;
@@ -45,12 +46,16 @@ export function InstructionDraftOfferBanner({
       sx={{ mb: 1 }}
       action={
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <Button color="inherit" size="small" onClick={onReview}>
-            Review draft
-          </Button>
-          <Button color="inherit" size="small" onClick={() => setDismissedKey(offerKey)}>
-            Dismiss
-          </Button>
+          <ControlTooltip title="Review and apply an instruction draft">
+            <Button color="inherit" size="small" onClick={onReview}>
+              Review draft
+            </Button>
+          </ControlTooltip>
+          <ControlTooltip title="Dismiss this offer for now">
+            <Button color="inherit" size="small" onClick={() => setDismissedKey(offerKey)}>
+              Dismiss
+            </Button>
+          </ControlTooltip>
         </Stack>
       }
     >

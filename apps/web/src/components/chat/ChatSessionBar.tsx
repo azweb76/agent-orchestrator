@@ -10,7 +10,6 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -25,6 +24,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import type { ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
 import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 
 interface ChatSessionBarProps {
   sessions: ChatSession[];
@@ -126,9 +126,13 @@ export function ChatSessionBar({
           const running = session.status === 'running';
           const waiting = session.status === 'queued';
           const editing = editingId === session.id;
-          return (
+          const chipTooltip = waiting
+            ? 'Waiting — another session is using this worktree'
+            : canRename
+              ? 'Double-click to rename'
+              : undefined;
+          const chip = (
             <Chip
-              key={session.id}
               size="small"
               label={
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -196,13 +200,6 @@ export function ChatSessionBar({
               }
               variant={selected ? 'filled' : 'outlined'}
               color={selected ? 'primary' : 'default'}
-              title={
-                waiting
-                  ? 'Waiting — another session is using this worktree'
-                  : canRename
-                    ? 'Double-click to rename'
-                    : undefined
-              }
               onClick={() => {
                 if (editing) return;
                 onSelect(session.id);
@@ -233,34 +230,41 @@ export function ChatSessionBar({
               }}
             />
           );
+          return (
+            <Box key={session.id} component="span" sx={{ display: 'inline-flex' }}>
+              {chipTooltip ? (
+                <ControlTooltip title={chipTooltip}>
+                  <span style={{ display: 'inline-flex' }}>{chip}</span>
+                </ControlTooltip>
+              ) : (
+                chip
+              )}
+            </Box>
+          );
         })}
       </Box>
-      <Tooltip title="Rename session">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Rename session"
-            disabled={!canRename || !activeSession}
-            onClick={() => {
-              if (activeSession) beginRename(activeSession);
-            }}
-          >
-            <DriveFileRenameOutlineIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="New session">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="New session"
-            disabled={disabled || creating}
-            onClick={(event) => setAnchor(event.currentTarget)}
-          >
-            {creating ? <CircularProgress size={16} /> : <AddIcon fontSize="small" />}
-          </IconButton>
-        </span>
-      </Tooltip>
+      <ControlTooltip title="Rename session" disabled={!canRename || !activeSession}>
+        <IconButton
+          size="small"
+          aria-label="Rename session"
+          disabled={!canRename || !activeSession}
+          onClick={() => {
+            if (activeSession) beginRename(activeSession);
+          }}
+        >
+          <DriveFileRenameOutlineIcon fontSize="small" />
+        </IconButton>
+      </ControlTooltip>
+      <ControlTooltip title="New session" disabled={disabled || creating}>
+        <IconButton
+          size="small"
+          aria-label="New session"
+          disabled={disabled || creating}
+          onClick={(event) => setAnchor(event.currentTarget)}
+        >
+          {creating ? <CircularProgress size={16} /> : <AddIcon fontSize="small" />}
+        </IconButton>
+      </ControlTooltip>
       <Menu
         anchorEl={anchor}
         open={Boolean(anchor)}

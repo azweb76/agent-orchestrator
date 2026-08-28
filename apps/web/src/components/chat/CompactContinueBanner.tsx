@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { hasCrossedCompactThreshold, isContextUsageHot } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { ControlTooltip } from '../ui/ControlTooltip';
 
 interface CompactContinueBannerProps {
   agentId: string;
@@ -50,14 +51,19 @@ export function CompactContinueBanner({
         severity="warning"
         sx={{ mb: 1 }}
         action={
-          <Button
-            color="inherit"
-            size="small"
+          <ControlTooltip
+            title="Summarize this session and continue in a fresh one"
             disabled={compacting}
-            onClick={() => setConfirmOpen(true)}
           >
-            {compacting ? 'Compacting…' : 'Compact & continue'}
-          </Button>
+            <Button
+              color="inherit"
+              size="small"
+              disabled={compacting}
+              onClick={() => setConfirmOpen(true)}
+            >
+              {compacting ? 'Compacting…' : 'Compact & continue'}
+            </Button>
+          </ControlTooltip>
         }
       >
         {crossed

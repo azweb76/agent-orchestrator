@@ -23,6 +23,7 @@ import type {
   InstructionFileScope,
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ResponsiveDialog } from '../ui/ResponsiveDialog';
 
 interface ImproveInstructionsDialogProps {
@@ -140,6 +141,9 @@ export function ImproveInstructionsDialog({
     return 'Skill';
   };
 
+  const generateDisabled =
+    generateMutation.isPending || (mode === 'existing' && !selectedExisting);
+
   return (
     <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Create or improve instructions</DialogTitle>
@@ -150,88 +154,103 @@ export function ImproveInstructionsDialog({
             AGENTS.md. Review the markdown before writing it to disk.
           </Typography>
 
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={mode}
-            onChange={(_, value: TargetMode | null) => {
-              if (value) {
-                setMode(value);
-                setDraft(null);
-                setContent('');
-                setAppliedPath(null);
-              }
-            }}
-            sx={{ flexWrap: 'wrap' }}
-          >
-            <ToggleButton value="new_skill">New skill</ToggleButton>
-            <ToggleButton value="claude_md">CLAUDE.md</ToggleButton>
-            <ToggleButton value="agents_md">AGENTS.md</ToggleButton>
-            <ToggleButton value="existing" disabled={existingOptions.length === 0}>
-              Existing file
-            </ToggleButton>
-          </ToggleButtonGroup>
+          <ControlTooltip title="Choose what kind of instruction file to create or update">
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={mode}
+              onChange={(_, value: TargetMode | null) => {
+                if (value) {
+                  setMode(value);
+                  setDraft(null);
+                  setContent('');
+                  setAppliedPath(null);
+                }
+              }}
+              sx={{ flexWrap: 'wrap' }}
+            >
+              <ToggleButton value="new_skill">New skill</ToggleButton>
+              <ToggleButton value="claude_md">CLAUDE.md</ToggleButton>
+              <ToggleButton value="agents_md">AGENTS.md</ToggleButton>
+              <ToggleButton value="existing" disabled={existingOptions.length === 0}>
+                Existing file
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </ControlTooltip>
 
           {mode === 'new_skill' ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-              <TextField
-                label="Skill name"
-                placeholder="optional-slug"
-                value={skillName}
-                onChange={(event) => setSkillName(event.target.value)}
-                fullWidth
-              />
-              <FormControl sx={{ minWidth: { sm: 160 } }}>
-                <InputLabel id="skill-scope-label">Scope</InputLabel>
-                <Select
-                  labelId="skill-scope-label"
-                  label="Scope"
-                  value={scope}
-                  onChange={(event) => setScope(event.target.value as InstructionFileScope)}
-                >
-                  <MenuItem value="project">Project</MenuItem>
-                  <MenuItem value="personal">Personal</MenuItem>
-                </Select>
-              </FormControl>
+              <ControlTooltip title="Optional slug for the new skill directory">
+                <TextField
+                  label="Skill name"
+                  placeholder="optional-slug"
+                  value={skillName}
+                  onChange={(event) => setSkillName(event.target.value)}
+                  fullWidth
+                />
+              </ControlTooltip>
+              <ControlTooltip title="Project skills live in the repo; personal skills apply across repos">
+                <FormControl sx={{ minWidth: { sm: 160 } }}>
+                  <InputLabel id="skill-scope-label">Scope</InputLabel>
+                  <Select
+                    labelId="skill-scope-label"
+                    label="Scope"
+                    value={scope}
+                    onChange={(event) => setScope(event.target.value as InstructionFileScope)}
+                  >
+                    <MenuItem value="project">Project</MenuItem>
+                    <MenuItem value="personal">Personal</MenuItem>
+                  </Select>
+                </FormControl>
+              </ControlTooltip>
             </Stack>
           ) : null}
 
           {mode === 'existing' ? (
-            <FormControl fullWidth>
-              <InputLabel id="existing-file-label">File</InputLabel>
-              <Select
-                labelId="existing-file-label"
-                label="File"
-                value={existingKey}
-                onChange={(event) => setExistingKey(event.target.value)}
-              >
-                {existingOptions.map((item) => (
-                  <MenuItem key={`${item.scope}:${item.relativePath}`} value={`${item.scope}:${item.relativePath}`}>
-                    {item.relativePath} · {item.scope}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <ControlTooltip title="Pick an existing instruction file to update">
+              <FormControl fullWidth>
+                <InputLabel id="existing-file-label">File</InputLabel>
+                <Select
+                  labelId="existing-file-label"
+                  label="File"
+                  value={existingKey}
+                  onChange={(event) => setExistingKey(event.target.value)}
+                >
+                  {existingOptions.map((item) => (
+                    <MenuItem key={`${item.scope}:${item.relativePath}`} value={`${item.scope}:${item.relativePath}`}>
+                      {item.relativePath} · {item.scope}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </ControlTooltip>
           ) : null}
 
-          <TextField
-            label="Extra notes"
-            value={extraNotes}
-            onChange={(event) => setExtraNotes(event.target.value)}
-            fullWidth
-            multiline
-            minRows={2}
-            placeholder="Optional: what the next agent should always do or avoid"
-          />
+          <ControlTooltip title="Optional guidance for the draft generator">
+            <TextField
+              label="Extra notes"
+              value={extraNotes}
+              onChange={(event) => setExtraNotes(event.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Optional: what the next agent should always do or avoid"
+            />
+          </ControlTooltip>
 
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Button
-              variant={draft ? 'outlined' : 'contained'}
-              onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending || (mode === 'existing' && !selectedExisting)}
+            <ControlTooltip
+              title={draft ? 'Regenerate the draft with current settings' : 'Generate a draft from this session'}
+              disabled={generateDisabled}
             >
-              {generateMutation.isPending ? 'Generating…' : draft ? 'Regenerate' : 'Generate draft'}
-            </Button>
+              <Button
+                variant={draft ? 'outlined' : 'contained'}
+                onClick={() => generateMutation.mutate()}
+                disabled={generateDisabled}
+              >
+                {generateMutation.isPending ? 'Generating…' : draft ? 'Regenerate' : 'Generate draft'}
+              </Button>
+            </ControlTooltip>
             {filesQuery.isError ? (
               <Typography variant="caption" color="error">
                 {(filesQuery.error as Error).message}
@@ -249,23 +268,25 @@ export function ImproveInstructionsDialog({
                 {kindLabel(draft.kind)} · {draft.action} {draft.relativePath}
                 {draft.rationale ? ` — ${draft.rationale}` : ''}
               </Alert>
-              <TextField
-                label="Draft"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                fullWidth
-                multiline
-                minRows={12}
-                slotProps={{
-                  input: {
-                    sx: {
-                      fontFamily: '"IBM Plex Mono", monospace',
-                      fontSize: 13,
-                      lineHeight: 1.5,
+              <ControlTooltip title="Edit the generated markdown before writing to disk">
+                <TextField
+                  label="Draft"
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={12}
+                  slotProps={{
+                    input: {
+                      sx: {
+                        fontFamily: '"IBM Plex Mono", monospace',
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                      },
                     },
-                  },
-                }}
-              />
+                  }}
+                />
+              </ControlTooltip>
             </Stack>
           ) : null}
 
@@ -278,14 +299,21 @@ export function ImproveInstructionsDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-        <Button
-          variant="contained"
+        <ControlTooltip title="Close without writing changes">
+          <Button onClick={onClose}>Close</Button>
+        </ControlTooltip>
+        <ControlTooltip
+          title="Write the reviewed draft to disk"
           disabled={!draft || !content.trim() || applyMutation.isPending}
-          onClick={() => applyMutation.mutate()}
         >
-          {applyMutation.isPending ? 'Writing…' : 'Write file'}
-        </Button>
+          <Button
+            variant="contained"
+            disabled={!draft || !content.trim() || applyMutation.isPending}
+            onClick={() => applyMutation.mutate()}
+          >
+            {applyMutation.isPending ? 'Writing…' : 'Write file'}
+          </Button>
+        </ControlTooltip>
       </DialogActions>
     </ResponsiveDialog>
   );
