@@ -28,6 +28,8 @@ import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentDiffScope, ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { useSseConnectionState } from '../api/events';
+import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
@@ -68,6 +70,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [prDraft, setPrDraft] = useState(true);
+  const sseState = useSseConnectionState();
 
   // Consume one-shot navigation state so refresh does not re-send the idea.
   useEffect(() => {
@@ -81,10 +84,13 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     enabled: Boolean(agentId),
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
+      if (sseState === 'connected') return false;
       const data = query.state.data;
       if (!data) return false;
-      if (data.status === 'running') return 2000;
-      if (data.sessions?.some((item) => item.status === 'running')) return 2000;
+      if (data.status === 'running') return SSE_FALLBACK_ACTIVE_POLL_MS;
+      if (data.sessions?.some((item) => item.status === 'running')) {
+        return SSE_FALLBACK_ACTIVE_POLL_MS;
+      }
       return false;
     },
   });

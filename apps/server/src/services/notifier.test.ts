@@ -33,3 +33,18 @@ test('a throwing subscriber does not break other subscribers', () => {
   notifier.emit('run_finished', { agentId: 'ag-1', sessionId: 'sess-1' });
   assert.deepEqual(seen, ['run_finished']);
 });
+
+test('replaySince returns events after the last seen id', () => {
+  const notifier = new Notifier();
+  const first = notifier.emit('agent_changed', { agentId: 'ag-1' });
+  const second = notifier.emit('run_finished', { agentId: 'ag-1', sessionId: 's-1' });
+  notifier.emit('queue_changed', { agentId: 'ag-1', sessionId: 's-1' });
+
+  assert.deepEqual(
+    notifier.replaySince(first.id).map((event) => event.type),
+    ['run_finished', 'queue_changed'],
+  );
+  assert.deepEqual(notifier.replaySince(second.id).map((event) => event.type), ['queue_changed']);
+  assert.equal(notifier.replaySince('unknown-id').length, 3);
+  assert.deepEqual(notifier.replaySince(undefined), []);
+});

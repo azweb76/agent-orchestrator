@@ -22,6 +22,8 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useSseConnectionState } from '../api/events';
+import { useSsePollingFallback } from '../api/ssePolling';
 import { useNotificationSettings } from '../notifications';
 import { paletteShortcutLabel } from './commandPalette/paletteCommands';
 
@@ -43,14 +45,21 @@ export const NAV_ITEMS = [
 
 /** Claude / GitHub readiness chips (used in the app bar and the mobile drawer). */
 export function StatusChips({ sx }: { sx?: SxProps<Theme> }) {
+  const sseState = useSseConnectionState();
+  const sseFallback = useSsePollingFallback();
   const { data: status } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
-    refetchInterval: 30_000,
+    refetchInterval: sseFallback,
   });
 
   return (
     <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', ...sx }}>
+      {sseState === 'disconnected' ? (
+        <Tooltip title="Live updates paused — reconnecting…">
+          <Chip size="small" label="Offline" color="warning" variant="outlined" />
+        </Tooltip>
+      ) : null}
       <Tooltip title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}>
         <Chip
           size="small"

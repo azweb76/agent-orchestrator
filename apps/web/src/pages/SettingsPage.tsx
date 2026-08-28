@@ -17,6 +17,7 @@ import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNone
 import SettingsBrightnessOutlinedIcon from '@mui/icons-material/SettingsBrightnessOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useSsePollingFallback } from '../api/ssePolling';
 import { useThemePreferenceContext } from '../components/ThemePreferenceProvider';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useNotificationSettings } from '../notifications';
@@ -83,10 +84,11 @@ function permissionColor(
 export function SettingsPage() {
   const notifications = useNotificationSettings();
   const { preference, resolvedMode, setPreference } = useThemePreferenceContext();
+  const sseFallback = useSsePollingFallback();
   const { data: status } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
-    refetchInterval: 30_000,
+    refetchInterval: sseFallback,
   });
 
   const onThemeChange = (_event: React.MouseEvent<HTMLElement>, value: ThemePreference | null) => {

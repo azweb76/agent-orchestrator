@@ -43,6 +43,8 @@ import {
   streamSessionFollow,
   type ChatStreamHandlers,
 } from '../../api/client';
+import { useSseConnectionState } from '../../api/events';
+import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../../api/ssePolling';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { EmptyState } from '../ui/EmptyState';
@@ -201,6 +203,7 @@ function MessageTimeline({ message, onRetry }: { message: Message; onRetry?: () 
 
 export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: ChatPanelProps) {
   const agentId = agent.id;
+  const sseState = useSseConnectionState();
   const keyboardInset = useVisualViewportInset();
   const queryClient = useQueryClient();
   const sessions = agent.sessions ?? [];
@@ -288,13 +291,15 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     queryKey: ['queue', agentId, activeSessionId],
     queryFn: () => api.listQueuedMessages(agentId, activeSessionId),
     enabled: Boolean(activeSessionId),
-    refetchInterval: (query) =>
-      session?.status === 'running' ||
-      session?.status === 'queued' ||
-      isSending ||
-      (query.state.data?.length ?? 0) > 0
-        ? 2000
-        : false,
+    refetchInterval: (query) => {
+      if (sseState === 'connected') return false;
+      return session?.status === 'running' ||
+        session?.status === 'queued' ||
+        isSending ||
+        (query.state.data?.length ?? 0) > 0
+        ? SSE_FALLBACK_ACTIVE_POLL_MS
+        : false;
+    },
   });
   const queue: QueuedChatItem[] = (queueQuery.data ?? []).map((item) => ({
     id: item.id,
@@ -313,11 +318,14 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     enabled: Boolean(activeSessionId),
     refetchOnWindowFocus: true,
     refetchInterval: () => {
+      if (sseState === 'connected') return false;
       if (sendingSessionsRef.current.has(activeSessionId)) return false;
       if (followingRef.current.has(activeSessionId)) return false;
       const cached = queryClient.getQueryData<Message[]>(['messages', agentId, activeSessionId]);
       const streaming = cached?.some((item) => item.metadata?.streaming);
-      if (session?.status === 'running' || streaming || queue.length > 0) return 1000;
+      if (session?.status === 'running' || streaming || queue.length > 0) {
+        return SSE_FALLBACK_ACTIVE_POLL_MS;
+      }
       return false;
     },
   });
@@ -429,7 +437,10 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
     queryKey: ['permissions', agentId, activeSessionId],
     queryFn: () => api.listPendingPermissions(agentId, activeSessionId),
     enabled: Boolean(activeSessionId) && (sessionBusy || permissionRequests.length > 0),
-    refetchInterval: () => (sessionBusy || permissionRequests.length > 0 ? 2000 : false),
+    refetchInterval: () => {
+      if (sseState === 'connected') return false;
+      return sessionBusy || permissionRequests.length > 0 ? SSE_FALLBACK_ACTIVE_POLL_MS : false;
+    },
   });
 
   useEffect(() => {
