@@ -54,7 +54,8 @@ async function runTargets(ctx: AppContext): Promise<{ rateLimited: boolean }> {
           break;
         }
         console.warn(
-          `[automation] poll failed for ${target.owner}/${target.repo}#${target.number}:`,
+          '[automation] poll failed for target:',
+          `${target.owner}/${target.repo}#${target.number}`,
           error,
         );
       }
@@ -104,7 +105,7 @@ async function runPollCycle(ctx: AppContext, options: PollBusOptions): Promise<v
   }
 
   pollRunning = true;
-  let rateLimited = false;
+  let rateLimited: boolean;
   try {
     ({ rateLimited } = await runTargets(ctx));
   } finally {
@@ -120,7 +121,7 @@ export async function triggerGithubPollNow(
 ): Promise<{ triggered: boolean }> {
   if (pollRunning) return { triggered: false };
   pollRunning = true;
-  let rateLimited = false;
+  let rateLimited: boolean;
   try {
     ({ rateLimited } = await runTargets(ctx));
   } finally {
