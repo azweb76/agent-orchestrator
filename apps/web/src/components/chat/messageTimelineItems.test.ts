@@ -58,7 +58,7 @@ describe('applyEventToAssistant', () => {
       'claude-parent',
     );
 
-    const subagents = visibleSubagentItems(message.metadata?.timeline ?? [], false);
+    const subagents = visibleSubagentItems(message.metadata?.timeline ?? []);
     expect(subagents).toHaveLength(1);
     expect(subagents[0]?.status).toBe('running');
     expect(subagents[0]?.task?.subagentType).toBe('Explore');
@@ -82,7 +82,7 @@ describe('buildMessageTimelineView', () => {
     expect(view.subagents).toHaveLength(1);
   });
 
-  it('hides finished subagent cards once every row is done', () => {
+  it('keeps finished subagent cards once every row is done', () => {
     const doneTimeline: StreamPart[] = [
       {
         type: 'tool',
@@ -93,7 +93,8 @@ describe('buildMessageTimelineView', () => {
       },
     ];
     const view = buildMessageTimelineView(assistantMessage(doneTimeline, false), []);
-    expect(view.showSubagents).toBe(false);
+    expect(view.showSubagents).toBe(true);
+    expect(view.subagents).toHaveLength(1);
   });
 
   it('hides AskUserQuestion progress when the question card is pending', () => {

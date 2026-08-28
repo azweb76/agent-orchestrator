@@ -81,7 +81,7 @@ export function buildMessageTimelineView(
   const toolItems = parts.filter(
     (part): part is Extract<(typeof parts)[number], { type: 'tool' }> => part.type === 'tool',
   );
-  const subagents = visibleSubagentItems(timeline, streaming);
+  const subagents = visibleSubagentItems(timeline);
   const otherTools = toolItems.filter(
     (item) => !isSubagentItem(item) && !shouldHideInteractiveToolProgress(item, permissionRequests),
   );

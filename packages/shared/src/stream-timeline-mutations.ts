@@ -301,6 +301,7 @@ export function applyTaskEvent(parts: StreamPart[], event: Record<string, unknow
       taskType: taskType ?? (subagentType ? 'local_agent' : undefined),
       subagentType,
       description,
+      backgrounded: payload.is_backgrounded === true ? true : undefined,
       ...usage,
     };
     if (index >= 0) {

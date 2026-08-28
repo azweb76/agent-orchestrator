@@ -324,6 +324,110 @@ rl.on('close', () => process.exit(0));
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('runStreaming survives the launch ack of a backgrounded agent', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-bg-ack-'));
+  const binPath = path.join(tmp, 'fake-claude');
+  const runsDir = path.join(tmp, 'runs');
+
+  // Real CLI shape for a backgrounded Agent: `task_started` (is_backgrounded),
+  // then an immediate `tool_result` acking the launch, then the parent `result`
+  // while the subagent is still working. The ack must not finish the row —
+  // otherwise the run is reaped and the promised follow-up never arrives.
+  await writeFakeClaude(
+    binPath,
+    `#!/usr/bin/env node
+const readline = require('readline');
+const rl = readline.createInterface({ input: process.stdin });
+const w = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+rl.on('line', (line) => {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (msg.type !== 'user') return;
+  w({ type: 'system', session_id: 'sess-ack' });
+  w({
+    type: 'assistant',
+    session_id: 'sess-ack',
+    message: {
+      content: [{
+        type: 'tool_use',
+        id: 'toolu_1',
+        name: 'Agent',
+        input: { description: 'Explore light theme', subagent_type: 'Explore' },
+      }],
+    },
+  });
+  w({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: 't1',
+    tool_use_id: 'toolu_1',
+    task_type: 'local_agent',
+    subagent_type: 'Explore',
+    description: 'Explore light theme',
+    is_backgrounded: true,
+    session_id: 'sess-ack',
+  });
+  w({
+    type: 'user',
+    session_id: 'sess-ack',
+    message: {
+      content: [{
+        type: 'tool_result',
+        tool_use_id: 'toolu_1',
+        content: [{ type: 'text', text: 'Async agent launched successfully.' }],
+      }],
+    },
+  });
+  w({
+    type: 'stream_event',
+    event: { delta: { type: 'text_delta', text: "I've kicked off an exploration." } },
+    session_id: 'sess-ack',
+  });
+  w({ type: 'result', result: "I've kicked off an exploration.", session_id: 'sess-ack' });
+  setTimeout(() => {
+    w({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 't1',
+      tool_use_id: 'toolu_1',
+      status: 'completed',
+      summary: 'found the theme bug',
+      session_id: 'sess-ack',
+    });
+    w({
+      type: 'stream_event',
+      event: { delta: { type: 'text_delta', text: ' The theme bug is in theme.ts.' } },
+      session_id: 'sess-ack',
+    });
+    w({ type: 'result', result: 'The theme bug is in theme.ts.', session_id: 'sess-ack' });
+  }, 3000);
+});
+rl.on('close', () => process.exit(0));
+`,
+  );
+
+  const service = new ClaudeService(binPath, runsDir);
+  let pid: number | null = null;
+  const result = await service.runStreaming('sess-bg-ack', {
+    cwd: tmp,
+    prompt: 'fix the light theme',
+    onStarted: (handle) => {
+      pid = handle.pid;
+    },
+  });
+
+  assert.equal(
+    result.result,
+    "I've kicked off an exploration.\n\nThe theme bug is in theme.ts.",
+  );
+  assert.equal(result.stopped, false);
+  assert.ok(pid);
+  assert.equal(isPidAlive(pid), false);
+  assert.equal(service.getRunningProcess('sess-bg-ack'), undefined);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test('runStreaming closes a deferred run when no wake turn follows the settled task', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-bg-nowake-'));
   const binPath = path.join(tmp, 'fake-claude');

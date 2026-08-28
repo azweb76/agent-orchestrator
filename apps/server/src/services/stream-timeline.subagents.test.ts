@@ -220,6 +220,67 @@ describe('parallel tools and subagents', () => {
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
   });
 
+  it('keeps a backgrounded agent running when its launch ack arrives', () => {
+    // Backgrounded Agent/Task calls get an immediate `tool_result` ("Async agent
+    // launched successfully") long before the subagent finishes. Completing the
+    // row there would let the parent `result` end the run mid-flight.
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'Agent',
+            input: { description: 'Explore light theme', subagent_type: 'Explore' },
+          },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      task_type: 'local_agent',
+      subagent_type: 'Explore',
+      description: 'Explore light theme',
+      is_backgrounded: true,
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'Async agent launched successfully.' },
+        ],
+      },
+    }, 'sess-parent');
+
+    assert.equal(runningSubagentItems(parts).length, 1);
+
+    parts = applyStreamEvent(parts, {
+      type: 'result',
+      result: "I've kicked off an exploration.",
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    assert.equal(runningSubagentItems(parts).length, 1);
+
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      status: 'completed',
+      summary: 'found the theme bug',
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    assert.equal(runningSubagentItems(parts).length, 0);
+  });
+
   it('keeps running subagents on the final result; completes ordinary tools', () => {
     let parts: StreamPart[] = [
       { type: 'tool', id: 'task_1', name: 'Task', status: 'running' },
@@ -258,12 +319,12 @@ describe('visible subagent cards', () => {
     },
   ];
 
-  it('hides finished Bash/Task cards after the turn completes', () => {
-    assert.equal(visibleSubagentItems(bashTimeline, false).length, 0);
+  it('keeps finished Bash/Task cards after the turn completes', () => {
+    assert.equal(visibleSubagentItems(bashTimeline).length, 3);
   });
 
   it('shows finished subagents while the turn is still streaming', () => {
-    assert.equal(visibleSubagentItems(bashTimeline, true).length, 3);
+    assert.equal(visibleSubagentItems(bashTimeline).length, 3);
   });
 
   it('keeps a live Explore card after parent Ready, including done siblings', () => {
@@ -277,12 +338,12 @@ describe('visible subagent cards', () => {
         task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
       },
     ];
-    const visible = visibleSubagentItems(parts, false);
+    const visible = visibleSubagentItems(parts);
     assert.equal(visible.length, 4);
     assert.equal(visible.some((item) => item.status === 'running'), true);
   });
 
-  it('hides every subagent card once all rows finish', () => {
+  it('keeps every subagent card once all rows finish', () => {
     const parts: StreamPart[] = [
       {
         type: 'tool',
@@ -292,6 +353,6 @@ describe('visible subagent cards', () => {
         task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
       },
     ];
-    assert.equal(visibleSubagentItems(parts, false).length, 0);
+    assert.equal(visibleSubagentItems(parts).length, 1);
   });
 });

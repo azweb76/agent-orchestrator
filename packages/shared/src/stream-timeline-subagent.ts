@@ -116,18 +116,13 @@ export function runningSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
 }
 
 /**
- * Subagent cards to render under an assistant turn.
- * Show them while the turn is streaming, or while any sibling is still running
- * (parent Ready must not hide a live Explore/Task). Once the turn is finished
- * and every row is done, return nothing so leftover Bash/Task chips do not
- * stick under a completed reply.
+ * Subagent cards to render under an assistant turn. Background Task/Agent and
+ * `task_*` rows stay visible for the life of the turn — streaming or finished,
+ * running or done — so a backgrounded agent is never invisible in the chat.
  */
-export function visibleSubagentItems(parts: StreamPart[], streaming: boolean): ToolActivityItem[] {
-  const items = parts.filter(
+export function visibleSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
+  return parts.filter(
     (part): part is Extract<StreamPart, { type: 'tool' }> =>
       part.type === 'tool' && isSubagentItem(part),
   );
-  if (items.length === 0) return [];
-  if (streaming || items.some((item) => item.status === 'running')) return items;
-  return [];
 }

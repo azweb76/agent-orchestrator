@@ -6,6 +6,8 @@ export interface ToolTaskInfo {
   /** Stable task title from `task_started` / Task tool input. */
   description?: string;
   lastToolName?: string;
+  /** True for tasks the CLI runs in the background (`task_started.is_backgrounded`). */
+  backgrounded?: boolean;
   summary?: string;
   durationMs?: number;
   toolUses?: number;

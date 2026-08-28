@@ -39,6 +39,10 @@ function completeToolIds(parts: StreamPart[], ids: string[]): StreamPart[] {
   const wanted = new Set(ids);
   return parts.map((part) => {
     if (part.type !== 'tool' || part.status === 'done') return part;
+    // A backgrounded Task/Agent answers its tool_use immediately ("Async agent
+    // launched successfully") while the subagent keeps working. Only
+    // `task_updated` / `task_notification` may finish those rows.
+    if (part.task?.backgrounded) return part;
     if (wanted.has(part.id) || (part.task?.taskId && wanted.has(part.task.taskId))) {
       return { ...part, status: 'done' as const };
     }
