@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Paper,
   Stack,
@@ -211,20 +212,25 @@ function PullRequestDetailContent({
               merged={pr.merged}
               checksRollup={checksQuery.data?.rollup}
             />
+            {pr.archived ? <Chip size="small" label="Archived" color="warning" variant="outlined" /> : null}
           </Stack>
         }
         actions={
           <>
             {pr.state === 'open' && !pr.merged && (checksQuery.data?.failing ?? 0) > 0 ? (
               <ControlTooltip
-                title="Start a Claude agent to fix failing CI checks"
-                disabled={startTemplate.isPending}
+                title={
+                  pr.archived
+                    ? 'This repository is archived and read-only.'
+                    : 'Start a Claude agent to fix failing CI checks'
+                }
+                disabled={startTemplate.isPending || pr.archived}
               >
                 <Button
                   variant="outlined"
                   color="error"
                   startIcon={<BugReportOutlinedIcon />}
-                  disabled={startTemplate.isPending}
+                  disabled={startTemplate.isPending || pr.archived}
                   onClick={() => startTemplate.mutate('fix-ci')}
                 >
                   Fix CI
@@ -233,13 +239,17 @@ function PullRequestDetailContent({
             ) : null}
             {pr.state === 'open' && !pr.merged ? (
               <ControlTooltip
-                title="Start a Claude agent to address review feedback"
-                disabled={startTemplate.isPending}
+                title={
+                  pr.archived
+                    ? 'This repository is archived and read-only.'
+                    : 'Start a Claude agent to address review feedback'
+                }
+                disabled={startTemplate.isPending || pr.archived}
               >
                 <Button
                   variant="outlined"
                   startIcon={<ReplyOutlinedIcon />}
-                  disabled={startTemplate.isPending}
+                  disabled={startTemplate.isPending || pr.archived}
                   onClick={() => startTemplate.mutate('address-review')}
                 >
                   Address review
@@ -260,11 +270,13 @@ function PullRequestDetailContent({
             ) : (
               <ControlTooltip
                 title={
-                  pr.workspaceId
-                    ? 'Create a worktree and Claude agent for this pull request'
-                    : 'Clone the repository and start a Claude agent for this pull request'
+                  pr.archived
+                    ? 'This repository is archived and read-only.'
+                    : pr.workspaceId
+                      ? 'Create a worktree and Claude agent for this pull request'
+                      : 'Clone the repository and start a Claude agent for this pull request'
                 }
-                disabled={createAgent.isPending}
+                disabled={createAgent.isPending || pr.archived}
               >
                 <Button
                   variant="outlined"
@@ -275,7 +287,7 @@ function PullRequestDetailContent({
                       <SmartToyOutlinedIcon />
                     )
                   }
-                  disabled={createAgent.isPending}
+                  disabled={createAgent.isPending || pr.archived}
                   onClick={() => createAgent.mutate()}
                 >
                   {pr.workspaceId ? 'Create agent' : 'Start agent'}
@@ -338,7 +350,7 @@ function PullRequestDetailContent({
               loading={checksQuery.isLoading}
               error={checksQuery.error}
               onFixCi={
-                pr.state === 'open' && !pr.merged
+                pr.state === 'open' && !pr.merged && !pr.archived
                   ? () => startTemplate.mutate('fix-ci')
                   : undefined
               }
@@ -364,7 +376,7 @@ function PullRequestDetailContent({
               reviews={reviewsQuery.data}
               loading={reviewsQuery.isLoading}
               error={reviewsQuery.error}
-              canWrite={pr.state === 'open' && !pr.merged}
+              canWrite={pr.state === 'open' && !pr.merged && !pr.archived}
               submitting={submitReview.isPending}
               submitError={submitReview.error ? (submitReview.error as Error).message : null}
               onSubmitReview={(event, body) => submitReview.mutate({ event, body })}
@@ -375,7 +387,7 @@ function PullRequestDetailContent({
               comments={commentsQuery.data}
               loading={commentsQuery.isLoading}
               error={commentsQuery.error}
-              canWrite={pr.state === 'open' && !pr.merged}
+              canWrite={pr.state === 'open' && !pr.merged && !pr.archived}
               submitting={submitComment.isPending}
               submitError={submitComment.error ? (submitComment.error as Error).message : null}
               onSubmitComment={(body) => submitComment.mutate(body)}

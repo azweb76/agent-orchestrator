@@ -67,6 +67,7 @@ function prDetail(overrides: Partial<PullRequestDetail> = {}): PullRequestDetail
     mergeCommitSha: null,
     allowedMergeMethods: ['squash'],
     deleteBranchOnMerge: false,
+    archived: false,
     workspaceId: 'ws-1',
     agentId: 'ag-1',
     ...overrides,

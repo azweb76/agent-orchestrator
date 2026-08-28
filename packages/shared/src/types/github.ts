@@ -108,6 +108,7 @@ export interface PullRequestDetail {
   /** Merge methods enabled in the repository settings. */
   allowedMergeMethods: PullRequestMergeMethod[];
   deleteBranchOnMerge: boolean;
+  archived: boolean;
   /** Existing local workspace for this repo, if any. */
   workspaceId: string | null;
   /** Existing local agent created from this PR, if any. */
