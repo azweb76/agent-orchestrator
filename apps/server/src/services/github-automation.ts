@@ -40,6 +40,10 @@ function mergedStateKey(target: PollTarget): string {
   return `merged:${pollTargetKey(target)}`;
 }
 
+function archivedStateKey(target: PollTarget): string {
+  return `archived:${pollTargetKey(target)}`;
+}
+
 function emitPrChanged(ctx: AppContext, event: GithubPrChangeEvent): void {
   notify(ctx, 'github_pr_changed', {
     agentId: event.agentId ?? undefined,
@@ -77,20 +81,38 @@ export async function pollTargetState(
   const detail = await ctx.github.getPullRequestDetail(target.owner, target.repo, target.number);
 
   if (detail.merged) {
-    const mergedKey = mergedStateKey(target);
-    const wasMerged = ctx.repos.automationState.get(mergedKey) === '1';
-    if (!wasMerged) {
-      ctx.repos.automationState.set(mergedKey, '1');
-      const event: GithubPrChangeEvent = {
-        kind: 'merged',
-        owner: target.owner,
-        repo: target.repo,
-        number: target.number,
-        agentId: target.agentId,
-        merged: true,
-      };
-      events.push(event);
-      emitPrChanged(ctx, event);
+    if (target.agentId) {
+      const agent = ctx.repos.agents.getById(target.agentId);
+      const alreadyArchived =
+        !agent || agent.archivedAt || ctx.repos.automationState.get(archivedStateKey(target)) === '1';
+      if (!alreadyArchived) {
+        const event: GithubPrChangeEvent = {
+          kind: 'merged',
+          owner: target.owner,
+          repo: target.repo,
+          number: target.number,
+          agentId: target.agentId,
+          merged: true,
+        };
+        events.push(event);
+        emitPrChanged(ctx, event);
+      }
+    } else {
+      const mergedKey = mergedStateKey(target);
+      const wasMerged = ctx.repos.automationState.get(mergedKey) === '1';
+      if (!wasMerged) {
+        ctx.repos.automationState.set(mergedKey, '1');
+        const event: GithubPrChangeEvent = {
+          kind: 'merged',
+          owner: target.owner,
+          repo: target.repo,
+          number: target.number,
+          agentId: target.agentId,
+          merged: true,
+        };
+        events.push(event);
+        emitPrChanged(ctx, event);
+      }
     }
     return events;
   }
@@ -293,6 +315,7 @@ async function maybeAutoArchive(
   await archiveAgent(ctx, target.agentId, {
     deleteWorktree: settings.autoArchiveDeleteWorktree,
   });
+  ctx.repos.automationState.set(archivedStateKey(target), '1');
   emitAutomation(ctx, target.agentId, 'archive_completed', {
     owner: target.owner,
     repo: target.repo,

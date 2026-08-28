@@ -39,6 +39,55 @@ export function startGithubPollBus(ctx: AppContext, options: PollBusOptions = {}
   scheduleNext(ctx, 5_000, options);
 }
 
+async function runTargets(ctx: AppContext): Promise<{ rateLimited: boolean }> {
+  let rateLimited = false;
+  try {
+    const targets = await collectPollTargets(ctx);
+    for (const target of targets) {
+      try {
+        const events = await pollTargetState(ctx, target);
+        await handleAutomationEvents(ctx, target, events);
+      } catch (error) {
+        if (isRateLimitError(error)) {
+          rateLimited = true;
+          console.warn('[automation] GitHub rate limit hit; backing off');
+          break;
+        }
+        console.warn(
+          '[automation] poll failed for target:',
+          `${target.owner}/${target.repo}#${target.number}`,
+          error,
+        );
+      }
+    }
+    if (rateLimited) {
+      backoffMultiplier = Math.min(backoffMultiplier * 2, 8);
+    } else {
+      backoffMultiplier = 1;
+    }
+  } catch (error) {
+    console.warn('[automation] poll cycle failed:', error);
+    if (isRateLimitError(error)) {
+      rateLimited = true;
+      backoffMultiplier = Math.min(backoffMultiplier * 2, 8);
+    }
+  }
+  return { rateLimited };
+}
+
+function scheduleAfterCycle(
+  ctx: AppContext,
+  baseIntervalMs: number,
+  rateLimited: boolean,
+  options: PollBusOptions,
+): void {
+  const delay = Math.min(
+    AUTOMATION_POLL_MAX_SECONDS * 1_000,
+    Math.max(AUTOMATION_POLL_MIN_SECONDS * 1_000, baseIntervalMs * backoffMultiplier),
+  );
+  scheduleNext(ctx, rateLimited ? delay : baseIntervalMs * backoffMultiplier, options);
+}
+
 async function runPollCycle(ctx: AppContext, options: PollBusOptions): Promise<void> {
   if (pollRunning) {
     scheduleNext(ctx, 2_000, options);
@@ -56,45 +105,32 @@ async function runPollCycle(ctx: AppContext, options: PollBusOptions): Promise<v
   }
 
   pollRunning = true;
-  let rateLimited = false;
+  let rateLimited: boolean;
   try {
-    const targets = await collectPollTargets(ctx);
-    for (const target of targets) {
-      try {
-        const events = await pollTargetState(ctx, target);
-        await handleAutomationEvents(ctx, target, events);
-      } catch (error) {
-        if (isRateLimitError(error)) {
-          rateLimited = true;
-          console.warn('[automation] GitHub rate limit hit; backing off');
-          break;
-        }
-        console.warn(
-          `[automation] poll failed for ${target.owner}/${target.repo}#${target.number}:`,
-          error,
-        );
-      }
-    }
-    if (rateLimited) {
-      backoffMultiplier = Math.min(backoffMultiplier * 2, 8);
-    } else {
-      backoffMultiplier = 1;
-    }
-  } catch (error) {
-    console.warn('[automation] poll cycle failed:', error);
-    if (isRateLimitError(error)) {
-      rateLimited = true;
-      backoffMultiplier = Math.min(backoffMultiplier * 2, 8);
-    }
+    ({ rateLimited } = await runTargets(ctx));
   } finally {
     pollRunning = false;
   }
 
-  const delay = Math.min(
-    AUTOMATION_POLL_MAX_SECONDS * 1_000,
-    Math.max(AUTOMATION_POLL_MIN_SECONDS * 1_000, baseIntervalMs * backoffMultiplier),
-  );
-  scheduleNext(ctx, rateLimited ? delay : baseIntervalMs * backoffMultiplier, options);
+  scheduleAfterCycle(ctx, baseIntervalMs, rateLimited, options);
+}
+
+export async function triggerGithubPollNow(
+  ctx: AppContext,
+  options: PollBusOptions = {},
+): Promise<{ triggered: boolean }> {
+  if (pollRunning) return { triggered: false };
+  pollRunning = true;
+  let rateLimited: boolean;
+  try {
+    ({ rateLimited } = await runTargets(ctx));
+  } finally {
+    pollRunning = false;
+  }
+  const settings = getAutomationSettings(ctx);
+  const baseIntervalMs = options.tickMs?.(settings) ?? settings.pollIntervalSeconds * 1_000;
+  scheduleAfterCycle(ctx, baseIntervalMs, rateLimited, options);
+  return { triggered: true };
 }
 
 /** Test hook: run one poll cycle synchronously. */
