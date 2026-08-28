@@ -153,9 +153,7 @@ export function ChatBubble({
             }}
           >
             <Attachments message={message} />
-            <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, overflowWrap: 'anywhere' }}>
-              {message.content}
-            </Typography>
+            <MarkdownContent content={message.content || ''} />
             <Stack
               direction="row"
               spacing={0.5}
