@@ -1,28 +1,27 @@
 # Agent Orchestrator
 
-Local web app for managing git workspaces, worktrees, and Claude Code agents.
+Local web app for managing GitHub workspaces, git worktrees, and one Claude Code agent per worktree.
 
 ## Features
 
-- **Command center** — Jarvis-style home dashboard with live agent fleet, system readiness, workspaces, and PR inbox
-- **Workspaces** — clone GitHub repos as managed workspaces
-- **Pull requests** — browse your open PRs and review requests, then create a workspace + agent from any PR
-- **Worktrees** — create worktrees from branches or existing pull requests
-- **Agents** — one Claude Code agent per worktree
-- **Chat** — streaming conversations with follow-up support via Claude session resume
-  - Queue follow-ups or force-send (interrupts the current run)
-  - Stop generation, clear history (`/clear` or Clear button), model + permission mode controls
-  - Rewind to any user message (`/rewind` or the history button on a bubble) to truncate later turns, reset the Claude session, and restore the prompt for editing
-  - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that stashes the plan session and starts a new auto-mode session to implement
-  - Each agent can hold multiple chat sessions in parallel (for example a plan chat plus a Review or Create draft PR session)
-  - New chats are auto-named from the first prompt via the Anthropic API; rename from the session bar (pencil, double-click, or right-click)
-  - Manual / plan modes prompt on the agent page for tool permissions; `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved via `--allowedTools`
-  - Slash commands & skills autocomplete (project/personal/bundled)
-  - Image attachments (paste or upload), markdown replies, compact tool-use progress bar (updates with the active tool)
-  - Analyze a session with AI (turns, tokens, context, instruction files, skills) and generate a skill, CLAUDE.md, or AGENTS.md draft from the transcript
-- **Diff & PRs** — view agent changes and open pull requests on GitHub
-- **Events** — inspect Claude stream events and agent lifecycle activity
-- **Sidebar** — browse workspaces/agents and create new agents in place
+- **Command center** — home dashboard with the live agent fleet, a **Needs attention** panel when agents are waiting on prompts, spend/usage rollup (today's cost, all-time, top spend per agent), system readiness, recent workspaces, and a PR inbox. Everything updates live over SSE — no manual refresh.
+- **Workspaces** — clone GitHub repos as managed workspaces.
+- **Pull requests** — browse your open PRs and review requests; open a PR to see checks, files, commits, reviews, and conversation, and start an agent from it. **Fix CI** and **Address review** kick off ready-made sessions against the PR branch.
+- **Agents** — one Claude Code agent per git worktree. Create one **From idea** (the idea is sent as the first prompt, unmodified), **From branch**, or **From PR**. Each agent page has two tabs: **Chat** and **Changes**.
+- **Chat** — streaming conversations with follow-up support via Claude session resume:
+  - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that stashes the plan session and starts a new auto-mode session to implement.
+  - Multiple sessions per agent, created from templates (**New chat**, **Review**, **Create draft PR**, **Address review**, **Fix CI**). Git-mutating sessions take a per-worktree lock; a queued session shows **Waiting** until the worktree is free.
+  - Queue follow-ups or force-send (interrupts the current run); stop generation; clear history (`/clear`); rewind to any user message (`/rewind` or the history button on a bubble).
+  - Slash commands with real gathered context: `/diff` attaches the current diff, `/test` runs the project's tests and attaches the output, `/pr` pulls the PR and its checks, `/review` opens a Review session — plus autocomplete for project, personal, and bundled skills.
+  - `@` mentions in the composer attach context: `@diff` for the current worktree patch, `@path/to/file` for any file in the worktree.
+  - A context-usage chip shows tokens and percent toward the auto-compact threshold; when context runs hot, a **Compact & continue** banner starts a fresh session seeded with a summary while keeping the old transcript.
+  - Model, effort, and permission-mode controls; manual/plan modes prompt in the UI for tool permissions. `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved.
+  - Image attachments (paste or upload), markdown replies, compact tool-use progress bar.
+  - Analyze and grade a session with AI (turns, tokens, context, instruction files, skills). After a graded Build or Fix CI session, the app may offer an instruction-file draft (a skill, `CLAUDE.md`, or `AGENTS.md`) — review and apply it, or dismiss; nothing is written until you apply.
+  - New chats are auto-named from the first prompt via the Anthropic API; rename from the session bar.
+- **Changes** — file-tree diff of the agent's worktree, scoped to pending changes or all PR changes; **Commit & push** from the UI; create or view the pull request on GitHub.
+- **Notifications** — optional browser notifications (bell in the app bar) when a run finishes or an agent needs your input.
+- **Unlock screen** — when `AUTH_TOKEN` is set, the UI asks for the token once and stores it locally.
 
 ## Stack
 
@@ -74,11 +73,14 @@ pnpm dev
 | `HOST` | Bind address | `127.0.0.1` |
 | `AUTH_TOKEN` | Optional shared secret for API access | — |
 
+The server binds to loopback by default. Set `HOST=0.0.0.0` only if you intend to expose the UI on the network, and pair it with `AUTH_TOKEN` — the web UI will then show an unlock screen asking for the token.
+
 ## Usage
 
-1. **Add a workspace** — paste a GitHub repo URL; the app clones it locally.
-2. **Create a worktree** — pick a branch or open PR; a git worktree and agent are created automatically.
-3. **Open the agent** — chat with Claude Code in the worktree directory, view diffs, and create PRs when ready.
+1. **Add a workspace** — paste a GitHub repo URL; the app clones it locally. Or start from the **Pull requests** inbox: starting an agent from a PR clones the workspace for you.
+2. **Create an agent** — from an idea, a branch, or an open PR; a git worktree is created automatically. From an idea, the agent opens with your idea as the first prompt.
+3. **Plan, then build** — sessions start in plan mode; when Claude presents a plan, hit **Build** to hand off to an auto-mode session that implements it.
+4. **Review and ship** — watch the diff on the **Changes** tab, commit and push from the UI, and create the PR when ready.
 
 ## Architecture
 
@@ -91,6 +93,6 @@ packages/
 data/       Cloned repos, worktrees, database (gitignored)
 ```
 
-Each worktree maps 1:1 to a Claude Code agent. An agent can have multiple chat sessions (plan, build, review, draft PR) running in parallel. Chat uses `claude` with `stream-json` output; follow-ups resume via `--resume <session_id>`.
+Each worktree maps 1:1 to a Claude Code agent. An agent can have multiple chat sessions (plan, build, review, draft PR) running in parallel; sessions that mutate the worktree are serialized behind a per-worktree lock. Chat uses `claude` with `stream-json` output; follow-ups resume via `--resume <session_id>`.
 
 Claude runs are **detached** from the orchestrator process: shutting down or restarting the app does not stop in-flight agents. Run output is written to log files under `data/runs/`; stdin uses a named pipe plus a small holder process so AskUserQuestion / permission prompts stay pending across restart. On startup the server re-attaches, rebuilds chat history from the log (without duplicating it), restores any unanswered prompts, and finalizes when the run completes.
