@@ -19,7 +19,7 @@ export interface ToolActivityItem {
   id: string;
   name: string;
   detail?: string;
-  status: 'running' | 'done';
+  status: 'running' | 'done' | 'error';
   /** Present for Task/Agent tool uses and Claude `task_*` system events. */
   task?: ToolTaskInfo;
 }

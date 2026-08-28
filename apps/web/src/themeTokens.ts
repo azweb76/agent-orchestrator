@@ -29,6 +29,9 @@ export interface AoPalette {
     warningTint: string;
     warningTintStrong: string;
     warningBorder: string;
+    errorTint: string;
+    errorTintStrong: string;
+    errorBorder: string;
     infoTint: string;
     infoTintStrong: string;
     infoGlow: string;
@@ -56,6 +59,7 @@ const DARK = {
   primary: '#8ba4ff',
   secondary: '#5eead4',
   warning: '#ffb74d',
+  error: '#f87171',
   info: '#7c9cff',
   bg: '#0b0f17',
   paper: '#141c2e',
@@ -67,6 +71,7 @@ const LIGHT = {
   primary: '#3f5fd6',
   secondary: '#0d9488',
   warning: '#d97706',
+  error: '#dc2626',
   info: '#4f6fd6',
   bg: '#f6f8fc',
   paper: '#ffffff',
@@ -106,6 +111,9 @@ export function buildAoPalette(mode: PaletteMode): AoPalette {
       warningTint: alpha(c.warning, isDark ? 0.08 : 0.07),
       warningTintStrong: alpha(c.warning, isDark ? 0.12 : 0.1),
       warningBorder: alpha(c.warning, isDark ? 0.42 : 0.38),
+      errorTint: alpha(c.error, isDark ? 0.08 : 0.07),
+      errorTintStrong: alpha(c.error, isDark ? 0.12 : 0.1),
+      errorBorder: alpha(c.error, isDark ? 0.42 : 0.38),
       infoTint: alpha(c.info, isDark ? 0.12 : 0.08),
       infoTintStrong: alpha(c.info, 0.18),
       infoGlow: alpha(c.info, isDark ? 0.38 : 0.22),
