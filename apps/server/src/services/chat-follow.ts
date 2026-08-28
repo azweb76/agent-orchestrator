@@ -104,8 +104,9 @@ export async function followAgentSession(
   }
 
   let assistantMessage = [...messages].reverse().find((item) => item.role === 'assistant');
-  let assistantText = assistantMessage?.content ?? '';
-  let timeline: StreamPart[] = assistantMessage?.metadata.timeline ?? [];
+  // Rebuilt from the run log below; do not seed from persisted content.
+  let assistantText = '';
+  let timeline: StreamPart[] = [];
   let parentClaudeSessionId: string | null = session.claudeSessionId;
 
   const applyEvent = (event: Record<string, unknown>, live: boolean) => {
@@ -122,8 +123,6 @@ export async function followAgentSession(
   };
 
   const snapshot = await readClaudeLogSnapshot(handle.logPath);
-  assistantText = '';
-  timeline = [];
   for (const line of snapshot.lines) {
     try {
       applyEvent(JSON.parse(line) as Record<string, unknown>, false);
