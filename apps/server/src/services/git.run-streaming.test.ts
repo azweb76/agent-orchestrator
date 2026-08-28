@@ -250,9 +250,9 @@ test('runStreaming keeps a run alive across a background task and captures the w
   const runsDir = path.join(tmp, 'runs');
 
   // Parent turn ends (`result`) while a background Explore task is still
-  // running; the CLI wakes the model once the task settles. The notification
-  // arrives well after the old 1.5s post-result reap window, so the old
-  // behavior (close stdin + SIGTERM after the first result) fails this test.
+  // running; the CLI wakes the model once the task settles. The launch
+  // tool_result must not look like the Task finished — otherwise the run
+  // closes on the first result and never sees the wake turn.
   await writeFakeClaude(
     binPath,
     `#!/usr/bin/env node
@@ -265,9 +265,23 @@ rl.on('line', (line) => {
   if (msg.type !== 'user') return;
   w({ type: 'system', session_id: 'sess-bg' });
   w({
-    type: 'stream_event',
-    event: { delta: { type: 'text_delta', text: 'Launched an Explore agent.' } },
+    type: 'assistant',
     session_id: 'sess-bg',
+    message: {
+      content: [
+        { type: 'text', text: 'Launched an Explore agent.' },
+        {
+          type: 'tool_use',
+          id: 'toolu_1',
+          name: 'Task',
+          input: {
+            description: 'Explore repo',
+            subagent_type: 'Explore',
+            run_in_background: true,
+          },
+        },
+      ],
+    },
   });
   w({
     type: 'system',
@@ -276,6 +290,18 @@ rl.on('line', (line) => {
     task_type: 'local_agent',
     tool_use_id: 'toolu_1',
     description: 'Explore repo',
+    session_id: 'sess-bg',
+  });
+  w({
+    type: 'user',
+    session_id: 'sess-bg',
+    message: {
+      content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'Background agent launched' }],
+    },
+  });
+  w({
+    type: 'stream_event',
+    event: { delta: { type: 'text_delta', text: 'Launched an Explore agent.' } },
     session_id: 'sess-bg',
   });
   w({ type: 'result', result: 'Launched an Explore agent.', session_id: 'sess-bg' });
