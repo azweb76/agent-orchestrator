@@ -47,7 +47,7 @@ export function AgentPage() {
 
 function AgentPageContent({ agentId }: { agentId: string }) {
   const theme = useTheme();
-  const isWide = useMediaQuery(theme.breakpoints.up('md'));
+  const isWide = useMediaQuery(theme.breakpoints.up('lg'));
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -358,7 +358,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           scrollButtons="auto"
           allowScrollButtonsMobile
           sx={{
-            display: { xs: 'flex', md: 'none' },
+            display: { xs: 'flex', lg: 'none' },
             px: { xs: 0.5, sm: 1.5 },
             minHeight: 40,
             borderBottom: 1,
@@ -375,16 +375,16 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             flex: 1,
             minHeight: 0,
             display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
+            flexDirection: { xs: 'column', lg: 'row' },
             overflow: 'hidden',
           }}
         >
           <Box
             sx={{
-              flex: { md: '1 1 55%' },
+              flex: { lg: '1 1 55%' },
               minWidth: 0,
               minHeight: 0,
-              display: { xs: tab === 0 ? 'flex' : 'none', md: 'flex' },
+              display: { xs: tab === 0 ? 'flex' : 'none', lg: 'flex' },
               flexDirection: 'column',
             }}
           >
@@ -399,16 +399,16 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           <Divider
             orientation="vertical"
             flexItem
-            sx={{ display: { xs: 'none', md: 'block' }, borderColor: 'divider' }}
+            sx={{ display: { xs: 'none', lg: 'block' }, borderColor: 'divider' }}
           />
 
           <Box
             sx={{
-              flex: { md: '1 1 45%' },
+              flex: { lg: '1 1 45%' },
               minWidth: 0,
               minHeight: 0,
               overflow: 'hidden',
-              display: { xs: tab === 1 ? 'flex' : 'none', md: 'flex' },
+              display: { xs: tab === 1 ? 'flex' : 'none', lg: 'flex' },
               flexDirection: 'column',
             }}
           >
