@@ -411,13 +411,6 @@ export interface CreateWorktreeFromIdeaRequest {
   permissionMode?: PermissionMode;
 }
 
-export interface UpdateAgentRequest {
-  name?: string;
-  model?: string;
-  effort?: EffortLevel;
-  permissionMode?: PermissionMode;
-}
-
 export interface ArchiveAgentRequest {
   /** When true, also remove the agent's git worktree from disk and the database. */
   deleteWorktree?: boolean;

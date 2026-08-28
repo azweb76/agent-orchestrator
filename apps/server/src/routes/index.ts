@@ -31,7 +31,6 @@ import {
   getAgentAttachment,
   getAgentDetail,
   getAgentDiff,
-  getAgentEvents,
   getAgentMessages,
   getAgentSessionContext,
   getPullRequestChecks,
@@ -48,7 +47,6 @@ import {
   generateAgentInstructionDraft,
   applyAgentInstructionFile,
   listAgentInstructionFiles,
-  listAgentSessions,
   listAgentSlashCommands,
   listAgentMentionFiles,
   listGitHubBranches,
@@ -62,14 +60,11 @@ import {
   rewindAgentChat,
   searchGitHubRepositories,
   setPullRequestState,
-  stopAgent,
   stopAgentSession,
   streamAgentChat,
   followAgentSession,
   submitPullRequestReview,
-  suggestBranchNameForWorkspace,
   unarchiveAgent,
-  updateAgent,
   updateAgentSession,
   updatePullRequestBranch,
 } from '../services/app.js';
@@ -218,19 +213,6 @@ export function createRouter(ctx: AppContext): express.Router {
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromBranch(ctx, param(req.params.workspaceId), body));
-    }),
-  );
-
-  router.post(
-    '/workspaces/:workspaceId/worktrees/suggest-branch-name',
-    asyncHandler(async (req, res) => {
-      const body = z.object({ idea: z.string().min(1) }).parse(req.body);
-      const branchName = await suggestBranchNameForWorkspace(
-        ctx,
-        param(req.params.workspaceId),
-        body.idea,
-      );
-      res.json({ branchName });
     }),
   );
 
@@ -464,30 +446,6 @@ export function createRouter(ctx: AppContext): express.Router {
     }),
   );
 
-  router.patch(
-    '/agents/:agentId',
-    asyncHandler(async (req, res) => {
-      const body = z
-        .object({
-          name: z.string().optional(),
-          model: z.string().optional(),
-          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
-          permissionMode: z
-            .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
-            .optional(),
-        })
-        .parse(req.body);
-      res.json(await updateAgent(ctx, param(req.params.agentId), body));
-    }),
-  );
-
-  router.post(
-    '/agents/:agentId/stop',
-    asyncHandler(async (req, res) => {
-      res.json(await stopAgent(ctx, param(req.params.agentId)));
-    }),
-  );
-
   router.post(
     '/agents/:agentId/archive',
     asyncHandler(async (req, res) => {
@@ -520,13 +478,6 @@ export function createRouter(ctx: AppContext): express.Router {
     'address-review',
     'fix-ci',
   ]);
-
-  router.get(
-    '/agents/:agentId/sessions',
-    asyncHandler(async (req, res) => {
-      res.json(listAgentSessions(ctx, param(req.params.agentId)));
-    }),
-  );
 
   router.post(
     '/agents/:agentId/sessions',
@@ -1015,13 +966,6 @@ export function createRouter(ctx: AppContext): express.Router {
       res.setHeader('Content-Type', attachment.mimeType);
       res.setHeader('Content-Disposition', `inline; filename="${attachment.name}"`);
       fs.createReadStream(attachment.path).pipe(res);
-    }),
-  );
-
-  router.get(
-    '/agents/:agentId/events',
-    asyncHandler(async (req, res) => {
-      res.json(getAgentEvents(ctx, param(req.params.agentId)));
     }),
   );
 
