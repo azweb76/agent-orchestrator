@@ -10,7 +10,7 @@ import {
   buildJarvisBriefing,
   type JarvisAction,
   type JarvisAgent,
-} from './jarvisBriefing';
+} from './jarvisBriefingModel';
 
 type JarvisBriefingProps = {
   systemsOk: boolean;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildJarvisBriefing, type JarvisAgent } from './jarvisBriefing';
+import { buildJarvisBriefing, type JarvisAgent } from './jarvisBriefingModel';
 
 function agent(partial: Partial<JarvisAgent> & Pick<JarvisAgent, 'id' | 'name'>): JarvisAgent {
   return {

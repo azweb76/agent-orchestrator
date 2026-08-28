@@ -7,7 +7,7 @@
     "build": "pnpm -r build",
     "start": "pnpm --filter @agent-orchestrator/server start",
     "typecheck": "pnpm --filter @agent-orchestrator/shared build && pnpm -r typecheck",
-    "lint": "eslint ."
+    "lint": "eslint . && node scripts/check-case-collisions.mjs"
   },
   "packageManager": "pnpm@10.33.3",
   "engines": {

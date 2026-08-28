@@ -15,7 +15,7 @@ import { createChatStreamHandlers } from './createChatStreamHandlers';
 import { setMessagesCache } from './chatQueryCache';
 import type { PendingImage } from './composerTypes';
 import { pendingMentionToChatMention, createPendingMention, type PendingMention } from './mentionComposer';
-import { shouldPatchAssistantTimeline } from './messageTimeline';
+import { shouldPatchAssistantTimeline } from './messageTimelineItems';
 import { createStreamingPatchBuffer } from './streamingPatchBuffer';
 import type { QueuedChatItem } from './composerTypes';
 import { useChatFollowStream } from './useChatFollowStream';

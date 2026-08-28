@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Box } from '@mui/material';
 import type { Message, PermissionRequest } from '@agent-orchestrator/shared';
 import { ChatBubble } from './ChatBubble';
-import { buildMessageTimelineView } from './messageTimeline';
+import { buildMessageTimelineView } from './messageTimelineItems';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
 
 export const MessageTimeline = memo(function MessageTimeline({
