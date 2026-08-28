@@ -123,6 +123,20 @@ export function describeNotificationEvent(
         return null;
     }
   }
+  if (event.type === 'spend_cap_blocked') {
+    const message =
+      typeof event.data.message === 'string' && event.data.message
+        ? event.data.message
+        : 'A spend cap blocked a new run.';
+    return { title: `${name} blocked by spend cap`, body: message.slice(0, 140) };
+  }
+  if (event.type === 'watchdog_alert') {
+    const message =
+      typeof event.data.message === 'string' && event.data.message
+        ? event.data.message
+        : 'A run may be hung or waiting too long.';
+    return { title: `${name} may need attention`, body: message.slice(0, 140) };
+  }
   return null;
 }
 
@@ -180,6 +194,12 @@ export function navigationStateForEvent(event: AppEvent): AgentAttentionNavigati
   if (event.type === 'run_finished' || event.type === 'automation_triggered' || event.type === 'draft_pr_offer') {
     return {
       focusAttention: 'run-finished',
+      sessionId: event.sessionId ?? undefined,
+    };
+  }
+  if (event.type === 'watchdog_alert' || event.type === 'spend_cap_blocked') {
+    return {
+      focusAttention: 'needs-input',
       sessionId: event.sessionId ?? undefined,
     };
   }

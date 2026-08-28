@@ -80,6 +80,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
   ensureColumn(db, 'queued_messages', 'mentions', "TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn(db, 'queued_messages', 'blocked_reason', 'TEXT');
   migrateChatSessions(db);
   ensureColumn(db, 'chat_sessions', 'grade_score', 'INTEGER');
   ensureColumn(db, 'chat_sessions', 'grade_comment', 'TEXT');

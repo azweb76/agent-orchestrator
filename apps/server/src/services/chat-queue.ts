@@ -10,6 +10,7 @@ import type {
   QueuedChatMessage,
 } from '@agent-orchestrator/shared';
 import type { AppContext } from './app.js';
+import { evaluateSpendCap, type SpendCapEvaluation } from './spend-cap.js';
 import {
   findRunningMutatingPeer,
   findRunningMutatingSession,
@@ -194,6 +195,12 @@ export async function drainSessionQueue(
       if (!agent || agent.archivedAt) return;
       const session = ctx.repos.sessions.getById(sessionId);
       if (!session || session.status === 'running') return;
+      const spendBlock = evaluateSpendCap(ctx, agentId);
+      if (spendBlock) {
+        ctx.repos.queued.setBlockedReason(sessionId, spendBlock.reason);
+        return;
+      }
+      ctx.repos.queued.clearBlockedReason(sessionId);
       if (shouldQueueMutatingStart(ctx.repos.sessions.listByAgent(agentId), session)) {
         markSessionQueued(ctx, session);
         return;
@@ -257,6 +264,59 @@ export async function drainWaitingMutatingSessions(
   } finally {
     drainingMutatingAgents.delete(agentId);
   }
+}
+
+/**
+ * Queue a chat turn blocked by spend caps and notify the client / event bus.
+ */
+export async function enqueueSpendCapBlocked(
+  ctx: AppContext,
+  agentId: string,
+  session: ChatSession,
+  body: EnqueueChatMessageRequest,
+  block: SpendCapEvaluation,
+  res: Response | null,
+): Promise<QueuedChatMessage> {
+  const { saveChatImages } = await import('./app.js');
+  const attachments = await saveChatImages(ctx, agentId, body.images);
+  const mentions = body.mentions ?? [];
+  const hasMentions = mentions.length > 0;
+  const message = body.message.trim();
+  const queued: QueuedChatMessage = {
+    id: uuidv4(),
+    agentId,
+    sessionId: session.id,
+    content: message || (hasMentions ? '(mention attachment)' : '(image attachment)'),
+    attachments,
+    mentions,
+    blockedReason: block.reason,
+    createdAt: nowIso(),
+  };
+  ctx.repos.queued.create(queued);
+  ctx.repos.events.create(
+    makeEvent(agentId, 'message_queued', {
+      queuedId: queued.id,
+      sessionId: session.id,
+      blockedReason: block.reason,
+    }),
+  );
+  notify(ctx, 'queue_changed', { agentId, sessionId: session.id });
+  notify(ctx, 'spend_cap_blocked', {
+    agentId,
+    sessionId: session.id,
+    data: { reason: block.reason, message: block.message },
+  });
+
+  if (res) {
+    attachChatSse(res);
+    writeSse(res, 'blocked', {
+      reason: block.reason,
+      message: block.message,
+      queuedId: queued.id,
+    });
+    if (!res.writableEnded) res.end();
+  }
+  return queued;
 }
 
 /**

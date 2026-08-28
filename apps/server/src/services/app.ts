@@ -120,6 +120,10 @@ export {
 export {
   drainSessionQueue,
   enqueueChatMessage,
+  enqueueSpendCapBlocked,
   listQueuedMessages,
   removeQueuedMessage,
 } from './chat-queue.js';
+
+export { getAppSettings, updateAppSettings } from './app-settings.js';
+export type { UpdateAppSettingsRequest } from './app-settings.js';

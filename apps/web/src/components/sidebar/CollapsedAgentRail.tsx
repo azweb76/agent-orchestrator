@@ -19,6 +19,7 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
   workspaceActive: boolean;
 }) {
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
+  const stalled = Boolean(agent.stalled);
   return (
     <Box sx={{ position: 'relative' }}>
       <ControlTooltip
@@ -36,9 +37,9 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
                 Needs your input
               </Typography>
             )}
-            {agent.status === 'running' && (
-              <Typography variant="caption" color="info.light">
-                In progress…
+            {stalled && (
+              <Typography variant="caption" color="warning.light">
+                Stalled
               </Typography>
             )}
           </Box>
@@ -73,11 +74,11 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
             },
           })}
         >
-          <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
+          <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput && !stalled}>
             <AgentStatusIcon status={agent.status} selected={selected} />
           </Badge>
           <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
-            <AgentStatusDot status={agent.status} size={7} />
+            <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
           </Box>
           {agent.status === 'running' && (
             <LinearProgress

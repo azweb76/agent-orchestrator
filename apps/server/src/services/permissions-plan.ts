@@ -11,7 +11,7 @@ import { buildImplementPlanPrompt, buildAskUserQuestionUpdatedInput, extractPlan
 import fs from 'node:fs/promises';
 import { enrichPermissionInput } from './git.js';
 import { gatherPlanBuildHandoffContext } from './plan-handoff.js';
-import { type AppContext, makeEvent, nowIso } from './app-context.js';
+import { type AppContext, makeEvent } from './app-context.js';
 import { createSessionForAgent, requireAgent, requireSession } from './agent-core.js';
 import { getAgentDetail } from './agents-lifecycle.js';
 import { clearSessionQueue } from './chat-queue.js';
@@ -47,7 +47,7 @@ export function listPendingPermissions(
     toolName: item.toolName,
     input: item.input,
     toolUseId: item.toolUseId,
-    createdAt: nowIso(),
+    createdAt: new Date(item.requestedAt).toISOString(),
   }));
 }
 

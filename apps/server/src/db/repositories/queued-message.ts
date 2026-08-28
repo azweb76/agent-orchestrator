@@ -8,8 +8,8 @@ export class QueuedMessageRepository {
   create(message: QueuedChatMessage): QueuedChatMessage {
     this.db
       .prepare(
-        `INSERT INTO queued_messages (id, agent_id, session_id, content, attachments, mentions, created_at)
-         VALUES (@id, @agentId, @sessionId, @content, @attachments, @mentions, @createdAt)`,
+        `INSERT INTO queued_messages (id, agent_id, session_id, content, attachments, mentions, blocked_reason, created_at)
+         VALUES (@id, @agentId, @sessionId, @content, @attachments, @mentions, @blockedReason, @createdAt)`,
       )
       .run({
         id: message.id,
@@ -18,6 +18,7 @@ export class QueuedMessageRepository {
         content: message.content,
         attachments: JSON.stringify(message.attachments ?? []),
         mentions: JSON.stringify(message.mentions ?? []),
+        blockedReason: message.blockedReason ?? null,
         createdAt: message.createdAt,
       });
     return message;
@@ -52,6 +53,17 @@ export class QueuedMessageRepository {
       .prepare('DELETE FROM queued_messages WHERE session_id = ?')
       .run(sessionId);
     return result.changes;
+  }
+
+  /** Update blocked reason for all queued messages on a session. */
+  setBlockedReason(sessionId: string, blockedReason: string | null): void {
+    this.db
+      .prepare('UPDATE queued_messages SET blocked_reason = ? WHERE session_id = ?')
+      .run(blockedReason, sessionId);
+  }
+
+  clearBlockedReason(sessionId: string): void {
+    this.setBlockedReason(sessionId, null);
   }
 
   /** Session ids that still have queued messages (used to drain after restart). */

@@ -58,7 +58,13 @@ export function DashboardMetricsRow({
       <MetricTile
         label="Spend today"
         value={usage ? formatUsd(usage.todayCostUsd) : '—'}
-        hint={usage ? `${formatUsd(usage.totalCostUsd)} all-time` : 'Loading…'}
+        hint={
+          usage?.budget.dailyCapUsd != null
+            ? `${formatUsd(usage.budget.remainingDailyUsd ?? 0)} left today · ${formatUsd(usage.totalCostUsd)} all-time`
+            : usage
+              ? `${formatUsd(usage.totalCostUsd)} all-time`
+              : 'Loading…'
+        }
         accent="warning.main"
       />
     </Box>

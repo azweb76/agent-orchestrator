@@ -210,6 +210,8 @@ const AgentListItem = memo(function AgentListItem({
   selected: boolean;
 }) {
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
+  const stalled = Boolean(agent.stalled);
+  const statusHint = needsInput ? 'Needs your input' : stalled ? 'Stalled' : agent.status;
   return (
     <ControlTooltip
       sidebar
@@ -222,9 +224,9 @@ const AgentListItem = memo(function AgentListItem({
           <Typography
             variant="caption"
             sx={{ display: 'block', textTransform: 'capitalize' }}
-            color={needsInput ? 'warning.light' : undefined}
+            color={needsInput || stalled ? 'warning.light' : undefined}
           >
-            {needsInput ? 'Needs your input' : agent.status}
+            {statusHint}
           </Typography>
         </Box>
       }
@@ -236,7 +238,7 @@ const AgentListItem = memo(function AgentListItem({
         sx={{ pl: 4.5, pr: 1.5, py: 0.4, alignItems: 'center' }}
       >
         <ListItemIcon sx={{ minWidth: 26 }}>
-          <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
+          <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput && !stalled}>
             <AgentStatusIcon status={agent.status} selected={selected} />
           </Badge>
         </ListItemIcon>
@@ -256,7 +258,7 @@ const AgentListItem = memo(function AgentListItem({
               >
                 {agent.name}
               </Typography>
-              <AgentStatusDot status={agent.status} size={7} />
+              <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
             </Stack>
           }
         />

@@ -115,7 +115,9 @@ export type AppEventType =
   | 'instruction_draft_offer'
   | 'github_pr_changed'
   | 'automation_triggered'
-  | 'draft_pr_offer';
+  | 'draft_pr_offer'
+  | 'spend_cap_blocked'
+  | 'watchdog_alert';
 
 export interface AppEvent {
   id: string;

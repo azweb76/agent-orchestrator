@@ -117,6 +117,8 @@ export interface QueuedChatMessage {
   content: string;
   attachments: MessageAttachment[];
   mentions?: ChatMention[];
+  /** Set when spend caps block sending this queued message. */
+  blockedReason?: import('../app-settings.js').SpendCapBlockReason | null;
   createdAt: string;
 }
 
