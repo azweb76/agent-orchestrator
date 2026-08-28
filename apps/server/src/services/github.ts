@@ -123,6 +123,14 @@ export interface SearchedPullRequest {
 export class GitHubService {
   constructor(private options: GitHubApiOptions) {}
 
+  setToken(token: string): void {
+    this.options.token = token;
+    this.loginCache = undefined;
+    this.repoCache = null;
+    this.prByBranchCache.clear();
+    this.repoDetailCache.clear();
+  }
+
   private loginCache: string | null | undefined;
   private repoCache: { repos: GitHubRepository[]; fetchedAt: number } | null = null;
   private prByBranchCache = new Map<string, { pr: GitHubPullRequest | null; fetchedAt: number }>();

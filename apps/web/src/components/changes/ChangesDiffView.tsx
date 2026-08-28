@@ -4,6 +4,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import { Virtuoso } from 'react-virtuoso';
 import { DiffBlock } from '../pr/DiffBlock';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
@@ -14,6 +15,12 @@ import {
   type FileTreeNode,
 } from '../../utils/fileTree';
 import { parseUnifiedDiff, type DiffFile, type DiffFileStatus } from '../../utils/parseUnifiedDiff';
+import { truncatePatch, MAX_DIFF_PREVIEW_LINES } from './diffPreview';
+import {
+  FILE_TREE_VIRTUOSO_THRESHOLD,
+  flattenVisibleFileTree,
+  type FlatFileTreeRow,
+} from './flattenFileTree';
 
 const STATUS_COLOR: Record<DiffFileStatus, string> = {
   added: 'success.light',
@@ -29,120 +36,67 @@ const STATUS_LETTER: Record<DiffFileStatus, string> = {
   renamed: 'R',
 };
 
-function FileTreeBranch({
-  nodes,
-  depth,
-  selectedPath,
-  expanded,
-  onToggleDir,
-  onSelectFile,
-}: {
-  nodes: FileTreeNode[];
-  depth: number;
-  selectedPath: string | null;
-  expanded: Set<string>;
-  onToggleDir: (path: string) => void;
-  onSelectFile: (file: DiffFile) => void;
-}) {
-  return (
-    <>
-      {nodes.map((node) =>
-        node.type === 'dir' ? (
-          <DirRow
-            key={`dir:${node.path}`}
-            node={node}
-            depth={depth}
-            selectedPath={selectedPath}
-            expanded={expanded}
-            onToggleDir={onToggleDir}
-            onSelectFile={onSelectFile}
-          />
-        ) : (
-          <FileRow
-            key={`file:${node.path}`}
-            node={node}
-            depth={depth}
-            selected={selectedPath === node.path}
-            onSelect={onSelectFile}
-          />
-        ),
-      )}
-    </>
-  );
-}
-
 function DirRow({
   node,
   depth,
-  selectedPath,
   expanded,
   onToggleDir,
-  onSelectFile,
 }: {
   node: FileTreeDirNode;
   depth: number;
-  selectedPath: string | null;
   expanded: Set<string>;
   onToggleDir: (path: string) => void;
-  onSelectFile: (file: DiffFile) => void;
 }) {
   const isOpen = expanded.has(node.path);
   return (
-    <Box>
-      <Box
-        component="button"
-        type="button"
-        onClick={() => onToggleDir(node.path)}
-        aria-expanded={isOpen}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          width: '100%',
-          pl: 0.5 + depth * 1.25,
-          pr: 1,
-          py: 0.35,
-          border: 0,
-          bgcolor: 'transparent',
-          color: 'text.primary',
-          cursor: 'pointer',
-          textAlign: 'left',
-          borderRadius: 1,
-          '&:hover': { bgcolor: 'ao.surface.hover' },
-        }}
-      >
-        {isOpen ? <ExpandMoreIcon sx={{ fontSize: 16, opacity: 0.7 }} /> : <ChevronRightIcon sx={{ fontSize: 16, opacity: 0.7 }} />}
-        <FolderOutlinedIcon sx={{ fontSize: 15, color: 'secondary.light', opacity: 0.9 }} />
-        <Typography variant="body2" noWrap sx={{ fontSize: 13, fontWeight: 500 }}>
-          {node.name}
-        </Typography>
-      </Box>
-      <Collapse in={isOpen} timeout="auto" unmountOnExit>
-        <FileTreeBranch
-          nodes={node.children}
-          depth={depth + 1}
-          selectedPath={selectedPath}
-          expanded={expanded}
-          onToggleDir={onToggleDir}
-          onSelectFile={onSelectFile}
-        />
-      </Collapse>
+    <Box
+      component="button"
+      type="button"
+      onClick={() => onToggleDir(node.path)}
+      aria-expanded={isOpen}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.5,
+        width: '100%',
+        pl: 0.5 + depth * 1.25,
+        pr: 1,
+        py: 0.35,
+        border: 0,
+        bgcolor: 'transparent',
+        color: 'text.primary',
+        cursor: 'pointer',
+        textAlign: 'left',
+        borderRadius: 1,
+        '&:hover': { bgcolor: 'ao.surface.hover' },
+      }}
+    >
+      {isOpen ? (
+        <ExpandMoreIcon sx={{ fontSize: 16, opacity: 0.7 }} />
+      ) : (
+        <ChevronRightIcon sx={{ fontSize: 16, opacity: 0.7 }} />
+      )}
+      <FolderOutlinedIcon sx={{ fontSize: 15, color: 'secondary.light', opacity: 0.9 }} />
+      <Typography variant="body2" noWrap sx={{ fontSize: 13, fontWeight: 500 }}>
+        {node.name}
+      </Typography>
     </Box>
   );
 }
 
 function FileRow({
-  node,
+  file,
+  name,
   depth,
   selected,
   onSelect,
 }: {
-  node: Extract<FileTreeNode, { type: 'file' }>;
+  file: DiffFile;
+  name: string;
   depth: number;
   selected: boolean;
   onSelect: (file: DiffFile) => void;
 }) {
-  const { file } = node;
   return (
     <ControlTooltip title={file.path}>
       <Box
@@ -181,7 +135,7 @@ function FileRow({
             fontFamily: '"IBM Plex Mono", monospace',
           }}
         >
-          {node.name}
+          {name}
         </Typography>
         <Typography
           component="span"
@@ -192,6 +146,92 @@ function FileRow({
         </Typography>
       </Box>
     </ControlTooltip>
+  );
+}
+
+function FileTreeBranch({
+  nodes,
+  depth,
+  selectedPath,
+  expanded,
+  onToggleDir,
+  onSelectFile,
+}: {
+  nodes: FileTreeNode[];
+  depth: number;
+  selectedPath: string | null;
+  expanded: Set<string>;
+  onToggleDir: (path: string) => void;
+  onSelectFile: (file: DiffFile) => void;
+}) {
+  return (
+    <>
+      {nodes.map((node) =>
+        node.type === 'dir' ? (
+          <Box key={`dir:${node.path}`}>
+            <DirRow node={node} depth={depth} expanded={expanded} onToggleDir={onToggleDir} />
+            <Collapse in={expanded.has(node.path)} timeout="auto" unmountOnExit>
+              <FileTreeBranch
+                nodes={node.children}
+                depth={depth + 1}
+                selectedPath={selectedPath}
+                expanded={expanded}
+                onToggleDir={onToggleDir}
+                onSelectFile={onSelectFile}
+              />
+            </Collapse>
+          </Box>
+        ) : (
+          <FileRow
+            key={`file:${node.path}`}
+            file={node.file}
+            name={node.name}
+            depth={depth}
+            selected={selectedPath === node.path}
+            onSelect={onSelectFile}
+          />
+        ),
+      )}
+    </>
+  );
+}
+
+function VirtualFileTree({
+  rows,
+  selectedPath,
+  expanded,
+  onToggleDir,
+  onSelectFile,
+}: {
+  rows: FlatFileTreeRow[];
+  selectedPath: string | null;
+  expanded: Set<string>;
+  onToggleDir: (path: string) => void;
+  onSelectFile: (file: DiffFile) => void;
+}) {
+  return (
+    <Virtuoso
+      style={{ height: '100%' }}
+      data={rows}
+      itemContent={(_index, row) =>
+        row.type === 'dir' ? (
+          <DirRow
+            node={{ type: 'dir', name: row.name, path: row.path, children: [] }}
+            depth={row.depth}
+            expanded={expanded}
+            onToggleDir={onToggleDir}
+          />
+        ) : (
+          <FileRow
+            file={row.file}
+            name={row.name}
+            depth={row.depth}
+            selected={selectedPath === row.path}
+            onSelect={onSelectFile}
+          />
+        )
+      }
+    />
   );
 }
 
@@ -211,7 +251,14 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
     setSelectedPath(files[0]?.path ?? null);
   }, [files, tree]);
 
+  const flatRows = useMemo(() => flattenVisibleFileTree(tree, expanded), [tree, expanded]);
+  const useVirtualTree = flatRows.length > FILE_TREE_VIRTUOSO_THRESHOLD;
+
   const selected = files.find((file) => file.path === selectedPath) ?? null;
+  const preview = useMemo(
+    () => (selected ? truncatePatch(selected.patch) : null),
+    [selected],
+  );
   const totalAdditions = files.reduce((sum, file) => sum + file.additions, 0);
   const totalDeletions = files.reduce((sum, file) => sum + file.deletions, 0);
 
@@ -241,8 +288,7 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
         {' · '}
         <Box component="span" sx={{ color: 'success.light' }}>
           +{totalAdditions}
-        </Box>
-        {' '}
+        </Box>{' '}
         <Box component="span" sx={{ color: 'error.light' }}>
           −{totalDeletions}
         </Box>
@@ -265,27 +311,38 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
             width: { xs: '100%', md: 280 },
             flexShrink: 0,
             maxHeight: { xs: 220, md: 'none' },
+            height: { md: '100%' },
             borderRight: { md: 1 },
             borderBottom: { xs: 1, md: 0 },
             borderColor: 'divider',
-            overflow: 'auto',
+            overflow: useVirtualTree ? 'hidden' : 'auto',
             bgcolor: 'ao.surface.inset',
             py: 0.75,
             px: 0.5,
           }}
         >
-          <FileTreeBranch
-            nodes={tree}
-            depth={0}
-            selectedPath={selectedPath}
-            expanded={expanded}
-            onToggleDir={toggleDir}
-            onSelectFile={(file) => setSelectedPath(file.path)}
-          />
+          {useVirtualTree ? (
+            <VirtualFileTree
+              rows={flatRows}
+              selectedPath={selectedPath}
+              expanded={expanded}
+              onToggleDir={toggleDir}
+              onSelectFile={(file) => setSelectedPath(file.path)}
+            />
+          ) : (
+            <FileTreeBranch
+              nodes={tree}
+              depth={0}
+              selectedPath={selectedPath}
+              expanded={expanded}
+              onToggleDir={toggleDir}
+              onSelectFile={(file) => setSelectedPath(file.path)}
+            />
+          )}
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', p: 1.25 }}>
-          {selected ? (
+          {selected && preview ? (
             <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Typography
@@ -309,7 +366,12 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
                   −{selected.deletions}
                 </Typography>
               </Stack>
-              <DiffBlock patch={selected.patch} />
+              {preview.truncated ? (
+                <Typography variant="caption" color="text.secondary">
+                  Showing first {MAX_DIFF_PREVIEW_LINES} lines of {preview.totalLines}.
+                </Typography>
+              ) : null}
+              <DiffBlock patch={preview.patch} />
             </Stack>
           ) : (
             <EmptyState compact title="Select a file" description="Choose a file from the tree to view its diff." />

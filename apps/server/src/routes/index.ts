@@ -41,6 +41,9 @@ import {
   getPullRequestInbox,
   getPullRequestReviews,
   getSystemStatus,
+  getSetupInfo,
+  configureGithubToken,
+  configureClaudeBin,
   getUsageSummary,
   getWorkspace,
   gradeAgentSession,
@@ -108,6 +111,30 @@ export function createRouter(ctx: AppContext): express.Router {
     '/status',
     asyncHandler(async (_req, res) => {
       res.json(await getSystemStatus(ctx));
+    }),
+  );
+
+  router.get(
+    '/setup',
+    asyncHandler(async (_req, res) => {
+      res.json(await getSetupInfo(ctx));
+    }),
+  );
+
+  router.post(
+    '/setup/github-token',
+    asyncHandler(async (req, res) => {
+      const body = z.object({ token: z.string().min(1) }).parse(req.body ?? {});
+      res.json(await configureGithubToken(ctx, body.token));
+    }),
+  );
+
+  router.post(
+    '/setup/claude-bin',
+    asyncHandler(async (req, res) => {
+      const body = z.object({ claudeBin: z.string().min(1) }).parse(req.body ?? {});
+      await configureClaudeBin(ctx, body.claudeBin);
+      res.json({ ok: true });
     }),
   );
 

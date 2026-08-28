@@ -101,6 +101,14 @@ import { buildSessionGradeContext } from '../services/session-grade.js';
 import { buildTemplateKickoffPrompt } from '../services/session-kickoff.js';
 import { gatherPlanBuildHandoffContext } from '../services/plan-handoff.js';
 import { resolveClaudeSessionFilePath, readClaudeSessionFile, readClaudeSessionContext } from '../services/claude-session-file.js';
+import { invalidateStatusCache, cachedClaudeInstalled, cachedDataDirBytes } from './status-cache.js';
+import {
+  CLAUDE_DOCS_URL,
+  SETUP_DOCS_URL,
+  configureClaudeBin,
+  configureGithubToken,
+  detectClaudeCandidates,
+} from './setup.js';
 import {
   clearSessionQueue,
   cleanupQueuedAttachments,
@@ -363,16 +371,32 @@ export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCoun
   });
 }
 
-/** Pending interactive prompts across all of an agent's sessions. */
-function countPendingPermissions(ctx: AppContext, agentId: string): number {
-  return ctx.repos.sessions
-    .listByAgent(agentId)
-    .reduce((total, session) => total + ctx.claude.listPendingPermissions(session.id).length, 0);
+/** One session query for many agents; pending counts stay in-memory on ClaudeService. */
+function batchPendingPermissionCounts(
+  ctx: AppContext,
+  agentIds: string[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const agentId of agentIds) counts.set(agentId, 0);
+  if (agentIds.length === 0) return counts;
+
+  for (const session of ctx.repos.sessions.listByAgentIds(agentIds)) {
+    const pending = ctx.claude.listPendingPermissions(session.id).length;
+    if (pending > 0) {
+      counts.set(session.agentId, (counts.get(session.agentId) ?? 0) + pending);
+    }
+  }
+  return counts;
 }
 
 /** Workspace → agents tree for the persistent app sidebar. */
 export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace[]> {
   const workspaces = ctx.repos.workspaces.list();
+  const agentIds = workspaces.flatMap((workspace) =>
+    ctx.repos.agents.listByWorkspace(workspace.id).map((agent) => agent.id),
+  );
+  const pendingByAgent = batchPendingPermissionCounts(ctx, agentIds);
+
   return workspaces.map((workspace) => {
     const worktrees = ctx.repos.worktrees.listByWorkspace(workspace.id);
     const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]));
@@ -386,7 +410,7 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
           branch: worktree?.branch ?? '',
           prNumber: worktree?.prNumber ?? null,
         },
-        pendingPermissionCount: countPendingPermissions(ctx, agent.id),
+        pendingPermissionCount: pendingByAgent.get(agent.id) ?? 0,
       };
     });
     return { ...workspace, agents };
@@ -748,6 +772,7 @@ export async function archiveAgent(
 
   if (body.deleteWorktree) {
     await deleteWorktree(ctx, agent.worktreeId);
+    invalidateStatusCache();
     return { agent: null, deletedWorktree: true };
   }
   const updated: Agent = {
@@ -761,6 +786,7 @@ export async function archiveAgent(
   ctx.repos.agents.update(updated);
   ctx.repos.events.create(makeEvent(agentId, 'agent_archived', {}));
   notify(ctx, 'agent_changed', { agentId, data: { status: 'archived' } });
+  invalidateStatusCache();
   return { agent: updated, deletedWorktree: false };
 }
 
@@ -841,6 +867,7 @@ export async function pruneArchivedAgents(ctx: AppContext): Promise<PruneArchive
     prunedAgents += archivedOnTree.length;
   }
 
+  invalidateStatusCache();
   return { prunedAgents, deletedWorktrees };
 }
 
@@ -3028,7 +3055,7 @@ export async function createWorktreeFromIdea(
 }
 
 export async function getSystemStatus(ctx: AppContext) {
-  const claudeInstalled = await ctx.claude.checkInstalled();
+  const claudeInstalled = await cachedClaudeInstalled(ctx.claude);
   let githubLogin: string | null = null;
   if (process.env.GITHUB_TOKEN || process.env.GITHUB_LOGIN?.trim()) {
     try {
@@ -3039,14 +3066,30 @@ export async function getSystemStatus(ctx: AppContext) {
   }
   return {
     claudeInstalled,
-    claudeBin: process.env.CLAUDE_BIN ?? 'claude',
+    claudeBin: ctx.claude.getBin(),
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
     githubLogin,
     authRequired: Boolean(process.env.AUTH_TOKEN?.trim()),
     archivedAgentCount: ctx.repos.agents.countArchived(),
-    dataDirBytes: await directorySizeBytes(ctx.dataDir),
+    dataDirBytes: await cachedDataDirBytes(ctx.dataDir, directorySizeBytes),
+    setupDocsUrl: SETUP_DOCS_URL,
+    claudeDocsUrl: CLAUDE_DOCS_URL,
   };
 }
+
+export async function getSetupInfo(ctx: AppContext) {
+  const claudeCandidates = await detectClaudeCandidates(ctx.claude.getBin());
+  return {
+    claudeCandidates,
+    claudeBin: ctx.claude.getBin(),
+    claudeInstalled: await cachedClaudeInstalled(ctx.claude),
+    githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
+    setupDocsUrl: SETUP_DOCS_URL,
+    claudeDocsUrl: CLAUDE_DOCS_URL,
+  };
+}
+
+export { configureGithubToken, configureClaudeBin };
 
 async function directorySizeBytes(root: string): Promise<number> {
   let total = 0;

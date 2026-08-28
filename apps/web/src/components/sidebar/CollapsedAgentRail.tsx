@@ -4,6 +4,7 @@ import AddIcon from '@mui/icons-material/Add';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
+import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 
 export function CollapsedAgentRail({
   agents,
@@ -70,84 +71,96 @@ export function CollapsedAgentRail({
         const workspaceActive = selectedWorkspaceId === workspace.id && pathname.startsWith('/workspaces');
         const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
         return (
-          <ControlTooltip
-            key={agent.id}
-            sidebar
-            title={
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {agent.name}
-                </Typography>
-                <Typography variant="caption" sx={{ display: 'block' }}>
-                  {workspace.name} · {agent.status}
-                </Typography>
-                {needsInput && (
-                  <Typography variant="caption" color="warning.light">
-                    Needs your input
+          <Box key={agent.id} sx={{ position: 'relative' }}>
+            <ControlTooltip
+              sidebar
+              title={
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {agent.name}
                   </Typography>
-                )}
-                {agent.status === 'running' && (
-                  <Typography variant="caption" color="info.light">
-                    In progress…
+                  <Typography variant="caption" sx={{ display: 'block' }}>
+                    {workspace.name} · {agent.status}
                   </Typography>
-                )}
-              </Box>
-            }
-          >
-            <IconButton
-              component={RouterLink}
-              to={`/agents/${agent.id}`}
-              size="small"
-              aria-label={`${agent.name} (${agent.status})`}
-              sx={(theme) => ({
-                width: 40,
-                height: 40,
-                borderRadius: 2,
-                border: '1px solid',
-                borderColor:
-                  selected || workspaceActive
-                    ? 'secondary.main'
-                    : agent.status === 'running'
-                      ? 'info.main'
-                      : 'divider',
-                bgcolor:
-                  selected
-                    ? theme.palette.ao.surface.selected
-                    : agent.status === 'running'
-                      ? theme.palette.ao.accent.infoTint
-                      : theme.palette.ao.surface.hover,
-                position: 'relative',
-                boxShadow:
-                  agent.status === 'running'
-                    ? `0 0 10px ${theme.palette.ao.accent.infoGlow}`
-                    : 'none',
-                '&:hover': {
-                  bgcolor: theme.palette.ao.surface.hoverStrong,
-                },
-              })}
+                  {needsInput && (
+                    <Typography variant="caption" color="warning.light">
+                      Needs your input
+                    </Typography>
+                  )}
+                  {agent.status === 'running' && (
+                    <Typography variant="caption" color="info.light">
+                      In progress…
+                    </Typography>
+                  )}
+                </Box>
+              }
             >
-              <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
-                <AgentStatusIcon status={agent.status} selected={selected} />
-              </Badge>
-              <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
-                <AgentStatusDot status={agent.status} size={7} />
-              </Box>
-              {agent.status === 'running' && (
-                <LinearProgress
-                  color="info"
-                  sx={{
-                    position: 'absolute',
-                    left: 4,
-                    right: 4,
-                    bottom: 2,
-                    height: 2,
-                    borderRadius: 1,
-                    bgcolor: 'transparent',
-                  }}
-                />
-              )}
-            </IconButton>
-          </ControlTooltip>
+              <IconButton
+                component={RouterLink}
+                to={`/agents/${agent.id}`}
+                size="small"
+                aria-label={`${agent.name} (${agent.status})`}
+                sx={(theme) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor:
+                    selected || workspaceActive
+                      ? 'secondary.main'
+                      : agent.status === 'running'
+                        ? 'info.main'
+                        : 'divider',
+                  bgcolor:
+                    selected
+                      ? theme.palette.ao.surface.selected
+                      : agent.status === 'running'
+                        ? theme.palette.ao.accent.infoTint
+                        : theme.palette.ao.surface.hover,
+                  position: 'relative',
+                  boxShadow:
+                    agent.status === 'running'
+                      ? `0 0 10px ${theme.palette.ao.accent.infoGlow}`
+                      : 'none',
+                  '&:hover': {
+                    bgcolor: theme.palette.ao.surface.hoverStrong,
+                  },
+                })}
+              >
+                <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
+                  <AgentStatusIcon status={agent.status} selected={selected} />
+                </Badge>
+                <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
+                  <AgentStatusDot status={agent.status} size={7} />
+                </Box>
+                {agent.status === 'running' && (
+                  <LinearProgress
+                    color="info"
+                    sx={{
+                      position: 'absolute',
+                      left: 4,
+                      right: 4,
+                      bottom: 2,
+                      height: 2,
+                      borderRadius: 1,
+                      bgcolor: 'transparent',
+                    }}
+                  />
+                )}
+              </IconButton>
+            </ControlTooltip>
+            <Box
+              sx={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                bgcolor: 'ao.surface.sidebar',
+                borderRadius: 1,
+              }}
+            >
+              <SidebarAgentArchiveMenu agent={agent} />
+            </Box>
+          </Box>
         );
       })}
     </Stack>

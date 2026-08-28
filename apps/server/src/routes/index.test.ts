@@ -25,6 +25,7 @@ async function withServer(
       github: new GitHubService({}),
       claude: {
         checkInstalled: async () => false,
+        getBin: () => 'claude',
         releaseAll: () => undefined,
         stop: () => true,
       } as unknown as ClaudeService,
