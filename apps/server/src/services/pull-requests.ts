@@ -46,10 +46,39 @@ export async function getPullRequestInbox(ctx: AppContext): Promise<PullRequestI
     ctx.github.listReviewRequestedPullRequests(),
   ]);
 
+  const archivedRepos = await resolveArchivedRepos(ctx, [...authored, ...reviewRequested]);
+  const notArchived = (pr: SearchedPullRequest) => !archivedRepos.has(`${pr.owner}/${pr.repo}`);
+
   return {
-    authored: authored.map((pr) => enrichInboxPullRequest(ctx, pr, 'authored')),
-    reviewRequested: reviewRequested.map((pr) => enrichInboxPullRequest(ctx, pr, 'review_requested')),
+    authored: authored.filter(notArchived).map((pr) => enrichInboxPullRequest(ctx, pr, 'authored')),
+    reviewRequested: reviewRequested
+      .filter(notArchived)
+      .map((pr) => enrichInboxPullRequest(ctx, pr, 'review_requested')),
   };
+}
+
+/**
+ * Resolve which of the given PRs' repos are archived on GitHub, deduping so each
+ * unique repo is only looked up once. Fails open per repo: an inaccessible/flaky
+ * repo is treated as not archived so it can't take down the whole inbox response.
+ */
+async function resolveArchivedRepos(
+  ctx: AppContext,
+  prs: SearchedPullRequest[],
+): Promise<Set<string>> {
+  const uniqueRepos = [...new Set(prs.map((pr) => `${pr.owner}/${pr.repo}`))];
+  const archived = new Set<string>();
+  await Promise.all(
+    uniqueRepos.map(async (key) => {
+      const [owner, repo] = key.split('/');
+      try {
+        if (await ctx.github.isRepoArchived(owner, repo)) archived.add(key);
+      } catch {
+        // Fail open: an inaccessible/flaky repo should not drop other PRs from the inbox.
+      }
+    }),
+  );
+  return archived;
 }
 
 /**
