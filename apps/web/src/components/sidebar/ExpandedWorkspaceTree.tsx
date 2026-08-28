@@ -18,7 +18,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
-import { AgentProgressBar, AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
+import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
 
 export function ExpandedWorkspaceTree({
   tree,
@@ -94,22 +94,6 @@ export function ExpandedWorkspaceTree({
 
   return (
     <List dense disablePadding>
-      <ListItemButton
-        onClick={onCreateWorkspace}
-        sx={{ mx: 1, mb: 0.5, borderRadius: 1.5, py: 0.75 }}
-      >
-        <ListItemIcon sx={{ minWidth: 32 }}>
-          <AddIcon fontSize="small" color="secondary" />
-        </ListItemIcon>
-        <ListItemText
-          primary={
-            <Typography variant="body2" color="secondary.main" sx={{ fontWeight: 600 }}>
-              New workspace
-            </Typography>
-          }
-        />
-      </ListItemButton>
-
       {tree.map((workspace) => {
         const open = forceExpandAll || expandedWorkspaces.has(workspace.id);
         const workspaceSelected = selectedWorkspaceId === workspace.id && !selectedAgentId;
@@ -117,44 +101,33 @@ export function ExpandedWorkspaceTree({
 
         return (
           <Box key={workspace.id}>
-            <ListItemButton
-              selected={workspaceSelected}
-              onClick={() => onToggleWorkspace(workspace.id)}
-              sx={{ py: 1, px: 1.5, alignItems: 'flex-start' }}
+            <Tooltip
+              placement="right"
+              enterDelay={500}
+              title={`${workspace.githubOwner}/${workspace.githubRepo} · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}`}
             >
-              <ListItemIcon sx={{ minWidth: 32, mt: 0.25 }}>
-                <FolderOpenOutlinedIcon fontSize="small" color={workspaceSelected ? 'secondary' : 'inherit'} />
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 600,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {workspace.name}
-                    </Typography>
-                    {hasRunning && <AgentStatusDot status="running" size={6} />}
-                  </Stack>
-                }
-                secondary={
-                  <Typography variant="caption" color="text.secondary" noWrap component="span">
-                    {workspace.githubOwner}/{workspace.githubRepo}
-                    {workspace.agents.length > 0
-                      ? ` · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}`
-                      : ''}
-                  </Typography>
-                }
-                slotProps={{
-                  secondary: { component: 'div' },
-                }}
-              />
-              <Tooltip title="New agent">
+              <ListItemButton
+                selected={workspaceSelected}
+                onClick={() => onToggleWorkspace(workspace.id)}
+                sx={{ py: 0.5, px: 1, alignItems: 'center' }}
+              >
+                <ListItemIcon sx={{ minWidth: 28 }}>
+                  <FolderOpenOutlinedIcon
+                    fontSize="small"
+                    color={workspaceSelected ? 'secondary' : 'inherit'}
+                  />
+                </ListItemIcon>
+                <ListItemText
+                  sx={{ my: 0 }}
+                  primary={
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                      <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                        {workspace.name}
+                      </Typography>
+                      {hasRunning && <AgentStatusDot status="running" size={6} />}
+                    </Stack>
+                  }
+                />
                 <IconButton
                   size="small"
                   aria-label={`Create agent in ${workspace.name}`}
@@ -163,13 +136,13 @@ export function ExpandedWorkspaceTree({
                     onCreateAgent(workspace.id);
                     if (!open) onToggleWorkspace(workspace.id);
                   }}
-                  sx={{ mr: 0.25, mt: 0.25 }}
+                  sx={{ p: 0.25 }}
                 >
-                  <AddIcon fontSize="small" />
+                  <AddIcon sx={{ fontSize: 16 }} />
                 </IconButton>
-              </Tooltip>
-              {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-            </ListItemButton>
+                {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </ListItemButton>
+            </Tooltip>
 
             <Collapse in={open} timeout="auto" unmountOnExit>
               <List dense disablePadding>
@@ -177,9 +150,10 @@ export function ExpandedWorkspaceTree({
                   component={RouterLink}
                   to={`/workspaces/${workspace.id}`}
                   selected={workspaceSelected}
-                  sx={{ pl: 5, py: 0.5 }}
+                  sx={{ pl: 4.5, py: 0.25 }}
                 >
                   <ListItemText
+                    sx={{ my: 0 }}
                     primary={
                       <Typography variant="caption" color="text.secondary">
                         Workspace overview
@@ -188,28 +162,17 @@ export function ExpandedWorkspaceTree({
                   />
                 </ListItemButton>
 
-                <ListItemButton
-                  onClick={() => onCreateAgent(workspace.id)}
-                  sx={{ pl: 5, py: 0.5 }}
-                >
-                  <ListItemIcon sx={{ minWidth: 28 }}>
-                    <AddIcon fontSize="small" color="secondary" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
-                        New agent
-                      </Typography>
-                    }
-                  />
-                </ListItemButton>
-
                 {workspace.agents.length === 0 ? (
-                  <Box sx={{ pl: 5, pr: 2, py: 0.75 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      No agents yet
-                    </Typography>
-                  </Box>
+                  <ListItemButton onClick={() => onCreateAgent(workspace.id)} sx={{ pl: 4.5, py: 0.25 }}>
+                    <ListItemText
+                      sx={{ my: 0 }}
+                      primary={
+                        <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
+                          New agent
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
                 ) : (
                   workspace.agents.map((agent) => (
                     <AgentListItem
@@ -231,57 +194,55 @@ export function ExpandedWorkspaceTree({
 function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boolean }) {
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   return (
-    <ListItemButton
-      component={RouterLink}
-      to={`/agents/${agent.id}`}
-      selected={selected}
-      sx={{ pl: 5, py: 0.85, alignItems: 'flex-start' }}
+    <Tooltip
+      placement="right"
+      enterDelay={500}
+      title={
+        <Box>
+          <Typography variant="caption" sx={{ display: 'block' }}>
+            {agent.worktree.branch}
+            {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{ display: 'block', textTransform: 'capitalize' }}
+            color={needsInput ? 'warning.light' : undefined}
+          >
+            {needsInput ? 'Needs your input' : agent.status}
+          </Typography>
+        </Box>
+      }
     >
-      <ListItemIcon sx={{ minWidth: 28, mt: 0.35 }}>
-        <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
-          <AgentStatusIcon status={agent.status} selected={selected} />
-        </Badge>
-      </ListItemIcon>
-      <ListItemText
-        primary={
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: selected ? 700 : 500,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {agent.name}
-            </Typography>
-            <AgentStatusDot status={agent.status} />
-          </Stack>
-        }
-        secondary={
-          <Box component="span" sx={{ display: 'block' }}>
-            <Typography variant="caption" color="text.secondary" noWrap component="span" sx={{ display: 'block' }}>
-              {agent.worktree.branch}
-              {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
-              {' · '}
-              {needsInput ? (
-                <Box component="span" sx={{ color: 'warning.main', fontWeight: 700 }}>
-                  Needs input
-                </Box>
-              ) : (
-                <Box component="span" sx={{ textTransform: 'capitalize' }}>
-                  {agent.status}
-                </Box>
-              )}
-            </Typography>
-            <AgentProgressBar status={agent.status} />
-          </Box>
-        }
-        slotProps={{
-          secondary: { component: 'div' },
-        }}
-      />
-    </ListItemButton>
+      <ListItemButton
+        component={RouterLink}
+        to={`/agents/${agent.id}`}
+        selected={selected}
+        sx={{ pl: 4.5, pr: 1.5, py: 0.4, alignItems: 'center' }}
+      >
+        <ListItemIcon sx={{ minWidth: 26 }}>
+          <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
+            <AgentStatusIcon status={agent.status} selected={selected} />
+          </Badge>
+        </ListItemIcon>
+        <ListItemText
+          sx={{ my: 0 }}
+          primary={
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  fontWeight: selected ? 700 : 500,
+                  color: needsInput ? 'warning.main' : undefined,
+                }}
+              >
+                {agent.name}
+              </Typography>
+              <AgentStatusDot status={agent.status} size={7} />
+            </Stack>
+          }
+        />
+      </ListItemButton>
+    </Tooltip>
   );
 }

@@ -18,6 +18,7 @@ import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_DRAWER_WIDTH,
   SIDEBAR_EXPANDED_WIDTH,
   useSidebarCollapsed,
   WorkspaceSidebar,
@@ -74,7 +75,7 @@ export function AppLayout() {
               ModalProps={{ keepMounted: true }}
               sx={{
                 '& .MuiDrawer-paper': {
-                  width: `min(${SIDEBAR_EXPANDED_WIDTH}px, 100vw)`,
+                  width: `min(${SIDEBAR_DRAWER_WIDTH}px, 100vw)`,
                   boxSizing: 'border-box',
                   bgcolor: 'rgba(18,24,38,0.98)',
                   backgroundImage: 'none',

@@ -16,16 +16,22 @@ import {
   isSidebarFilterActive,
   type SidebarStatusFilter,
 } from './sidebar/sidebarFilter';
+import { resolveInitialSidebarCollapsed } from './sidebar/sidebarPrefs';
 
-export const SIDEBAR_EXPANDED_WIDTH = 280;
+export const SIDEBAR_EXPANDED_WIDTH = 232;
 export const SIDEBAR_COLLAPSED_WIDTH = 72;
+/** Mobile drawer overlays content, so it keeps a comfortable width. */
+export const SIDEBAR_DRAWER_WIDTH = 280;
 
 const COLLAPSE_STORAGE_KEY = 'ao.sidebar.collapsed';
 const EXPANDED_WS_STORAGE_KEY = 'ao.sidebar.expandedWorkspaces';
 
 function loadCollapsed(): boolean {
   try {
-    return localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1';
+    return resolveInitialSidebarCollapsed(
+      localStorage.getItem(COLLAPSE_STORAGE_KEY),
+      window.innerWidth,
+    );
   } catch {
     return false;
   }
@@ -179,23 +185,25 @@ export function WorkspaceSidebar({
           alignItems: 'center',
           justifyContent: collapsed ? 'center' : 'space-between',
           px: collapsed ? 1 : 1.5,
-          py: 1.25,
+          py: 0.5,
           borderBottom: '1px solid',
           borderColor: 'divider',
-          minHeight: 52,
+          minHeight: 40,
         }}
       >
         {!collapsed && (
-          <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Stack
+            direction="row"
+            spacing={0.75}
+            sx={{ minWidth: 0, flex: 1, alignItems: 'baseline' }}
+          >
             <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
               Workspaces
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {runningCount > 0
-                ? `${runningCount} agent${runningCount === 1 ? '' : 's'} running`
-                : `${allAgents.length} agent${allAgents.length === 1 ? '' : 's'}`}
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {runningCount > 0 ? `${runningCount} running` : ''}
             </Typography>
-          </Box>
+          </Stack>
         )}
         <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', flexShrink: 0 }}>
           <Tooltip title="New workspace" placement="right">

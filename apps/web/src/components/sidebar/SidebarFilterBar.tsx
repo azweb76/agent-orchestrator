@@ -24,8 +24,8 @@ export function SidebarFilterBar({
 
   return (
     <Stack
-      spacing={0.75}
-      sx={{ px: 1.5, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}
+      spacing={0.5}
+      sx={{ px: 1, py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}
     >
       <TextField
         value={query}
@@ -58,7 +58,7 @@ export function SidebarFilterBar({
                 </IconButton>
               </InputAdornment>
             ) : undefined,
-            sx: { fontSize: 14 },
+            sx: { fontSize: 13, '& .MuiInputBase-input': { py: 0.6 } },
           },
           htmlInput: { 'aria-label': 'Search workspaces and agents' },
         }}
