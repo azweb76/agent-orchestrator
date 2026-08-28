@@ -133,6 +133,7 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
     updateBranchMutation.isPending ||
     stateMutation.isPending ||
     readyMutation.isPending;
+  const locked = busy || pr.archived;
   const error =
     (mergeMutation.error as Error | null)?.message ??
     (updateBranchMutation.error as Error | null)?.message ??
@@ -155,11 +156,18 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
         sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' } }}
       >
         {pr.draft && pr.state === 'open' && !pr.merged ? (
-          <ControlTooltip title="Mark this draft pull request ready for review" disabled={busy}>
+          <ControlTooltip
+            title={
+              pr.archived
+                ? 'This repository is archived and read-only.'
+                : 'Mark this draft pull request ready for review'
+            }
+            disabled={locked}
+          >
             <Button
               variant="contained"
               startIcon={<RateReviewOutlinedIcon />}
-              disabled={busy}
+              disabled={locked}
               onClick={() => readyMutation.mutate()}
               fullWidth={false}
               sx={{ width: { xs: '100%', sm: 'auto' } }}
@@ -172,15 +180,17 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
         {readiness.allowedMethods.length > 0 ? (
           <ControlTooltip
             title={
-              !readiness.canMerge && !busy
-                ? readiness.reason
-                : `${METHOD_BUTTONS[activeMethod]} — open the menu to change method`
+              pr.archived
+                ? 'This repository is archived and read-only.'
+                : !readiness.canMerge && !busy
+                  ? readiness.reason
+                  : `${METHOD_BUTTONS[activeMethod]} — open the menu to change method`
             }
-            disabled={!readiness.canMerge || busy}
+            disabled={!readiness.canMerge || locked}
           >
             <ButtonGroup
               variant="contained"
-              disabled={!readiness.canMerge || busy}
+              disabled={!readiness.canMerge || locked}
               sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
               <Button
@@ -202,11 +212,18 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
         ) : null}
 
         {readiness.canUpdateBranch ? (
-          <ControlTooltip title="Merge the latest base branch into this pull request" disabled={busy}>
+          <ControlTooltip
+            title={
+              pr.archived
+                ? 'This repository is archived and read-only.'
+                : 'Merge the latest base branch into this pull request'
+            }
+            disabled={locked}
+          >
             <Button
               variant="outlined"
               startIcon={<SyncOutlinedIcon />}
-              disabled={busy}
+              disabled={locked}
               onClick={() => updateBranchMutation.mutate()}
               sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
@@ -216,11 +233,18 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
         ) : null}
 
         {pr.state === 'open' ? (
-          <ControlTooltip title="Close this pull request without merging" disabled={busy}>
+          <ControlTooltip
+            title={
+              pr.archived
+                ? 'This repository is archived and read-only.'
+                : 'Close this pull request without merging'
+            }
+            disabled={locked}
+          >
             <Button
               variant="outlined"
               color="error"
-              disabled={busy}
+              disabled={locked}
               onClick={() => setConfirming('closed')}
               sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
@@ -230,11 +254,18 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
         ) : null}
 
         {pr.state === 'closed' && !pr.merged ? (
-          <ControlTooltip title="Reopen this closed pull request on GitHub" disabled={busy}>
+          <ControlTooltip
+            title={
+              pr.archived
+                ? 'This repository is archived and read-only.'
+                : 'Reopen this closed pull request on GitHub'
+            }
+            disabled={locked}
+          >
             <Button
               variant="outlined"
               startIcon={<LockOpenOutlinedIcon />}
-              disabled={busy}
+              disabled={locked}
               onClick={() => setConfirming('open')}
               sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
