@@ -69,6 +69,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [commitPush, setCommitPush] = useState(true);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
+  const [prDraft, setPrDraft] = useState(true);
 
   // Consume one-shot navigation state so refresh does not re-send the idea.
   useEffect(() => {
@@ -146,14 +147,18 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   });
 
   const createPrMutation = useMutation({
-    mutationFn: () => api.createPr(agentId, { title: prTitle, body: prBody }),
-    onSuccess: () => {
+    mutationFn: () => api.createPr(agentId, { title: prTitle, body: prBody, draft: prDraft }),
+    onSuccess: (pr) => {
       setPrOpen(false);
       setPrTitle('');
       setPrBody('');
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      const workspace = agentQuery.data?.workspace;
+      if (workspace) {
+        navigate(pullRequestPath(workspace.githubOwner, workspace.githubRepo, pr.number));
+      }
     },
   });
 
@@ -491,13 +496,14 @@ function AgentPageContent({ agentId }: { agentId: string }) {
               multiline
               minRows={4}
             />
+            <FormControlLabel
+              control={
+                <Checkbox checked={prDraft} onChange={(e) => setPrDraft(e.target.checked)} />
+              }
+              label="Open as draft"
+            />
             {createPrMutation.error && (
               <Alert severity="error">{(createPrMutation.error as Error).message}</Alert>
-            )}
-            {createPrMutation.data && (
-              <Alert severity="success">
-                PR #{createPrMutation.data.number} created: {createPrMutation.data.htmlUrl}
-              </Alert>
             )}
           </Stack>
         </DialogContent>

@@ -682,6 +682,46 @@ export class GitHubService {
   }
 
   /**
+   * Flip a draft PR to "ready for review". The REST PATCH endpoint silently
+   * ignores `draft`, so this requires the GraphQL mutation keyed by node id.
+   */
+  async markPullRequestReadyForReview(
+    owner: string,
+    repo: string,
+    prNumber: number,
+  ): Promise<PullRequestDetail> {
+    const url = this.prUrl(owner, repo, prNumber);
+    const [settings, pr] = await Promise.all([
+      this.getRepoSettings(owner, repo),
+      this.request<RawPullRequestDetail>(url),
+    ]);
+
+    // Already ready: the mutation would fail, so just report the current state.
+    if (!pr.draft) return mapPullRequestDetail(owner, repo, pr, settings);
+    if (!pr.node_id) throw new Error(`Pull request #${prNumber} is missing a node id`);
+
+    // GraphQL reports failures as 200s with an `errors` array.
+    const result = await this.request<{ errors?: Array<{ message?: string }> }>(
+      'https://api.github.com/graphql',
+      {
+        method: 'POST',
+        body: {
+          query:
+            'mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { number } } }',
+          variables: { id: pr.node_id },
+        },
+      },
+    );
+    if (result?.errors?.length) {
+      throw new Error(result.errors[0]?.message ?? 'GitHub could not mark the pull request ready');
+    }
+
+    this.invalidatePullRequestCaches(owner, repo);
+    const updated = await this.request<RawPullRequestDetail>(url);
+    return mapPullRequestDetail(owner, repo, updated, settings);
+  }
+
+  /**
    * Merge (or rebase, per repo settings) the base branch into the head branch.
    * The 202 only means "queued" — the head sha changes a moment later. A 422
    * means the branch is not behind, or the expected sha no longer matches.
@@ -720,7 +760,7 @@ export class GitHubService {
   async createPullRequest(
     owner: string,
     repo: string,
-    options: { title: string; body?: string; head: string; base: string },
+    options: { title: string; body?: string; head: string; base: string; draft?: boolean },
   ): Promise<{ number: number; htmlUrl: string }> {
     this.assertPathSegment(owner, 'owner');
     this.assertPathSegment(repo, 'repo');
@@ -734,6 +774,7 @@ export class GitHubService {
           body: options.body ?? '',
           head: options.head,
           base: options.base,
+          ...(options.draft !== undefined ? { draft: options.draft } : {}),
         },
       },
     );
@@ -767,6 +808,7 @@ interface RawUser {
 }
 
 interface RawPullRequestDetail {
+  node_id?: string;
   number: number;
   title: string;
   body: string | null;

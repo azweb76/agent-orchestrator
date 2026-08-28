@@ -17,6 +17,7 @@ import {
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import SyncOutlinedIcon from '@mui/icons-material/SyncOutlined';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
@@ -122,11 +123,21 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
     },
   });
 
-  const busy = mergeMutation.isPending || updateBranchMutation.isPending || stateMutation.isPending;
+  const readyMutation = useMutation({
+    mutationFn: () => api.markPullRequestReady(pr.owner, pr.repo, pr.number),
+    onSuccess: invalidate,
+  });
+
+  const busy =
+    mergeMutation.isPending ||
+    updateBranchMutation.isPending ||
+    stateMutation.isPending ||
+    readyMutation.isPending;
   const error =
     (mergeMutation.error as Error | null)?.message ??
     (updateBranchMutation.error as Error | null)?.message ??
-    (stateMutation.error as Error | null)?.message;
+    (stateMutation.error as Error | null)?.message ??
+    (readyMutation.error as Error | null)?.message;
 
   const openMergeDialog = () => {
     setCommitTitle(`${pr.title} (#${pr.number})`);
@@ -138,6 +149,17 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
   return (
     <Stack spacing={1}>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        {pr.draft && pr.state === 'open' && !pr.merged ? (
+          <Button
+            variant="contained"
+            startIcon={<RateReviewOutlinedIcon />}
+            disabled={busy}
+            onClick={() => readyMutation.mutate()}
+          >
+            {readyMutation.isPending ? 'Marking ready…' : 'Ready for review'}
+          </Button>
+        ) : null}
+
         {readiness.allowedMethods.length > 0 ? (
           <ButtonGroup variant="contained" disabled={!readiness.canMerge || busy}>
             <Button startIcon={<MergeTypeIcon />} onClick={openMergeDialog}>
