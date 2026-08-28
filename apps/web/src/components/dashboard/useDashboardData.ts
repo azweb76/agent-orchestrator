@@ -101,6 +101,7 @@ export function useDashboardData(query: string) {
   return {
     status,
     pruneMutation,
+    sidebar,
     sidebarLoading,
     sidebarError,
     workspacesLoading,

@@ -100,11 +100,21 @@ CREATE TABLE IF NOT EXISTS automation_state (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS session_search_index (
+  session_id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  first_prompt TEXT NOT NULL DEFAULT '',
+  last_summary TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agents_worktree ON agents(worktree_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
+CREATE INDEX IF NOT EXISTS idx_session_search_agent ON session_search_index(agent_id);
 `;
 
 /** Indexes on columns that older databases may not have until `migrateSchema` runs. */

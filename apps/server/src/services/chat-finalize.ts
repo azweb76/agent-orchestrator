@@ -9,6 +9,7 @@ import {
 import { offerInstructionDraftAfterRun } from './instruction-offer.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { clearSessionRunFields, syncAgentFromSessions } from './agent-core.js';
+import { refreshSessionSearchIndex } from './session-search-index.js';
 
 function extractCostUsd(
   events: Array<Record<string, unknown>>,
@@ -100,10 +101,11 @@ export function finalizeSessionRun(
   const storedContent = content || placeholderAssistantContent(metadata.stopped);
 
   const assistantMessageId = options.assistantMessageId;
+  let saved: Message;
   if (assistantMessageId) {
     const existing = ctx.repos.messages.getById(session.agentId, assistantMessageId);
     if (!existing) {
-      return {
+      saved = {
         id: assistantMessageId,
         agentId: session.agentId,
         sessionId: session.id,
@@ -113,8 +115,10 @@ export function finalizeSessionRun(
         metadata,
         createdAt: nowIso(),
       };
+      refreshSessionSearchIndex(ctx, session.id);
+      return saved;
     }
-    return ctx.repos.messages.update({
+    saved = ctx.repos.messages.update({
       ...existing,
       content: content || placeholderAssistantContent(metadata.stopped, existing.content),
       metadata: {
@@ -124,37 +128,38 @@ export function finalizeSessionRun(
         streaming: false,
       },
     });
+  } else {
+    const messages = ctx.repos.messages.listBySession(session.id);
+    const last = messages[messages.length - 1];
+
+    if (last?.role === 'assistant') {
+      saved = ctx.repos.messages.update({
+        ...last,
+        content: content || placeholderAssistantContent(metadata.stopped, last.content),
+        metadata: {
+          ...last.metadata,
+          ...metadata,
+          timeline: metadata.timeline ?? last.metadata.timeline,
+          streaming: false,
+        },
+      });
+    } else {
+      saved = {
+        id: uuidv4(),
+        agentId: session.agentId,
+        sessionId: session.id,
+        role: 'assistant',
+        content: storedContent,
+        attachments: [],
+        metadata,
+        createdAt: nowIso(),
+      };
+      ctx.repos.messages.create(saved);
+    }
   }
 
-  const messages = ctx.repos.messages.listBySession(session.id);
-  const last = messages[messages.length - 1];
-
-  if (last?.role === 'assistant') {
-    const updated: Message = {
-      ...last,
-      content: content || placeholderAssistantContent(metadata.stopped, last.content),
-      metadata: {
-        ...last.metadata,
-        ...metadata,
-        timeline: metadata.timeline ?? last.metadata.timeline,
-        streaming: false,
-      },
-    };
-    return ctx.repos.messages.update(updated);
-  }
-
-  const assistantMessage: Message = {
-    id: uuidv4(),
-    agentId: session.agentId,
-    sessionId: session.id,
-    role: 'assistant',
-    content: storedContent,
-    attachments: [],
-    metadata,
-    createdAt: nowIso(),
-  };
-  ctx.repos.messages.create(assistantMessage);
-  return assistantMessage;
+  refreshSessionSearchIndex(ctx, session.id);
+  return saved;
 }
 
 export function markStreamingAssistantStopped(

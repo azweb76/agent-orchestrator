@@ -14,6 +14,7 @@ import {
 } from '@agent-orchestrator/shared';
 import { fallbackTitleFromPrompt, sanitizeChatTitle } from './anthropic.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
+import { refreshSessionSearchIndex, touchSessionSearchTitle } from './session-search-index.js';
 
 export async function createAgentForWorktree(
   ctx: AppContext,
@@ -90,12 +91,14 @@ export async function maybeAutoNameChatSession(
   );
   if (unique === current.title && sessionTitleSource(current) === 'auto') return current;
 
-  return ctx.repos.sessions.update({
+  const updated = ctx.repos.sessions.update({
     ...current,
     title: unique,
     titleSource: 'auto',
     updatedAt: nowIso(),
   });
+  touchSessionSearchTitle(ctx, updated.id, updated.title);
+  return updated;
 }
 
 /** Write session runtime fields without clobbering a title that landed concurrently. */
@@ -145,6 +148,7 @@ export function createSessionForAgent(
     titleSource: requestedTitle ? 'user' : 'default',
   };
   ctx.repos.sessions.create(session);
+  refreshSessionSearchIndex(ctx, session.id);
   if (options.activate !== false) {
     ctx.repos.agents.update({
       ...ctx.repos.agents.getById(agent.id)!,

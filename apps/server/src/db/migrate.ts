@@ -91,6 +91,59 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'autopilot_enabled', 'INTEGER');
 }
 
+function backfillSessionSearchIndexTable(db: Database.Database): void {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM session_search_index').get() as { n: number };
+  if (count.n > 0) return;
+
+  const sessions = db.prepare('SELECT id FROM chat_sessions').all() as Array<{ id: string }>;
+  if (sessions.length === 0) return;
+
+  const listMessages = db.prepare(
+    `SELECT role, content FROM messages
+     WHERE session_id = ?
+     ORDER BY created_at ASC, rowid ASC`,
+  );
+  const getSession = db.prepare(
+    'SELECT id, agent_id, title, updated_at FROM chat_sessions WHERE id = ?',
+  );
+  const upsert = db.prepare(
+    `INSERT INTO session_search_index (
+       session_id, agent_id, title, first_prompt, last_summary, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(session_id) DO UPDATE SET
+       agent_id = excluded.agent_id,
+       title = excluded.title,
+       first_prompt = excluded.first_prompt,
+       last_summary = excluded.last_summary,
+       updated_at = excluded.updated_at`,
+  );
+
+  for (const { id } of sessions) {
+    const session = getSession.get(id) as
+      | { id: string; agent_id: string; title: string; updated_at: string }
+      | undefined;
+    if (!session) continue;
+    const messages = listMessages.all(id) as Array<{ role: string; content: string }>;
+    const firstUser = messages.find((item) => item.role === 'user');
+    const lastAssistant = [...messages].reverse().find((item) => item.role === 'assistant');
+    const summary = lastAssistant?.content?.trim() ?? '';
+    const clipped =
+      summary.length > 500
+        ? summary.slice(0, 500)
+        : summary === '[stopped]' || summary === '[no output]'
+          ? ''
+          : summary;
+    upsert.run(
+      session.id,
+      session.agent_id,
+      session.title,
+      firstUser?.content ?? '',
+      clipped,
+      session.updated_at,
+    );
+  }
+}
+
 function applySchema(db: Database.Database): void {
   db.exec(SCHEMA);
   migrateSchema(db);
@@ -140,6 +193,7 @@ function openAndMigrate(dbPath: string): Database.Database {
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     applySchema(db);
+    backfillSessionSearchIndexTable(db);
     return db;
   } catch (err) {
     try {

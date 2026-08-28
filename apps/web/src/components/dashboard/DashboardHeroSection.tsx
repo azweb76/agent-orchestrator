@@ -17,8 +17,9 @@ import { paletteShortcutLabel } from '../commandPalette/paletteCommands';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { CommandCenterHero } from './CommandCenterHero';
 import { JarvisBriefing } from './JarvisBriefing';
+import { FleetBulkSection } from '../commandPalette/FleetBulkSection';
 import type { DashboardAgent } from './dashboardAgents';
-import type { PullRequestInbox } from '@agent-orchestrator/shared';
+import type { PullRequestInbox, SidebarWorkspace } from '@agent-orchestrator/shared';
 
 interface DashboardHeroSectionProps {
   query: string;
@@ -29,6 +30,7 @@ interface DashboardHeroSectionProps {
   systemsPartial: boolean;
   githubConfigured: boolean;
   activeAgents: DashboardAgent[];
+  sidebar?: SidebarWorkspace[];
   inbox?: PullRequestInbox;
   archivedCount: number;
   onPruneClick: () => void;
@@ -43,6 +45,7 @@ export function DashboardHeroSection({
   systemsPartial,
   githubConfigured,
   activeAgents,
+  sidebar,
   inbox,
   archivedCount,
   onPruneClick,
@@ -78,6 +81,12 @@ export function DashboardHeroSection({
           pendingPermissionCount: agent.pendingPermissionCount ?? 0,
         }))}
         inbox={inbox}
+      />
+
+      <FleetBulkSection
+        inbox={inbox}
+        sidebar={sidebar ?? []}
+        githubConfigured={githubConfigured}
       />
 
       <Box component="form" onSubmit={onCommandSubmit} sx={{ mt: 2.5, maxWidth: 640 }}>

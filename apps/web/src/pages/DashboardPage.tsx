@@ -38,6 +38,7 @@ export function DashboardPage() {
         systemsPartial={data.systemsPartial}
         githubConfigured={Boolean(data.status?.githubTokenConfigured)}
         activeAgents={data.activeAgents}
+        sidebar={data.sidebar}
         inbox={data.inboxQuery.data}
         archivedCount={data.archivedCount}
         onPruneClick={openPrune}

@@ -70,6 +70,28 @@ export interface AgentUsage extends UsageRollup {
   sessions: SessionUsage[];
 }
 
+/** Palette / search hit for a chat session transcript snippet. */
+export interface SessionSearchHit {
+  sessionId: string;
+  agentId: string;
+  agentName: string;
+  workspaceName: string;
+  title: string;
+  snippet: string;
+  updatedAt: string;
+}
+
+/** Active agent whose linked pull request has merged on GitHub. */
+export interface MergedFleetAgent {
+  agentId: string;
+  agentName: string;
+  workspaceName: string;
+  owner: string;
+  repo: string;
+  prNumber: number;
+  prTitle: string;
+}
+
 /** Fleet-wide cost rollup for the dashboard (`GET /api/usage`). */
 export interface UsageSummary {
   totalCostUsd: number;
