@@ -322,8 +322,7 @@ export interface PullRequestReviewComment {
   pullRequestReviewId: string | null;
 }
 
-const PULL_REQUEST_REVIEW_EVENTS = ['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as const;
-export type PullRequestReviewEvent = (typeof PULL_REQUEST_REVIEW_EVENTS)[number];
+export type PullRequestReviewEvent = 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
 
 export interface SubmitPullRequestReviewRequest {
   event: PullRequestReviewEvent;

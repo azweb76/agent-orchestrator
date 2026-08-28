@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { after, before, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import type { Agent, Message, Workspace, Worktree } from '@agent-orchestrator/shared';
 import { createRepositories, initDatabase } from './index.js';
 
