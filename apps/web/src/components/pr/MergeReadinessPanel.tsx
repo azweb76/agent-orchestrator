@@ -26,6 +26,7 @@ export function MergeReadinessPanel({ pr, readiness, checks }: MergeReadinessPan
     <Alert
       severity={readiness.severity}
       icon={readiness.computing ? <CircularProgress size={18} /> : undefined}
+      sx={{ '& .MuiAlert-message': { width: '100%', minWidth: 0 } }}
     >
       <AlertTitle sx={{ mb: 0.5 }}>{readiness.reason}</AlertTitle>
       <Stack spacing={0.75}>

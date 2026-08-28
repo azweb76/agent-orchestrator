@@ -10,32 +10,28 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControlLabel,
-  IconButton,
   Paper,
   Stack,
   Tab,
   Tabs,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
-import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentDiffScope, ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { ChangesDiffView } from '../components/changes/ChangesDiffView';
+import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
-import { EmptyState } from '../components/ui/EmptyState';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 import { statusColor } from '../theme';
@@ -50,6 +46,8 @@ export function AgentPage() {
 }
 
 function AgentPageContent({ agentId }: { agentId: string }) {
+  const theme = useTheme();
+  const isWide = useMediaQuery(theme.breakpoints.up('md'));
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
@@ -89,12 +87,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       if (data.sessions?.some((item) => item.status === 'running')) return 2000;
       return false;
     },
-  });
-
-  const diffQuery = useQuery({
-    queryKey: ['diff', agentId, diffScope],
-    queryFn: () => api.getDiff(agentId, diffScope),
-    enabled: Boolean(agentId) && tab === 1,
   });
 
   const archiveMutation = useMutation({
@@ -145,6 +137,13 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
     },
   });
+
+  const openCommitDialog = () => {
+    commitMutation.reset();
+    setCommitMessage('');
+    setCommitPush(true);
+    setCommitOpen(true);
+  };
 
   const createPrMutation = useMutation({
     mutationFn: () => api.createPr(agentId, { title: prTitle, body: prBody, draft: prDraft }),
@@ -358,7 +357,14 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           variant="scrollable"
           scrollButtons="auto"
           allowScrollButtonsMobile
-          sx={{ px: { xs: 0.5, sm: 1.5 }, minHeight: 40, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
+          sx={{
+            display: { xs: 'flex', md: 'none' },
+            px: { xs: 0.5, sm: 1.5 },
+            minHeight: 40,
+            borderBottom: 1,
+            borderColor: 'divider',
+            flexShrink: 0,
+          }}
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Changes" sx={{ minHeight: 40, py: 1 }} />
@@ -368,112 +374,55 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           sx={{
             flex: 1,
             minHeight: 0,
-            display: tab === 0 ? 'flex' : 'none',
-            flexDirection: 'column',
-          }}
-        >
-          <ChatPanel
-            agent={agent}
-            archived={archived}
-            initialPrompt={initialPrompt}
-            initialTemplate={initialTemplate}
-          />
-        </Box>
-
-        <Box
-          sx={{
-            p: 1.5,
-            flex: 1,
-            minHeight: 0,
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
             overflow: 'hidden',
-            display: tab === 1 ? 'flex' : 'none',
-            flexDirection: 'column',
           }}
         >
-            <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0 }}>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={1}
-                sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', flexShrink: 0 }}
-              >
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    Local path
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                      fontSize: 12,
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {agent.worktree.path}
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
-                  <ToggleButtonGroup
-                    size="small"
-                    exclusive
-                    value={diffScope}
-                    onChange={(_, value: AgentDiffScope | null) => {
-                      if (value) setDiffScope(value);
-                    }}
-                    aria-label="Change scope"
-                  >
-                    <ToggleButton value="pending">Pending</ToggleButton>
-                    <ToggleButton value="pr">All PR changes</ToggleButton>
-                  </ToggleButtonGroup>
-                  <Tooltip title="Refresh">
-                    <span>
-                      <IconButton
-                        size="small"
-                        aria-label="Refresh changes"
-                        onClick={() => diffQuery.refetch()}
-                        disabled={diffQuery.isFetching}
-                      >
-                        <RefreshIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<UploadOutlinedIcon />}
-                    disabled={archived || !diffQuery.data?.patch}
-                    onClick={() => {
-                      commitMutation.reset();
-                      setCommitMessage('');
-                      setCommitPush(true);
-                      setCommitOpen(true);
-                    }}
-                  >
-                    Commit & push
-                  </Button>
-                </Stack>
-              </Stack>
-
-              {diffQuery.isLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <CircularProgress size={28} />
-                </Box>
-              ) : diffQuery.error ? (
-                <Alert severity="error">{(diffQuery.error as Error).message}</Alert>
-              ) : !diffQuery.data?.patch ? (
-                <EmptyState
-                  compact
-                  title={diffScope === 'pending' ? 'No pending changes' : 'No PR changes'}
-                  description={
-                    diffScope === 'pending'
-                      ? 'The working tree matches HEAD. Switch to All PR changes to see commits on this branch.'
-                      : 'No differences from the base branch.'
-                  }
-                />
-              ) : (
-                <ChangesDiffView patch={diffQuery.data.patch} />
-              )}
-            </Stack>
+          <Box
+            sx={{
+              flex: { md: '1 1 55%' },
+              minWidth: 0,
+              minHeight: 0,
+              display: { xs: tab === 0 ? 'flex' : 'none', md: 'flex' },
+              flexDirection: 'column',
+            }}
+          >
+            <ChatPanel
+              agent={agent}
+              archived={archived}
+              initialPrompt={initialPrompt}
+              initialTemplate={initialTemplate}
+            />
           </Box>
+
+          <Divider
+            orientation="vertical"
+            flexItem
+            sx={{ display: { xs: 'none', md: 'block' }, borderColor: 'divider' }}
+          />
+
+          <Box
+            sx={{
+              flex: { md: '1 1 45%' },
+              minWidth: 0,
+              minHeight: 0,
+              overflow: 'hidden',
+              display: { xs: tab === 1 ? 'flex' : 'none', md: 'flex' },
+              flexDirection: 'column',
+            }}
+          >
+            <AgentChangesPanel
+              agentId={agentId}
+              worktreePath={agent.worktree.path}
+              archived={archived}
+              diffScope={diffScope}
+              onDiffScopeChange={setDiffScope}
+              onCommitClick={openCommitDialog}
+              enabled={isWide || tab === 1}
+            />
+          </Box>
+        </Box>
       </Paper>
 
       <ResponsiveDialog open={prOpen} onClose={() => setPrOpen(false)} maxWidth="sm" fullWidth>
