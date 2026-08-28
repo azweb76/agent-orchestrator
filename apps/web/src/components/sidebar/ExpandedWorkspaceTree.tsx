@@ -19,7 +19,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
+import { AgentStatusDot, AgentStatusIcon, PrStatusDot } from './agentStatusVisuals';
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 
 export function ExpandedWorkspaceTree({
@@ -199,6 +199,16 @@ export function ExpandedWorkspaceTree({
   );
 }
 
+function prStatusWord(status: SidebarAgent['prStatus']): string {
+  if (!status) return '';
+  if (status.merged) return 'Merged';
+  if (status.state === 'closed') return 'Closed';
+  if (status.checksRollup === 'failure') return 'Checks failing';
+  if (status.checksRollup === 'pending') return 'Checks pending';
+  if (status.draft) return 'Draft';
+  return 'Open';
+}
+
 const AgentListItem = memo(function AgentListItem({
   agent,
   selected,
@@ -216,7 +226,9 @@ const AgentListItem = memo(function AgentListItem({
         <Box>
           <Typography variant="caption" sx={{ display: 'block' }}>
             {agent.worktree.branch}
-            {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
+            {agent.worktree.prNumber
+              ? ` · PR #${agent.worktree.prNumber}${agent.prStatus ? ` · ${prStatusWord(agent.prStatus)}` : ''}`
+              : ''}
           </Typography>
           <Typography
             variant="caption"
@@ -255,6 +267,7 @@ const AgentListItem = memo(function AgentListItem({
               >
                 {agent.name}
               </Typography>
+              {agent.prStatus && <PrStatusDot status={agent.prStatus} size={6} />}
               <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
             </Stack>
           }
