@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -53,6 +53,7 @@ export function CommandPalette({
   onNewWorkspace,
 }: CommandPaletteProps) {
   const navigate = useNavigate();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
 
@@ -105,8 +106,26 @@ export function CommandPalette({
       fullWidth
       maxWidth="sm"
       aria-label="Command palette"
+      // Handle navigation keys at the dialog root so they work no matter
+      // which element inside the modal ends up focused.
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setHighlight(Math.min(activeIndex + 1, Math.max(filtered.length - 1, 0)));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setHighlight(Math.max(activeIndex - 1, 0));
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          const command = filtered[activeIndex];
+          if (command) runAction(command.action);
+        }
+      }}
       sx={{ '& .MuiDialog-container': { alignItems: 'flex-start' } }}
       slotProps={{
+        // The modal focus trap can beat React's autoFocus to the punch, so
+        // explicitly focus the search input once the open transition settles.
+        transition: { onEntered: () => inputRef.current?.focus() },
         paper: {
           sx: {
             mt: { xs: 2, sm: 10 },
@@ -122,25 +141,13 @@ export function CommandPalette({
         <TextField
           fullWidth
           autoFocus
+          inputRef={inputRef}
           variant="standard"
           placeholder="Jump to an agent, workspace, or PR — or run an action…"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
             setHighlight(0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setHighlight(Math.min(activeIndex + 1, Math.max(filtered.length - 1, 0)));
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setHighlight(Math.max(activeIndex - 1, 0));
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              const command = filtered[activeIndex];
-              if (command) runAction(command.action);
-            }
           }}
           slotProps={{
             input: {
