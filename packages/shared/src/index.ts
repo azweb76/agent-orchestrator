@@ -108,7 +108,8 @@ export type AppEventType =
   | 'run_finished'
   | 'permission_request'
   | 'queue_changed'
-  | 'workspaces_changed';
+  | 'workspaces_changed'
+  | 'instruction_draft_offer';
 
 export interface AppEvent {
   id: string;
@@ -789,11 +790,16 @@ export {
   buildCompactContinuePrompt,
   buildImplementPlanPrompt,
   chatSessionTemplateById,
+  instructionGradeFindings,
   isGitMutatingSessionTemplate,
+  isInstructionOfferSessionTemplate,
+  shouldOfferInstructionDraft,
   uniqueSessionTitle,
   CHAT_SESSION_TEMPLATES,
   CHAT_TITLE_MAX_LENGTH,
   GIT_MUTATING_SESSION_TEMPLATES,
+  INSTRUCTION_GRADE_FINDING_CATEGORIES,
+  INSTRUCTION_OFFER_SESSION_TEMPLATES,
   LISTED_CHAT_SESSION_TEMPLATES,
   SESSION_GRADE_FINDING_CATEGORIES,
   SESSION_GRADE_FINDING_LABELS,
