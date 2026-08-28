@@ -679,6 +679,14 @@ export class ClaudeService {
     return Boolean(this.claudeBin);
   }
 
+  getBin(): string {
+    return this.claudeBin;
+  }
+
+  setBin(bin: string): void {
+    this.claudeBin = bin;
+  }
+
   getRunningProcess(agentId: string): TrackedRun | undefined {
     return this.running.get(agentId);
   }

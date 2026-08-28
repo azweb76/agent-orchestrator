@@ -11,6 +11,7 @@ import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
 import { optionalBearerAuth } from './auth.js';
+import { applyPersistedSecrets } from './services/setup.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config();
@@ -18,6 +19,7 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '../../..');
 const dataDir = path.resolve(process.env.DATA_DIR ?? path.join(rootDir, 'data'));
+applyPersistedSecrets(dataDir);
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST?.trim() || '127.0.0.1';
 const authToken = process.env.AUTH_TOKEN?.trim() || undefined;

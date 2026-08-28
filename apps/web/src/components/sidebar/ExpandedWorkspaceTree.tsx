@@ -19,6 +19,7 @@ import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
+import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 
 export function ExpandedWorkspaceTree({
   tree,
@@ -242,6 +243,8 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
                 sx={{
                   fontWeight: selected ? 700 : 500,
                   color: needsInput ? 'warning.main' : undefined,
+                  flex: 1,
+                  minWidth: 0,
                 }}
               >
                 {agent.name}
@@ -250,6 +253,7 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
             </Stack>
           }
         />
+        <SidebarAgentArchiveMenu agent={agent} />
       </ListItemButton>
     </ControlTooltip>
   );

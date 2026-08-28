@@ -580,6 +580,17 @@ export class ChatSessionRepository {
       .map(rowToChatSession);
   }
 
+  listByAgentIds(agentIds: string[]): ChatSession[] {
+    if (agentIds.length === 0) return [];
+    const placeholders = agentIds.map(() => '?').join(',');
+    return this.db
+      .prepare(
+        `SELECT * FROM chat_sessions WHERE agent_id IN (${placeholders}) ORDER BY created_at ASC`,
+      )
+      .all(...agentIds)
+      .map(rowToChatSession);
+  }
+
   listRunning(): ChatSession[] {
     return this.db
       .prepare(
