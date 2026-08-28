@@ -127,9 +127,22 @@ export function createRouter(ctx: AppContext): express.Router {
     res.flushHeaders?.();
     res.write(': connected\n\n');
 
+    const writeEvent = (event: { id: string; type: string; data: unknown }) => {
+      res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+
+    const lastEventId = req.header('Last-Event-ID') ?? undefined;
+    for (const event of ctx.notifier?.replaySince(lastEventId) ?? []) {
+      try {
+        writeEvent(event);
+      } catch {
+        return;
+      }
+    }
+
     const unsubscribe = ctx.notifier?.subscribe((event) => {
       try {
-        res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+        writeEvent(event);
       } catch {
         // dropped below via close
       }

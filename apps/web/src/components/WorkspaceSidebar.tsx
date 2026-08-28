@@ -6,6 +6,11 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
+import { useSseConnectionState } from '../api/events';
+import {
+  SSE_FALLBACK_ACTIVE_POLL_MS,
+  SSE_FALLBACK_POLL_MS,
+} from '../api/ssePolling';
 import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 import { CollapsedAgentRail } from './sidebar/CollapsedAgentRail';
@@ -70,17 +75,18 @@ export function WorkspaceSidebar({
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
   const [filterStatuses, setFilterStatuses] = useState<Set<SidebarStatusFilter>>(new Set());
+  const sseState = useSseConnectionState();
 
   const sidebarQuery = useQuery({
     queryKey: ['sidebar'],
     queryFn: api.listSidebar,
-    // The SSE event stream invalidates this cache on changes; polling is a
-    // slow fallback for missed events.
+    // SSE invalidates this cache; polling is only a fallback while the stream is down.
     refetchInterval: (query) => {
-      const tree = query.state.data;
-      if (!tree) return 15_000;
-      const hasRunning = tree.some((ws) => ws.agents.some((a) => a.status === 'running'));
-      return hasRunning ? 10_000 : 30_000;
+      if (sseState === 'connected') return false;
+      const data = query.state.data;
+      if (!data) return 15_000;
+      const running = data.some((ws) => ws.agents.some((agent) => agent.status === 'running'));
+      return running ? SSE_FALLBACK_ACTIVE_POLL_MS : SSE_FALLBACK_POLL_MS;
     },
   });
 

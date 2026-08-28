@@ -22,6 +22,8 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentStatus, SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { useSseConnectionState } from '../api/events';
+import { useSsePollingFallback } from '../api/ssePolling';
 import { useCommandPalette } from '../components/commandPalette/CommandPaletteContext';
 import { paletteShortcutLabel } from '../components/commandPalette/paletteCommands';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -155,6 +157,8 @@ export function DashboardPage() {
   const [now, setNow] = useState(() => new Date());
   const [query, setQuery] = useState('');
   const [pruneOpen, setPruneOpen] = useState(false);
+  const sseState = useSseConnectionState();
+  const sseFallback = useSsePollingFallback();
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -164,7 +168,7 @@ export function DashboardPage() {
   const { data: status } = useQuery({
     queryKey: ['status'],
     queryFn: api.getStatus,
-    refetchInterval: 30_000,
+    refetchInterval: sseFallback,
   });
 
   const pruneMutation = useMutation({
@@ -185,8 +189,13 @@ export function DashboardPage() {
   } = useQuery({
     queryKey: ['sidebar'],
     queryFn: api.listSidebar,
-    // SSE invalidation keeps this fresh; the interval is a fallback.
-    refetchInterval: 30_000,
+    refetchInterval: (query) => {
+      if (sseState === 'connected') return false;
+      const data = query.state.data;
+      if (!data) return 15_000;
+      const running = data.some((ws) => ws.agents.some((agent) => agent.status === 'running'));
+      return running ? 15_000 : sseFallback || false;
+    },
   });
 
   const { data: workspaces, isLoading: workspacesLoading } = useQuery({
@@ -198,13 +207,13 @@ export function DashboardPage() {
     queryKey: ['pulls-inbox'],
     queryFn: api.getPullRequestInbox,
     enabled: Boolean(status?.githubTokenConfigured),
-    refetchInterval: 60_000,
+    refetchInterval: sseFallback,
   });
 
   const usageQuery = useQuery({
     queryKey: ['usage'],
     queryFn: api.getUsageSummary,
-    refetchInterval: 60_000,
+    refetchInterval: sseFallback,
   });
 
   const agents = useMemo(() => flattenAgents(sidebar ?? []), [sidebar]);
