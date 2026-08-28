@@ -21,10 +21,16 @@ export interface WorktreeWithAgent extends Worktree {
   agent: Agent | null;
 }
 
+export interface DraftPrOffer {
+  sessionId: string;
+}
+
 export interface AgentDetail extends Agent {
   worktree: Worktree;
   workspace: Workspace;
   sessions: ChatSession[];
+  /** Set when a completed Build session has a diff and no open PR (autopilot off). */
+  draftPrOffer?: DraftPrOffer | null;
 }
 
 /** Agent summary for sidebar navigation (includes worktree context). */

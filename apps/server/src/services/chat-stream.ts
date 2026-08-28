@@ -271,6 +271,9 @@ export async function streamAgentChat(
           data: { requestId: request.requestId, toolName: request.toolName },
         });
         send('permission_request', payload);
+        void import('./autopilot.js').then(({ maybeAutopilotOnExitPlanMode }) =>
+          maybeAutopilotOnExitPlanMode(ctx, agentId, runningSession, payload),
+        );
       },
       onEvent: (event) => {
         const record = event as Record<string, unknown>;

@@ -45,6 +45,10 @@ export async function createAgentSession(
     permissionMode: template?.permissionMode,
     activate: true,
   });
+  if (session.template === 'create-draft-pr') {
+    const { onCreateDraftPrSessionStarted } = await import('./autopilot.js');
+    onCreateDraftPrSessionStarted(ctx, agentId);
+  }
   ctx.repos.events.create(
     makeEvent(agentId, 'session_created', {
       sessionId: session.id,

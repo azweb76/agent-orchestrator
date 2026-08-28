@@ -15,6 +15,7 @@ const automationBody = z.object({
   autoArchiveOnMerge: z.boolean().optional(),
   autoArchiveDeleteWorktree: z.boolean().optional(),
   autoArchiveAllowDirty: z.boolean().optional(),
+  autopilot: z.boolean().optional(),
 });
 
 export function registerSettingsRoutes(router: express.Router, ctx: AppContext): void {

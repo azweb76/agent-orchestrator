@@ -11,6 +11,7 @@ import type {
   DeleteAgentResponse,
   MessageAttachment,
   PruneArchivedAgentsResponse,
+  UpdateAgentRequest,
 } from '@agent-orchestrator/shared';
 import { discoverSlashCommands } from './slash-commands.js';
 import { listWorktreeFiles } from './chat-mentions.js';
@@ -26,6 +27,7 @@ import {
 import { clearSessionQueue, drainWaitingMutatingSessions } from './chat-queue.js';
 import { markStreamingAssistantStopped } from './chat-run-lifecycle.js';
 import { deleteWorktree, overlayLivePullRequest } from './worktrees.js';
+import { getDraftPrOfferSessionId } from './autopilot.js';
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
   const agent = ctx.repos.agents.getById(agentId);
@@ -54,7 +56,28 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
     worktree: liveWorktree,
     workspace,
     sessions: ctx.repos.sessions.listByAgent(agentId),
+    draftPrOffer: (() => {
+      const offerSessionId = getDraftPrOfferSessionId(ctx, agentId);
+      return offerSessionId ? { sessionId: offerSessionId } : null;
+    })(),
   };
+}
+
+export async function updateAgent(
+  ctx: AppContext,
+  agentId: string,
+  body: UpdateAgentRequest,
+): Promise<AgentDetail> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot update an archived agent');
+  if (body.autopilot === undefined) return getAgentDetail(ctx, agentId);
+
+  ctx.repos.agents.update({
+    ...agent,
+    autopilot: body.autopilot,
+    updatedAt: nowIso(),
+  });
+  return getAgentDetail(ctx, agentId);
 }
 
 export async function stopAllSessions(ctx: AppContext, agent: Agent): Promise<void> {

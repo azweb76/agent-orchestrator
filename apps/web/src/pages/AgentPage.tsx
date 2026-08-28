@@ -48,6 +48,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     deleteMutation,
     commitMutation,
     createPrMutation,
+    autopilotMutation,
   } = useAgentPageMutations(agentId);
 
   useEffect(() => {
@@ -114,6 +115,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         archivePending={archiveMutation.isPending}
         unarchivePending={unarchiveMutation.isPending}
         deletePending={deleteMutation.isPending}
+        autopilotPending={autopilotMutation.isPending}
         onArchive={() => {
           archiveMutation.reset();
           setArchiveOpen(true);
@@ -124,6 +126,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           setDeleteOpen(true);
         }}
         onCreatePr={() => setPrOpen(true)}
+        onAutopilotChange={(enabled) => autopilotMutation.mutate(enabled)}
       />
 
       {(unarchiveMutation.error || deleteMutation.error) && (

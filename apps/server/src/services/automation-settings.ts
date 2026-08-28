@@ -22,6 +22,7 @@ function normalizeSettings(raw: Partial<AutomationSettings>): AutomationSettings
     autoArchiveOnMerge: Boolean(raw.autoArchiveOnMerge),
     autoArchiveDeleteWorktree: Boolean(raw.autoArchiveDeleteWorktree),
     autoArchiveAllowDirty: Boolean(raw.autoArchiveAllowDirty),
+    autopilot: Boolean(raw.autopilot),
   };
 }
 
