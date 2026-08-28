@@ -114,6 +114,7 @@ import {
   listQueuedMessages,
   removeQueuedMessage,
 } from './chat-queue.js';
+import { offerInstructionDraftAfterRun } from './instruction-offer.js';
 import {
   appendStreamText,
   applyStreamEvent,
@@ -1770,6 +1771,12 @@ function finalizeSessionRun(
         error: result.error ?? null,
       },
     });
+    void offerInstructionDraftAfterRun(
+      ctx,
+      latest,
+      { stopped: result.stopped, error: result.error },
+      () => gradeAgentSession(ctx, latest.agentId, latest.id),
+    );
   }
 
   const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;

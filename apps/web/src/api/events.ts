@@ -8,6 +8,7 @@ const EVENT_TYPES: AppEventType[] = [
   'permission_request',
   'queue_changed',
   'workspaces_changed',
+  'instruction_draft_offer',
 ];
 
 type AppEventListener = (event: AppEvent) => void;
@@ -61,6 +62,12 @@ function invalidateForEvent(queryClient: QueryClient, event: AppEvent): void {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['worktrees'] });
+      break;
+    case 'instruction_draft_offer':
+      // The offer banner renders from the session grade on the agent detail.
+      if (agentId) {
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      }
       break;
   }
 }

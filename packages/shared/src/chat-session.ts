@@ -206,6 +206,53 @@ export function isGitMutatingSessionTemplate(
   return Boolean(template && GIT_MUTATING_SESSION_TEMPLATE_SET.has(template as ChatSessionTemplateId));
 }
 
+/** Templates whose completed runs offer to fold graded lessons into instruction files. */
+export const INSTRUCTION_OFFER_SESSION_TEMPLATES: readonly ChatSessionTemplateId[] = [
+  'build',
+  'fix-ci',
+];
+
+const INSTRUCTION_OFFER_SESSION_TEMPLATE_SET = new Set<ChatSessionTemplateId>(
+  INSTRUCTION_OFFER_SESSION_TEMPLATES,
+);
+
+export function isInstructionOfferSessionTemplate(
+  template: ChatSessionTemplateId | string | undefined,
+): boolean {
+  return Boolean(
+    template && INSTRUCTION_OFFER_SESSION_TEMPLATE_SET.has(template as ChatSessionTemplateId),
+  );
+}
+
+/** Grade finding categories that point at instruction files or skills. */
+export const INSTRUCTION_GRADE_FINDING_CATEGORIES: readonly SessionGradeFindingCategory[] = [
+  'instruction_files',
+  'skills',
+];
+
+/** Non-ok grade findings about instruction files or skills. */
+export function instructionGradeFindings(
+  grade: SessionGrade | null | undefined,
+): SessionGradeFinding[] {
+  const findings = grade?.analysis?.findings ?? [];
+  return findings.filter(
+    (finding) =>
+      finding.severity !== 'ok' &&
+      INSTRUCTION_GRADE_FINDING_CATEGORIES.includes(finding.category),
+  );
+}
+
+/**
+ * True when a graded Build / Fix CI session should prompt the user to review
+ * and apply an instruction-file draft. Applying always stays manual.
+ */
+export function shouldOfferInstructionDraft(
+  session: Pick<ChatSession, 'template' | 'grade'>,
+): boolean {
+  if (!isInstructionOfferSessionTemplate(session.template)) return false;
+  return instructionGradeFindings(session.grade).length > 0;
+}
+
 export function chatSessionTemplateById(
   id: string | undefined,
 ): ChatSessionTemplate | undefined {

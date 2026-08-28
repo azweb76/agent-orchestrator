@@ -55,6 +55,7 @@ import { CONTEXT_SLASH_CHIP_COMMANDS } from './slashComposer';
 import { ChatSessionBar } from './ChatSessionBar';
 import { GradeSessionDialog } from './GradeSessionDialog';
 import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
+import { InstructionDraftOfferBanner } from './InstructionDraftOfferBanner';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -1403,6 +1404,14 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
         }}
       >
         <Box sx={{ maxWidth: CHAT_COLUMN_MAX_WIDTH, mx: 'auto', px: { xs: 1.25, sm: 2.5 }, py: { xs: 1.25, sm: 1.5 }, pb: { xs: 'calc(10px + env(safe-area-inset-bottom, 0px))', sm: 1.5 } }}>
+          {!archived && session ? (
+            <InstructionDraftOfferBanner
+              session={session}
+              isStreaming={sessionBusy}
+              onReview={() => setImproveOpen(true)}
+            />
+          ) : null}
+
           {!archived && activeSessionId ? (
             <CompactContinueBanner
               agentId={agentId}
