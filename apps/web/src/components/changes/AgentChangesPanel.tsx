@@ -7,7 +7,6 @@ import {
   Stack,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -15,6 +14,7 @@ import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { useQuery } from '@tanstack/react-query';
 import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ChangesDiffView } from './ChangesDiffView';
 
@@ -76,30 +76,43 @@ export function AgentChangesPanel({
             }}
             aria-label="Change scope"
           >
-            <ToggleButton value="pending">Pending</ToggleButton>
-            <ToggleButton value="pr">All PR changes</ToggleButton>
+            <ControlTooltip title="Uncommitted changes in the working tree">
+              <ToggleButton value="pending">Pending</ToggleButton>
+            </ControlTooltip>
+            <ControlTooltip title="All commits on this branch compared to the base branch">
+              <ToggleButton value="pr">All PR changes</ToggleButton>
+            </ControlTooltip>
           </ToggleButtonGroup>
-          <Tooltip title="Refresh">
-            <span>
-              <IconButton
-                size="small"
-                aria-label="Refresh changes"
-                onClick={() => diffQuery.refetch()}
-                disabled={diffQuery.isFetching}
-              >
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<UploadOutlinedIcon />}
+          <ControlTooltip title="Reload the diff" disabled={diffQuery.isFetching}>
+            <IconButton
+              size="small"
+              aria-label="Refresh changes"
+              onClick={() => diffQuery.refetch()}
+              disabled={diffQuery.isFetching}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </ControlTooltip>
+          <ControlTooltip
+            title={
+              archived
+                ? 'Archived agents cannot commit changes'
+                : !diffQuery.data?.patch
+                  ? 'No changes to commit'
+                  : 'Commit pending changes and push to origin'
+            }
             disabled={archived || !diffQuery.data?.patch}
-            onClick={onCommitClick}
           >
-            Commit & push
-          </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<UploadOutlinedIcon />}
+              disabled={archived || !diffQuery.data?.patch}
+              onClick={onCommitClick}
+            >
+              Commit & push
+            </Button>
+          </ControlTooltip>
         </Stack>
       </Stack>
 

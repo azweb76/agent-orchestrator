@@ -31,6 +31,7 @@ import {
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { PullRequestPicker } from './pr/PullRequestPicker';
+import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
 interface CreateWorktreeDialogProps {
@@ -175,59 +176,67 @@ export function CreateWorktreeDialog({
 
         {tab === 'idea' && (
           <Stack spacing={1.5}>
-            <TextField
-              label="Describe your idea"
-              value={ideaText}
-              onChange={(e) => setIdeaText(e.target.value)}
-              placeholder="Add a dark mode toggle to the settings page"
-              fullWidth
-              multiline
-              minRows={4}
-              autoFocus
-            />
+            <ControlTooltip title="Describe what you want the agent to build or change">
+              <TextField
+                label="Describe your idea"
+                value={ideaText}
+                onChange={(e) => setIdeaText(e.target.value)}
+                placeholder="Add a dark mode toggle to the settings page"
+                fullWidth
+                multiline
+                minRows={4}
+                autoFocus
+              />
+            </ControlTooltip>
             <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
-              <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
-                <InputLabel>Model</InputLabel>
-                <Select
-                  label="Model"
-                  value={ideaModel}
-                  onChange={(e) => setIdeaModel(e.target.value)}
-                >
-                  {CLAUDE_MODELS.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
-                <InputLabel>Effort</InputLabel>
-                <Select
-                  label="Effort"
-                  value={ideaEffort}
-                  onChange={(e) => setIdeaEffort(e.target.value as EffortLevel)}
-                >
-                  {CLAUDE_EFFORT_LEVELS.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
-                <InputLabel>Permissions</InputLabel>
-                <Select
-                  label="Permissions"
-                  value={ideaPermissionMode}
-                  onChange={(e) => setIdeaPermissionMode(e.target.value as PermissionMode)}
-                >
-                  {PERMISSION_MODES.map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {item.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <ControlTooltip title="Claude model for the planning session">
+                <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
+                  <InputLabel>Model</InputLabel>
+                  <Select
+                    label="Model"
+                    value={ideaModel}
+                    onChange={(e) => setIdeaModel(e.target.value)}
+                  >
+                    {CLAUDE_MODELS.map((item) => (
+                      <MenuItem key={item.id} value={item.id}>
+                        {item.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </ControlTooltip>
+              <ControlTooltip title="How much reasoning effort the model should use">
+                <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
+                  <InputLabel>Effort</InputLabel>
+                  <Select
+                    label="Effort"
+                    value={ideaEffort}
+                    onChange={(e) => setIdeaEffort(e.target.value as EffortLevel)}
+                  >
+                    {CLAUDE_EFFORT_LEVELS.map((item) => (
+                      <MenuItem key={item.id} value={item.id}>
+                        {item.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </ControlTooltip>
+              <ControlTooltip title="How much tool access the agent has during planning">
+                <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
+                  <InputLabel>Permissions</InputLabel>
+                  <Select
+                    label="Permissions"
+                    value={ideaPermissionMode}
+                    onChange={(e) => setIdeaPermissionMode(e.target.value as PermissionMode)}
+                  >
+                    {PERMISSION_MODES.map((item) => (
+                      <MenuItem key={item.id} value={item.id}>
+                        {item.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </ControlTooltip>
             </Stack>
             <Typography variant="body2" color="text.secondary">
               A branch name is suggested automatically. Your idea is sent as the first message using
@@ -248,42 +257,23 @@ export function CreateWorktreeDialog({
                   '& .MuiFormControlLabel-root': { mr: { xs: 0, sm: 2 } },
                 }}
               >
-                <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
-                <FormControlLabel value="new" control={<Radio />} label="New branch" />
+                <ControlTooltip title="Check out an existing branch for the new worktree">
+                  <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
+                </ControlTooltip>
+                <ControlTooltip title="Create a new branch from a base branch">
+                  <FormControlLabel value="new" control={<Radio />} label="New branch" />
+                </ControlTooltip>
               </RadioGroup>
             </FormControl>
 
             {branchMode === 'existing' ? (
-              <FormControl fullWidth>
-                <InputLabel>Branch</InputLabel>
-                <Select
-                  label="Branch"
-                  value={selectedBranch}
-                  onChange={(e) => setSelectedBranch(e.target.value)}
-                >
-                  {branchesQuery.data?.map((branch) => (
-                    <MenuItem key={branch.name} value={branch.name}>
-                      {branch.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <>
-                <TextField
-                  label="New branch name"
-                  value={newBranchName}
-                  onChange={(e) => setNewBranchName(e.target.value)}
-                  placeholder="feature/my-change"
-                  fullWidth
-                  required
-                />
+              <ControlTooltip title="Branch to check out for the new worktree">
                 <FormControl fullWidth>
-                  <InputLabel>Base branch</InputLabel>
+                  <InputLabel>Branch</InputLabel>
                   <Select
-                    label="Base branch"
-                    value={resolvedDefaultBranch}
-                    onChange={(e) => setBaseBranch(e.target.value)}
+                    label="Branch"
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
                   >
                     {branchesQuery.data?.map((branch) => (
                       <MenuItem key={branch.name} value={branch.name}>
@@ -292,6 +282,35 @@ export function CreateWorktreeDialog({
                     ))}
                   </Select>
                 </FormControl>
+              </ControlTooltip>
+            ) : (
+              <>
+                <ControlTooltip title="Name for the new git branch">
+                  <TextField
+                    label="New branch name"
+                    value={newBranchName}
+                    onChange={(e) => setNewBranchName(e.target.value)}
+                    placeholder="feature/my-change"
+                    fullWidth
+                    required
+                  />
+                </ControlTooltip>
+                <ControlTooltip title="Branch to fork from when creating the new branch">
+                  <FormControl fullWidth>
+                    <InputLabel>Base branch</InputLabel>
+                    <Select
+                      label="Base branch"
+                      value={resolvedDefaultBranch}
+                      onChange={(e) => setBaseBranch(e.target.value)}
+                    >
+                      {branchesQuery.data?.map((branch) => (
+                        <MenuItem key={branch.name} value={branch.name}>
+                          {branch.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </ControlTooltip>
               </>
             )}
           </Stack>
@@ -315,22 +334,41 @@ export function CreateWorktreeDialog({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Cancel</Button>
-        <Button
-          variant="contained"
+        <ControlTooltip title="Discard and close without creating an agent">
+          <Button onClick={handleClose}>Cancel</Button>
+        </ControlTooltip>
+        <ControlTooltip
+          title={
+            createPending
+              ? tab === 'idea'
+                ? 'Suggesting a branch name and creating the agent…'
+                : 'Creating the agent…'
+              : !canCreate
+                ? 'Fill in the required fields first'
+                : tab === 'idea'
+                  ? 'Create agent and send your idea as the first message'
+                  : tab === 'pr'
+                    ? 'Create agent from the selected pull request'
+                    : 'Create agent from the selected branch'
+          }
           disabled={createPending || !canCreate}
-          onClick={() => {
-            if (tab === 'branch') createFromBranch.mutate();
-            else if (tab === 'pr') createFromPr.mutate();
-            else createFromIdea.mutate();
-          }}
         >
-          {createPending
-            ? tab === 'idea'
-              ? 'Suggesting & creating…'
-              : 'Creating…'
-            : 'Create'}
-        </Button>
+          <Button
+            variant="contained"
+            disabled={createPending || !canCreate}
+            onClick={() => {
+              if (tab === 'branch') createFromBranch.mutate();
+              else if (tab === 'pr') createFromPr.mutate();
+              else createFromIdea.mutate();
+            }}
+          >
+            {createPending
+              ? tab === 'idea'
+                ? 'Suggesting & creating…'
+                : 'Creating…'
+              : 'Create'}
+          </Button>
+        </ControlTooltip>
       </DialogActions>
       </ResponsiveDialog>
   );

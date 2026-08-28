@@ -10,7 +10,6 @@ import {
   Radio,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
@@ -22,6 +21,7 @@ import { api } from '../../api/client';
 import { formatRelativeTime } from '../../utils/format';
 import { pullRequestPath } from '../../utils/paths';
 import { EmptyState } from '../ui/EmptyState';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../ui/ListPanel';
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -74,30 +74,32 @@ export function PullRequestPicker({
 
   return (
     <Stack spacing={1.5}>
-      <TextField
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by title, number, author, or paste a URL"
-        fullWidth
-        autoFocus
-        size="small"
-        helperText="Your open pull requests are listed first. Select a row or view it in the app."
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-            endAdornment: pullsQuery.isFetching ? (
-              <InputAdornment position="end">
-                <CircularProgress size={16} />
-              </InputAdornment>
-            ) : null,
-          },
-          htmlInput: { 'aria-label': 'Search pull requests' },
-        }}
-      />
+      <ControlTooltip title="Search pull requests by title, number, author, or URL">
+        <TextField
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by title, number, author, or paste a URL"
+          fullWidth
+          autoFocus
+          size="small"
+          helperText="Your open pull requests are listed first. Select a row or view it in the app."
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: pullsQuery.isFetching ? (
+                <InputAdornment position="end">
+                  <CircularProgress size={16} />
+                </InputAdornment>
+              ) : null,
+            },
+            htmlInput: { 'aria-label': 'Search pull requests' },
+          }}
+        />
+      </ControlTooltip>
 
       {pullsQuery.error ? (
         <Alert severity="error">{(pullsQuery.error as Error).message}</Alert>
@@ -241,7 +243,7 @@ function PrPickerRow({
       onClick={() => onSelect(pr.number)}
       secondaryAction={
         owner && repo ? (
-          <Tooltip title="View pull request">
+          <ControlTooltip title="View pull request in the app">
             <IconButton
               component={RouterLink}
               to={pullRequestPath(owner, repo, pr.number)}
@@ -251,18 +253,20 @@ function PrPickerRow({
             >
               <VisibilityOutlinedIcon fontSize="small" />
             </IconButton>
-          </Tooltip>
+          </ControlTooltip>
         ) : undefined
       }
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-        <Radio
-          checked={selected}
-          onChange={() => onSelect(pr.number)}
-          size="small"
-          sx={{ mt: 0.25, p: 0.5 }}
-          slotProps={{ input: { 'aria-label': `Select pull request #${pr.number}` } }}
-        />
+        <ControlTooltip title={`Select pull request #${pr.number}`}>
+          <Radio
+            checked={selected}
+            onChange={() => onSelect(pr.number)}
+            size="small"
+            sx={{ mt: 0.25, p: 0.5 }}
+            slotProps={{ input: { 'aria-label': `Select pull request #${pr.number}` } }}
+          />
+        </ControlTooltip>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 0.25 }}>
             <ListRowTitle>
