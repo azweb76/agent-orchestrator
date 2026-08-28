@@ -11,6 +11,7 @@ import {
   Stack,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
@@ -51,13 +52,16 @@ function flattenAgents(
 }
 
 function HudPanel({ children, sx }: { children: ReactNode; sx?: object }) {
+  const theme = useTheme();
+  const ao = theme.palette.ao;
+
   return (
     <Box
       sx={{
         position: 'relative',
         border: '1px solid',
         borderColor: 'divider',
-        bgcolor: 'rgba(18,24,38,0.72)',
+        bgcolor: ao.surface.panel,
         backdropFilter: 'blur(10px)',
         borderRadius: 2,
         p: 2.5,
@@ -66,8 +70,7 @@ function HudPanel({ children, sx }: { children: ReactNode; sx?: object }) {
           content: '""',
           position: 'absolute',
           inset: 0,
-          background:
-            'linear-gradient(135deg, rgba(94,234,212,0.05) 0%, transparent 42%, rgba(139,164,255,0.04) 100%)',
+          background: ao.gradient.panelSheen,
           pointerEvents: 'none',
         },
         ...sx,
@@ -269,6 +272,9 @@ export function DashboardPage() {
     day: 'numeric',
   });
 
+  const theme = useTheme();
+  const ao = theme.palette.ao;
+
   const onCommandSubmit = (event: FormEvent) => {
     event.preventDefault();
     const first = filteredAgents[0];
@@ -286,8 +292,7 @@ export function DashboardPage() {
           overflow: 'hidden',
           px: { xs: 2, md: 3.5 },
           py: { xs: 2.25, md: 3.5 },
-          background:
-            'radial-gradient(ellipse 80% 70% at 15% 20%, rgba(94,234,212,0.12), transparent 55%), radial-gradient(ellipse 60% 80% at 90% 10%, rgba(139,164,255,0.1), transparent 50%), linear-gradient(180deg, rgba(18,24,38,0.95), rgba(11,15,23,0.88))',
+          background: ao.gradient.hero,
         }}
       >
         <Stack
@@ -395,7 +400,7 @@ export function DashboardPage() {
               }}
               sx={{
                 '& .MuiOutlinedInput-root': {
-                  bgcolor: 'rgba(11,15,23,0.55)',
+                  bgcolor: 'ao.surface.overlay',
                   fontFamily: '"IBM Plex Mono", monospace',
                   fontSize: '0.9rem',
                 },
@@ -453,7 +458,7 @@ export function DashboardPage() {
           border: '1px solid',
           borderColor: 'divider',
           borderRadius: 2,
-          bgcolor: 'rgba(18,24,38,0.55)',
+          bgcolor: 'ao.surface.panelMuted',
           overflow: 'hidden',
           '& > *:nth-of-type(odd)': {
             borderRight: { xs: '1px solid', md: 'none' },
@@ -493,10 +498,9 @@ export function DashboardPage() {
       {blockedAgents.length > 0 ? (
         <HudPanel
           sx={{
-            borderColor: 'rgba(255,183,77,0.4)',
+            borderColor: 'ao.accent.warningBorder',
             '&::before': {
-              background:
-                'linear-gradient(135deg, rgba(255,183,77,0.08) 0%, transparent 45%, rgba(255,183,77,0.04) 100%)',
+              background: `linear-gradient(135deg, ${ao.accent.warningTintStrong} 0%, transparent 45%, ${ao.accent.warningTint} 100%)`,
             },
           }}
         >
@@ -524,14 +528,14 @@ export function DashboardPage() {
                   textDecoration: 'none',
                   color: 'inherit',
                   border: '1px solid',
-                  borderColor: 'rgba(255,183,77,0.25)',
+                  borderColor: 'ao.accent.warningBorder',
                   borderRadius: 1.5,
                   px: 1.75,
                   py: 1,
                   transition: 'border-color 0.2s ease, background-color 0.2s ease',
                   '&:hover': {
-                    borderColor: 'rgba(255,183,77,0.55)',
-                    bgcolor: 'rgba(255,183,77,0.06)',
+                    borderColor: 'warning.main',
+                    bgcolor: 'ao.accent.warningTint',
                   },
                 }}
               >
@@ -626,8 +630,8 @@ export function DashboardPage() {
                     py: 1.25,
                     transition: 'border-color 0.2s ease, background-color 0.2s ease',
                     '&:hover': {
-                      borderColor: 'rgba(94,234,212,0.35)',
-                      bgcolor: 'rgba(94,234,212,0.04)',
+                      borderColor: 'ao.accent.secondaryBorder',
+                      bgcolor: 'ao.accent.secondaryTint',
                     },
                     '&:focus-visible': {
                       outline: '2px solid',
@@ -649,7 +653,7 @@ export function DashboardPage() {
                               ? 'success.main'
                               : 'warning.main',
                         boxShadow:
-                          agent.status === 'running' ? '0 0 0 3px rgba(139,164,255,0.25)' : 'none',
+                          agent.status === 'running' ? `0 0 0 3px ${ao.accent.infoGlow}` : 'none',
                         animation:
                           agent.status === 'running' ? 'ao-pulse 1.4s ease-in-out infinite' : 'none',
                         '@keyframes ao-pulse': {
@@ -673,7 +677,7 @@ export function DashboardPage() {
                             mt: 0.75,
                             height: 2,
                             borderRadius: 1,
-                            bgcolor: 'rgba(139,164,255,0.12)',
+                            bgcolor: 'ao.accent.infoTint',
                           }}
                         />
                       ) : null}

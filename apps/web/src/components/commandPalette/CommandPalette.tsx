@@ -130,7 +130,7 @@ export function CommandPalette({
         paper: {
           sx: {
             mt: { xs: 2, sm: 10 },
-            bgcolor: 'rgba(18,24,38,0.98)',
+            bgcolor: 'ao.surface.elevated',
             backgroundImage: 'none',
             border: '1px solid',
             borderColor: 'divider',

@@ -56,7 +56,7 @@ function FindingCard({ finding }: { finding: SessionGradeFinding }) {
         borderRadius: 1.5,
         border: 1,
         borderColor: 'divider',
-        bgcolor: 'rgba(255,255,255,0.02)',
+        bgcolor: 'ao.surface.inset',
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>

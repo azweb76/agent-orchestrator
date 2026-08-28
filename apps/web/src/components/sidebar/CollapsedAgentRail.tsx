@@ -59,7 +59,7 @@ export function CollapsedAgentRail({
             borderRadius: 2,
             border: '1px solid',
             borderColor: 'divider',
-            bgcolor: 'rgba(94,234,212,0.06)',
+            bgcolor: 'ao.accent.secondaryTint',
           }}
         >
           <AddIcon fontSize="small" />
@@ -99,7 +99,7 @@ export function CollapsedAgentRail({
               to={`/agents/${agent.id}`}
               size="small"
               aria-label={`${agent.name} (${agent.status})`}
-              sx={{
+              sx={(theme) => ({
                 width: 40,
                 height: 40,
                 borderRadius: 2,
@@ -112,19 +112,19 @@ export function CollapsedAgentRail({
                       : 'divider',
                 bgcolor:
                   selected
-                    ? 'rgba(94,234,212,0.12)'
+                    ? theme.palette.ao.surface.selected
                     : agent.status === 'running'
-                      ? 'rgba(124,156,255,0.1)'
-                      : 'rgba(255,255,255,0.03)',
+                      ? theme.palette.ao.accent.infoTint
+                      : theme.palette.ao.surface.hover,
                 position: 'relative',
                 boxShadow:
                   agent.status === 'running'
-                    ? '0 0 10px rgba(124,156,255,0.35)'
+                    ? `0 0 10px ${theme.palette.ao.accent.infoGlow}`
                     : 'none',
                 '&:hover': {
-                  bgcolor: 'rgba(255,255,255,0.08)',
+                  bgcolor: theme.palette.ao.surface.hoverStrong,
                 },
-              }}
+              })}
             >
               <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput}>
                 <AgentStatusIcon status={agent.status} selected={selected} />

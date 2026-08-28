@@ -172,7 +172,7 @@ export function WorkspaceSidebar({
         flexShrink: 0,
         borderRight: '1px solid',
         borderColor: 'divider',
-        bgcolor: 'rgba(18,24,38,0.92)',
+        bgcolor: 'ao.surface.sidebar',
         backdropFilter: 'blur(10px)',
         display: 'flex',
         flexDirection: 'column',

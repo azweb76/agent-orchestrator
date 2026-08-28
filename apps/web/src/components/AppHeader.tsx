@@ -103,7 +103,7 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
       position="sticky"
       elevation={0}
       sx={{
-        bgcolor: 'rgba(11,15,23,0.88)',
+        bgcolor: 'ao.surface.header',
         backdropFilter: 'blur(14px)',
         borderBottom: '1px solid',
         borderColor: 'divider',

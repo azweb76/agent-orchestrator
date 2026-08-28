@@ -27,28 +27,32 @@ export function AgentStatusDot({
   const running = status === 'running';
   return (
     <Box
-      sx={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        bgcolor: statusDotColor(status),
-        flexShrink: 0,
-        boxShadow: running
-          ? '0 0 6px 2px rgba(124,156,255,0.85), 0 0 0 3px rgba(124,156,255,0.3)'
-          : 'none',
-        animation: running ? 'ao-status-glow 1.2s ease-in-out infinite' : 'none',
-        '@keyframes ao-status-glow': {
-          '0%, 100%': {
-            opacity: 1,
-            transform: 'scale(1)',
-            boxShadow: '0 0 6px 2px rgba(124,156,255,0.85), 0 0 0 3px rgba(124,156,255,0.3)',
+      sx={(theme) => {
+        const glow = theme.palette.ao.accent.infoGlow;
+        const ring = theme.palette.info.main;
+        const runningShadow = `0 0 6px 2px ${ring}, 0 0 0 3px ${glow}`;
+        const pulseShadow = `0 0 12px 4px ${ring}, 0 0 0 4px ${glow}`;
+        return {
+          width: size,
+          height: size,
+          borderRadius: '50%',
+          bgcolor: statusDotColor(status),
+          flexShrink: 0,
+          boxShadow: running ? runningShadow : 'none',
+          animation: running ? 'ao-status-glow 1.2s ease-in-out infinite' : 'none',
+          '@keyframes ao-status-glow': {
+            '0%, 100%': {
+              opacity: 1,
+              transform: 'scale(1)',
+              boxShadow: runningShadow,
+            },
+            '50%': {
+              opacity: 0.75,
+              transform: 'scale(0.9)',
+              boxShadow: pulseShadow,
+            },
           },
-          '50%': {
-            opacity: 0.75,
-            transform: 'scale(0.9)',
-            boxShadow: '0 0 12px 4px rgba(124,156,255,1), 0 0 0 4px rgba(124,156,255,0.45)',
-          },
-        },
+        };
       }}
     />
   );
@@ -68,16 +72,16 @@ export function AgentStatusIcon({
     <SmartToyOutlinedIcon
       fontSize={fontSize}
       color={selected ? 'secondary' : running ? 'info' : 'inherit'}
-      sx={{
+      sx={(theme) => ({
         animation: running ? 'ao-agent-spin 2.4s linear infinite' : 'none',
         filter: running
-          ? 'drop-shadow(0 0 4px rgba(124,156,255,0.9)) drop-shadow(0 0 8px rgba(124,156,255,0.45))'
+          ? `drop-shadow(0 0 4px ${theme.palette.info.main}) drop-shadow(0 0 8px ${theme.palette.ao.accent.infoGlow})`
           : 'none',
         '@keyframes ao-agent-spin': {
           from: { transform: 'rotate(0deg)' },
           to: { transform: 'rotate(360deg)' },
         },
-      }}
+      })}
     />
   );
 }

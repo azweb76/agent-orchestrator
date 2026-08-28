@@ -1,159 +1,170 @@
 import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Box, Link, Typography } from '@mui/material';
+import { Box, Link, Typography, useTheme } from '@mui/material';
+import { useMemo } from 'react';
 
-const components: Components = {
-  p: ({ children }) => (
-    <Typography component="p" sx={{ mb: 1, lineHeight: 1.65, '&:last-child': { mb: 0 } }}>
-      {children}
-    </Typography>
-  ),
-  a: ({ href, children }) => (
-    <Link href={href} target="_blank" rel="noopener noreferrer">
-      {children}
-    </Link>
-  ),
-  code: ({ className, children, ...props }) => {
-    const inline = !className;
-    if (inline) {
-      return (
+function useMarkdownComponents(): Components {
+  const theme = useTheme();
+  const ao = theme.palette.ao;
+
+  return useMemo(
+    () => ({
+      p: ({ children }) => (
+        <Typography component="p" sx={{ mb: 1, lineHeight: 1.65, '&:last-child': { mb: 0 } }}>
+          {children}
+        </Typography>
+      ),
+      a: ({ href, children }) => (
+        <Link href={href} target="_blank" rel="noopener noreferrer">
+          {children}
+        </Link>
+      ),
+      code: ({ className, children, ...props }) => {
+        const inline = !className;
+        if (inline) {
+          return (
+            <Box
+              component="code"
+              sx={{
+                px: 0.6,
+                py: 0.1,
+                borderRadius: 1,
+                bgcolor: ao.surface.codeInline,
+                fontFamily: '"IBM Plex Mono", monospace',
+                fontSize: '0.85em',
+              }}
+              {...props}
+            >
+              {children}
+            </Box>
+          );
+        }
+        return (
+          <Box
+            component="code"
+            className={className}
+            sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 13 }}
+            {...props}
+          >
+            {children}
+          </Box>
+        );
+      },
+      pre: ({ children }) => (
         <Box
-          component="code"
+          component="pre"
           sx={{
-            px: 0.6,
-            py: 0.1,
-            borderRadius: 1,
-            bgcolor: 'rgba(255,255,255,0.08)',
-            fontFamily: '"IBM Plex Mono", monospace',
-            fontSize: '0.85em',
+            p: 1.5,
+            my: 1,
+            overflow: 'auto',
+            overflowWrap: 'anywhere',
+            borderRadius: 2,
+            bgcolor: ao.surface.code,
+            border: '1px solid',
+            borderColor: 'divider',
           }}
-          {...props}
         >
           {children}
         </Box>
-      );
-    }
-    return (
-      <Box
-        component="code"
-        className={className}
-        sx={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 13 }}
-        {...props}
-      >
-        {children}
-      </Box>
-    );
-  },
-  pre: ({ children }) => (
-    <Box
-      component="pre"
-      sx={{
-        p: 1.5,
-        my: 1,
-        overflow: 'auto',
-        overflowWrap: 'anywhere',
-        borderRadius: 2,
-        bgcolor: 'rgba(0,0,0,0.35)',
-        border: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      {children}
-    </Box>
-  ),
-  ul: ({ children }) => (
-    <Box component="ul" sx={{ pl: 2.5, my: 1 }}>
-      {children}
-    </Box>
-  ),
-  ol: ({ children }) => (
-    <Box component="ol" sx={{ pl: 2.5, my: 1 }}>
-      {children}
-    </Box>
-  ),
-  li: ({ children }) => (
-    <Typography component="li" sx={{ mb: 0.5, lineHeight: 1.55 }}>
-      {children}
-    </Typography>
-  ),
-  h1: ({ children }) => (
-    <Typography variant="h5" sx={{ mt: 1.5, mb: 1 }}>
-      {children}
-    </Typography>
-  ),
-  h2: ({ children }) => (
-    <Typography variant="h6" sx={{ mt: 1.5, mb: 1 }}>
-      {children}
-    </Typography>
-  ),
-  h3: ({ children }) => (
-    <Typography variant="subtitle1" sx={{ mt: 1, mb: 0.75, fontWeight: 700 }}>
-      {children}
-    </Typography>
-  ),
-  blockquote: ({ children }) => (
-    <Box
-      component="blockquote"
-      sx={{
-        m: 0,
-        my: 1,
-        pl: 1.5,
-        borderLeft: '3px solid',
-        borderColor: 'secondary.main',
-        color: 'text.secondary',
-      }}
-    >
-      {children}
-    </Box>
-  ),
-  img: ({ src, alt }) => (
-    <Box
-      component="img"
-      src={src}
-      alt={alt ?? ''}
-      sx={{ maxWidth: '100%', height: 'auto', borderRadius: 1, my: 1, display: 'block' }}
-    />
-  ),
-  hr: () => (
-    <Box
-      component="hr"
-      sx={{
-        border: 0,
-        borderTop: '1px solid',
-        borderColor: 'divider',
-        my: 2,
-      }}
-    />
-  ),
-  table: ({ children }) => (
-    <Box sx={{ overflow: 'auto', my: 1.25 }}>
-      <Box
-        component="table"
-        sx={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: 13,
-          '& th, & td': {
-            border: '1px solid',
+      ),
+      ul: ({ children }) => (
+        <Box component="ul" sx={{ pl: 2.5, my: 1 }}>
+          {children}
+        </Box>
+      ),
+      ol: ({ children }) => (
+        <Box component="ol" sx={{ pl: 2.5, my: 1 }}>
+          {children}
+        </Box>
+      ),
+      li: ({ children }) => (
+        <Typography component="li" sx={{ mb: 0.5, lineHeight: 1.55 }}>
+          {children}
+        </Typography>
+      ),
+      h1: ({ children }) => (
+        <Typography variant="h5" sx={{ mt: 1.5, mb: 1 }}>
+          {children}
+        </Typography>
+      ),
+      h2: ({ children }) => (
+        <Typography variant="h6" sx={{ mt: 1.5, mb: 1 }}>
+          {children}
+        </Typography>
+      ),
+      h3: ({ children }) => (
+        <Typography variant="subtitle1" sx={{ mt: 1, mb: 0.75, fontWeight: 700 }}>
+          {children}
+        </Typography>
+      ),
+      blockquote: ({ children }) => (
+        <Box
+          component="blockquote"
+          sx={{
+            m: 0,
+            my: 1,
+            pl: 1.5,
+            borderLeft: '3px solid',
+            borderColor: 'secondary.main',
+            color: 'text.secondary',
+          }}
+        >
+          {children}
+        </Box>
+      ),
+      img: ({ src, alt }) => (
+        <Box
+          component="img"
+          src={src}
+          alt={alt ?? ''}
+          sx={{ maxWidth: '100%', height: 'auto', borderRadius: 1, my: 1, display: 'block' }}
+        />
+      ),
+      hr: () => (
+        <Box
+          component="hr"
+          sx={{
+            border: 0,
+            borderTop: '1px solid',
             borderColor: 'divider',
-            px: 1.25,
-            py: 0.75,
-            textAlign: 'left',
-          },
-          '& th': {
-            bgcolor: 'rgba(255,255,255,0.04)',
-            fontWeight: 600,
-          },
-        }}
-      >
-        {children}
-      </Box>
-    </Box>
-  ),
-};
+            my: 2,
+          }}
+        />
+      ),
+      table: ({ children }) => (
+        <Box sx={{ overflow: 'auto', my: 1.25 }}>
+          <Box
+            component="table"
+            sx={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 13,
+              '& th, & td': {
+                border: '1px solid',
+                borderColor: 'divider',
+                px: 1.25,
+                py: 0.75,
+                textAlign: 'left',
+              },
+              '& th': {
+                bgcolor: ao.surface.hover,
+                fontWeight: 600,
+              },
+            }}
+          >
+            {children}
+          </Box>
+        </Box>
+      ),
+    }),
+    [ao],
+  );
+}
 
 export function MarkdownContent({ content, cursor }: { content: string; cursor?: boolean }) {
+  const components = useMarkdownComponents();
+
   return (
     <Box sx={{ '& > *:first-of-type': { mt: 0 } }}>
       {content ? (

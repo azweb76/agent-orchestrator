@@ -108,7 +108,7 @@ function DirRow({
           cursor: 'pointer',
           textAlign: 'left',
           borderRadius: 1,
-          '&:hover': { bgcolor: 'rgba(255,255,255,0.04)' },
+          '&:hover': { bgcolor: 'ao.surface.hover' },
         }}
       >
         {isOpen ? <ExpandMoreIcon sx={{ fontSize: 16, opacity: 0.7 }} /> : <ChevronRightIcon sx={{ fontSize: 16, opacity: 0.7 }} />}
@@ -161,12 +161,12 @@ function FileRow({
           border: 0,
           borderLeft: '2px solid',
           borderColor: selected ? 'secondary.main' : 'transparent',
-          bgcolor: selected ? 'rgba(94,234,212,0.16)' : 'transparent',
+          bgcolor: selected ? 'ao.surface.selectedStrong' : 'transparent',
           color: selected ? 'secondary.light' : 'text.primary',
           cursor: 'pointer',
           textAlign: 'left',
           borderRadius: 1,
-          '&:hover': { bgcolor: selected ? 'rgba(94,234,212,0.18)' : 'rgba(255,255,255,0.04)' },
+          '&:hover': { bgcolor: selected ? 'ao.surface.selectedStrong' : 'ao.surface.hover' },
         }}
       >
         <InsertDriveFileOutlinedIcon sx={{ fontSize: 14, opacity: selected ? 0.9 : 0.65, flexShrink: 0 }} />
@@ -269,7 +269,7 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
             borderBottom: { xs: 1, md: 0 },
             borderColor: 'divider',
             overflow: 'auto',
-            bgcolor: 'rgba(0,0,0,0.18)',
+            bgcolor: 'ao.surface.inset',
             py: 0.75,
             px: 0.5,
           }}

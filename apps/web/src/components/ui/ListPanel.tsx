@@ -14,7 +14,7 @@ export function ListPanel({ children, sx }: ListPanelProps) {
         border: '1px solid',
         borderColor: 'divider',
         borderRadius: 2,
-        bgcolor: 'rgba(18,24,38,0.55)',
+        bgcolor: 'ao.surface.panelMuted',
         overflow: 'hidden',
         ...sx,
       }}
@@ -50,7 +50,7 @@ export function ListRow({
       to={to}
       href={href}
       onClick={onClick}
-      sx={{
+      sx={(theme) => ({
         display: 'flex',
         flexDirection: { xs: 'column', sm: 'row' },
         alignItems: { xs: 'stretch', sm: 'center' },
@@ -61,14 +61,14 @@ export function ListRow({
         color: 'inherit',
         borderBottom: '1px solid',
         borderColor: 'divider',
-        bgcolor: selected ? 'rgba(94,234,212,0.1)' : 'transparent',
-        boxShadow: selected ? 'inset 3px 0 0 0 #5eead4' : 'none',
+        bgcolor: selected ? theme.palette.ao.surface.selected : 'transparent',
+        boxShadow: selected ? `inset 3px 0 0 0 ${theme.palette.secondary.main}` : 'none',
         cursor: interactive ? 'pointer' : 'default',
         transition: 'background-color 0.15s ease',
         '&:last-child': { borderBottom: 'none' },
         '&:hover': interactive
           ? {
-              bgcolor: 'rgba(94,234,212,0.05)',
+              bgcolor: theme.palette.ao.accent.secondaryTint,
             }
           : undefined,
         '&:focus-visible': {
@@ -76,7 +76,7 @@ export function ListRow({
           outlineColor: 'secondary.main',
           outlineOffset: -2,
         },
-      }}
+      })}
     >
       <Box sx={{ minWidth: 0, flex: 1 }}>{children}</Box>
       {secondaryAction ? (

@@ -1,20 +1,21 @@
-import { Box } from '@mui/material';
-
-const LINE_COLORS: Record<string, string> = {
-  '+': 'rgba(74,222,128,0.10)',
-  '-': 'rgba(248,113,113,0.10)',
-  '@': 'rgba(94,234,212,0.08)',
-};
+import { Box, useTheme } from '@mui/material';
 
 /** Unified-diff hunk renderer. Mounted lazily so a 300-file PR does not paint every patch. */
 export function DiffBlock({ patch }: { patch: string }) {
+  const { diff } = useTheme().palette.ao;
+  const lineColors: Record<string, string> = {
+    '+': diff.add,
+    '-': diff.remove,
+    '@': diff.hunk,
+  };
+
   return (
     <Box
       sx={{
         fontFamily: '"IBM Plex Mono", monospace',
         fontSize: 12.5,
         lineHeight: 1.55,
-        bgcolor: 'rgba(0,0,0,0.35)',
+        bgcolor: diff.backdrop,
         borderRadius: 2,
         overflowX: 'auto',
         py: 0.5,
@@ -32,14 +33,14 @@ export function DiffBlock({ patch }: { patch: string }) {
               whiteSpace: 'pre',
               overflowX: 'visible',
               maxWidth: 'none',
-              bgcolor: LINE_COLORS[line[0] ?? ''] ?? 'transparent',
+              bgcolor: lineColors[line[0] ?? ''] ?? 'transparent',
               color:
                 line.startsWith('+')
-                  ? 'success.light'
+                  ? 'success.main'
                   : line.startsWith('-')
-                    ? 'error.light'
+                    ? 'error.main'
                     : line.startsWith('@')
-                      ? 'secondary.light'
+                      ? 'secondary.main'
                       : 'text.secondary',
             }}
           >

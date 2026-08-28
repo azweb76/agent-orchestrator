@@ -116,7 +116,7 @@ function ContextFillBar({ usage, windowTokens }: { usage: TokenUsageBreakdown; w
         height: 10,
         borderRadius: 1,
         overflow: 'hidden',
-        bgcolor: 'rgba(255,255,255,0.08)',
+        bgcolor: 'ao.surface.codeInline',
       }}
       aria-hidden
     >
@@ -216,11 +216,11 @@ function HistoryBar({
           height: CHART_HEIGHT + 14,
           px: 0.25,
           borderRadius: 0.75,
-          bgcolor: selected ? 'rgba(139,164,255,0.12)' : 'transparent',
+          bgcolor: selected ? 'ao.accent.primaryTintStrong' : 'transparent',
           outline: selected ? '2px solid' : 'none',
           outlineColor: 'primary.main',
           outlineOffset: -2,
-          '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
+          '&:hover': { bgcolor: 'ao.surface.hover' },
           '&:focus': { outline: 'none' },
           '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 0 },
         }}
@@ -254,7 +254,7 @@ function HistoryBar({
               overflow: 'hidden',
               boxShadow: occupancyColor ? 'inset 0 0 0 1px' : undefined,
               color: occupancyColor,
-              bgcolor: 'rgba(255,255,255,0.08)',
+              bgcolor: 'ao.surface.codeInline',
             }}
           >
             <Box sx={{ flexGrow: turn.usage.cacheReadInputTokens, minHeight: 0, bgcolor: CACHE_READ }} />
@@ -338,7 +338,7 @@ function HistoryChart({
                     right: 0,
                     bottom: `${tick * 100}%`,
                     borderTop: 1,
-                    borderColor: tick === 0 ? 'divider' : 'rgba(255,255,255,0.08)',
+                    borderColor: tick === 0 ? 'divider' : 'ao.surface.hover',
                     borderStyle: tick === 0 ? 'solid' : 'dashed',
                   }}
                   aria-hidden
@@ -399,7 +399,7 @@ function HistoryChart({
             px: 1.25,
             py: 1,
             borderRadius: 1,
-            bgcolor: 'rgba(255,255,255,0.04)',
+            bgcolor: 'ao.surface.hover',
             border: 1,
             borderColor: 'divider',
           }}
@@ -434,7 +434,7 @@ function HistoryChart({
             <UsageLegendItem color={CACHE_READ} label="Cache read" tokens={selected.usage.cacheReadInputTokens} />
             <UsageLegendItem color={CACHE_WRITE} label="Cache write" tokens={selected.usage.cacheCreationInputTokens} />
             <UsageLegendItem color={FRESH_INPUT} label="Input" tokens={selected.usage.inputTokens} />
-            <UsageLegendItem color="rgba(255,255,255,0.45)" label="Output" tokens={selected.usage.outputTokens} />
+            <UsageLegendItem color="ao.chart.muted" label="Output" tokens={selected.usage.outputTokens} />
           </Box>
           {selected.tools.length > 0 ? (
             <Typography variant="caption" color="text.secondary">
@@ -471,7 +471,7 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
           sx={{
             height: 8,
             borderRadius: 1,
-            bgcolor: 'rgba(255,255,255,0.08)',
+            bgcolor: 'ao.surface.codeInline',
             '& .MuiLinearProgress-bar': { bgcolor: fill, borderRadius: 1 },
           }}
         />
@@ -499,7 +499,7 @@ function ContextUsageBody({ data }: { data: SessionContextUsage }) {
             <UsageLegendItem color={CACHE_READ} label="Cache read" tokens={data.usage!.cacheReadInputTokens} />
             <UsageLegendItem color={CACHE_WRITE} label="Cache write" tokens={data.usage!.cacheCreationInputTokens} />
             <UsageLegendItem color={FRESH_INPUT} label="Input" tokens={data.usage!.inputTokens} />
-            <UsageLegendItem color="rgba(255,255,255,0.45)" label="Output" tokens={data.usage!.outputTokens} />
+            <UsageLegendItem color="ao.chart.muted" label="Output" tokens={data.usage!.outputTokens} />
           </Box>
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <Chip
@@ -604,7 +604,7 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
                 width: 22,
                 height: 4,
                 borderRadius: 1,
-                bgcolor: 'rgba(255,255,255,0.12)',
+                bgcolor: 'ao.surface.codeInline',
                 overflow: 'hidden',
                 display: { xs: 'none', sm: 'block' },
               }}

@@ -57,7 +57,7 @@ export function ToolPermissionCard({
           m: 0,
           p: 1.5,
           borderRadius: 1.5,
-          bgcolor: 'rgba(11,15,23,0.55)',
+          bgcolor: 'ao.surface.overlay',
           border: 1,
           borderColor: 'divider',
           fontFamily: '"IBM Plex Mono", monospace',
