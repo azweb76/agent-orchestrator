@@ -7,7 +7,6 @@ import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
-import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { AgentPageHeader } from './AgentPageHeader';
@@ -33,7 +32,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [commitPush, setCommitPush] = useState(true);
@@ -45,7 +43,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const {
     archiveMutation,
     unarchiveMutation,
-    deleteMutation,
     commitMutation,
     createPrMutation,
     autopilotMutation,
@@ -114,30 +111,19 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         archived={archived}
         archivePending={archiveMutation.isPending}
         unarchivePending={unarchiveMutation.isPending}
-        deletePending={deleteMutation.isPending}
         autopilotPending={autopilotMutation.isPending}
         onArchive={() => {
           archiveMutation.reset();
           setArchiveOpen(true);
         }}
         onUnarchive={() => unarchiveMutation.mutate()}
-        onDelete={() => {
-          deleteMutation.reset();
-          setDeleteOpen(true);
-        }}
         onCreatePr={() => setPrOpen(true)}
         onAutopilotChange={(enabled) => autopilotMutation.mutate(enabled)}
       />
 
-      {(unarchiveMutation.error || deleteMutation.error) && (
-        <Alert
-          severity="error"
-          onClose={() => {
-            unarchiveMutation.reset();
-            deleteMutation.reset();
-          }}
-        >
-          {((unarchiveMutation.error ?? deleteMutation.error) as Error).message}
+      {unarchiveMutation.error && (
+        <Alert severity="error" onClose={() => unarchiveMutation.reset()}>
+          {(unarchiveMutation.error as Error).message}
         </Alert>
       )}
 
@@ -242,19 +228,6 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             onSuccess: () => setArchiveOpen(false),
           });
         }}
-      />
-
-      <ConfirmDialog
-        open={deleteOpen}
-        title={`Delete ${agent.name}?`}
-        description="This permanently deletes the agent and its chat history. The git worktree is kept on disk."
-        confirmLabel="Delete agent"
-        loading={deleteMutation.isPending}
-        onCancel={() => {
-          setDeleteOpen(false);
-          deleteMutation.reset();
-        }}
-        onConfirm={() => deleteMutation.mutate()}
       />
 
       <CommitChangesDialog
