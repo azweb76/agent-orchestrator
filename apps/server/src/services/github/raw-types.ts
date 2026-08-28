@@ -85,6 +85,7 @@ export interface RawRepoSettings {
   allow_squash_merge?: boolean;
   allow_rebase_merge?: boolean;
   delete_branch_on_merge?: boolean;
+  archived?: boolean;
 }
 
 export interface RawCheckRun {

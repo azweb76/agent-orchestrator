@@ -87,3 +87,12 @@ export async function getRepoSettings(
   ctx.repoDetailCache.set(cacheKey, { settings, fetchedAt: Date.now() });
   return settings;
 }
+
+export async function isRepoArchived(
+  ctx: GitHubClientContext,
+  owner: string,
+  repo: string,
+): Promise<boolean> {
+  const settings = await getRepoSettings(ctx, owner, repo);
+  return settings.archived === true;
+}

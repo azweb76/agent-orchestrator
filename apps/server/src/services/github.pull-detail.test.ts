@@ -26,6 +26,22 @@ test('getPullRequestDetail maps the full payload and repo merge settings', async
   assert.deepEqual(pr.labels, [{ name: 'enhancement', color: 'a2eeef' }]);
   assert.deepEqual(pr.allowedMergeMethods, ['merge', 'squash', 'rebase']);
   assert.equal(pr.deleteBranchOnMerge, true);
+  assert.equal(pr.archived, false);
+});
+
+test('getPullRequestDetail reports archived true when the repo is archived', async (t) => {
+  routeFetch(t, [
+    [/\/pulls\/42$/, () => jsonResponse(rawPrDetail())],
+    [
+      /^\/repos\/azweb76\/agent-orchestrator$/,
+      () => jsonResponse({ ...REPO_SETTINGS, archived: true }),
+    ],
+  ]);
+
+  const service = new GitHubService({ token: 'tok', mergeabilityRetryDelayMs: 0 });
+  const pr = await service.getPullRequestDetail('azweb76', 'agent-orchestrator', 42);
+
+  assert.equal(pr.archived, true);
 });
 
 test('getPullRequestDetail derives allowedMergeMethods from repo settings', async (t) => {
