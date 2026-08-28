@@ -1,4 +1,4 @@
-import { Box, LinearProgress } from '@mui/material';
+import { Box } from '@mui/material';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import type { AgentStatus } from '@agent-orchestrator/shared';
 
@@ -15,21 +15,6 @@ function statusDotColor(status: AgentStatus): string {
     default:
       return 'text.secondary';
   }
-}
-
-export function AgentProgressBar({ status }: { status: AgentStatus }) {
-  if (status !== 'running') return null;
-  return (
-    <LinearProgress
-      color="info"
-      sx={{
-        mt: 0.75,
-        height: 3,
-        borderRadius: 1,
-        bgcolor: 'rgba(124,156,255,0.15)',
-      }}
-    />
-  );
 }
 
 export function AgentStatusDot({

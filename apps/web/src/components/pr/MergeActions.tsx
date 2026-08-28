@@ -148,21 +148,36 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
 
   return (
     <Stack spacing={1}>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        useFlexGap
+        sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' } }}
+      >
         {pr.draft && pr.state === 'open' && !pr.merged ? (
           <Button
             variant="contained"
             startIcon={<RateReviewOutlinedIcon />}
             disabled={busy}
             onClick={() => readyMutation.mutate()}
+            fullWidth={false}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             {readyMutation.isPending ? 'Marking ready…' : 'Ready for review'}
           </Button>
         ) : null}
 
         {readiness.allowedMethods.length > 0 ? (
-          <ButtonGroup variant="contained" disabled={!readiness.canMerge || busy}>
-            <Button startIcon={<MergeTypeIcon />} onClick={openMergeDialog}>
+          <ButtonGroup
+            variant="contained"
+            disabled={!readiness.canMerge || busy}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
+            <Button
+              startIcon={<MergeTypeIcon />}
+              onClick={openMergeDialog}
+              sx={{ flex: { xs: 1, sm: 'none' } }}
+            >
               {METHOD_BUTTONS[activeMethod]}
             </Button>
             <Button
@@ -181,6 +196,7 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
             startIcon={<SyncOutlinedIcon />}
             disabled={busy}
             onClick={() => updateBranchMutation.mutate()}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             {updateBranchMutation.isPending ? 'Updating…' : 'Update branch'}
           </Button>
@@ -192,6 +208,7 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
             color="error"
             disabled={busy}
             onClick={() => setConfirming('closed')}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Close pull request
           </Button>
@@ -203,6 +220,7 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
             startIcon={<LockOpenOutlinedIcon />}
             disabled={busy}
             onClick={() => setConfirming('open')}
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
             Reopen pull request
           </Button>

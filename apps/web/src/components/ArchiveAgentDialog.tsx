@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   Checkbox,
-  Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
@@ -11,6 +10,7 @@ import {
   FormControlLabel,
   Typography,
 } from '@mui/material';
+import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
 export interface ArchiveAgentDialogProps {
   open: boolean;
@@ -40,7 +40,7 @@ export function ArchiveAgentDialog({
   const title = agentName ? `Archive ${agentName}?` : 'Archive agent?';
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : onCancel} maxWidth="xs" fullWidth>
+    <ResponsiveDialog open={open} onClose={loading ? undefined : onCancel} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <DialogContentText sx={{ mb: 1.5 }}>
@@ -85,6 +85,6 @@ export function ArchiveAgentDialog({
           {loading ? 'Working…' : deleteWorktree ? 'Archive and delete' : 'Archive'}
         </Button>
       </DialogActions>
-    </Dialog>
+    </ResponsiveDialog>
   );
 }

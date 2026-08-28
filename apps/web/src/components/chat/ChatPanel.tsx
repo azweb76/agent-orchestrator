@@ -44,6 +44,7 @@ import {
   streamSessionFollow,
   type ChatStreamHandlers,
 } from '../../api/client';
+import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { EmptyState } from '../ui/EmptyState';
 import { AskUserQuestionCard } from './AskUserQuestionCard';
@@ -201,6 +202,7 @@ function MessageTimeline({ message, onRetry }: { message: Message; onRetry?: () 
 
 export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: ChatPanelProps) {
   const agentId = agent.id;
+  const keyboardInset = useVisualViewportInset();
   const queryClient = useQueryClient();
   const sessions = agent.sessions ?? [];
   const [sessionId, setSessionId] = useState(
@@ -1403,7 +1405,18 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           backdropFilter: 'blur(12px)',
         }}
       >
-        <Box sx={{ maxWidth: CHAT_COLUMN_MAX_WIDTH, mx: 'auto', px: { xs: 1.25, sm: 2.5 }, py: { xs: 1.25, sm: 1.5 }, pb: { xs: 'calc(10px + env(safe-area-inset-bottom, 0px))', sm: 1.5 } }}>
+        <Box
+          sx={{
+            maxWidth: CHAT_COLUMN_MAX_WIDTH,
+            mx: 'auto',
+            px: { xs: 1.25, sm: 2.5 },
+            py: { xs: 1.25, sm: 1.5 },
+            pb: {
+              xs: `calc(10px + env(safe-area-inset-bottom, 0px) + ${keyboardInset}px)`,
+              sm: 1.5,
+            },
+          }}
+        >
           {!archived && session ? (
             <InstructionDraftOfferBanner
               session={session}
