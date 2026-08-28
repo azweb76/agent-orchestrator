@@ -10,7 +10,7 @@ import {
 } from '@agent-orchestrator/shared';
 import { createAgentSession } from './app.js';
 import { GitHubService } from './github.js';
-import { mockResponse, seedAgent } from './chat-sessions.test-helpers.js';
+import { seedAgent } from './chat-sessions.test-helpers.js';
 
 test('listed templates include Create draft PR, Review, Address review, and Fix CI', () => {
   const ids = LISTED_CHAT_SESSION_TEMPLATES.map((item) => item.id);

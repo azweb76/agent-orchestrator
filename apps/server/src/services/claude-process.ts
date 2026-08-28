@@ -1,6 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import {
-  closeSync,
   createWriteStream,
   existsSync,
   openSync,

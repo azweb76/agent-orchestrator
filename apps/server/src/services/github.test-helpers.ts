@@ -1,5 +1,3 @@
-import assert from 'node:assert/strict';
-
 interface RawRepo {
   owner: { login: string };
   name: string;

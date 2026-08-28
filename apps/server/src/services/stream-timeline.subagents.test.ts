@@ -1,15 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  activeToolItem,
-  appendStreamText,
   applyStreamEvent,
   adoptParentClaudeSessionId,
   claudeResultErrorMessage,
-  coalesceTimelineText,
   completeRunningTools,
   isNestedSubagentEvent,
-  isSubagentItem,
   isTopLevelClaudeResult,
   parentStreamTextDelta,
   runningSubagentItems,

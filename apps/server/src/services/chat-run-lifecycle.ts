@@ -17,7 +17,6 @@ import { isPidAlive } from './git.js';
 import { type AppContext, makeEvent, nowIso, notify } from './app-context.js';
 import { clearSessionRunFields, syncAgentFromSessions } from './agent-core.js';
 import {
-  clearSessionQueue,
   drainSessionQueue,
   drainWaitingMutatingSessions,
   isGitMutatingSession,

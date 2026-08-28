@@ -1,20 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import {
-  ClaudeService,
-  GitService,
-  enrichPermissionInput,
-  isPidAlive,
-  killProcessTree,
-  slugify,
-} from './git.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

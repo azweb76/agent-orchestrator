@@ -4,17 +4,10 @@ import {
   activeToolItem,
   appendStreamText,
   applyStreamEvent,
-  adoptParentClaudeSessionId,
-  claudeResultErrorMessage,
   coalesceTimelineText,
-  completeRunningTools,
-  isNestedSubagentEvent,
   isSubagentItem,
-  isTopLevelClaudeResult,
   parentStreamTextDelta,
   runningSubagentItems,
-  visibleAssistantContent,
-  visibleSubagentItems,
   type StreamPart,
 } from '@agent-orchestrator/shared';
 
