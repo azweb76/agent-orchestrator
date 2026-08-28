@@ -82,7 +82,7 @@ describe('buildMessageTimelineView', () => {
     expect(view.subagents).toHaveLength(1);
   });
 
-  it('keeps finished subagent cards once every row is done', () => {
+  it('hides finished subagent cards once every row is done', () => {
     const doneTimeline: StreamPart[] = [
       {
         type: 'tool',
@@ -93,8 +93,8 @@ describe('buildMessageTimelineView', () => {
       },
     ];
     const view = buildMessageTimelineView(assistantMessage(doneTimeline, false), []);
-    expect(view.showSubagents).toBe(true);
-    expect(view.subagents).toHaveLength(1);
+    expect(view.showSubagents).toBe(false);
+    expect(view.subagents).toHaveLength(0);
   });
 
   it('hides AskUserQuestion progress when the question card is pending', () => {
