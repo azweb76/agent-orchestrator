@@ -6,6 +6,7 @@ import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
+import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
@@ -28,7 +29,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
   const [initialTemplate] = useState(() => locationState?.sessionTemplate);
   const [focusAttention] = useState(() => locationState?.focusAttention);
-  const [focusSessionId] = useState(() => locationState?.sessionId);
+  const [focusSessionId, setFocusSessionId] = useState(() => locationState?.sessionId);
   const [tab, setTab] = useState(0);
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
@@ -129,6 +130,15 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         }}
         onCreatePr={() => setPrOpen(true)}
         onAutopilotChange={(enabled) => autopilotMutation.mutate(enabled)}
+      />
+
+      <AgentPrStatusStrip
+        agent={agent}
+        archived={archived}
+        onSessionStarted={(sessionId) => {
+          setFocusSessionId(sessionId);
+          setTab(0);
+        }}
       />
 
       {(unarchiveMutation.error || deleteMutation.error) && (
