@@ -136,6 +136,61 @@ test('pollTargetState emits github_pr_changed when checks transition to failure'
   }
 });
 
+test('pollTargetState emits github_pr_changed with kind "state" when draft status changes', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-state-'));
+  try {
+    const { ctx } = await seedAgent(tmp);
+    const notifier = new Notifier();
+    ctx.notifier = notifier;
+    const events = captureEvents(notifier);
+
+    let draft = true;
+    ctx.github = mockGithub({
+      getPullRequestDetail: async () => prDetail({ draft }),
+    } as unknown as Partial<GitHubService>);
+
+    await pollTargetState(ctx, target());
+    assert.equal(
+      events.some((item) => item.type === 'github_pr_changed' && item.data.kind === 'state'),
+      false,
+    );
+
+    draft = false;
+    await pollTargetState(ctx, target());
+    assert.equal(
+      events.filter((item) => item.type === 'github_pr_changed' && item.data.kind === 'state').length,
+      1,
+    );
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('pollTargetState clears checksRollup to none once a PR merges', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-merge-checks-'));
+  try {
+    const { ctx } = await seedAgent(tmp);
+    const notifier = new Notifier();
+    ctx.notifier = notifier;
+    captureEvents(notifier);
+
+    let merged = false;
+    ctx.github = mockGithub({
+      getPullRequestDetail: async () => prDetail({ merged }),
+      getPullRequestChecks: async () => checksResult('pending'),
+    } as unknown as Partial<GitHubService>);
+
+    await pollTargetState(ctx, target());
+    assert.equal(getCachedPrStatus(ctx, 'example', 'demo', 42)?.checksRollup, 'pending');
+
+    merged = true;
+    await pollTargetState(ctx, target());
+    assert.equal(getCachedPrStatus(ctx, 'example', 'demo', 42)?.checksRollup, 'none');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test('auto Fix CI enqueues a session and respects retry cap per commit SHA', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-fixci-'));
   try {

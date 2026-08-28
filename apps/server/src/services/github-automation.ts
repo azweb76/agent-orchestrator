@@ -9,7 +9,7 @@ import { hasActiveOrQueuedTemplate, startAutomationTemplate } from './automation
 import type { PollTarget } from './github-poll-targets.js';
 import { pollTargetKey } from './github-poll-targets.js';
 
-export type GithubPrChangeKind = 'checks' | 'reviews' | 'merged';
+export type GithubPrChangeKind = 'checks' | 'reviews' | 'merged' | 'state';
 
 export interface GithubPrChangeEvent {
   kind: GithubPrChangeKind;
@@ -38,6 +38,10 @@ function fixCiAttemptsKey(agentId: string, headSha: string): string {
 
 function mergedStateKey(target: PollTarget): string {
   return `merged:${pollTargetKey(target)}`;
+}
+
+function stateDraftKey(target: PollTarget): string {
+  return `state-draft:${pollTargetKey(target)}`;
 }
 
 function statusStateKey(target: PollTarget): string {
@@ -95,6 +99,22 @@ export async function pollTargetState(
   const events: GithubPrChangeEvent[] = [];
   const detail = await ctx.github.getPullRequestDetail(target.owner, target.repo, target.number);
 
+  const stateDraftKeyValue = stateDraftKey(target);
+  const stateDraftPayload = JSON.stringify({ state: detail.state, draft: detail.draft });
+  const prevStateDraft = ctx.repos.automationState.get(stateDraftKeyValue);
+  if (prevStateDraft !== null && prevStateDraft !== stateDraftPayload) {
+    const event: GithubPrChangeEvent = {
+      kind: 'state',
+      owner: target.owner,
+      repo: target.repo,
+      number: target.number,
+      agentId: target.agentId,
+    };
+    events.push(event);
+    emitPrChanged(ctx, event);
+  }
+  ctx.repos.automationState.set(stateDraftKeyValue, stateDraftPayload);
+
   if (detail.merged) {
     const mergedKey = mergedStateKey(target);
     const wasMerged = ctx.repos.automationState.get(mergedKey) === '1';
@@ -111,14 +131,13 @@ export async function pollTargetState(
       events.push(event);
       emitPrChanged(ctx, event);
     }
-    const prevStatus = getCachedPrStatus(ctx, target.owner, target.repo, target.number);
     ctx.repos.automationState.set(
       statusStateKey(target),
       JSON.stringify({
         state: detail.state as 'open' | 'closed',
         draft: detail.draft,
         merged: detail.merged,
-        checksRollup: prevStatus?.checksRollup ?? 'none',
+        checksRollup: 'none',
         updatedAt: new Date().toISOString(),
       }),
     );
