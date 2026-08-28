@@ -2,6 +2,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AgentDetail, ChatSessionTemplateId } from '@agent-orchestrator/shared';
@@ -41,6 +42,15 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: prKey });
       if (sessionId) onSessionStarted?.(sessionId);
+    },
+  });
+
+  const markReady = useMutation({
+    mutationFn: () => api.markPullRequestReady(owner, repo, prNumber!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: prKey });
+      queryClient.invalidateQueries({ queryKey: ['agent', agent.id] });
+      queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
     },
   });
 
@@ -108,6 +118,19 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
               </Button>
             </ControlTooltip>
           ) : null}
+          {model.showMarkReady ? (
+            <ControlTooltip title="Mark this draft ready for review" disabled={markReady.isPending}>
+              <Button
+                color="inherit"
+                size="small"
+                startIcon={<RateReviewOutlinedIcon />}
+                disabled={markReady.isPending}
+                onClick={() => markReady.mutate()}
+              >
+                {markReady.isPending ? 'Marking…' : 'Mark ready'}
+              </Button>
+            </ControlTooltip>
+          ) : null}
           <ControlTooltip title="Open this pull request in the app">
             <Button color="inherit" size="small" component={RouterLink} to={inAppPath}>
               Open PR
@@ -141,9 +164,9 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
             ) : null}
           </Stack>
         </Box>
-        {startTemplate.error ? (
+        {startTemplate.error || markReady.error ? (
           <Typography variant="caption" color="error">
-            {(startTemplate.error as Error).message}
+            {((startTemplate.error ?? markReady.error) as Error).message}
           </Typography>
         ) : null}
       </Stack>

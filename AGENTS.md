@@ -52,6 +52,7 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOS
 - Shared DTOs and stream/permission helpers belong in `packages/shared`. Keep `apps/web/src/api/client.ts` aligned with `apps/server/src/routes/index.ts`.
 - From-idea kickoff sends the raw idea; do not append extra instructions there.
 - Session grades persist on `chat_sessions` (`grade_score` / comment / transcript snapshot). Instruction drafts write only allowed paths: `CLAUDE.md`, `AGENTS.md`, `.claude/CLAUDE.md`, and `.claude/skills/<slug>/SKILL.md`.
+- Agent **delivery phase** (`resolveAgentDeliveryPhase` in `@agent-orchestrator/shared`) is derived from sessions + linked PR checks/reviews — plan → build → needs PR → draft → CI/review → ready → merged → archived. Prefer this for “where is this agent?” UI over inventing a second workflow engine.
 
 ## Conventions
 

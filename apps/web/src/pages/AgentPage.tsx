@@ -144,6 +144,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       <AgentPrActionOffers
         agent={agent}
         archived={archived}
+        archivePending={archiveMutation.isPending}
+        onArchive={() => {
+          archiveMutation.reset();
+          setArchiveOpen(true);
+        }}
         onSessionStarted={(sessionId) => {
           setFocusSessionId(sessionId);
           setTab(0);

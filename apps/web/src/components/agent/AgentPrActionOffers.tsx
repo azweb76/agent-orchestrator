@@ -14,6 +14,7 @@ import {
   type AgentPrActionKind,
   type AgentPrActionOffer,
 } from './agentPrStatusModel';
+import { MergedPrCompletionBanner } from './MergedPrCompletionBanner';
 import { useAgentLinkedPr } from './useAgentLinkedPr';
 
 const DISMISS_PREFIX = 'ao.pr-action-dismiss:';
@@ -67,6 +68,8 @@ function primaryLabel(kind: AgentPrActionKind, pending: boolean): string {
 export interface AgentPrActionOffersProps {
   agent: AgentDetail;
   archived: boolean;
+  archivePending?: boolean;
+  onArchive?: () => void;
   onSessionStarted?: (sessionId: string) => void;
 }
 
@@ -74,11 +77,18 @@ export interface AgentPrActionOffersProps {
  * Dismissible PR action cards (Fix CI, Address review, Mark ready, Merge).
  * Shares PR/checks queries with the status strip via React Query cache.
  */
-export function AgentPrActionOffers({ agent, archived, onSessionStarted }: AgentPrActionOffersProps) {
+export function AgentPrActionOffers({
+  agent,
+  archived,
+  archivePending,
+  onArchive,
+  onSessionStarted,
+}: AgentPrActionOffersProps) {
   const queryClient = useQueryClient();
   const { enabled, owner, repo, prNumber, prKey, pr, checks } = useAgentLinkedPr(agent);
   const [dismissed, setDismissed] = useState(() => readDismissed(agent.id));
   const [mergeOffer, setMergeOffer] = useState<AgentPrActionOffer | null>(null);
+  const [mergeCompleteDismissed, setMergeCompleteDismissed] = useState(false);
 
   const offers = useMemo(() => {
     if (!pr) return [];
@@ -138,6 +148,7 @@ export function AgentPrActionOffers({ agent, archived, onSessionStarted }: Agent
     },
     onSuccess: () => {
       setMergeOffer(null);
+      setMergeCompleteDismissed(false);
       queryClient.invalidateQueries({ queryKey: prKey });
       queryClient.invalidateQueries({ queryKey: ['agent', agent.id] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
@@ -161,6 +172,21 @@ export function AgentPrActionOffers({ agent, archived, onSessionStarted }: Agent
           : (mergeMutation.error as Error | null);
 
   if (!enabled || !pr) return null;
+
+  if (pr.merged && !mergeCompleteDismissed) {
+    return (
+      <MergedPrCompletionBanner
+        owner={owner}
+        repo={repo}
+        prNumber={pr.number}
+        prTitle={pr.title}
+        archived={archived}
+        archivePending={archivePending}
+        onArchive={onArchive}
+        onDismiss={() => setMergeCompleteDismissed(true)}
+      />
+    );
+  }
 
   return (
     <>

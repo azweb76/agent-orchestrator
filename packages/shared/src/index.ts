@@ -123,6 +123,12 @@ export {
 } from './pull-request.js';
 
 export {
+  resolveAgentDeliveryPhase,
+  AGENT_DELIVERY_PHASE_LABELS,
+  type AgentDeliveryPhase,
+} from './agent-delivery-phase.js';
+
+export {
   buildIssueKickoffPrompt,
   parseIssueReference,
   type IssueKickoffComment,
