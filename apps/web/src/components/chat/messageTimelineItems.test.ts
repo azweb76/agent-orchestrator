@@ -135,4 +135,19 @@ describe('buildMessageTimelineView', () => {
       true,
     );
   });
+
+  it('renders tool-separated assistant text as separate paragraphs', () => {
+    const timeline: StreamPart[] = [
+      { type: 'text', id: 't1', text: 'First reply.' },
+      { type: 'tool', id: 'tool_1', name: 'Read', status: 'done' },
+      { type: 'text', id: 't2', text: 'Second reply.' },
+    ];
+    const message = {
+      ...assistantMessage(timeline, false),
+      content: 'First reply.Second reply.',
+    };
+    const view = buildMessageTimelineView(message, []);
+    expect(view.textContent).toBe('First reply.\n\nSecond reply.');
+    expect(view.showText).toBe(true);
+  });
 });

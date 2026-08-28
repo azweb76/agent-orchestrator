@@ -5,6 +5,7 @@ import {
   appendStreamText,
   applyStreamEvent,
   adoptParentClaudeSessionId,
+  coalesceTimelineText,
   parentStreamTextDelta,
 } from '@agent-orchestrator/shared';
 import { followClaudeLog, isPidAlive, readClaudeLogSnapshot } from './git.js';
@@ -111,8 +112,8 @@ export async function followAgentSession(
     parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, event);
     const token = parentStreamTextDelta(event, parentClaudeSessionId);
     if (token) {
-      assistantText += token;
       timeline = appendStreamText(timeline, token);
+      assistantText = coalesceTimelineText(timeline);
       if (live) send('token', { text: token });
     } else if (String(event.type ?? '') !== 'stderr') {
       timeline = applyStreamEvent(timeline, event, parentClaudeSessionId);

@@ -10,6 +10,7 @@ import {
   appendStreamText,
   applyStreamEvent,
   adoptParentClaudeSessionId,
+  coalesceTimelineText,
   parentStreamTextDelta,
   type StreamPart,
 } from '@agent-orchestrator/shared';
@@ -187,8 +188,8 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
     parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, record);
     const token = parentStreamTextDelta(record, parentClaudeSessionId);
     if (token) {
-      assistantText += token;
       timeline = appendStreamText(timeline, token);
+      assistantText = coalesceTimelineText(timeline);
       flushProgress();
     } else if (event.type !== 'stderr') {
       timeline = applyStreamEvent(timeline, record, parentClaudeSessionId);
