@@ -319,15 +319,11 @@ describe('visible subagent cards', () => {
     },
   ];
 
-  it('keeps finished Bash/Task cards after the turn completes', () => {
-    assert.equal(visibleSubagentItems(bashTimeline).length, 3);
+  it('hides finished Bash/Task cards after the turn completes', () => {
+    assert.equal(visibleSubagentItems(bashTimeline).length, 0);
   });
 
-  it('shows finished subagents while the turn is still streaming', () => {
-    assert.equal(visibleSubagentItems(bashTimeline).length, 3);
-  });
-
-  it('keeps a live Explore card after parent Ready, including done siblings', () => {
+  it('shows only the running Explore card, hiding done siblings', () => {
     const parts: StreamPart[] = [
       ...bashTimeline,
       {
@@ -339,11 +335,11 @@ describe('visible subagent cards', () => {
       },
     ];
     const visible = visibleSubagentItems(parts);
-    assert.equal(visible.length, 4);
-    assert.equal(visible.some((item) => item.status === 'running'), true);
+    assert.equal(visible.length, 1);
+    assert.equal(visible[0]?.status, 'running');
   });
 
-  it('keeps every subagent card once all rows finish', () => {
+  it('hides every subagent card once all rows finish', () => {
     const parts: StreamPart[] = [
       {
         type: 'tool',
@@ -353,6 +349,60 @@ describe('visible subagent cards', () => {
         task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
       },
     ];
-    assert.equal(visibleSubagentItems(parts).length, 1);
+    assert.equal(visibleSubagentItems(parts).length, 0);
+  });
+
+  it('shows a backgrounded agent as running through its launch ack, then hides it on real completion', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'Agent',
+            input: { description: 'Explore light theme', subagent_type: 'Explore' },
+          },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      task_type: 'local_agent',
+      subagent_type: 'Explore',
+      description: 'Explore light theme',
+      is_backgrounded: true,
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'Async agent launched successfully.' },
+        ],
+      },
+    }, 'sess-parent');
+
+    let visible = visibleSubagentItems(parts);
+    assert.equal(visible.length, 1);
+    assert.equal(visible[0]?.status, 'running');
+
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      status: 'completed',
+      summary: 'found the theme bug',
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    visible = visibleSubagentItems(parts);
+    assert.equal(visible.length, 0);
   });
 });

@@ -116,13 +116,13 @@ export function runningSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
 }
 
 /**
- * Subagent cards to render under an assistant turn. Background Task/Agent and
- * `task_*` rows stay visible for the life of the turn — streaming or finished,
- * running or done — so a backgrounded agent is never invisible in the chat.
+ * Subagent cards to render under an assistant turn. A card disappears the
+ * instant its status flips to 'done' — success or failure — regardless of
+ * whether the parent turn is still streaming or siblings are still running.
+ * Backgrounded items only flip to 'done' on a real task_updated/task_notification
+ * completion (see completeToolIds), never on their launch-ack tool_result, so
+ * they correctly stay visible as running until then.
  */
 export function visibleSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
-  return parts.filter(
-    (part): part is Extract<StreamPart, { type: 'tool' }> =>
-      part.type === 'tool' && isSubagentItem(part),
-  );
+  return runningSubagentItems(parts);
 }
