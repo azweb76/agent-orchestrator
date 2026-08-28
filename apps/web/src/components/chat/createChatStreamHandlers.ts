@@ -2,7 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import { adoptParentClaudeSessionId, type ChatSession, type Message, type PermissionRequest } from '@agent-orchestrator/shared';
 import { api, type ChatStreamHandlers } from '../../api/client';
-import { applyEventToAssistant } from './messageTimeline';
+import { applyEventToAssistant } from './messageTimelineItems';
 import { setMessagesCache, upsertAgentSession, upsertMessage } from './chatQueryCache';
 
 export interface StreamHandlerContext {

@@ -6,7 +6,7 @@ import {
   buildMessageTimelineView,
   shouldHideInteractiveToolProgress,
   shouldPatchAssistantTimeline,
-} from './messageTimeline';
+} from './messageTimelineItems';
 
 function assistantMessage(timeline: StreamPart[], streaming = true): Message {
   return {
