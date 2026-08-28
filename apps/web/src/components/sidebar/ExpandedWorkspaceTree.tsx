@@ -112,8 +112,9 @@ export function ExpandedWorkspaceTree({
               title={`${workspace.githubOwner}/${workspace.githubRepo} · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}`}
             >
               <ListItemButton
+                component={RouterLink}
+                to={`/workspaces/${workspace.id}`}
                 selected={workspaceSelected}
-                onClick={() => onToggleWorkspace(workspace.id)}
                 sx={{ py: 0.5, px: 1, alignItems: 'center' }}
               >
                 <ListItemIcon sx={{ minWidth: 28 }}>
@@ -138,6 +139,7 @@ export function ExpandedWorkspaceTree({
                     size="small"
                     aria-label={`Create agent in ${workspace.name}`}
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       onCreateAgent(workspace.id);
                       if (!open) onToggleWorkspace(workspace.id);
@@ -147,30 +149,25 @@ export function ExpandedWorkspaceTree({
                     <AddIcon sx={{ fontSize: 16 }} />
                   </IconButton>
                 </ControlTooltip>
-                {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                <ControlTooltip title={`${open ? 'Collapse' : 'Expand'} ${workspace.name}`} sidebar>
+                  <IconButton
+                    size="small"
+                    aria-label={`${open ? 'Collapse' : 'Expand'} ${workspace.name}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onToggleWorkspace(workspace.id);
+                    }}
+                    sx={{ p: 0.25 }}
+                  >
+                    {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                  </IconButton>
+                </ControlTooltip>
               </ListItemButton>
             </ControlTooltip>
 
             <Collapse in={open} timeout="auto" unmountOnExit>
               <List dense disablePadding>
-                <ControlTooltip title="Open workspace overview" sidebar>
-                  <ListItemButton
-                    component={RouterLink}
-                    to={`/workspaces/${workspace.id}`}
-                    selected={workspaceSelected}
-                    sx={{ pl: 4.5, py: 0.25 }}
-                  >
-                    <ListItemText
-                      sx={{ my: 0 }}
-                      primary={
-                        <Typography variant="caption" color="text.secondary">
-                          Workspace overview
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ControlTooltip>
-
                 {workspace.agents.length === 0 ? (
                   <ControlTooltip title="Create a new agent in this workspace" sidebar>
                     <ListItemButton onClick={() => onCreateAgent(workspace.id)} sx={{ pl: 4.5, py: 0.25 }}>
