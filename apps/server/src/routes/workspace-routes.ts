@@ -4,6 +4,7 @@ import type { AppContext } from '../services/app.js';
 import {
   createWorktreeFromBranch,
   createWorktreeFromIdea,
+  createWorktreeFromIssue,
   createWorktreeFromPr,
   createWorkspace,
   deleteWorktree,
@@ -111,6 +112,29 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromPr(ctx, param(req.params.workspaceId), body));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/worktrees/from-issue',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          issueNumber: z.number().int().positive().optional(),
+          reference: z.string().optional(),
+          name: z.string().optional(),
+          baseBranch: z.string().optional(),
+          model: z.string().optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+          permissionMode: z
+            .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
+            .optional(),
+        })
+        .refine((value) => Boolean(value.issueNumber) || Boolean(value.reference?.trim()), {
+          message: 'issueNumber or reference is required',
+        })
+        .parse(req.body);
+      res.status(201).json(await createWorktreeFromIssue(ctx, param(req.params.workspaceId), body));
     }),
   );
 

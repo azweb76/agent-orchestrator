@@ -1,9 +1,11 @@
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
+import { buildIssueKickoffPrompt, parseIssueReference } from '@agent-orchestrator/shared';
 import type {
   Agent,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromIdeaRequest,
+  CreateWorktreeFromIssueRequest,
   CreateWorktreeFromPrRequest,
   Workspace,
   Worktree,
@@ -102,7 +104,11 @@ export async function createWorktreeFromPr(
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
 
-  const existing = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, body.prNumber);
+  const pr = await ctx.github.getPullRequest(workspace.githubOwner, workspace.githubRepo, body.prNumber);
+
+  const existingByPr = ctx.repos.worktrees.getByWorkspaceAndPr(workspace.id, body.prNumber);
+  const existingByBranch = ctx.repos.worktrees.getByWorkspaceAndBranch(workspace.id, pr.headRef);
+  const existing = existingByPr ?? existingByBranch;
   if (existing) {
     let agent = ctx.repos.agents.getByWorktreeId(existing.id);
     if (!agent) {
@@ -110,8 +116,6 @@ export async function createWorktreeFromPr(
     }
     return { worktree: existing, agent };
   }
-
-  const pr = await ctx.github.getPullRequest(workspace.githubOwner, workspace.githubRepo, body.prNumber);
   const localBranch = `pr-${body.prNumber}`;
   const name = body.name ?? slugify(pr.headRef);
   const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
@@ -216,4 +220,73 @@ export async function createWorktreeFromIdea(
   }
 
   return { worktree, agent: configured, branchName, idea };
+}
+
+async function resolveIssueNumberForWorkspace(
+  ctx: AppContext,
+  workspaceId: string,
+  body: CreateWorktreeFromIssueRequest,
+): Promise<number> {
+  const reference = body.reference?.trim();
+  if (reference) {
+    const parsed = parseIssueReference(reference);
+    if (!parsed) throw new Error('Invalid issue reference. Use owner/repo#n or a GitHub issue URL.');
+    const workspace = ctx.repos.workspaces.getById(workspaceId);
+    if (!workspace) throw new Error('Workspace not found');
+    if (
+      parsed.owner.toLowerCase() !== workspace.githubOwner.toLowerCase() ||
+      parsed.repo.toLowerCase() !== workspace.githubRepo.toLowerCase()
+    ) {
+      throw new Error(
+        `Issue ${parsed.owner}/${parsed.repo}#${parsed.number} does not match workspace ${workspace.githubOwner}/${workspace.githubRepo}`,
+      );
+    }
+    return parsed.number;
+  }
+
+  if (!body.issueNumber || body.issueNumber <= 0) {
+    throw new Error('Issue number or reference is required');
+  }
+  return body.issueNumber;
+}
+
+/**
+ * Fetch a GitHub issue, create a new worktree + plan-mode agent, and return the kickoff prompt.
+ */
+export async function createWorktreeFromIssue(
+  ctx: AppContext,
+  workspaceId: string,
+  body: CreateWorktreeFromIssueRequest,
+) {
+  const workspace = ctx.repos.workspaces.getById(workspaceId);
+  if (!workspace) throw new Error('Workspace not found');
+
+  const issueNumber = await resolveIssueNumberForWorkspace(ctx, workspaceId, body);
+  const issue = await ctx.github.getIssueDetail(workspace.githubOwner, workspace.githubRepo, issueNumber);
+  const prompt = buildIssueKickoffPrompt(issue, issue.comments);
+
+  const branchName = await ctx.anthropic.suggestBranchName(`${issue.title}\n\n${issue.body}`.trim());
+  const { worktree, agent } = await createWorktreeFromBranch(ctx, workspaceId, {
+    branch: branchName,
+    createNew: true,
+    baseBranch: body.baseBranch,
+    name: body.name,
+  });
+
+  const configured: Agent = {
+    ...agent,
+    model: body.model?.trim() || agent.model,
+    effort: body.effort ?? agent.effort,
+    permissionMode: body.permissionMode ?? 'plan',
+    updatedAt: nowIso(),
+  };
+  if (
+    configured.model !== agent.model ||
+    configured.effort !== agent.effort ||
+    configured.permissionMode !== agent.permissionMode
+  ) {
+    ctx.repos.agents.update(configured);
+  }
+
+  return { worktree, agent: configured, branchName, issueNumber, prompt };
 }

@@ -2,6 +2,7 @@ import type {
   Agent,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromIdeaRequest,
+  CreateWorktreeFromIssueRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   GitHubBranch,
@@ -35,6 +36,11 @@ export const apiWorkspaces = {
   createWorktreeFromPr: (workspaceId: string, body: CreateWorktreeFromPrRequest) =>
     request<{ worktree: WorktreeWithAgent; agent: Agent }>(
       `/workspaces/${workspaceId}/worktrees/from-pr`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  createWorktreeFromIssue: (workspaceId: string, body: CreateWorktreeFromIssueRequest) =>
+    request<{ worktree: WorktreeWithAgent; agent: Agent; branchName: string; issueNumber: number; prompt: string }>(
+      `/workspaces/${workspaceId}/worktrees/from-issue`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
   deleteWorktree: (worktreeId: string) =>

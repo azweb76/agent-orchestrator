@@ -75,14 +75,17 @@ export function JarvisBriefing({
         owner: action.pr.owner,
         repo: action.pr.repo,
         prNumber: action.pr.number,
+        template: action.template as 'fix-ci' | 'address-review',
       });
-      return { agentId: result.agent.id, template: action.template };
+      return { agentId: result.agent.id, template: action.template, sessionId: result.sessionId };
     },
-    onSuccess: ({ agentId, template }) => {
+    onSuccess: ({ agentId, template, sessionId }) => {
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
-      navigate(`/agents/${agentId}`, { state: { sessionTemplate: template } });
+      navigate(`/agents/${agentId}`, {
+        state: sessionId ? { sessionId } : { sessionTemplate: template },
+      });
     },
   });
 

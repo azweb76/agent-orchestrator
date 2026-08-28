@@ -132,14 +132,21 @@ function PullRequestDetailContent({
 
   const startTemplate = useMutation({
     mutationFn: async (template: ChatSessionTemplateId) => {
-      const result = await api.createAgentFromPr({ owner, repo, prNumber });
-      return { agentId: result.agent.id, template };
+      const result = await api.createAgentFromPr({
+        owner,
+        repo,
+        prNumber,
+        template: template as 'fix-ci' | 'address-review',
+      });
+      return { agentId: result.agent.id, template, sessionId: result.sessionId };
     },
-    onSuccess: ({ agentId, template }) => {
+    onSuccess: ({ agentId, template, sessionId }) => {
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       queryClient.invalidateQueries({ queryKey: prKey });
-      navigate(`/agents/${agentId}`, { state: { sessionTemplate: template } });
+      navigate(`/agents/${agentId}`, {
+        state: sessionId ? { sessionId } : { sessionTemplate: template },
+      });
     },
   });
 

@@ -1,8 +1,10 @@
 import type {
   Agent,
+  CreateAgentFromIssueRequest,
   CreateAgentFromPrRequest,
   CreatePullRequestCommentRequest,
   GitHubRepository,
+  IssueInbox,
   MergePullRequestRequest,
   MergePullRequestResponse,
   PullRequestChecks,
@@ -27,11 +29,24 @@ export const apiGitHub = {
   searchRepositories: (query: string) =>
     request<GitHubRepository[]>(`/github/repos/search?q=${encodeURIComponent(query)}`),
   getPullRequestInbox: () => request<PullRequestInbox>('/github/pulls/inbox'),
+  getIssueInbox: () => request<IssueInbox>('/github/issues/inbox'),
   createAgentFromPr: (body: CreateAgentFromPrRequest) =>
-    request<{ workspace: Workspace; worktree: Worktree; agent: Agent; created: boolean }>(
-      '/github/pulls/create-agent',
-      { method: 'POST', body: JSON.stringify(body) },
-    ),
+    request<{
+      workspace: Workspace;
+      worktree: Worktree;
+      agent: Agent;
+      created: boolean;
+      reused: boolean;
+      sessionId: string | null;
+    }>('/github/pulls/create-agent', { method: 'POST', body: JSON.stringify(body) }),
+  createAgentFromIssue: (body: CreateAgentFromIssueRequest) =>
+    request<{
+      workspace: Workspace;
+      worktree: Worktree;
+      agent: Agent;
+      prompt: string;
+      created: boolean;
+    }>('/github/issues/create-agent', { method: 'POST', body: JSON.stringify(body) }),
   getPullRequest: (owner: string, repo: string, prNumber: number) =>
     request<PullRequestDetail>(prBase(owner, repo, prNumber)),
   getPullRequestChecks: (owner: string, repo: string, prNumber: number) =>
