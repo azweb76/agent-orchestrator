@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import type { AskUserQuestionItem, PermissionRequest } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatPromptCard } from './ChatPromptCard';
 
 interface AskUserQuestionCardProps {
@@ -94,13 +95,17 @@ export function AskUserQuestionCard({
       }
       actions={
         <>
-          <Button variant="contained" disabled={!canSubmit || submitting} onClick={handleSubmit}>
-            Submit answers
-          </Button>
-          {onDismiss ? (
-            <Button variant="text" color="inherit" disabled={submitting} onClick={onDismiss}>
-              Skip
+          <ControlTooltip title="Send your answers to Claude" disabled={!canSubmit || submitting}>
+            <Button variant="contained" disabled={!canSubmit || submitting} onClick={handleSubmit}>
+              Submit answers
             </Button>
+          </ControlTooltip>
+          {onDismiss ? (
+            <ControlTooltip title="Skip these questions and continue with defaults" disabled={submitting}>
+              <Button variant="text" color="inherit" disabled={submitting} onClick={onDismiss}>
+                Skip
+              </Button>
+            </ControlTooltip>
           ) : null}
         </>
       }
@@ -114,42 +119,45 @@ export function AskUserQuestionCard({
             </Typography>
 
             {q.options.length === 0 ? (
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Type your answer"
-                value={otherText[q.question] ?? ''}
-                disabled={submitting}
-                onChange={(e) => {
-                  setUseOther((prev) => ({ ...prev, [q.question]: true }));
-                  setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }));
-                }}
-                sx={{ mt: 0.5 }}
-              />
+              <ControlTooltip title="Type your answer to this question">
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Type your answer"
+                  value={otherText[q.question] ?? ''}
+                  disabled={submitting}
+                  onChange={(e) => {
+                    setUseOther((prev) => ({ ...prev, [q.question]: true }));
+                    setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }));
+                  }}
+                  sx={{ mt: 0.5 }}
+                />
+              </ControlTooltip>
             ) : q.multiSelect ? (
               <FormGroup>
                 {q.options.map((opt) => (
-                  <FormControlLabel
-                    key={opt.label}
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={(selections[q.question] ?? []).includes(opt.label)}
-                        onChange={() => toggleMulti(q.question, opt.label)}
-                        disabled={Boolean(useOther[q.question]) || submitting}
-                      />
-                    }
-                    label={
-                      <Box>
-                        <Typography variant="body2">{opt.label}</Typography>
-                        {opt.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {opt.description}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
-                  />
+                  <ControlTooltip key={opt.label} title={opt.description || opt.label}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={(selections[q.question] ?? []).includes(opt.label)}
+                          onChange={() => toggleMulti(q.question, opt.label)}
+                          disabled={Boolean(useOther[q.question]) || submitting}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2">{opt.label}</Typography>
+                          {opt.description && (
+                            <Typography variant="caption" color="text.secondary">
+                              {opt.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </ControlTooltip>
                 ))}
               </FormGroup>
             ) : (
@@ -158,70 +166,83 @@ export function AskUserQuestionCard({
                 onChange={(_, value) => chooseSingle(q.question, value)}
               >
                 {q.options.map((opt) => (
-                  <FormControlLabel
-                    key={opt.label}
-                    value={opt.label}
-                    disabled={Boolean(useOther[q.question]) || submitting}
-                    control={<Radio size="small" />}
-                    label={
-                      <Box>
-                        <Typography variant="body2">{opt.label}</Typography>
-                        {opt.description && (
-                          <Typography variant="caption" color="text.secondary">
-                            {opt.description}
-                          </Typography>
-                        )}
-                      </Box>
-                    }
-                  />
+                  <ControlTooltip key={opt.label} title={opt.description || opt.label}>
+                    <FormControlLabel
+                      value={opt.label}
+                      disabled={Boolean(useOther[q.question]) || submitting}
+                      control={<Radio size="small" />}
+                      label={
+                        <Box>
+                          <Typography variant="body2">{opt.label}</Typography>
+                          {opt.description && (
+                            <Typography variant="caption" color="text.secondary">
+                              {opt.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </ControlTooltip>
                 ))}
               </RadioGroup>
             )}
 
             {q.options.length > 0 && (
               <>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={Boolean(useOther[q.question])}
-                      disabled={submitting}
-                      onChange={(_, checked) => {
-                        setUseOther((prev) => ({ ...prev, [q.question]: checked }));
-                        if (checked) setSelections((prev) => ({ ...prev, [q.question]: [] }));
-                      }}
-                    />
-                  }
-                  label={<Typography variant="body2">Other</Typography>}
-                />
-                {useOther[q.question] && (
-                  <TextField
-                    size="small"
-                    fullWidth
-                    placeholder="Type your own answer"
-                    value={otherText[q.question] ?? ''}
-                    disabled={submitting}
-                    onChange={(e) =>
-                      setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }))
+                <ControlTooltip title="Provide a custom answer instead of the listed options">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={Boolean(useOther[q.question])}
+                        disabled={submitting}
+                        onChange={(_, checked) => {
+                          setUseOther((prev) => ({ ...prev, [q.question]: checked }));
+                          if (checked) setSelections((prev) => ({ ...prev, [q.question]: [] }));
+                        }}
+                      />
                     }
-                    sx={{ mt: 0.5 }}
+                    label={<Typography variant="body2">Other</Typography>}
                   />
+                </ControlTooltip>
+                {useOther[q.question] && (
+                  <ControlTooltip title="Type your own answer">
+                    <TextField
+                      size="small"
+                      fullWidth
+                      placeholder="Type your own answer"
+                      value={otherText[q.question] ?? ''}
+                      disabled={submitting}
+                      onChange={(e) =>
+                        setOtherText((prev) => ({ ...prev, [q.question]: e.target.value }))
+                      }
+                      sx={{ mt: 0.5 }}
+                    />
+                  </ControlTooltip>
                 )}
               </>
             )}
           </Box>
         ))}
 
-        <TextField
-          size="small"
-          fullWidth
-          multiline
-          minRows={2}
-          label={questions.length > 0 ? 'Or reply freely (skips structured answers)' : 'Your reply'}
-          value={freeResponse}
-          disabled={submitting}
-          onChange={(e) => setFreeResponse(e.target.value)}
-        />
+        <ControlTooltip
+          title={
+            questions.length > 0
+              ? 'Reply in your own words instead of structured answers'
+              : 'Type your reply to continue'
+          }
+        >
+          <TextField
+            size="small"
+            fullWidth
+            multiline
+            minRows={2}
+            label={questions.length > 0 ? 'Or reply freely (skips structured answers)' : 'Your reply'}
+            value={freeResponse}
+            disabled={submitting}
+            onChange={(e) => setFreeResponse(e.target.value)}
+          />
+        </ControlTooltip>
       </Stack>
     </ChatPromptCard>
   );

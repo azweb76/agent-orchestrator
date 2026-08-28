@@ -10,7 +10,6 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -25,6 +24,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import type { ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
 import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 
 interface ChatSessionBarProps {
   sessions: ChatSession[];
@@ -126,9 +126,13 @@ export function ChatSessionBar({
           const running = session.status === 'running';
           const waiting = session.status === 'queued';
           const editing = editingId === session.id;
-          return (
+          const chipTooltip = waiting
+            ? 'Waiting — another session is using this worktree'
+            : canRename
+              ? 'Double-click to rename'
+              : undefined;
+          const chip = (
             <Chip
-              key={session.id}
               size="small"
               label={
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -148,39 +152,41 @@ export function ChatSessionBar({
                     />
                   ) : null}
                   {editing ? (
-                    <TextField
-                      inputRef={inputRef}
-                      size="small"
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault();
-                          commitRename(session);
-                        } else if (event.key === 'Escape') {
-                          event.preventDefault();
-                          cancelRename();
-                        }
-                      }}
-                      onBlur={() => commitRename(session)}
-                      slotProps={{
-                        htmlInput: {
-                          maxLength: CHAT_TITLE_MAX_LENGTH,
-                          'aria-label': 'Session name',
-                        },
-                      }}
-                      sx={{
-                        width: { xs: 132, sm: 168 },
-                        '& .MuiInputBase-root': { height: 22 },
-                        '& .MuiInputBase-input': {
-                          py: 0,
-                          px: 0.5,
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                        },
-                      }}
-                    />
+                    <ControlTooltip title="Edit session name">
+                      <TextField
+                        inputRef={inputRef}
+                        size="small"
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            commitRename(session);
+                          } else if (event.key === 'Escape') {
+                            event.preventDefault();
+                            cancelRename();
+                          }
+                        }}
+                        onBlur={() => commitRename(session)}
+                        slotProps={{
+                          htmlInput: {
+                            maxLength: CHAT_TITLE_MAX_LENGTH,
+                            'aria-label': 'Session name',
+                          },
+                        }}
+                        sx={{
+                          width: { xs: 132, sm: 168 },
+                          '& .MuiInputBase-root': { height: 22 },
+                          '& .MuiInputBase-input': {
+                            py: 0,
+                            px: 0.5,
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                          },
+                        }}
+                      />
+                    </ControlTooltip>
                   ) : (
                     <Typography component="span" variant="caption" sx={{ fontWeight: 600 }}>
                       {session.title}
@@ -196,13 +202,6 @@ export function ChatSessionBar({
               }
               variant={selected ? 'filled' : 'outlined'}
               color={selected ? 'primary' : 'default'}
-              title={
-                waiting
-                  ? 'Waiting — another session is using this worktree'
-                  : canRename
-                    ? 'Double-click to rename'
-                    : undefined
-              }
               onClick={() => {
                 if (editing) return;
                 onSelect(session.id);
@@ -233,34 +232,41 @@ export function ChatSessionBar({
               }}
             />
           );
+          return (
+            <Box key={session.id} component="span" sx={{ display: 'inline-flex' }}>
+              {chipTooltip ? (
+                <ControlTooltip title={chipTooltip}>
+                  <span style={{ display: 'inline-flex' }}>{chip}</span>
+                </ControlTooltip>
+              ) : (
+                chip
+              )}
+            </Box>
+          );
         })}
       </Box>
-      <Tooltip title="Rename session">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="Rename session"
-            disabled={!canRename || !activeSession}
-            onClick={() => {
-              if (activeSession) beginRename(activeSession);
-            }}
-          >
-            <DriveFileRenameOutlineIcon fontSize="small" />
-          </IconButton>
-        </span>
-      </Tooltip>
-      <Tooltip title="New session">
-        <span>
-          <IconButton
-            size="small"
-            aria-label="New session"
-            disabled={disabled || creating}
-            onClick={(event) => setAnchor(event.currentTarget)}
-          >
-            {creating ? <CircularProgress size={16} /> : <AddIcon fontSize="small" />}
-          </IconButton>
-        </span>
-      </Tooltip>
+      <ControlTooltip title="Rename session" disabled={!canRename || !activeSession}>
+        <IconButton
+          size="small"
+          aria-label="Rename session"
+          disabled={!canRename || !activeSession}
+          onClick={() => {
+            if (activeSession) beginRename(activeSession);
+          }}
+        >
+          <DriveFileRenameOutlineIcon fontSize="small" />
+        </IconButton>
+      </ControlTooltip>
+      <ControlTooltip title="New session" disabled={disabled || creating}>
+        <IconButton
+          size="small"
+          aria-label="New session"
+          disabled={disabled || creating}
+          onClick={(event) => setAnchor(event.currentTarget)}
+        >
+          {creating ? <CircularProgress size={16} /> : <AddIcon fontSize="small" />}
+        </IconButton>
+      </ControlTooltip>
       <Menu
         anchorEl={anchor}
         open={Boolean(anchor)}
@@ -269,20 +275,21 @@ export function ChatSessionBar({
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
         {LISTED_CHAT_SESSION_TEMPLATES.map((template) => (
-          <MenuItem
-            key={template.id}
-            onClick={() => {
-              setAnchor(null);
-              onCreate(template);
-            }}
-          >
-            <ListItemIcon>{templateIcon(template.id)}</ListItemIcon>
-            <ListItemText
-              primary={template.title}
-              secondary={template.description}
-              slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
-            />
-          </MenuItem>
+          <ControlTooltip key={template.id} title={template.description}>
+            <MenuItem
+              onClick={() => {
+                setAnchor(null);
+                onCreate(template);
+              }}
+            >
+              <ListItemIcon>{templateIcon(template.id)}</ListItemIcon>
+              <ListItemText
+                primary={template.title}
+                secondary={template.description}
+                slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
+              />
+            </MenuItem>
+          </ControlTooltip>
         ))}
       </Menu>
       <Menu
@@ -293,30 +300,34 @@ export function ChatSessionBar({
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
       >
         {canRename ? (
-          <MenuItem
-            onClick={() => {
-              if (sessionMenu) beginRename(sessionMenu.session);
-            }}
-          >
-            <ListItemIcon>
-              <DriveFileRenameOutlineIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText primary="Rename" />
-          </MenuItem>
+          <ControlTooltip title="Rename session">
+            <MenuItem
+              onClick={() => {
+                if (sessionMenu) beginRename(sessionMenu.session);
+              }}
+            >
+              <ListItemIcon>
+                <DriveFileRenameOutlineIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Rename" />
+            </MenuItem>
+          </ControlTooltip>
         ) : null}
         {canDelete && sessionMenu ? (
-          <MenuItem
-            onClick={() => {
-              const target = sessionMenu.session;
-              setSessionMenu(null);
-              onDelete?.(target);
-            }}
-          >
-            <ListItemIcon>
-              <DeleteOutlinedIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText primary="Delete" />
-          </MenuItem>
+          <ControlTooltip title="Delete session">
+            <MenuItem
+              onClick={() => {
+                const target = sessionMenu.session;
+                setSessionMenu(null);
+                onDelete?.(target);
+              }}
+            >
+              <ListItemIcon>
+                <DeleteOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Delete" />
+            </MenuItem>
+          </ControlTooltip>
         ) : null}
       </Menu>
     </Stack>

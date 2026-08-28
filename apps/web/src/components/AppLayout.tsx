@@ -23,6 +23,7 @@ import {
   useSidebarCollapsed,
   WorkspaceSidebar,
 } from './WorkspaceSidebar';
+import { ControlTooltip } from './ui/ControlTooltip';
 
 export function AppLayout() {
   const location = useLocation();
@@ -106,24 +107,25 @@ export function AppLayout() {
                   {NAV_ITEMS.map((item) => {
                     const active = item.match(location.pathname);
                     return (
-                      <Button
-                        key={item.to}
-                        component={RouterLink}
-                        to={item.to}
-                        size="small"
-                        startIcon={item.icon}
-                        color={active ? 'secondary' : 'inherit'}
-                        onClick={() => setMobileNavOpen(false)}
-                        fullWidth
-                        sx={{
-                          fontWeight: active ? 700 : 500,
-                          justifyContent: 'flex-start',
-                          px: 1.25,
-                          bgcolor: active ? 'rgba(94,234,212,0.08)' : 'transparent',
-                        }}
-                      >
-                        {item.label}
-                      </Button>
+                      <ControlTooltip key={item.to} title={`Go to ${item.label}`}>
+                        <Button
+                          component={RouterLink}
+                          to={item.to}
+                          size="small"
+                          startIcon={item.icon}
+                          color={active ? 'secondary' : 'inherit'}
+                          onClick={() => setMobileNavOpen(false)}
+                          fullWidth
+                          sx={{
+                            fontWeight: active ? 700 : 500,
+                            justifyContent: 'flex-start',
+                            px: 1.25,
+                            bgcolor: active ? 'rgba(94,234,212,0.08)' : 'transparent',
+                          }}
+                        >
+                          {item.label}
+                        </Button>
+                      </ControlTooltip>
                     );
                   })}
                 </Stack>

@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useSsePollingFallback } from '../api/ssePolling';
 import { useThemePreferenceContext } from '../components/ThemePreferenceProvider';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageHeader } from '../components/ui/PageHeader';
 import { useNotificationSettings } from '../notifications';
 import type { ThemePreference } from '../themePrefs';
@@ -129,23 +130,30 @@ export function SettingsPage() {
                 variant="outlined"
               />
               {notifications.permission === 'default' ? (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<NotificationsNoneOutlinedIcon />}
-                  onClick={() => void notifications.requestPermission()}
-                >
-                  Request permission
-                </Button>
+                <ControlTooltip title="Request browser notification permission">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<NotificationsNoneOutlinedIcon />}
+                    onClick={() => void notifications.requestPermission()}
+                  >
+                    Request permission
+                  </Button>
+                </ControlTooltip>
               ) : null}
             </Stack>
             <FormControlLabel
               control={
-                <Switch
-                  checked={notifications.enabled}
-                  onChange={(event) => void onNotificationsToggle(event.target.checked)}
+                <ControlTooltip
+                  title="Enable agent notifications when a run finishes or needs input"
                   disabled={notifications.permission === 'denied'}
-                />
+                >
+                  <Switch
+                    checked={notifications.enabled}
+                    onChange={(event) => void onNotificationsToggle(event.target.checked)}
+                    disabled={notifications.permission === 'denied'}
+                  />
+                </ControlTooltip>
               }
               label="Enable agent notifications"
             />
@@ -171,18 +179,24 @@ export function SettingsPage() {
             size="small"
             sx={{ flexWrap: 'wrap' }}
           >
-            <ToggleButton value="dark" aria-label="Dark">
-              <DarkModeOutlinedIcon sx={{ mr: 0.75, fontSize: 18 }} />
-              Dark
-            </ToggleButton>
-            <ToggleButton value="light" aria-label="Light">
-              <LightModeOutlinedIcon sx={{ mr: 0.75, fontSize: 18 }} />
-              Light
-            </ToggleButton>
-            <ToggleButton value="system" aria-label="System">
-              <SettingsBrightnessOutlinedIcon sx={{ mr: 0.75, fontSize: 18 }} />
-              System
-            </ToggleButton>
+            <ControlTooltip title="Use dark color scheme">
+              <ToggleButton value="dark" aria-label="Dark">
+                <DarkModeOutlinedIcon sx={{ mr: 0.75, fontSize: 18 }} />
+                Dark
+              </ToggleButton>
+            </ControlTooltip>
+            <ControlTooltip title="Use light color scheme">
+              <ToggleButton value="light" aria-label="Light">
+                <LightModeOutlinedIcon sx={{ mr: 0.75, fontSize: 18 }} />
+                Light
+              </ToggleButton>
+            </ControlTooltip>
+            <ControlTooltip title="Follow device color scheme">
+              <ToggleButton value="system" aria-label="System">
+                <SettingsBrightnessOutlinedIcon sx={{ mr: 0.75, fontSize: 18 }} />
+                System
+              </ToggleButton>
+            </ControlTooltip>
           </ToggleButtonGroup>
           <Typography variant="body2" color="text.secondary">
             Active scheme: {resolvedMode}

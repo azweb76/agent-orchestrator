@@ -1,6 +1,7 @@
 import { Box, Button, Typography } from '@mui/material';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import type { PermissionRequest } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatPromptCard } from './ChatPromptCard';
 import { MarkdownContent } from './MarkdownContent';
 
@@ -26,18 +27,28 @@ export function ExitPlanModeCard({
       description="Review the plan below. Build keeps this chat and starts a new auto-mode session to implement it. Keep planning dismisses this prompt so you can refine it."
       actions={
         <>
-          <Button
-            variant="contained"
-            color="success"
-            startIcon={<ConstructionIcon />}
+          <ControlTooltip
+            title="Start a new auto-mode session to implement this plan"
             disabled={submitting}
-            onClick={onBuild}
           >
-            Build
-          </Button>
-          <Button variant="outlined" disabled={submitting} onClick={onKeepPlanning}>
-            Keep planning
-          </Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<ConstructionIcon />}
+              disabled={submitting}
+              onClick={onBuild}
+            >
+              Build
+            </Button>
+          </ControlTooltip>
+          <ControlTooltip
+            title="Dismiss and keep refining the plan in this session"
+            disabled={submitting}
+          >
+            <Button variant="outlined" disabled={submitting} onClick={onKeepPlanning}>
+              Keep planning
+            </Button>
+          </ControlTooltip>
         </>
       }
     >

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
-import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, IconButton, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -13,6 +13,7 @@ import {
 } from '../api/ssePolling';
 import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
+import { ControlTooltip } from './ui/ControlTooltip';
 import { CollapsedAgentRail } from './sidebar/CollapsedAgentRail';
 import { ExpandedWorkspaceTree } from './sidebar/ExpandedWorkspaceTree';
 import { SidebarFilterBar } from './sidebar/SidebarFilterBar';
@@ -212,7 +213,7 @@ export function WorkspaceSidebar({
           </Stack>
         )}
         <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', flexShrink: 0 }}>
-          <Tooltip title="New workspace" placement="right">
+          <ControlTooltip title="New workspace" sidebar>
             <IconButton
               size="small"
               onClick={() => setCreateWorkspaceOpen(true)}
@@ -221,9 +222,9 @@ export function WorkspaceSidebar({
             >
               <AddIcon fontSize="small" />
             </IconButton>
-          </Tooltip>
+          </ControlTooltip>
           {!hideCollapseControl ? (
-            <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right">
+            <ControlTooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} sidebar>
               <IconButton
                 size="small"
                 onClick={() => setCollapsed(!collapsed)}
@@ -231,7 +232,7 @@ export function WorkspaceSidebar({
               >
                 {collapsed ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
               </IconButton>
-            </Tooltip>
+            </ControlTooltip>
           ) : null}
         </Stack>
       </Stack>

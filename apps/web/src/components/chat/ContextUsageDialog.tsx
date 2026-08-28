@@ -11,13 +11,13 @@ import {
   DialogTitle,
   LinearProgress,
   Stack,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SessionContextTurn, SessionContextUsage, TokenUsageBreakdown } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { formatTokenCount } from '../../utils/format';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ResponsiveDialog } from '../ui/ResponsiveDialog';
 
 interface ContextUsageButtonProps {
@@ -185,7 +185,7 @@ function HistoryBar({
   const label = `Turn ${turn.turn}: ${formatTokenCount(turn.contextTokens)} (${formatPercent(occupancy)})`;
 
   return (
-    <Tooltip
+    <ControlTooltip
       title={
         <Stack spacing={0.25}>
           <Typography variant="caption" sx={{ fontWeight: 700 }}>
@@ -263,7 +263,7 @@ function HistoryBar({
           </Box>
         </Box>
       </ButtonBase>
-    </Tooltip>
+    </ControlTooltip>
   );
 }
 
@@ -580,49 +580,47 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
 
   return (
     <>
-      <Tooltip title={tooltip}>
-        <span>
-          <Button
-            size="small"
-            color={color}
-            variant="text"
-            disabled={!sessionId}
-            onClick={() => setOpen(true)}
-            aria-label={`Context usage ${label}`}
-            sx={{
-              minWidth: 0,
-              px: 0.75,
-              py: 0.25,
-              fontSize: 12,
-              fontWeight: 700,
-              fontVariantNumeric: 'tabular-nums',
-              color: percent == null ? 'text.secondary' : fill,
-            }}
-          >
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+      <ControlTooltip title={tooltip} disabled={!sessionId}>
+        <Button
+          size="small"
+          color={color}
+          variant="text"
+          disabled={!sessionId}
+          onClick={() => setOpen(true)}
+          aria-label={`Context usage ${label}`}
+          sx={{
+            minWidth: 0,
+            px: 0.75,
+            py: 0.25,
+            fontSize: 12,
+            fontWeight: 700,
+            fontVariantNumeric: 'tabular-nums',
+            color: percent == null ? 'text.secondary' : fill,
+          }}
+        >
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <Box
+              sx={{
+                width: 22,
+                height: 4,
+                borderRadius: 1,
+                bgcolor: 'rgba(255,255,255,0.12)',
+                overflow: 'hidden',
+                display: { xs: 'none', sm: 'block' },
+              }}
+            >
               <Box
                 sx={{
-                  width: 22,
-                  height: 4,
-                  borderRadius: 1,
-                  bgcolor: 'rgba(255,255,255,0.12)',
-                  overflow: 'hidden',
-                  display: { xs: 'none', sm: 'block' },
+                  width: `${percent ?? 0}%`,
+                  height: '100%',
+                  bgcolor: fill,
                 }}
-              >
-                <Box
-                  sx={{
-                    width: `${percent ?? 0}%`,
-                    height: '100%',
-                    bgcolor: fill,
-                  }}
-                />
-              </Box>
-              {label}
-            </Stack>
-          </Button>
-        </span>
-      </Tooltip>
+              />
+            </Box>
+            {label}
+          </Stack>
+        </Button>
+      </ControlTooltip>
 
       <ResponsiveDialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Context usage</DialogTitle>

@@ -10,7 +10,6 @@ import {
   LinearProgress,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
@@ -27,6 +26,7 @@ import { useSsePollingFallback } from '../api/ssePolling';
 import { useCommandPalette } from '../components/commandPalette/CommandPaletteContext';
 import { paletteShortcutLabel } from '../components/commandPalette/paletteCommands';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { statusColor } from '../theme';
 import { formatBytes, formatUsd, statusLabel } from '../utils/format';
@@ -357,83 +357,91 @@ export function DashboardPage() {
         </Stack>
 
         <Box component="form" onSubmit={onCommandSubmit} sx={{ mt: 2.5, maxWidth: 640 }}>
-          <TextField
-            fullWidth
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Find an agent, workspace, or branch…"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Tooltip title="Open the command palette">
-                      <Button
-                        size="small"
-                        onClick={openPalette}
-                        aria-label="Open command palette"
-                        sx={{
-                          minWidth: 0,
-                          px: 1,
-                          color: 'text.secondary',
-                          fontFamily: '"IBM Plex Mono", monospace',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {paletteShortcutLabel()}
-                      </Button>
-                    </Tooltip>
-                  </InputAdornment>
-                ),
-                'aria-label': 'Search agents',
-              },
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                bgcolor: 'rgba(11,15,23,0.55)',
-                fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: '0.9rem',
-              },
-            }}
-          />
+          <ControlTooltip title="Search agents by name, workspace, or branch">
+            <TextField
+              fullWidth
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find an agent, workspace, or branch…"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <ControlTooltip title={`Open the command palette (${paletteShortcutLabel()})`}>
+                        <Button
+                          size="small"
+                          onClick={openPalette}
+                          aria-label="Open command palette"
+                          sx={{
+                            minWidth: 0,
+                            px: 1,
+                            color: 'text.secondary',
+                            fontFamily: '"IBM Plex Mono", monospace',
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          {paletteShortcutLabel()}
+                        </Button>
+                      </ControlTooltip>
+                    </InputAdornment>
+                  ),
+                  'aria-label': 'Search agents',
+                },
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: 'rgba(11,15,23,0.55)',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  fontSize: '0.9rem',
+                },
+              }}
+            />
+          </ControlTooltip>
         </Box>
 
         <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }}>
-          <Button
-            component={RouterLink}
-            to="/workspaces"
-            variant="contained"
-            startIcon={<FolderOpenOutlinedIcon />}
-            size="small"
-          >
-            Workspaces
-          </Button>
-          <Button
-            component={RouterLink}
-            to="/pull-requests"
-            variant="outlined"
-            startIcon={<MergeTypeIcon />}
-            size="small"
-          >
-            Pull requests
-          </Button>
-          {archivedCount > 0 ? (
+          <ControlTooltip title="Browse and manage cloned repositories">
             <Button
-              variant="outlined"
-              color="warning"
-              startIcon={<DeleteSweepOutlinedIcon />}
+              component={RouterLink}
+              to="/workspaces"
+              variant="contained"
+              startIcon={<FolderOpenOutlinedIcon />}
               size="small"
-              onClick={() => {
-                pruneMutation.reset();
-                setPruneOpen(true);
-              }}
             >
-              Prune archived ({archivedCount})
+              Workspaces
             </Button>
+          </ControlTooltip>
+          <ControlTooltip title="Open your pull request inbox">
+            <Button
+              component={RouterLink}
+              to="/pull-requests"
+              variant="outlined"
+              startIcon={<MergeTypeIcon />}
+              size="small"
+            >
+              Pull requests
+            </Button>
+          </ControlTooltip>
+          {archivedCount > 0 ? (
+            <ControlTooltip title={`Permanently delete ${archivedCount} archived agent${archivedCount === 1 ? '' : 's'}`}>
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<DeleteSweepOutlinedIcon />}
+                size="small"
+                onClick={() => {
+                  pruneMutation.reset();
+                  setPruneOpen(true);
+                }}
+              >
+                Prune archived ({archivedCount})
+              </Button>
+            </ControlTooltip>
           ) : null}
         </Stack>
       </Box>
@@ -586,15 +594,17 @@ export function DashboardPage() {
               }
               action={
                 !query ? (
-                  <Button
-                    component={RouterLink}
-                    to="/workspaces"
-                    variant="contained"
-                    size="small"
-                    startIcon={<FolderOpenOutlinedIcon />}
-                  >
-                    Open workspaces
-                  </Button>
+                  <ControlTooltip title="Clone a repo and create your first agent">
+                    <Button
+                      component={RouterLink}
+                      to="/workspaces"
+                      variant="contained"
+                      size="small"
+                      startIcon={<FolderOpenOutlinedIcon />}
+                    >
+                      Open workspaces
+                    </Button>
+                  </ControlTooltip>
                 ) : null
               }
             />
@@ -821,9 +831,11 @@ export function DashboardPage() {
                 <SectionLabel>Repositories</SectionLabel>
                 <Typography variant="h6">Workspaces</Typography>
               </Box>
-              <Button component={RouterLink} to="/workspaces" size="small">
-                View all
-              </Button>
+              <ControlTooltip title="View all workspaces">
+                <Button component={RouterLink} to="/workspaces" size="small">
+                  View all
+                </Button>
+              </ControlTooltip>
             </Stack>
 
             {workspacesLoading ? (
@@ -884,9 +896,11 @@ export function DashboardPage() {
                 <SectionLabel>Inbox</SectionLabel>
                 <Typography variant="h6">Pull requests</Typography>
               </Box>
-              <Button component={RouterLink} to="/pull-requests" size="small">
-                Open inbox
-              </Button>
+              <ControlTooltip title="Open the full pull request inbox">
+                <Button component={RouterLink} to="/pull-requests" size="small">
+                  Open inbox
+                </Button>
+              </ControlTooltip>
             </Stack>
 
             {!status?.githubTokenConfigured ? (

@@ -16,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CreateWorktreeDialog } from '../components/CreateWorktreeDialog';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
@@ -98,17 +99,21 @@ export function WorkspaceDetailPage() {
         description={`${workspace.githubOwner}/${workspace.githubRepo} · default branch ${workspace.defaultBranch}`}
         actions={
           <>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-              New agent
-            </Button>
-            <Button
-              color="error"
-              variant="outlined"
-              startIcon={<DeleteOutlineOutlinedIcon />}
-              onClick={() => setDeleteWorkspaceOpen(true)}
-            >
-              Delete
-            </Button>
+            <ControlTooltip title="Create a worktree and Claude agent from a branch or pull request">
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+                New agent
+              </Button>
+            </ControlTooltip>
+            <ControlTooltip title="Delete this workspace and all of its worktrees and agents">
+              <Button
+                color="error"
+                variant="outlined"
+                startIcon={<DeleteOutlineOutlinedIcon />}
+                onClick={() => setDeleteWorkspaceOpen(true)}
+              >
+                Delete
+              </Button>
+            </ControlTooltip>
           </>
         }
       />
@@ -142,9 +147,11 @@ export function WorkspaceDetailPage() {
             title="No agents yet"
             description="Create a worktree from a branch or pull request to spawn a Claude agent."
             action={
-              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
-                Create agent
-              </Button>
+              <ControlTooltip title="Create a worktree and Claude agent from a branch or pull request">
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialogOpen(true)}>
+                  Create agent
+                </Button>
+              </ControlTooltip>
             }
           />
         ) : (
@@ -155,22 +162,26 @@ export function WorkspaceDetailPage() {
                 secondaryAction={
                   <>
                     {worktree.agent ? (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={() => navigate(`/agents/${worktree.agent!.id}`)}
-                      >
-                        Open agent
-                      </Button>
+                      <ControlTooltip title="Open this agent's chat">
+                        <Button
+                          variant="contained"
+                          size="small"
+                          onClick={() => navigate(`/agents/${worktree.agent!.id}`)}
+                        >
+                          Open agent
+                        </Button>
+                      </ControlTooltip>
                     ) : null}
-                    <Button
-                      color="error"
-                      variant="outlined"
-                      size="small"
-                      onClick={() => setRemoveWorktreeId(worktree.id)}
-                    >
-                      Remove
-                    </Button>
+                    <ControlTooltip title="Remove this worktree and its agent from the workspace">
+                      <Button
+                        color="error"
+                        variant="outlined"
+                        size="small"
+                        onClick={() => setRemoveWorktreeId(worktree.id)}
+                      >
+                        Remove
+                      </Button>
+                    </ControlTooltip>
                   </>
                 }
               >

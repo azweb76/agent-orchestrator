@@ -5,6 +5,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import { DiffBlock } from '../pr/DiffBlock';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import {
   buildFileTree,
@@ -143,53 +144,54 @@ function FileRow({
 }) {
   const { file } = node;
   return (
-    <Box
-      component="button"
-      type="button"
-      onClick={() => onSelect(file)}
-      aria-current={selected ? 'true' : undefined}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.75,
-        width: '100%',
-        pl: 0.5 + depth * 1.25 + 2,
-        pr: 1,
-        py: 0.4,
-        border: 0,
-        borderLeft: '2px solid',
-        borderColor: selected ? 'secondary.main' : 'transparent',
-        bgcolor: selected ? 'rgba(94,234,212,0.16)' : 'transparent',
-        color: selected ? 'secondary.light' : 'text.primary',
-        cursor: 'pointer',
-        textAlign: 'left',
-        borderRadius: 1,
-        '&:hover': { bgcolor: selected ? 'rgba(94,234,212,0.18)' : 'rgba(255,255,255,0.04)' },
-      }}
-    >
-      <InsertDriveFileOutlinedIcon sx={{ fontSize: 14, opacity: selected ? 0.9 : 0.65, flexShrink: 0 }} />
-      <Typography
-        variant="body2"
-        noWrap
-        title={file.path}
+    <ControlTooltip title={file.path}>
+      <Box
+        component="button"
+        type="button"
+        onClick={() => onSelect(file)}
+        aria-current={selected ? 'true' : undefined}
         sx={{
-          flex: 1,
-          minWidth: 0,
-          fontSize: 12.5,
-          fontWeight: selected ? 600 : 400,
-          fontFamily: '"IBM Plex Mono", monospace',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.75,
+          width: '100%',
+          pl: 0.5 + depth * 1.25 + 2,
+          pr: 1,
+          py: 0.4,
+          border: 0,
+          borderLeft: '2px solid',
+          borderColor: selected ? 'secondary.main' : 'transparent',
+          bgcolor: selected ? 'rgba(94,234,212,0.16)' : 'transparent',
+          color: selected ? 'secondary.light' : 'text.primary',
+          cursor: 'pointer',
+          textAlign: 'left',
+          borderRadius: 1,
+          '&:hover': { bgcolor: selected ? 'rgba(94,234,212,0.18)' : 'rgba(255,255,255,0.04)' },
         }}
       >
-        {node.name}
-      </Typography>
-      <Typography
-        component="span"
-        variant="caption"
-        sx={{ color: STATUS_COLOR[file.status], fontWeight: 700, fontSize: 11, flexShrink: 0 }}
-      >
-        {STATUS_LETTER[file.status]}
-      </Typography>
-    </Box>
+        <InsertDriveFileOutlinedIcon sx={{ fontSize: 14, opacity: selected ? 0.9 : 0.65, flexShrink: 0 }} />
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 12.5,
+            fontWeight: selected ? 600 : 400,
+            fontFamily: '"IBM Plex Mono", monospace',
+          }}
+        >
+          {node.name}
+        </Typography>
+        <Typography
+          component="span"
+          variant="caption"
+          sx={{ color: STATUS_COLOR[file.status], fontWeight: 700, fontSize: 11, flexShrink: 0 }}
+        >
+          {STATUS_LETTER[file.status]}
+        </Typography>
+      </Box>
+    </ControlTooltip>
   );
 }
 

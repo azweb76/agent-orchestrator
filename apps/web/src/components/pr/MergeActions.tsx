@@ -11,7 +11,6 @@ import {
   MenuItem,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -27,6 +26,7 @@ import type {
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { ResponsiveDialog } from '../ui/ResponsiveDialog';
 
 const ALL_METHODS: PullRequestMergeMethod[] = ['merge', 'squash', 'rebase'];
@@ -155,75 +155,92 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
         sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' } }}
       >
         {pr.draft && pr.state === 'open' && !pr.merged ? (
-          <Button
-            variant="contained"
-            startIcon={<RateReviewOutlinedIcon />}
-            disabled={busy}
-            onClick={() => readyMutation.mutate()}
-            fullWidth={false}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
-          >
-            {readyMutation.isPending ? 'Marking ready…' : 'Ready for review'}
-          </Button>
+          <ControlTooltip title="Mark this draft pull request ready for review" disabled={busy}>
+            <Button
+              variant="contained"
+              startIcon={<RateReviewOutlinedIcon />}
+              disabled={busy}
+              onClick={() => readyMutation.mutate()}
+              fullWidth={false}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              {readyMutation.isPending ? 'Marking ready…' : 'Ready for review'}
+            </Button>
+          </ControlTooltip>
         ) : null}
 
         {readiness.allowedMethods.length > 0 ? (
-          <ButtonGroup
-            variant="contained"
+          <ControlTooltip
+            title={
+              !readiness.canMerge && !busy
+                ? readiness.reason
+                : `${METHOD_BUTTONS[activeMethod]} — open the menu to change method`
+            }
             disabled={!readiness.canMerge || busy}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
           >
-            <Button
-              startIcon={<MergeTypeIcon />}
-              onClick={openMergeDialog}
-              sx={{ flex: { xs: 1, sm: 'none' } }}
+            <ButtonGroup
+              variant="contained"
+              disabled={!readiness.canMerge || busy}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
             >
-              {METHOD_BUTTONS[activeMethod]}
-            </Button>
-            <Button
-              size="small"
-              aria-label="Select merge method"
-              onClick={(event) => setMenuAnchor(event.currentTarget)}
-            >
-              <ArrowDropDownIcon />
-            </Button>
-          </ButtonGroup>
+              <Button
+                startIcon={<MergeTypeIcon />}
+                onClick={openMergeDialog}
+                sx={{ flex: { xs: 1, sm: 'none' } }}
+              >
+                {METHOD_BUTTONS[activeMethod]}
+              </Button>
+              <Button
+                size="small"
+                aria-label="Select merge method"
+                onClick={(event) => setMenuAnchor(event.currentTarget)}
+              >
+                <ArrowDropDownIcon />
+              </Button>
+            </ButtonGroup>
+          </ControlTooltip>
         ) : null}
 
         {readiness.canUpdateBranch ? (
-          <Button
-            variant="outlined"
-            startIcon={<SyncOutlinedIcon />}
-            disabled={busy}
-            onClick={() => updateBranchMutation.mutate()}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
-          >
-            {updateBranchMutation.isPending ? 'Updating…' : 'Update branch'}
-          </Button>
+          <ControlTooltip title="Merge the latest base branch into this pull request" disabled={busy}>
+            <Button
+              variant="outlined"
+              startIcon={<SyncOutlinedIcon />}
+              disabled={busy}
+              onClick={() => updateBranchMutation.mutate()}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              {updateBranchMutation.isPending ? 'Updating…' : 'Update branch'}
+            </Button>
+          </ControlTooltip>
         ) : null}
 
         {pr.state === 'open' ? (
-          <Button
-            variant="outlined"
-            color="error"
-            disabled={busy}
-            onClick={() => setConfirming('closed')}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
-          >
-            Close pull request
-          </Button>
+          <ControlTooltip title="Close this pull request without merging" disabled={busy}>
+            <Button
+              variant="outlined"
+              color="error"
+              disabled={busy}
+              onClick={() => setConfirming('closed')}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Close pull request
+            </Button>
+          </ControlTooltip>
         ) : null}
 
         {pr.state === 'closed' && !pr.merged ? (
-          <Button
-            variant="outlined"
-            startIcon={<LockOpenOutlinedIcon />}
-            disabled={busy}
-            onClick={() => setConfirming('open')}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
-          >
-            Reopen pull request
-          </Button>
+          <ControlTooltip title="Reopen this closed pull request on GitHub" disabled={busy}>
+            <Button
+              variant="outlined"
+              startIcon={<LockOpenOutlinedIcon />}
+              disabled={busy}
+              onClick={() => setConfirming('open')}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Reopen pull request
+            </Button>
+          </ControlTooltip>
         ) : null}
       </Stack>
 
@@ -247,9 +264,9 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
           );
           // A disabled MenuItem swallows pointer events, so the tooltip needs a live wrapper.
           return disabledReason ? (
-            <Tooltip key={option} title={disabledReason} placement="left">
+            <ControlTooltip key={option} title={disabledReason} placement="left" disabled>
               <span>{item}</span>
-            </Tooltip>
+            </ControlTooltip>
           ) : (
             item
           );
@@ -271,21 +288,25 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
               </Alert>
             ) : (
               <>
-                <TextField
-                  label="Commit title"
-                  value={commitTitle}
-                  onChange={(event) => setCommitTitle(event.target.value)}
-                  fullWidth
-                  autoFocus
-                />
-                <TextField
-                  label="Commit message"
-                  value={commitMessage}
-                  onChange={(event) => setCommitMessage(event.target.value)}
-                  fullWidth
-                  multiline
-                  minRows={3}
-                />
+                <ControlTooltip title="Title for the merge commit on the base branch">
+                  <TextField
+                    label="Commit title"
+                    value={commitTitle}
+                    onChange={(event) => setCommitTitle(event.target.value)}
+                    fullWidth
+                    autoFocus
+                  />
+                </ControlTooltip>
+                <ControlTooltip title="Optional extended commit message">
+                  <TextField
+                    label="Commit message"
+                    value={commitMessage}
+                    onChange={(event) => setCommitMessage(event.target.value)}
+                    fullWidth
+                    multiline
+                    minRows={3}
+                  />
+                </ControlTooltip>
               </>
             )}
             {mergeMutation.error ? (
@@ -294,15 +315,22 @@ export function MergeActions({ pr, readiness }: { pr: PullRequestDetail; readine
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setMergeOpen(false)}>Cancel</Button>
-          <Button
-            variant="contained"
-            startIcon={<MergeTypeIcon />}
+          <ControlTooltip title="Close without merging">
+            <Button onClick={() => setMergeOpen(false)}>Cancel</Button>
+          </ControlTooltip>
+          <ControlTooltip
+            title={mergeMutation.isPending ? 'Merging on GitHub…' : 'Confirm and merge this pull request'}
             disabled={mergeMutation.isPending}
-            onClick={() => mergeMutation.mutate()}
           >
-            {mergeMutation.isPending ? 'Merging…' : 'Confirm merge'}
-          </Button>
+            <Button
+              variant="contained"
+              startIcon={<MergeTypeIcon />}
+              disabled={mergeMutation.isPending}
+              onClick={() => mergeMutation.mutate()}
+            >
+              {mergeMutation.isPending ? 'Merging…' : 'Confirm merge'}
+            </Button>
+          </ControlTooltip>
         </DialogActions>
       </ResponsiveDialog>
 

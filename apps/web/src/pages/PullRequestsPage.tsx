@@ -21,6 +21,7 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { pullRequestMatchesQuery, type InboxPullRequest } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -118,23 +119,25 @@ export function PullRequestsPage() {
       </Tabs>
 
       {status?.githubTokenConfigured && !inboxQuery.isLoading && !inboxQuery.error ? (
-        <TextField
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by title, number, repo, or author"
-          fullWidth
-          size="small"
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            },
-            htmlInput: { 'aria-label': 'Search pull requests' },
-          }}
-        />
+        <ControlTooltip title="Search by title, number, repository, or author">
+          <TextField
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by title, number, repo, or author"
+            fullWidth
+            size="small"
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+              htmlInput: { 'aria-label': 'Search pull requests' },
+            }}
+          />
+        </ControlTooltip>
       ) : null}
 
       {status?.githubTokenConfigured && inboxQuery.isLoading ? (
@@ -181,41 +184,54 @@ export function PullRequestsPage() {
                 secondaryAction={
                   <>
                     {pr.workspaceId ? (
-                      <Button
-                        component={RouterLink}
-                        to={`/workspaces/${pr.workspaceId}`}
-                        variant="outlined"
-                        size="small"
-                      >
-                        Workspace
-                      </Button>
+                      <ControlTooltip title="Open the workspace for this repository">
+                        <Button
+                          component={RouterLink}
+                          to={`/workspaces/${pr.workspaceId}`}
+                          variant="outlined"
+                          size="small"
+                        >
+                          Workspace
+                        </Button>
+                      </ControlTooltip>
                     ) : null}
                     {pr.agentId ? (
-                      <Button
-                        component={RouterLink}
-                        to={`/agents/${pr.agentId}`}
-                        variant="contained"
-                        size="small"
-                        startIcon={<SmartToyOutlinedIcon />}
-                      >
-                        Open agent
-                      </Button>
+                      <ControlTooltip title="Open the agent working on this pull request">
+                        <Button
+                          component={RouterLink}
+                          to={`/agents/${pr.agentId}`}
+                          variant="contained"
+                          size="small"
+                          startIcon={<SmartToyOutlinedIcon />}
+                        >
+                          Open agent
+                        </Button>
+                      </ControlTooltip>
                     ) : (
-                      <Button
-                        variant="contained"
-                        size="small"
-                        startIcon={
-                          isCreating ? (
-                            <CircularProgress size={16} color="inherit" />
-                          ) : (
-                            <SmartToyOutlinedIcon />
-                          )
+                      <ControlTooltip
+                        title={
+                          pr.workspaceId
+                            ? 'Create a worktree and Claude agent for this pull request'
+                            : 'Clone the repository and start a Claude agent for this pull request'
                         }
                         disabled={createMutation.isPending}
-                        onClick={() => createMutation.mutate(pr)}
                       >
-                        {pr.workspaceId ? 'Create agent' : 'Start agent'}
-                      </Button>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={
+                            isCreating ? (
+                              <CircularProgress size={16} color="inherit" />
+                            ) : (
+                              <SmartToyOutlinedIcon />
+                            )
+                          }
+                          disabled={createMutation.isPending}
+                          onClick={() => createMutation.mutate(pr)}
+                        >
+                          {pr.workspaceId ? 'Create agent' : 'Start agent'}
+                        </Button>
+                      </ControlTooltip>
                     )}
                   </>
                 }

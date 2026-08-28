@@ -3,6 +3,7 @@ import { Alert, Avatar, Box, Button, Link, Stack, TextField, Typography } from '
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { PullRequestComment } from '@agent-orchestrator/shared';
 import { MarkdownContent } from '../chat/MarkdownContent';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowTitle } from '../ui/ListPanel';
 import { formatRelativeTime } from '../../utils/format';
@@ -80,27 +81,31 @@ export function PullRequestConversationTab({
       {canWrite && onSubmitComment ? (
         <Stack spacing={1.25}>
           <Typography variant="subtitle2">Add a comment</Typography>
-          <TextField
-            label="Comment"
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            fullWidth
-            multiline
-            minRows={3}
-            placeholder="Leave a conversation comment on this pull request"
-          />
+          <ControlTooltip title="Leave a conversation comment on this pull request">
+            <TextField
+              label="Comment"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              fullWidth
+              multiline
+              minRows={3}
+              placeholder="Leave a conversation comment on this pull request"
+            />
+          </ControlTooltip>
           {submitError ? <Alert severity="error">{submitError}</Alert> : null}
           <Box>
-            <Button
-              variant="contained"
-              disabled={submitting || !body.trim()}
-              onClick={() => {
-                onSubmitComment(body.trim());
-                setBody('');
-              }}
-            >
-              {submitting ? 'Posting…' : 'Comment'}
-            </Button>
+            <ControlTooltip title="Post comment" disabled={submitting || !body.trim()}>
+              <Button
+                variant="contained"
+                disabled={submitting || !body.trim()}
+                onClick={() => {
+                  onSubmitComment(body.trim());
+                  setBody('');
+                }}
+              >
+                {submitting ? 'Posting…' : 'Comment'}
+              </Button>
+            </ControlTooltip>
           </Box>
         </Stack>
       ) : null}

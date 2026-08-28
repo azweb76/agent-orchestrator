@@ -1,7 +1,8 @@
 import { Link as RouterLink } from 'react-router-dom';
-import { Badge, Box, IconButton, LinearProgress, Stack, Tooltip, Typography } from '@mui/material';
+import { Badge, Box, IconButton, LinearProgress, Stack, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
 
 export function CollapsedAgentRail({
@@ -20,7 +21,7 @@ export function CollapsedAgentRail({
   if (agents.length === 0) {
     return (
       <Stack spacing={1} sx={{ alignItems: 'center', px: 1, pt: 2 }}>
-        <Tooltip title="New workspace" placement="right">
+        <ControlTooltip title="New workspace" sidebar>
           <IconButton
             size="small"
             onClick={onCreateWorkspace}
@@ -36,7 +37,7 @@ export function CollapsedAgentRail({
           >
             <AddIcon fontSize="small" />
           </IconButton>
-        </Tooltip>
+        </ControlTooltip>
         <Typography variant="caption" color="text.secondary" sx={{ writingMode: 'vertical-rl' }}>
           No agents
         </Typography>
@@ -46,7 +47,7 @@ export function CollapsedAgentRail({
 
   return (
     <Stack spacing={0.75} sx={{ alignItems: 'center', px: 1, py: 1 }}>
-      <Tooltip title="New workspace" placement="right">
+      <ControlTooltip title="New workspace" sidebar>
         <IconButton
           size="small"
           onClick={onCreateWorkspace}
@@ -63,15 +64,15 @@ export function CollapsedAgentRail({
         >
           <AddIcon fontSize="small" />
         </IconButton>
-      </Tooltip>
+      </ControlTooltip>
       {agents.map(({ agent, workspace }) => {
         const selected = selectedAgentId === agent.id;
         const workspaceActive = selectedWorkspaceId === workspace.id && pathname.startsWith('/workspaces');
         const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
         return (
-          <Tooltip
+          <ControlTooltip
             key={agent.id}
-            placement="right"
+            sidebar
             title={
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -146,7 +147,7 @@ export function CollapsedAgentRail({
                 />
               )}
             </IconButton>
-          </Tooltip>
+          </ControlTooltip>
         );
       })}
     </Stack>

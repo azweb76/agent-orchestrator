@@ -6,6 +6,7 @@ import {
   DialogContentText,
   DialogTitle,
 } from '@mui/material';
+import { ControlTooltip } from './ui/ControlTooltip';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -37,18 +38,22 @@ export function ConfirmDialog({
         <DialogContentText>{description}</DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} disabled={loading}>
-          {cancelLabel}
-        </Button>
-        <Button
-          variant="contained"
-          color={confirmColor}
-          disabled={loading}
-          onClick={onConfirm}
-          autoFocus
-        >
-          {loading ? 'Working…' : confirmLabel}
-        </Button>
+        <ControlTooltip title={cancelLabel} disabled={loading}>
+          <Button onClick={onCancel} disabled={loading}>
+            {cancelLabel}
+          </Button>
+        </ControlTooltip>
+        <ControlTooltip title={confirmLabel} disabled={loading}>
+          <Button
+            variant="contained"
+            color={confirmColor}
+            disabled={loading}
+            onClick={onConfirm}
+            autoFocus
+          >
+            {loading ? 'Working…' : confirmLabel}
+          </Button>
+        </ControlTooltip>
       </DialogActions>
     </Dialog>
   );

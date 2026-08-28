@@ -13,7 +13,6 @@ import {
   Rating,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -26,6 +25,7 @@ import {
   type SessionGradeFindingSeverity,
 } from '@agent-orchestrator/shared';
 import { ResponsiveDialog } from '../ui/ResponsiveDialog';
+import { ControlTooltip } from '../ui/ControlTooltip';
 
 interface GradeSessionDialogProps {
   open: boolean;
@@ -111,7 +111,7 @@ function SessionFilePath({ filePath }: { filePath: string }) {
         >
           {filePath}
         </Typography>
-        <Tooltip title={copied ? 'Copied' : 'Copy path'}>
+        <ControlTooltip title={copied ? 'Copied' : 'Copy path'}>
           <IconButton
             size="small"
             aria-label="Copy session file path"
@@ -123,7 +123,7 @@ function SessionFilePath({ filePath }: { filePath: string }) {
           >
             <ContentCopyIcon sx={{ fontSize: 16 }} />
           </IconButton>
-        </Tooltip>
+        </ControlTooltip>
       </Stack>
     </Box>
   );
@@ -210,31 +210,39 @@ export function GradeSessionDialog({
             </Stack>
           ) : null}
 
-          <TextField
-            label="Notes for the next analysis"
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            fullWidth
-            multiline
-            minRows={2}
-            disabled={loading}
-            placeholder="Optional: what to emphasize, e.g. token waste or missing skills"
-          />
+          <ControlTooltip title="Optional notes to guide the next analysis">
+            <TextField
+              label="Notes for the next analysis"
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+              disabled={loading}
+              placeholder="Optional: what to emphasize, e.g. token waste or missing skills"
+            />
+          </ControlTooltip>
           {error ? <Alert severity="error">{error}</Alert> : null}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
-          Close
-        </Button>
-        {onImprove ? (
-          <Button variant="outlined" disabled={loading} onClick={onImprove}>
-            Improve instructions
+        <ControlTooltip title="Close without saving">
+          <Button onClick={onClose} disabled={loading}>
+            Close
           </Button>
+        </ControlTooltip>
+        {onImprove ? (
+          <ControlTooltip title="Open instruction improvement flow">
+            <Button variant="outlined" disabled={loading} onClick={onImprove}>
+              Improve instructions
+            </Button>
+          </ControlTooltip>
         ) : null}
-        <Button variant="contained" disabled={loading} onClick={() => onAnalyze(notes)}>
-          {loading ? 'Analyzing…' : current ? 'Analyze again' : 'Analyze session'}
-        </Button>
+        <ControlTooltip title={current ? 'Re-run AI analysis on this session' : 'Run AI analysis on this session'}>
+          <Button variant="contained" disabled={loading} onClick={() => onAnalyze(notes)}>
+            {loading ? 'Analyzing…' : current ? 'Analyze again' : 'Analyze session'}
+          </Button>
+        </ControlTooltip>
       </DialogActions>
     </ResponsiveDialog>
   );

@@ -10,7 +10,6 @@ import {
   ListItemIcon,
   ListItemText,
   Stack,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -18,6 +17,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
 
 export function ExpandedWorkspaceTree({
@@ -62,9 +62,11 @@ export function ExpandedWorkspaceTree({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             No matching agents.
           </Typography>
-          <Button size="small" variant="outlined" onClick={onClearFilters}>
-            Clear filters
-          </Button>
+          <ControlTooltip title="Clear search and status filters">
+            <Button size="small" variant="outlined" onClick={onClearFilters}>
+              Clear filters
+            </Button>
+          </ControlTooltip>
         </Box>
       );
     }
@@ -73,21 +75,23 @@ export function ExpandedWorkspaceTree({
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
           No workspaces yet.
         </Typography>
-        <ListItemButton
-          onClick={onCreateWorkspace}
-          sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', py: 1 }}
-        >
-          <ListItemIcon sx={{ minWidth: 32 }}>
-            <AddIcon fontSize="small" color="secondary" />
-          </ListItemIcon>
-          <ListItemText
-            primary={
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Add a workspace
-              </Typography>
-            }
-          />
-        </ListItemButton>
+        <ControlTooltip title="Create a new workspace" sidebar>
+          <ListItemButton
+            onClick={onCreateWorkspace}
+            sx={{ borderRadius: 1.5, border: '1px solid', borderColor: 'divider', py: 1 }}
+          >
+            <ListItemIcon sx={{ minWidth: 32 }}>
+              <AddIcon fontSize="small" color="secondary" />
+            </ListItemIcon>
+            <ListItemText
+              primary={
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Add a workspace
+                </Typography>
+              }
+            />
+          </ListItemButton>
+        </ControlTooltip>
       </Box>
     );
   }
@@ -101,9 +105,8 @@ export function ExpandedWorkspaceTree({
 
         return (
           <Box key={workspace.id}>
-            <Tooltip
-              placement="right"
-              enterDelay={500}
+            <ControlTooltip
+              sidebar
               title={`${workspace.githubOwner}/${workspace.githubRepo} · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}`}
             >
               <ListItemButton
@@ -128,51 +131,57 @@ export function ExpandedWorkspaceTree({
                     </Stack>
                   }
                 />
-                <IconButton
-                  size="small"
-                  aria-label={`Create agent in ${workspace.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCreateAgent(workspace.id);
-                    if (!open) onToggleWorkspace(workspace.id);
-                  }}
-                  sx={{ p: 0.25 }}
-                >
-                  <AddIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                <ControlTooltip title={`Create agent in ${workspace.name}`} sidebar>
+                  <IconButton
+                    size="small"
+                    aria-label={`Create agent in ${workspace.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCreateAgent(workspace.id);
+                      if (!open) onToggleWorkspace(workspace.id);
+                    }}
+                    sx={{ p: 0.25 }}
+                  >
+                    <AddIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </ControlTooltip>
                 {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
               </ListItemButton>
-            </Tooltip>
+            </ControlTooltip>
 
             <Collapse in={open} timeout="auto" unmountOnExit>
               <List dense disablePadding>
-                <ListItemButton
-                  component={RouterLink}
-                  to={`/workspaces/${workspace.id}`}
-                  selected={workspaceSelected}
-                  sx={{ pl: 4.5, py: 0.25 }}
-                >
-                  <ListItemText
-                    sx={{ my: 0 }}
-                    primary={
-                      <Typography variant="caption" color="text.secondary">
-                        Workspace overview
-                      </Typography>
-                    }
-                  />
-                </ListItemButton>
-
-                {workspace.agents.length === 0 ? (
-                  <ListItemButton onClick={() => onCreateAgent(workspace.id)} sx={{ pl: 4.5, py: 0.25 }}>
+                <ControlTooltip title="Open workspace overview" sidebar>
+                  <ListItemButton
+                    component={RouterLink}
+                    to={`/workspaces/${workspace.id}`}
+                    selected={workspaceSelected}
+                    sx={{ pl: 4.5, py: 0.25 }}
+                  >
                     <ListItemText
                       sx={{ my: 0 }}
                       primary={
-                        <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
-                          New agent
+                        <Typography variant="caption" color="text.secondary">
+                          Workspace overview
                         </Typography>
                       }
                     />
                   </ListItemButton>
+                </ControlTooltip>
+
+                {workspace.agents.length === 0 ? (
+                  <ControlTooltip title="Create a new agent in this workspace" sidebar>
+                    <ListItemButton onClick={() => onCreateAgent(workspace.id)} sx={{ pl: 4.5, py: 0.25 }}>
+                      <ListItemText
+                        sx={{ my: 0 }}
+                        primary={
+                          <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
+                            New agent
+                          </Typography>
+                        }
+                      />
+                    </ListItemButton>
+                  </ControlTooltip>
                 ) : (
                   workspace.agents.map((agent) => (
                     <AgentListItem
@@ -194,9 +203,8 @@ export function ExpandedWorkspaceTree({
 function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boolean }) {
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   return (
-    <Tooltip
-      placement="right"
-      enterDelay={500}
+    <ControlTooltip
+      sidebar
       title={
         <Box>
           <Typography variant="caption" sx={{ display: 'block' }}>
@@ -243,6 +251,6 @@ function AgentListItem({ agent, selected }: { agent: SidebarAgent; selected: boo
           }
         />
       </ListItemButton>
-    </Tooltip>
+    </ControlTooltip>
   );
 }

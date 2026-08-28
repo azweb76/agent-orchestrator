@@ -10,6 +10,7 @@ import {
   FormControlLabel,
   Typography,
 } from '@mui/material';
+import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
 export interface ArchiveAgentDialogProps {
@@ -47,16 +48,21 @@ export function ArchiveAgentDialog({
           This archives the agent so it no longer appears as active. You can still view its
           history.
         </DialogContentText>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={deleteWorktree}
-              onChange={(event) => setDeleteWorktree(event.target.checked)}
-              disabled={loading}
-            />
-          }
-          label={worktreeName ? `Also delete worktree “${worktreeName}”` : 'Also delete the worktree'}
-        />
+        <ControlTooltip
+          title="Remove the git worktree from disk and delete the agent and its chat history"
+          disabled={loading}
+        >
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={deleteWorktree}
+                onChange={(event) => setDeleteWorktree(event.target.checked)}
+                disabled={loading}
+              />
+            }
+            label={worktreeName ? `Also delete worktree “${worktreeName}”` : 'Also delete the worktree'}
+          />
+        </ControlTooltip>
         {deleteWorktree ? (
           <Typography variant="caption" color="error" sx={{ display: 'block', ml: 4, mt: 0.25 }}>
             Removes the git worktree from disk. The agent and its chat history will be deleted.
@@ -73,17 +79,28 @@ export function ArchiveAgentDialog({
         ) : null}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} disabled={loading}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          color="error"
+        <ControlTooltip title="Cancel" disabled={loading}>
+          <Button onClick={onCancel} disabled={loading}>
+            Cancel
+          </Button>
+        </ControlTooltip>
+        <ControlTooltip
+          title={
+            deleteWorktree
+              ? 'Archive the agent and delete its worktree'
+              : 'Archive the agent and keep the worktree'
+          }
           disabled={loading}
-          onClick={() => onConfirm(deleteWorktree)}
         >
-          {loading ? 'Working…' : deleteWorktree ? 'Archive and delete' : 'Archive'}
-        </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={loading}
+            onClick={() => onConfirm(deleteWorktree)}
+          >
+            {loading ? 'Working…' : deleteWorktree ? 'Archive and delete' : 'Archive'}
+          </Button>
+        </ControlTooltip>
       </DialogActions>
     </ResponsiveDialog>
   );

@@ -31,6 +31,7 @@ import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
+import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 import { statusColor } from '../theme';
@@ -249,83 +250,104 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           {archived ? (
             <>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<UnarchiveOutlinedIcon />}
-                disabled={unarchiveMutation.isPending}
-                onClick={() => unarchiveMutation.mutate()}
-              >
-                Unarchive
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteOutlinedIcon />}
+              <ControlTooltip title="Restore this agent to the active fleet" disabled={unarchiveMutation.isPending}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<UnarchiveOutlinedIcon />}
+                  disabled={unarchiveMutation.isPending}
+                  onClick={() => unarchiveMutation.mutate()}
+                >
+                  Unarchive
+                </Button>
+              </ControlTooltip>
+              <ControlTooltip
+                title="Permanently delete this agent and its chat history"
                 disabled={deleteMutation.isPending}
-                onClick={() => {
-                  deleteMutation.reset();
-                  setDeleteOpen(true);
-                }}
               >
-                Delete
-              </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlinedIcon />}
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    deleteMutation.reset();
+                    setDeleteOpen(true);
+                  }}
+                >
+                  Delete
+                </Button>
+              </ControlTooltip>
             </>
           ) : (
             <>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                startIcon={<ArchiveOutlinedIcon />}
-                disabled={archiveMutation.isPending}
-                onClick={() => {
-                  archiveMutation.reset();
-                  setArchiveOpen(true);
-                }}
-              >
-                Archive
-              </Button>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteOutlinedIcon />}
+              <ControlTooltip title="Archive this agent and hide it from the active fleet" disabled={archiveMutation.isPending}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<ArchiveOutlinedIcon />}
+                  disabled={archiveMutation.isPending}
+                  onClick={() => {
+                    archiveMutation.reset();
+                    setArchiveOpen(true);
+                  }}
+                >
+                  Archive
+                </Button>
+              </ControlTooltip>
+              <ControlTooltip
+                title="Permanently delete this agent and its chat history"
                 disabled={deleteMutation.isPending}
-                onClick={() => {
-                  deleteMutation.reset();
-                  setDeleteOpen(true);
-                }}
               >
-                Delete
-              </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlinedIcon />}
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    deleteMutation.reset();
+                    setDeleteOpen(true);
+                  }}
+                >
+                  Delete
+                </Button>
+              </ControlTooltip>
             </>
           )}
           {prNumber != null ? (
-            <Button
-              size="small"
-              variant="contained"
-              component={RouterLink}
-              startIcon={<MergeTypeIcon />}
-              to={pullRequestPath(
-                agent.workspace.githubOwner,
-                agent.workspace.githubRepo,
-                prNumber,
-              )}
-            >
-              View PR #{prNumber}
-            </Button>
+            <ControlTooltip title={`Open pull request #${prNumber} in the app`}>
+              <Button
+                size="small"
+                variant="contained"
+                component={RouterLink}
+                startIcon={<MergeTypeIcon />}
+                to={pullRequestPath(
+                  agent.workspace.githubOwner,
+                  agent.workspace.githubRepo,
+                  prNumber,
+                )}
+              >
+                View PR #{prNumber}
+              </Button>
+            </ControlTooltip>
           ) : (
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={<MergeTypeIcon />}
+            <ControlTooltip
+              title={archived ? 'Archived agents cannot create pull requests' : 'Create a pull request for this branch'}
               disabled={archived}
-              onClick={() => setPrOpen(true)}
             >
-              Create PR
-            </Button>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<MergeTypeIcon />}
+                disabled={archived}
+                onClick={() => setPrOpen(true)}
+              >
+                Create PR
+              </Button>
+            </ControlTooltip>
           )}
         </Stack>
       </Stack>
@@ -412,42 +434,61 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         <DialogTitle>Create pull request</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Title"
-              value={prTitle}
-              onChange={(e) => setPrTitle(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-            />
-            <TextField
-              label="Description"
-              value={prBody}
-              onChange={(e) => setPrBody(e.target.value)}
-              fullWidth
-              multiline
-              minRows={4}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox checked={prDraft} onChange={(e) => setPrDraft(e.target.checked)} />
-              }
-              label="Open as draft"
-            />
+            <ControlTooltip title="Title shown on the GitHub pull request">
+              <TextField
+                label="Title"
+                value={prTitle}
+                onChange={(e) => setPrTitle(e.target.value)}
+                fullWidth
+                required
+                autoFocus
+              />
+            </ControlTooltip>
+            <ControlTooltip title="Optional description for the pull request body">
+              <TextField
+                label="Description"
+                value={prBody}
+                onChange={(e) => setPrBody(e.target.value)}
+                fullWidth
+                multiline
+                minRows={4}
+              />
+            </ControlTooltip>
+            <ControlTooltip title="Keep the pull request as a draft on GitHub">
+              <FormControlLabel
+                control={
+                  <Checkbox checked={prDraft} onChange={(e) => setPrDraft(e.target.checked)} />
+                }
+                label="Open as draft"
+              />
+            </ControlTooltip>
             {createPrMutation.error && (
               <Alert severity="error">{(createPrMutation.error as Error).message}</Alert>
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPrOpen(false)}>Close</Button>
-          <Button
-            variant="contained"
+          <ControlTooltip title="Close without creating a pull request">
+            <Button onClick={() => setPrOpen(false)}>Close</Button>
+          </ControlTooltip>
+          <ControlTooltip
+            title={
+              createPrMutation.isPending
+                ? 'Creating pull request on GitHub…'
+                : !prTitle
+                  ? 'Enter a title first'
+                  : 'Create pull request on GitHub'
+            }
             disabled={!prTitle || createPrMutation.isPending}
-            onClick={() => createPrMutation.mutate()}
           >
-            {createPrMutation.isPending ? 'Creating…' : 'Create PR'}
-          </Button>
+            <Button
+              variant="contained"
+              disabled={!prTitle || createPrMutation.isPending}
+              onClick={() => createPrMutation.mutate()}
+            >
+              {createPrMutation.isPending ? 'Creating…' : 'Create PR'}
+            </Button>
+          </ControlTooltip>
         </DialogActions>
       </ResponsiveDialog>
 
@@ -490,47 +531,66 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         <DialogTitle>Commit changes</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Commit message"
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-              multiline
-              minRows={2}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={commitPush}
-                  onChange={(event) => setCommitPush(event.target.checked)}
-                />
-              }
-              label="Push to origin after committing"
-            />
+            <ControlTooltip title="Message for the git commit">
+              <TextField
+                label="Commit message"
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                fullWidth
+                required
+                autoFocus
+                multiline
+                minRows={2}
+              />
+            </ControlTooltip>
+            <ControlTooltip title="Push the commit to origin after committing locally">
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={commitPush}
+                    onChange={(event) => setCommitPush(event.target.checked)}
+                  />
+                }
+                label="Push to origin after committing"
+              />
+            </ControlTooltip>
             {commitMutation.error ? (
               <Alert severity="error">{(commitMutation.error as Error).message}</Alert>
             ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => {
-              setCommitOpen(false);
-              commitMutation.reset();
-            }}
-            disabled={commitMutation.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
+          <ControlTooltip title="Close without committing" disabled={commitMutation.isPending}>
+            <Button
+              onClick={() => {
+                setCommitOpen(false);
+                commitMutation.reset();
+              }}
+              disabled={commitMutation.isPending}
+            >
+              Cancel
+            </Button>
+          </ControlTooltip>
+          <ControlTooltip
+            title={
+              commitMutation.isPending
+                ? 'Committing changes…'
+                : !commitMessage.trim()
+                  ? 'Enter a commit message first'
+                  : commitPush
+                    ? 'Commit pending changes and push to origin'
+                    : 'Commit pending changes locally'
+            }
             disabled={!commitMessage.trim() || commitMutation.isPending}
-            onClick={() => commitMutation.mutate()}
           >
-            {commitMutation.isPending ? 'Working…' : commitPush ? 'Commit and push' : 'Commit'}
-          </Button>
+            <Button
+              variant="contained"
+              disabled={!commitMessage.trim() || commitMutation.isPending}
+              onClick={() => commitMutation.mutate()}
+            >
+              {commitMutation.isPending ? 'Working…' : commitPush ? 'Commit and push' : 'Commit'}
+            </Button>
+          </ControlTooltip>
         </DialogActions>
       </ResponsiveDialog>
     </Stack>
