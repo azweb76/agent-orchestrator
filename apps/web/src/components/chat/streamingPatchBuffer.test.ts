@@ -63,6 +63,32 @@ describe('createStreamingPatchBuffer', () => {
     buffer.dispose();
   });
 
+  it('separates text segments when tools interrupt the stream', () => {
+    let message = streamingAssistant();
+    const buffer = createStreamingPatchBuffer((_sessionId, mutate) => {
+      message = mutate(message);
+    });
+
+    buffer.appendToken('s1', 'First thought.');
+    buffer.flushAll('s1');
+    buffer.patchStreaming('s1', (current) => ({
+      ...current,
+      metadata: {
+        ...current.metadata,
+        timeline: [
+          ...(current.metadata.timeline ?? []),
+          { type: 'tool', id: 'tool_1', name: 'Read', status: 'running' },
+        ],
+      },
+    }));
+    buffer.appendToken('s1', 'Second thought.');
+    buffer.flushAll('s1');
+
+    expect(message.content).toBe('First thought.\n\nSecond thought.');
+    expect(message.metadata.timeline?.filter((part) => part.type === 'text')).toHaveLength(2);
+    buffer.dispose();
+  });
+
   it('flushAll applies any remaining buffered text immediately', () => {
     const patches: string[] = [];
     const buffer = createStreamingPatchBuffer((_sessionId, mutate) => {

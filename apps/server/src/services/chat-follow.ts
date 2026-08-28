@@ -5,6 +5,7 @@ import {
   appendStreamText,
   applyStreamEvent,
   adoptParentClaudeSessionId,
+  coalesceTimelineText,
   parentStreamTextDelta,
 } from '@agent-orchestrator/shared';
 import { followClaudeLog, isPidAlive, readClaudeLogSnapshot } from './git.js';
@@ -103,16 +104,17 @@ export async function followAgentSession(
   }
 
   let assistantMessage = [...messages].reverse().find((item) => item.role === 'assistant');
-  let assistantText = assistantMessage?.content ?? '';
-  let timeline: StreamPart[] = assistantMessage?.metadata.timeline ?? [];
+  // Rebuilt from the run log below; do not seed from persisted content.
+  let assistantText = '';
+  let timeline: StreamPart[] = [];
   let parentClaudeSessionId: string | null = session.claudeSessionId;
 
   const applyEvent = (event: Record<string, unknown>, live: boolean) => {
     parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, event);
     const token = parentStreamTextDelta(event, parentClaudeSessionId);
     if (token) {
-      assistantText += token;
       timeline = appendStreamText(timeline, token);
+      assistantText = coalesceTimelineText(timeline);
       if (live) send('token', { text: token });
     } else if (String(event.type ?? '') !== 'stderr') {
       timeline = applyStreamEvent(timeline, event, parentClaudeSessionId);
@@ -121,8 +123,6 @@ export async function followAgentSession(
   };
 
   const snapshot = await readClaudeLogSnapshot(handle.logPath);
-  assistantText = '';
-  timeline = [];
   for (const line of snapshot.lines) {
     try {
       applyEvent(JSON.parse(line) as Record<string, unknown>, false);

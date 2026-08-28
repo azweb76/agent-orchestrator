@@ -168,12 +168,15 @@ export function applyStreamEvent(
   return next;
 }
 
-/** Join all timeline text parts into one string (single chat bubble). */
+/**
+ * Join timeline text parts for a single chat bubble.
+ * Segments separated by tools stay on separate lines (paragraph breaks).
+ */
 export function coalesceTimelineText(parts: StreamPart[]): string {
   return parts
     .filter((part): part is Extract<StreamPart, { type: 'text' }> => part.type === 'text')
     .map((part) => part.text)
-    .join('');
+    .join('\n\n');
 }
 
 /** Prefer a running tool; otherwise the most recent tool event. */

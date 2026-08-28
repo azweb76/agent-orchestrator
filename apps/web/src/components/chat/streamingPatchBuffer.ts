@@ -1,4 +1,4 @@
-import { appendStreamText, type Message } from '@agent-orchestrator/shared';
+import { appendStreamText, coalesceTimelineText, type Message } from '@agent-orchestrator/shared';
 
 export type StreamingAssistantPatcher = (
   sessionId: string,
@@ -26,15 +26,18 @@ export function createStreamingPatchBuffer(patch: StreamingAssistantPatcher) {
     const buffered = tokenBuffers.get(sessionId);
     if (!buffered) return;
     tokenBuffers.delete(sessionId);
-    patch(sessionId, (message) => ({
-      ...message,
-      content: message.content + buffered,
-      metadata: {
-        ...message.metadata,
-        streaming: true,
-        timeline: appendStreamText(message.metadata.timeline ?? [], buffered),
-      },
-    }));
+    patch(sessionId, (message) => {
+      const timeline = appendStreamText(message.metadata.timeline ?? [], buffered);
+      return {
+        ...message,
+        content: coalesceTimelineText(timeline),
+        metadata: {
+          ...message.metadata,
+          streaming: true,
+          timeline,
+        },
+      };
+    });
   };
 
   const scheduleFlush = (sessionId: string) => {
