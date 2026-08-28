@@ -8,6 +8,7 @@ import { MessageRepository } from './repositories/message.js';
 import { QueuedMessageRepository } from './repositories/queued-message.js';
 import { WorkspaceRepository } from './repositories/workspace.js';
 import { WorktreeRepository } from './repositories/worktree.js';
+import { SessionSearchIndexRepository } from './repositories/session-search-index.js';
 
 export { DATABASE_FILENAME, initDatabase } from './migrate.js';
 export { AppSettingsRepository } from './repositories/app-settings.js';
@@ -19,6 +20,7 @@ export { MessageRepository } from './repositories/message.js';
 export { QueuedMessageRepository } from './repositories/queued-message.js';
 export { WorkspaceRepository } from './repositories/workspace.js';
 export { WorktreeRepository } from './repositories/worktree.js';
+export { SessionSearchIndexRepository } from './repositories/session-search-index.js';
 
 export type AppRepositories = {
   workspaces: WorkspaceRepository;
@@ -30,6 +32,7 @@ export type AppRepositories = {
   queued: QueuedMessageRepository;
   settings: AppSettingsRepository;
   automationState: AutomationStateRepository;
+  sessionSearch: SessionSearchIndexRepository;
 };
 
 export function createRepositories(db: Database.Database): AppRepositories {
@@ -43,5 +46,6 @@ export function createRepositories(db: Database.Database): AppRepositories {
     queued: new QueuedMessageRepository(db),
     settings: new AppSettingsRepository(db),
     automationState: new AutomationStateRepository(db),
+    sessionSearch: new SessionSearchIndexRepository(db),
   };
 }

@@ -1,13 +1,27 @@
-import type { PullRequestInbox, SidebarWorkspace } from '@agent-orchestrator/shared';
+import type {
+  PullRequestInbox,
+  SessionSearchHit,
+  SidebarWorkspace,
+} from '@agent-orchestrator/shared';
 import { pullRequestPath } from '../../utils/paths';
+import type { FleetBulkActionId, FleetBulkCounts } from './fleetBulkActions';
+import { fleetBulkActionLabel } from './fleetBulkActions';
 
-export type PaletteGroup = 'Actions' | 'Agents' | 'Workspaces' | 'Pull requests';
+export type PaletteGroup =
+  | 'Actions'
+  | 'Fleet'
+  | 'Agents'
+  | 'Workspaces'
+  | 'Pull requests'
+  | 'Transcripts';
 
 export type PaletteCommandAction =
-  | { kind: 'navigate'; to: string }
+  | { kind: 'navigate'; to: string; state?: Record<string, unknown> }
   | { kind: 'new-agent'; workspaceId: string; defaultBranch?: string }
   | { kind: 'new-workspace' }
-  | { kind: 'toggle-sidebar' };
+  | { kind: 'toggle-sidebar' }
+  | { kind: 'bulk'; bulk: FleetBulkActionId }
+  | { kind: 'open-session'; agentId: string; sessionId: string };
 
 export interface PaletteCommand {
   id: string;
@@ -27,6 +41,7 @@ export interface PaletteCommand {
 export function buildPaletteCommands(
   tree: SidebarWorkspace[],
   inbox: PullRequestInbox | null,
+  bulkCounts?: FleetBulkCounts,
 ): PaletteCommand[] {
   const commands: PaletteCommand[] = [
     {
@@ -72,6 +87,10 @@ export function buildPaletteCommands(
       action: { kind: 'navigate', to: '/pull-requests' },
     },
   ];
+
+  if (bulkCounts) {
+    commands.push(...buildFleetBulkCommands(bulkCounts));
+  }
 
   for (const workspace of tree) {
     commands.push({
@@ -131,6 +150,36 @@ export function buildPaletteCommands(
   }
 
   return commands;
+}
+
+export function buildFleetBulkCommands(counts: FleetBulkCounts): PaletteCommand[] {
+  const commands: PaletteCommand[] = [];
+  const push = (bulk: FleetBulkActionId, count: number, keywords: string) => {
+    if (count <= 0) return;
+    commands.push({
+      id: `fleet:${bulk}`,
+      group: 'Fleet',
+      label: fleetBulkActionLabel(bulk, count),
+      keywords,
+      action: { kind: 'bulk', bulk },
+    });
+  };
+  push('fix-ci-all', counts.fixCi, 'bulk fleet ci checks failing fix');
+  push('address-review-all', counts.addressReview, 'bulk fleet review requested address');
+  push('archive-merged-all', counts.archiveMerged, 'bulk fleet archive merged cleanup');
+  push('open-needs-input-all', counts.needsInput, 'bulk fleet needs input permission blocked');
+  return commands;
+}
+
+export function transcriptHitsToCommands(hits: SessionSearchHit[]): PaletteCommand[] {
+  return hits.map((hit) => ({
+    id: `transcript:${hit.sessionId}`,
+    group: 'Transcripts' as const,
+    label: hit.title,
+    hint: `${hit.agentName} · ${hit.workspaceName}`,
+    keywords: `${hit.snippet} transcript session chat idea prompt`,
+    action: { kind: 'open-session', agentId: hit.agentId, sessionId: hit.sessionId },
+  }));
 }
 
 /** Every whitespace-separated token must match the label, hint, or keywords. */

@@ -38,6 +38,14 @@ export function registerAgentRoutes(router: express.Router, ctx: AppContext): vo
     }),
   );
 
+  router.get(
+    '/fleet/merged-agents',
+    asyncHandler(async (_req, res) => {
+      const { listMergedFleetAgents } = await import('../services/fleet-bulk.js');
+      res.json(await listMergedFleetAgents(ctx));
+    }),
+  );
+
   router.post(
     '/agents/:agentId/archive',
     asyncHandler(async (req, res) => {

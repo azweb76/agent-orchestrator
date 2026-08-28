@@ -43,6 +43,7 @@ import {
 } from './chat-run-lifecycle.js';
 import { clearSessionRunFields } from './agent-core.js';
 import { evaluateSpendCap } from './spend-cap.js';
+import { refreshSessionSearchIndex } from './session-search-index.js';
 
 export async function streamAgentChat(
   ctx: AppContext,
@@ -191,6 +192,7 @@ export async function streamAgentChat(
     createdAt: nowIso(),
   };
   ctx.repos.messages.create(userMessage);
+  refreshSessionSearchIndex(ctx, activeSession.id);
 
   let assistantMessage: Message = {
     id: uuidv4(),

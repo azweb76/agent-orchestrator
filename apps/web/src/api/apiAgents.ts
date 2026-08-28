@@ -26,6 +26,7 @@ import type {
   QueuedChatMessage,
   RewindChatResponse,
   SessionContextUsage,
+  SessionSearchHit,
   SlashCommand,
   UpdateChatSessionRequest,
   UpdateAgentRequest,
@@ -148,4 +149,8 @@ export const apiAgents = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  searchSessions: (query: string, limit = 24) =>
+    request<SessionSearchHit[]>(
+      `/sessions/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    ),
 };

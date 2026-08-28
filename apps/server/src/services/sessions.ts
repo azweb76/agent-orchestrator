@@ -20,6 +20,7 @@ import {
 import { getAgentDetail } from './agents-lifecycle.js';
 import { cleanupQueuedAttachments, clearSessionQueue, drainWaitingMutatingSessions } from './chat-queue.js';
 import { cleanupMessageAttachments } from './chat-run-lifecycle.js';
+import { removeSessionSearchIndex, touchSessionSearchTitle } from './session-search-index.js';
 export {
   gradeAgentSession,
   listAgentInstructionFiles,
@@ -88,6 +89,7 @@ export async function updateAgentSession(
     updatedAt: nowIso(),
   });
   syncAgentFromSessions(ctx, agentId);
+  if (requestedTitle) touchSessionSearchTitle(ctx, updated.id, updated.title);
   return updated;
 }
 
@@ -110,6 +112,7 @@ export async function deleteAgentSession(
   await cleanupQueuedAttachments(queued.flatMap((item) => item.attachments));
   ctx.repos.messages.deleteBySession(session.id);
   ctx.repos.sessions.delete(session.id);
+  removeSessionSearchIndex(ctx, session.id);
 
   const remaining = ctx.repos.sessions.listByAgent(agentId);
   if (remaining.length === 0) {

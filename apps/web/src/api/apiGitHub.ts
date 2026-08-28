@@ -106,4 +106,6 @@ export const apiGitHub = {
     }),
   markPullRequestReady: (owner: string, repo: string, prNumber: number) =>
     request<PullRequestDetail>(`${prBase(owner, repo, prNumber)}/ready`, { method: 'POST' }),
+  listMergedFleetAgents: () =>
+    request<import('@agent-orchestrator/shared').MergedFleetAgent[]>('/fleet/merged-agents'),
 };

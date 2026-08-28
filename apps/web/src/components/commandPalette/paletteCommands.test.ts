@@ -110,6 +110,18 @@ describe('buildPaletteCommands', () => {
     const prs = buildPaletteCommands([], duplicated).filter((c) => c.group === 'Pull requests');
     expect(prs).toHaveLength(1);
   });
+
+  it('includes fleet bulk commands when counts are provided', () => {
+    const commands = buildPaletteCommands([], null, {
+      fixCi: 2,
+      addressReview: 0,
+      archiveMerged: 1,
+      needsInput: 3,
+    });
+    expect(commands.some((c) => c.id === 'fleet:fix-ci-all')).toBe(true);
+    expect(commands.some((c) => c.id === 'fleet:archive-merged-all')).toBe(true);
+    expect(commands.some((c) => c.id === 'fleet:address-review-all')).toBe(false);
+  });
 });
 
 describe('filterPaletteCommands', () => {

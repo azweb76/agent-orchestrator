@@ -20,6 +20,19 @@ import { asyncHandler, param } from './helpers.js';
 import { sessionTemplate } from './schemas.js';
 
 export function registerSessionRoutes(router: express.Router, ctx: AppContext): void {
+  router.get(
+    '/sessions/search',
+    asyncHandler(async (req, res) => {
+      const query = typeof req.query.q === 'string' ? req.query.q : '';
+      const limit =
+        typeof req.query.limit === 'string' && /^\d+$/.test(req.query.limit)
+          ? Math.min(Number(req.query.limit), 48)
+          : 24;
+      const { searchSessionTranscripts } = await import('../services/session-search-index.js');
+      res.json(searchSessionTranscripts(ctx, query, limit));
+    }),
+  );
+
   router.post(
     '/agents/:agentId/sessions',
     asyncHandler(async (req, res) => {
