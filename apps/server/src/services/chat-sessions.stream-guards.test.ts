@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { describe, test } from 'node:test';
 import { streamAgentChat } from './app.js';
 import { ClaudeService } from './git.js';
 import { mockResponse, seedAgent } from './chat-sessions.test-helpers.js';
 
+describe('streamAgentChat guards', { concurrency: 1 }, () => {
 test('streamAgentChat rejects a non-force send while a tracked run has no persisted pid yet', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-guard-'));
   try {
@@ -143,4 +144,5 @@ test('streamAgentChat force-send interrupts a tracked run that has no persisted 
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
+});
 });
