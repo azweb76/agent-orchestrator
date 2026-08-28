@@ -31,8 +31,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Test (server)
         run: pnpm --filter @agent-orchestrator/server test
+
+      - name: Test (web)
+        run: pnpm --filter @agent-orchestrator/web test
 
       - name: Build
         run: pnpm build

@@ -14,11 +14,12 @@ pnpm build && pnpm start      # production: server serves apps/web/dist
 pnpm typecheck                # all packages
 pnpm --filter @agent-orchestrator/server test
 pnpm --filter @agent-orchestrator/server test -- src/services/git.test.ts
+pnpm --filter @agent-orchestrator/web test # Vitest suite for web helpers
 ```
 
 Shared types compile to `packages/shared/dist`. After changing `@agent-orchestrator/shared`, rebuild it (`pnpm --filter @agent-orchestrator/shared build`) or the full `pnpm build` before server tests that import the package.
 
-There is no repo-wide lint or frontend test script. `pnpm typecheck` is the cross-package check; add or update `apps/server` tests for server behavior you change.
+There is no repo-wide lint script. `pnpm typecheck` is the cross-package check; add or update `apps/server` tests for server behavior you change. Web helper tests run with Vitest and are colocated as `*.test.ts` in `apps/web/src`.
 
 ## Layout
 
