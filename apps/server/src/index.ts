@@ -10,6 +10,7 @@ import { AnthropicService } from './services/anthropic.js';
 import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
+import { startGithubPollBus } from './services/github-poll-bus.js';
 import { optionalBearerAuth } from './auth.js';
 import { applyPersistedSecrets } from './services/setup.js';
 
@@ -61,6 +62,7 @@ const server = app.listen(port, host, () => {
   console.log(`Agent Orchestrator running at http://${host}:${port}`);
   console.log(`Data directory: ${dataDir}`);
   recoverRunningAgents(ctx);
+  startGithubPollBus(ctx);
 });
 
 let shuttingDown = false;

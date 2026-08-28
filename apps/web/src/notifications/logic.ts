@@ -69,6 +69,39 @@ export function describeNotificationEvent(
           : `Claude wants to use ${tool}.`;
     return { title: `${name} needs your input`, body };
   }
+  if (event.type === 'automation_triggered') {
+    const action = typeof event.data.action === 'string' ? event.data.action : '';
+    const pr =
+      typeof event.data.number === 'number'
+        ? `PR #${event.data.number}`
+        : 'pull request';
+    switch (action) {
+      case 'fix_ci_started':
+        return { title: `${name}: Fix CI started`, body: `Auto-started Fix CI for ${pr}.` };
+      case 'fix_ci_cap_hit':
+        return {
+          title: `${name}: Fix CI cap reached`,
+          body: `Retry limit hit for ${pr}; manual intervention needed.`,
+        };
+      case 'address_review_started':
+        return {
+          title: `${name}: Address review started`,
+          body: `Auto-started Address review for ${pr}.`,
+        };
+      case 'archive_completed':
+        return { title: `${name} archived`, body: `Auto-archived after ${pr} merged.` };
+      case 'archive_skipped':
+        return {
+          title: `${name}: auto-archive skipped`,
+          body:
+            event.data.reason === 'dirty_worktree'
+              ? 'Uncommitted changes in the worktree.'
+              : 'No linked pull request.',
+        };
+      default:
+        return null;
+    }
+  }
   return null;
 }
 
@@ -123,7 +156,7 @@ export function navigationStateForEvent(event: AppEvent): AgentAttentionNavigati
       sessionId: event.sessionId ?? undefined,
     };
   }
-  if (event.type === 'run_finished') {
+  if (event.type === 'run_finished' || event.type === 'automation_triggered') {
     return {
       focusAttention: 'run-finished',
       sessionId: event.sessionId ?? undefined,

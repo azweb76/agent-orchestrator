@@ -107,7 +107,9 @@ export type AppEventType =
   | 'permission_request'
   | 'queue_changed'
   | 'workspaces_changed'
-  | 'instruction_draft_offer';
+  | 'instruction_draft_offer'
+  | 'github_pr_changed'
+  | 'automation_triggered';
 
 export interface AppEvent {
   id: string;

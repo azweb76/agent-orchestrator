@@ -8,6 +8,7 @@ import { registerEventsRoutes } from './events-routes.js';
 import { registerGitHubRoutes } from './github-routes.js';
 import { registerSessionRoutes } from './session-routes.js';
 import { registerWorkspaceRoutes } from './workspace-routes.js';
+import { registerSettingsRoutes } from './settings-routes.js';
 
 export { errorHandler } from './error-handler.js';
 
@@ -16,6 +17,7 @@ export function createRouter(ctx: AppContext): express.Router {
 
   registerAuthRoutes(router, ctx);
   registerEventsRoutes(router, ctx);
+  registerSettingsRoutes(router, ctx);
   registerWorkspaceRoutes(router, ctx);
   registerGitHubRoutes(router, ctx);
   registerAgentRoutes(router, ctx);

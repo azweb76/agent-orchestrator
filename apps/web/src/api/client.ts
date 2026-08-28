@@ -2,6 +2,10 @@ import { apiAgents } from './apiAgents';
 import { apiGitHub } from './apiGitHub';
 import { apiSetup } from './apiSetup';
 import { apiWorkspaces } from './apiWorkspaces';
+import {
+  getAutomationSettings,
+  updateAutomationSettings,
+} from '../automation/settings';
 
 export { setAuthToken } from './request';
 export type { ChatStreamHandlers, SetupInfo, SystemStatus } from './types';
@@ -17,4 +21,6 @@ export const api = {
   ...apiWorkspaces,
   ...apiGitHub,
   ...apiAgents,
+  getAutomationSettings,
+  updateAutomationSettings,
 };
