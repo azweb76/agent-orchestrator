@@ -22,6 +22,7 @@ export interface AgentPrStripModel {
   mergeHint: string | null;
   showFixCi: boolean;
   showAddressReview: boolean;
+  showMarkReady: boolean;
   open: boolean;
 }
 
@@ -103,6 +104,7 @@ export function buildAgentPrStripModel(input: {
     mergeHint,
     showFixCi: canAct && (checks?.failing ?? 0) > 0,
     showAddressReview: canAct,
+    showMarkReady: canAct && pr.draft && checks?.rollup === 'success',
     open,
   };
 }
