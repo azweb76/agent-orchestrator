@@ -7,7 +7,6 @@ export interface SystemStatus {
   githubLogin: string | null;
   authRequired: boolean;
   archivedAgentCount: number;
-  dataDirBytes: number;
   setupDocsUrl?: string;
   claudeDocsUrl?: string;
 }

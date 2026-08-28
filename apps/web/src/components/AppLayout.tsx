@@ -20,10 +20,11 @@ import { CreateWorktreeDialog } from './CreateWorktreeDialog';
 import {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_DRAWER_WIDTH,
-  SIDEBAR_EXPANDED_WIDTH,
   useSidebarCollapsed,
   WorkspaceSidebar,
 } from './WorkspaceSidebar';
+import { SidebarResizeHandle } from './sidebar/SidebarResizeHandle';
+import { useSidebarWidth } from './sidebar/useSidebarWidth';
 import { ControlTooltip } from './ui/ControlTooltip';
 
 export function AppLayout() {
@@ -31,6 +32,8 @@ export function AppLayout() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [sidebarCollapsed, setSidebarCollapsed] = useSidebarCollapsed();
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
+  const [sidebarResizing, setSidebarResizing] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [newAgentTarget, setNewAgentTarget] = useState<{
@@ -53,7 +56,7 @@ export function AppLayout() {
   };
 
   const onAgent = location.pathname.startsWith('/agents/');
-  const desktopSidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
+  const desktopSidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth;
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -150,14 +153,23 @@ export function AppLayout() {
                 height: 'calc(100dvh - 64px - env(safe-area-inset-top, 0px))',
                 width: desktopSidebarWidth,
                 flexShrink: 0,
-                transition: (t) =>
-                  t.transitions.create('width', {
-                    easing: t.transitions.easing.sharp,
-                    duration: t.transitions.duration.shorter,
-                  }),
+                transition: sidebarResizing
+                  ? 'none'
+                  : (t) =>
+                      t.transitions.create('width', {
+                        easing: t.transitions.easing.sharp,
+                        duration: t.transitions.duration.shorter,
+                      }),
               }}
             >
               <WorkspaceSidebar collapsed={sidebarCollapsed} onCollapsedChange={setSidebarCollapsed} />
+              {!sidebarCollapsed ? (
+                <SidebarResizeHandle
+                  currentWidth={sidebarWidth}
+                  onWidthChange={setSidebarWidth}
+                  onResizingChange={setSidebarResizing}
+                />
+              ) : null}
             </Box>
           )}
 

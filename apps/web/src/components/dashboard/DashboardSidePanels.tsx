@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import type { InboxIssue, InboxPullRequest, UsageSummary, WorkspaceWithCounts } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { formatBytes, formatUsd } from '../../utils/format';
+import { formatUsd } from '../../utils/format';
 import { pullRequestPath } from '../../utils/paths';
 import type { SystemStatus } from '../../api/client';
 import { HudPanel } from './HudPanel';
@@ -94,12 +94,6 @@ export function DashboardSidePanels({
                 onClick={onPruneClick}
                 sx={{ cursor: 'pointer' }}
               />
-            </Stack>
-          ) : null}
-          {typeof status?.dataDirBytes === 'number' ? (
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2">Data directory</Typography>
-              <Chip size="small" label={formatBytes(status.dataDirBytes)} variant="outlined" />
             </Stack>
           ) : null}
         </Stack>
