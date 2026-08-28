@@ -343,6 +343,23 @@ export function SettingsPage() {
       </SettingsSection>
 
       <SettingsSection
+        title="Session analysis"
+        description='Lets you run "Analyze this session" in chat to grade session quality with Claude. Off by default.'
+      >
+        <FormControlLabel
+          control={
+            <Switch
+              checked={Boolean(settings?.analyzeSessionEnabled)}
+              onChange={(event) =>
+                void saveSettings.mutateAsync({ analyzeSessionEnabled: event.target.checked })
+              }
+            />
+          }
+          label="Enable session analysis"
+        />
+      </SettingsSection>
+
+      <SettingsSection
         title="Authentication"
         description="Shows how this instance accepts API access. Preferences stay in your browser only."
       >
