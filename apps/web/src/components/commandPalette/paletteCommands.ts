@@ -44,6 +44,13 @@ export function buildPaletteCommands(
       action: { kind: 'toggle-sidebar' },
     },
     {
+      id: 'action:go-settings',
+      group: 'Actions',
+      label: 'Go to settings',
+      keywords: 'preferences notifications theme auth appearance',
+      action: { kind: 'navigate', to: '/settings' },
+    },
+    {
       id: 'action:go-dashboard',
       group: 'Actions',
       label: 'Go to dashboard',
