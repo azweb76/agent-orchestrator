@@ -170,7 +170,7 @@ function patchTool(
   patch: {
     name?: string;
     detail?: string;
-    status?: 'running' | 'done';
+    status?: 'running' | 'done' | 'error';
     task?: ToolTaskInfo;
   },
 ): StreamPart[] {

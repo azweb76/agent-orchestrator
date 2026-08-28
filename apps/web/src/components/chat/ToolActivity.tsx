@@ -102,9 +102,11 @@ export function ThinkingIndicator() {
 
 function ActivityIcon({
   running,
+  errored,
   children,
 }: {
   running: boolean;
+  errored?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -117,9 +119,9 @@ function ActivityIcon({
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        color: 'info.main',
-        bgcolor: theme.palette.ao.accent.primaryTintStrong,
-        animation: running ? 'ao-tool-pulse 1.6s ease-in-out infinite' : undefined,
+        color: errored ? 'error.main' : 'info.main',
+        bgcolor: errored ? theme.palette.ao.accent.errorTintStrong : theme.palette.ao.accent.primaryTintStrong,
+        animation: running && !errored ? 'ao-tool-pulse 1.6s ease-in-out infinite' : undefined,
         '@keyframes ao-tool-pulse': {
           '0%, 100%': { boxShadow: `0 0 0 0 ${theme.palette.ao.accent.infoGlow}` },
           '50%': { boxShadow: '0 0 0 5px transparent' },
@@ -142,6 +144,7 @@ export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
   const label = active ? toolActionLabel(active.name, active.detail) : 'Working';
   const detail = active?.detail?.trim();
   const running = active?.status === 'running';
+  const errored = active?.status === 'error';
 
   return (
     <Box
@@ -151,13 +154,13 @@ export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
         py: 1.15,
         borderRadius: 2,
         border: '1px solid',
-        borderColor: 'ao.accent.primaryBorder',
-        bgcolor: 'ao.accent.primaryTint',
+        borderColor: errored ? 'ao.accent.errorBorder' : 'ao.accent.primaryBorder',
+        bgcolor: errored ? 'ao.accent.errorTint' : 'ao.accent.primaryTint',
         maxWidth: 560,
       }}
     >
       <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-        <ActivityIcon running={running}>
+        <ActivityIcon running={running} errored={errored}>
           {active ? toolIcon(active.name, active.task?.taskType) : <BuildOutlinedIcon sx={{ fontSize: 16 }} />}
         </ActivityIcon>
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -220,8 +223,8 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
         py: 1.05,
         borderRadius: 2,
         border: '1px solid',
-        borderColor: failed ? 'ao.accent.warningBorder' : 'ao.accent.secondaryBorder',
-        bgcolor: failed ? 'ao.accent.warningTint' : 'ao.accent.secondaryTint',
+        borderColor: failed ? 'ao.accent.errorBorder' : 'ao.accent.secondaryBorder',
+        bgcolor: failed ? 'ao.accent.errorTint' : 'ao.accent.secondaryTint',
       }}
     >
       <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
@@ -234,9 +237,9 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            color: failed ? 'warning.main' : 'secondary.main',
+            color: failed ? 'error.main' : 'secondary.main',
             bgcolor: failed
-              ? theme.palette.ao.accent.warningTintStrong
+              ? theme.palette.ao.accent.errorTintStrong
               : theme.palette.ao.accent.secondaryTintStrong,
             animation: running ? 'ao-subagent-pulse 1.6s ease-in-out infinite' : undefined,
             '@keyframes ao-subagent-pulse': {

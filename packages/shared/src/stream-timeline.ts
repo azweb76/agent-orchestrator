@@ -34,17 +34,22 @@ export {
 
 export { completeRunningTools } from './stream-timeline-mutations.js';
 
-function completeToolIds(parts: StreamPart[], ids: string[]): StreamPart[] {
-  if (ids.length === 0) return parts;
-  const wanted = new Set(ids);
+function completeToolIds(
+  parts: StreamPart[],
+  results: { id: string; isError: boolean }[],
+): StreamPart[] {
+  if (results.length === 0) return parts;
+  const wanted = new Map(results.map((result) => [result.id, result.isError]));
   return parts.map((part) => {
-    if (part.type !== 'tool' || part.status === 'done') return part;
+    if (part.type !== 'tool' || part.status === 'done' || part.status === 'error') return part;
     // A backgrounded Task/Agent answers its tool_use immediately ("Async agent
     // launched successfully") while the subagent keeps working. Only
     // `task_updated` / `task_notification` may finish those rows.
     if (part.task?.backgrounded) return part;
-    if (wanted.has(part.id) || (part.task?.taskId && wanted.has(part.task.taskId))) {
-      return { ...part, status: 'done' as const };
+    const isError =
+      wanted.get(part.id) ?? (part.task?.taskId ? wanted.get(part.task.taskId) : undefined);
+    if (isError !== undefined) {
+      return { ...part, status: isError ? ('error' as const) : ('done' as const) };
     }
     return part;
   });
@@ -58,21 +63,24 @@ function completeNonSubagentTools(parts: StreamPart[]): StreamPart[] {
   });
 }
 
-function toolResultIds(event: Record<string, unknown>, content: unknown): string[] {
-  const ids: string[] = [];
-  const push = (value: unknown) => {
+function toolResultIds(
+  event: Record<string, unknown>,
+  content: unknown,
+): { id: string; isError: boolean }[] {
+  const results: { id: string; isError: boolean }[] = [];
+  const push = (value: unknown, isError: boolean) => {
     const id = stringField(value);
-    if (id) ids.push(id);
+    if (id) results.push({ id, isError });
   };
   if (Array.isArray(content)) {
     for (const block of content) {
       if (!block || typeof block !== 'object') continue;
       const b = block as Record<string, unknown>;
-      if (b.type === 'tool_result') push(b.tool_use_id);
+      if (b.type === 'tool_result') push(b.tool_use_id, b.is_error === true);
     }
   }
-  if (String(event.type ?? '') === 'tool_result') push(event.tool_use_id);
-  return ids;
+  if (String(event.type ?? '') === 'tool_result') push(event.tool_use_id, event.is_error === true);
+  return results;
 }
 
 /** Append a text token into the timeline, keeping tools interleaved in arrival order. */
@@ -155,9 +163,9 @@ export function applyStreamEvent(
     }
   }
 
-  const resultIds = toolResultIds(event, content);
-  if (resultIds.length > 0) {
-    next = completeToolIds(next, resultIds);
+  const results = toolResultIds(event, content);
+  if (results.length > 0) {
+    next = completeToolIds(next, results);
   }
 
   if (isTopLevelClaudeResult(event, parentSessionId)) {
