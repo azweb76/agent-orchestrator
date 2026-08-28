@@ -50,6 +50,30 @@ describe('mergeChatMessages', () => {
     assert.equal(merged[0]?.metadata.streaming, false);
   });
 
+  it('accepts a lagged server timeline while background subagents are still running', () => {
+    const local = [message('a1', 'assistant', 'Hello', false, 1)];
+    const remote = [
+      {
+        ...message('a1', 'assistant', 'Hello', true, 2),
+        metadata: {
+          streaming: true,
+          timeline: [
+            {
+              type: 'tool' as const,
+              id: 'task_1',
+              name: 'Task',
+              status: 'running' as const,
+              task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
+            },
+          ],
+        },
+      },
+    ];
+    const merged = mergeChatMessages(local, remote);
+    assert.equal(merged[0]?.metadata.streaming, true);
+    assert.equal(merged[0]?.metadata.timeline?.length, 1);
+  });
+
   it('keeps the longer live stream over a lagged persist', () => {
     const local = [message('a1', 'assistant', 'Hello world', true, 4)];
     const remote = [message('a1', 'assistant', 'Hello', true, 1)];

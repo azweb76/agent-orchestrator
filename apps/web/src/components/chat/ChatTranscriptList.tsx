@@ -31,6 +31,9 @@ type ChatTranscriptListProps = {
   renderPermissionRequest: (request: PermissionRequest) => ReactNode;
 };
 
+/** Extra pixels below the fold so tall permission cards stay scrollable in Virtuoso. */
+const PERMISSION_CARD_VIEWPORT_PADDING = 420;
+
 export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscriptListProps>(
   function ChatTranscriptList(
     {
@@ -67,7 +70,10 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
         }}
         data={messages}
         atBottomThreshold={NEAR_BOTTOM_PX}
-        followOutput={() => (stickToBottomRef.current ? 'auto' : false)}
+        increaseViewportBy={{ top: 200, bottom: PERMISSION_CARD_VIEWPORT_PADDING }}
+        followOutput={() =>
+          stickToBottomRef.current && permissionRequests.length === 0 ? 'auto' : false
+        }
         atBottomStateChange={(atBottom) => {
           stickToBottomRef.current = atBottom;
           onShowJumpToLatestChange(!atBottom);
