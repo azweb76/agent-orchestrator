@@ -94,6 +94,14 @@ export function describeNotificationEvent(
           title: `${name}: Address review started`,
           body: `Auto-started Address review for ${pr}.`,
         };
+      case 'address_review_blocked':
+        return {
+          title: `${name}: Address review blocked`,
+          body:
+            event.data.reason === 'worktree_busy'
+              ? `Could not auto-start Address review for ${pr}; worktree is busy.`
+              : `Could not auto-start Address review for ${pr}.`,
+        };
       case 'archive_completed':
         return { title: `${name} archived`, body: `Auto-archived after ${pr} merged.` };
       case 'archive_skipped':

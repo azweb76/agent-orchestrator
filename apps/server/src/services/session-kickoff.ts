@@ -70,6 +70,24 @@ async function resolveOpenPullRequest(
   workspace: Workspace,
   worktree: Worktree,
 ): Promise<ResolvedOpenPr | null> {
+  // From-PR worktrees use local branch `pr-<n>`, which does not match GitHub headRef.
+  // Prefer the stored prNumber so Fix CI / Address review kickoffs still seed context.
+  if (worktree.prNumber != null) {
+    const byNumber = await github.getPullRequest(
+      workspace.githubOwner,
+      workspace.githubRepo,
+      worktree.prNumber,
+    );
+    if (byNumber.state === 'open') {
+      const detail = await github.getPullRequestDetail(
+        workspace.githubOwner,
+        workspace.githubRepo,
+        byNumber.number,
+      );
+      return { summary: byNumber, headSha: detail.headSha };
+    }
+  }
+
   const pr = await github.getOpenPullRequestForBranch(
     workspace.githubOwner,
     workspace.githubRepo,
