@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -14,7 +14,6 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import {
   adoptParentClaudeSessionId,
-  appendStreamText,
   applyStreamEvent,
   coalesceTimelineText,
   completeRunningTools,
@@ -59,9 +58,9 @@ import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
 import { InstructionDraftOfferBanner } from './InstructionDraftOfferBanner';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { ToolPermissionCard } from './ToolPermissionCard';
+import { ChatTranscriptList, CHAT_COLUMN_MAX_WIDTH, type ChatTranscriptHandle } from './ChatTranscriptList';
+import { createStreamingPatchBuffer } from './streamingPatchBuffer';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
-
-const CHAT_COLUMN_MAX_WIDTH = 780;
 
 interface ChatPanelProps {
   agent: AgentDetail;
@@ -228,6 +227,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const abortBySessionRef = useRef(new Map<string, AbortController>());
   const parentClaudeBySessionRef = useRef<Record<string, string>>({});
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<ChatTranscriptHandle>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -470,11 +470,8 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   }, [activeSessionId]);
 
   useEffect(() => {
-    const el = chatScrollRef.current;
-    if (!el || !stickToBottomRef.current) return;
-    // Instant scroll keeps stick-to-bottom accurate; smooth scrollIntoView can
-    // fire onScroll mid-animation and clear the near-bottom flag.
-    el.scrollTop = el.scrollHeight;
+    if (!stickToBottomRef.current) return;
+    transcriptRef.current?.scrollToBottom();
   }, [messagesQuery.data, permissionRequests]);
 
   const handleChatScroll = () => {
@@ -488,8 +485,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const jumpToLatest = () => {
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
-    const el = chatScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    transcriptRef.current?.scrollToBottom();
   };
 
   const displayMessages = messagesQuery.data ?? [];
@@ -528,6 +524,13 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       return next;
     });
   };
+
+  const streamingPatches = useMemo(
+    () => createStreamingPatchBuffer(patchStreamingAssistant),
+    [queryClient, agentId],
+  );
+
+  useEffect(() => () => streamingPatches.dispose(), [streamingPatches]);
 
   const enqueueForSession = async (
     sid: string,
@@ -660,20 +663,12 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
-            patchStreamingAssistant(stream.sessionId, (message) => ({
-              ...message,
-              content: message.content + token,
-              metadata: {
-                ...message.metadata,
-                streaming: true,
-                timeline: appendStreamText(message.metadata.timeline ?? [], token),
-              },
-            }));
+            streamingPatches.appendToken(stream.sessionId, token);
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
             const parentSessionId = parentSessionForEvent(stream.sessionId, event);
-            patchStreamingAssistant(stream.sessionId, (message) =>
+            streamingPatches.patchStreaming(stream.sessionId, (message) =>
               applyEventToAssistant(message, event, parentSessionId),
             );
           },
@@ -687,6 +682,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           onDone: (payload) => {
             if (!mountedRef.current) return;
             const sid = payload.chatSessionId ?? stream.sessionId;
+            streamingPatches.flushAll(sid);
             void queryClient.cancelQueries({ queryKey: ['messages', agentId, sid] });
             setMessagesCache(queryClient, agentId, sid, (prev) =>
               upsertMessage(prev, payload.message),
@@ -780,20 +776,12 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       },
       onToken: (token) => {
         if (!mountedRef.current) return;
-        patchStreamingAssistant(stream.sessionId, (message) => ({
-          ...message,
-          content: message.content + token,
-          metadata: {
-            ...message.metadata,
-            streaming: true,
-            timeline: appendStreamText(message.metadata.timeline ?? [], token),
-          },
-        }));
+        streamingPatches.appendToken(stream.sessionId, token);
       },
       onEvent: (event) => {
         if (!mountedRef.current) return;
         const parentSessionId = parentSessionForEvent(stream.sessionId, event);
-        patchStreamingAssistant(stream.sessionId, (message) =>
+        streamingPatches.patchStreaming(stream.sessionId, (message) =>
           applyEventToAssistant(message, event, parentSessionId),
         );
       },
@@ -807,6 +795,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
       onDone: (payload) => {
         if (!mountedRef.current) return;
         const doneSid = payload.chatSessionId ?? stream.sessionId;
+        streamingPatches.flushAll(doneSid);
         void queryClient.cancelQueries({ queryKey: ['messages', agentId, doneSid] });
         setMessagesCache(queryClient, agentId, doneSid, (prev) =>
           upsertMessage(prev, payload.message),
@@ -1056,20 +1045,12 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           },
           onToken: (token) => {
             if (!mountedRef.current) return;
-            patchStreamingAssistant(stream.sessionId, (message) => ({
-              ...message,
-              content: message.content + token,
-              metadata: {
-                ...message.metadata,
-                streaming: true,
-                timeline: appendStreamText(message.metadata.timeline ?? [], token),
-              },
-            }));
+            streamingPatches.appendToken(stream.sessionId, token);
           },
           onEvent: (event) => {
             if (!mountedRef.current) return;
             const parentSessionId = parentSessionForEvent(stream.sessionId, event);
-            patchStreamingAssistant(stream.sessionId, (message) =>
+            streamingPatches.patchStreaming(stream.sessionId, (message) =>
               applyEventToAssistant(message, event, parentSessionId),
             );
           },
@@ -1083,6 +1064,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
           onDone: (payload) => {
             if (!mountedRef.current) return;
             const sid = payload.chatSessionId ?? stream.sessionId;
+            streamingPatches.flushAll(sid);
             void queryClient.cancelQueries({ queryKey: ['messages', agentId, sid] });
             setMessagesCache(queryClient, agentId, sid, (prev) =>
               upsertMessage(prev, payload.message),
@@ -1252,29 +1234,31 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
         }
       />
       <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        <Box
-          ref={chatScrollRef}
-          onScroll={handleChatScroll}
-          sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}
-        >
+        {messagesQuery.isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress size={28} />
+          </Box>
+        ) : messagesQuery.error ? (
+          <Alert severity="error" sx={{ m: 2 }}>
+            {(messagesQuery.error as Error).message}
+          </Alert>
+        ) : displayMessages.length === 0 ? (
           <Box
-            sx={{
-              maxWidth: CHAT_COLUMN_MAX_WIDTH,
-              mx: 'auto',
-              px: { xs: 1.5, sm: 2.5 },
-              py: { xs: 1.5, sm: 2 },
-              minHeight: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
+            ref={chatScrollRef}
+            onScroll={handleChatScroll}
+            sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}
           >
-            {messagesQuery.isLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress size={28} />
-              </Box>
-            ) : messagesQuery.error ? (
-              <Alert severity="error">{(messagesQuery.error as Error).message}</Alert>
-            ) : displayMessages.length === 0 ? (
+            <Box
+              sx={{
+                maxWidth: CHAT_COLUMN_MAX_WIDTH,
+                mx: 'auto',
+                px: { xs: 1.5, sm: 2.5 },
+                py: { xs: 1.5, sm: 2 },
+                minHeight: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
               <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
                 <EmptyState
                   compact
@@ -1298,15 +1282,67 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                   }
                 />
               </Box>
-            ) : (
-              displayMessages.map((message, index) => {
+              {permissionRequests.map((request) => {
+                if (request.toolName === 'AskUserQuestion') {
+                  const questions = parseAskUserQuestions(request.input);
+                  return (
+                    <AskUserQuestionCard
+                      key={request.requestId}
+                      request={request}
+                      questions={questions}
+                      submitting={permissionBusy}
+                      onSubmit={(answers, response) =>
+                        void submitAnswers(request, answers, response)
+                      }
+                      onDismiss={() => void skipAskUserQuestion(request)}
+                    />
+                  );
+                }
+                if (request.toolName === 'ExitPlanMode') {
+                  return (
+                    <ExitPlanModeCard
+                      key={request.requestId}
+                      request={request}
+                      plan={extractPlanFromInput(request.input)}
+                      submitting={permissionBusy}
+                      onBuild={() => void buildPlan(request)}
+                      onKeepPlanning={() => void keepPlanning(request)}
+                    />
+                  );
+                }
+                return (
+                  <ToolPermissionCard
+                    key={request.requestId}
+                    request={request}
+                    submitting={permissionBusy}
+                    onAllow={() => void allowTool(request)}
+                    onDeny={() => void denyTool(request)}
+                  />
+                );
+              })}
+              <Box ref={bottomSentinelRef} sx={{ height: 1, width: '100%' }} aria-hidden />
+            </Box>
+          </Box>
+        ) : (
+          <Box sx={{ flex: 1, minHeight: 0 }}>
+            <ChatTranscriptList
+              ref={transcriptRef}
+              messages={displayMessages}
+              permissionRequests={permissionRequests}
+              scrollerRef={(element) => {
+                chatScrollRef.current = element;
+              }}
+              bottomSentinelRef={bottomSentinelRef}
+              stickToBottomRef={stickToBottomRef}
+              onShowJumpToLatestChange={setShowJumpToLatest}
+              onScroll={handleChatScroll}
+              renderMessage={(message, index) => {
                 if (message.role === 'assistant') {
                   const priorUser = [...displayMessages.slice(0, index)]
                     .reverse()
                     .find((item) => item.role === 'user');
                   return (
                     <MessageTimeline
-                      key={message.id}
                       message={message}
                       onRetry={
                         message.metadata?.error && priorUser && priorUser.attachments.length === 0
@@ -1318,7 +1354,6 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                 }
                 return (
                   <ChatBubble
-                    key={message.id}
                     message={message}
                     onCopy={() => void navigator.clipboard.writeText(message.content)}
                     onRewind={!archived ? () => requestRewind(message) : undefined}
@@ -1329,50 +1364,48 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                     }
                   />
                 );
-              })
-            )}
-
-            {permissionRequests.map((request) => {
-              if (request.toolName === 'AskUserQuestion') {
-                const questions = parseAskUserQuestions(request.input);
+              }}
+              renderPermissionRequest={(request) => {
+                if (request.toolName === 'AskUserQuestion') {
+                  const questions = parseAskUserQuestions(request.input);
+                  return (
+                    <AskUserQuestionCard
+                      key={request.requestId}
+                      request={request}
+                      questions={questions}
+                      submitting={permissionBusy}
+                      onSubmit={(answers, response) =>
+                        void submitAnswers(request, answers, response)
+                      }
+                      onDismiss={() => void skipAskUserQuestion(request)}
+                    />
+                  );
+                }
+                if (request.toolName === 'ExitPlanMode') {
+                  return (
+                    <ExitPlanModeCard
+                      key={request.requestId}
+                      request={request}
+                      plan={extractPlanFromInput(request.input)}
+                      submitting={permissionBusy}
+                      onBuild={() => void buildPlan(request)}
+                      onKeepPlanning={() => void keepPlanning(request)}
+                    />
+                  );
+                }
                 return (
-                  <AskUserQuestionCard
+                  <ToolPermissionCard
                     key={request.requestId}
                     request={request}
-                    questions={questions}
                     submitting={permissionBusy}
-                    onSubmit={(answers, response) =>
-                      void submitAnswers(request, answers, response)
-                    }
-                    onDismiss={() => void skipAskUserQuestion(request)}
+                    onAllow={() => void allowTool(request)}
+                    onDeny={() => void denyTool(request)}
                   />
                 );
-              }
-              if (request.toolName === 'ExitPlanMode') {
-                return (
-                  <ExitPlanModeCard
-                    key={request.requestId}
-                    request={request}
-                    plan={extractPlanFromInput(request.input)}
-                    submitting={permissionBusy}
-                    onBuild={() => void buildPlan(request)}
-                    onKeepPlanning={() => void keepPlanning(request)}
-                  />
-                );
-              }
-              return (
-                <ToolPermissionCard
-                  key={request.requestId}
-                  request={request}
-                  submitting={permissionBusy}
-                  onAllow={() => void allowTool(request)}
-                  onDeny={() => void denyTool(request)}
-                />
-              );
-            })}
-            <Box ref={bottomSentinelRef} sx={{ height: 1, width: '100%' }} aria-hidden />
+              }}
+            />
           </Box>
-        </Box>
+        )}
 
         {showJumpToLatest ? (
           <Tooltip title="Jump to latest">
