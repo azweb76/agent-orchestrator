@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Alert,
   Box,
@@ -60,6 +60,7 @@ import {
 } from './messageTimeline';
 import { createStreamingPatchBuffer } from './streamingPatchBuffer';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
+import type { AgentAttentionFocus } from '../../notifications';
 
 interface ChatPanelProps {
   agent: AgentDetail;
@@ -68,10 +69,40 @@ interface ChatPanelProps {
   initialPrompt?: string;
   /** When set, create a new session from this template after mount. */
   initialTemplate?: ChatSessionTemplateId;
+  /** One-shot navigation focus from notifications or attention alerts. */
+  focusAttention?: AgentAttentionFocus;
+  focusSessionId?: string;
 }
 
 /** Distance from the bottom (px) still treated as "stuck" for auto-scroll. */
 const NEAR_BOTTOM_PX = 80;
+
+function FocusablePermissionShell({
+  highlight,
+  children,
+}: {
+  highlight: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Box
+      sx={
+        highlight
+          ? {
+              borderRadius: 2.5,
+              animation: 'ao-permission-focus 1.1s ease-in-out 3',
+              '@keyframes ao-permission-focus': {
+                '0%, 100%': { outline: '2px solid transparent' },
+                '50%': { outline: '2px solid', outlineColor: 'warning.main' },
+              },
+            }
+          : undefined
+      }
+    >
+      {children}
+    </Box>
+  );
+}
 
 function isNearBottom(el: HTMLElement, thresholdPx = NEAR_BOTTOM_PX): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight <= thresholdPx;
@@ -167,7 +198,14 @@ function MessageTimeline({
   );
 }
 
-export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: ChatPanelProps) {
+export function ChatPanel({
+  agent,
+  archived,
+  initialPrompt,
+  initialTemplate,
+  focusAttention,
+  focusSessionId,
+}: ChatPanelProps) {
   const agentId = agent.id;
   const sseState = useSseConnectionState();
   const keyboardInset = useVisualViewportInset();
@@ -219,6 +257,10 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const [gradeOpen, setGradeOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
+  const [focusPermissions, setFocusPermissions] = useState(false);
+  const [awaitingPermissionFocus, setAwaitingPermissionFocus] = useState(
+    () => focusAttention === 'needs-input',
+  );
   const runChatRef = useRef<
     (
       text: string,
@@ -403,7 +445,9 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   const pendingPermissionsQuery = useQuery({
     queryKey: ['permissions', agentId, activeSessionId],
     queryFn: () => api.listPendingPermissions(agentId, activeSessionId),
-    enabled: Boolean(activeSessionId) && (sessionBusy || permissionRequests.length > 0),
+    enabled:
+      Boolean(activeSessionId) &&
+      (sessionBusy || permissionRequests.length > 0 || awaitingPermissionFocus),
     refetchInterval: () => {
       if (sseState === 'connected') return false;
       return sessionBusy || permissionRequests.length > 0 ? SSE_FALLBACK_ACTIVE_POLL_MS : false;
@@ -1198,12 +1242,87 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
   };
 
   useEffect(() => {
+    if (!awaitingPermissionFocus) return;
+    if (permissionRequests.length > 0 || pendingPermissionsQuery.isFetched) {
+      setAwaitingPermissionFocus(false);
+    }
+  }, [awaitingPermissionFocus, permissionRequests.length, pendingPermissionsQuery.isFetched]);
+
+  useEffect(() => {
+    if (!focusAttention) return;
+    let cancelled = false;
+
+    const revealAttention = () => {
+      requestAnimationFrame(() => {
+        transcriptRef.current?.scrollToBottom();
+        stickToBottomRef.current = false;
+        setShowJumpToLatest(true);
+      });
+    };
+
+    const run = async () => {
+      if (focusSessionId && focusSessionId !== sessionIdRef.current) {
+        await selectSession(focusSessionId);
+        if (cancelled) return;
+      }
+      if (focusAttention === 'needs-input') {
+        setAwaitingPermissionFocus(true);
+        setFocusPermissions(true);
+        window.setTimeout(() => setFocusPermissions(false), 4000);
+      }
+      revealAttention();
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [focusAttention, focusSessionId]);
+
+  useEffect(() => {
     if (!initialTemplate || archived || autoStartedRef.current) return;
     const template = chatSessionTemplateById(initialTemplate);
     if (!template) return;
     autoStartedRef.current = true;
     void createSessionFromTemplate(template);
   }, [archived, initialTemplate]);
+
+  const renderPermissionRequest = (request: PermissionRequest) => {
+    const card =
+      request.toolName === 'AskUserQuestion' ? (
+        <AskUserQuestionCard
+          key={request.requestId}
+          request={request}
+          questions={parseAskUserQuestions(request.input)}
+          submitting={permissionBusy}
+          onSubmit={(answers, response) => void submitAnswers(request, answers, response)}
+          onDismiss={() => void skipAskUserQuestion(request)}
+        />
+      ) : request.toolName === 'ExitPlanMode' ? (
+        <ExitPlanModeCard
+          key={request.requestId}
+          request={request}
+          plan={extractPlanFromInput(request.input)}
+          submitting={permissionBusy}
+          onBuild={() => void buildPlan(request)}
+          onKeepPlanning={() => void keepPlanning(request)}
+        />
+      ) : (
+        <ToolPermissionCard
+          key={request.requestId}
+          request={request}
+          submitting={permissionBusy}
+          onAllow={() => void allowTool(request)}
+          onDeny={() => void denyTool(request)}
+        />
+      );
+
+    return (
+      <FocusablePermissionShell key={request.requestId} highlight={focusPermissions}>
+        {card}
+      </FocusablePermissionShell>
+    );
+  };
 
   return (
     <Box
@@ -1278,44 +1397,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                   }
                 />
               </Box>
-              {permissionRequests.map((request) => {
-                if (request.toolName === 'AskUserQuestion') {
-                  const questions = parseAskUserQuestions(request.input);
-                  return (
-                    <AskUserQuestionCard
-                      key={request.requestId}
-                      request={request}
-                      questions={questions}
-                      submitting={permissionBusy}
-                      onSubmit={(answers, response) =>
-                        void submitAnswers(request, answers, response)
-                      }
-                      onDismiss={() => void skipAskUserQuestion(request)}
-                    />
-                  );
-                }
-                if (request.toolName === 'ExitPlanMode') {
-                  return (
-                    <ExitPlanModeCard
-                      key={request.requestId}
-                      request={request}
-                      plan={extractPlanFromInput(request.input)}
-                      submitting={permissionBusy}
-                      onBuild={() => void buildPlan(request)}
-                      onKeepPlanning={() => void keepPlanning(request)}
-                    />
-                  );
-                }
-                return (
-                  <ToolPermissionCard
-                    key={request.requestId}
-                    request={request}
-                    submitting={permissionBusy}
-                    onAllow={() => void allowTool(request)}
-                    onDeny={() => void denyTool(request)}
-                  />
-                );
-              })}
+              {permissionRequests.map((request) => renderPermissionRequest(request))}
               <Box ref={bottomSentinelRef} sx={{ height: 1, width: '100%' }} aria-hidden />
             </Box>
           </Box>
@@ -1362,44 +1444,7 @@ export function ChatPanel({ agent, archived, initialPrompt, initialTemplate }: C
                   />
                 );
               }}
-              renderPermissionRequest={(request) => {
-                if (request.toolName === 'AskUserQuestion') {
-                  const questions = parseAskUserQuestions(request.input);
-                  return (
-                    <AskUserQuestionCard
-                      key={request.requestId}
-                      request={request}
-                      questions={questions}
-                      submitting={permissionBusy}
-                      onSubmit={(answers, response) =>
-                        void submitAnswers(request, answers, response)
-                      }
-                      onDismiss={() => void skipAskUserQuestion(request)}
-                    />
-                  );
-                }
-                if (request.toolName === 'ExitPlanMode') {
-                  return (
-                    <ExitPlanModeCard
-                      key={request.requestId}
-                      request={request}
-                      plan={extractPlanFromInput(request.input)}
-                      submitting={permissionBusy}
-                      onBuild={() => void buildPlan(request)}
-                      onKeepPlanning={() => void keepPlanning(request)}
-                    />
-                  );
-                }
-                return (
-                  <ToolPermissionCard
-                    key={request.requestId}
-                    request={request}
-                    submitting={permissionBusy}
-                    onAllow={() => void allowTool(request)}
-                    onDeny={() => void denyTool(request)}
-                  />
-                );
-              }}
+              renderPermissionRequest={(request) => renderPermissionRequest(request)}
             />
           </Box>
         )}

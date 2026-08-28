@@ -37,6 +37,14 @@ import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
+import type { AgentAttentionFocus } from '../notifications';
+
+type AgentLocationState = {
+  initialPrompt?: string;
+  sessionTemplate?: ChatSessionTemplateId;
+  focusAttention?: AgentAttentionFocus;
+  sessionId?: string;
+};
 
 export function AgentPage() {
   const { agentId = '' } = useParams();
@@ -49,12 +57,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const queryClient = useQueryClient();
   const location = useLocation();
   const navigate = useNavigate();
-  const locationState = location.state as {
-    initialPrompt?: string;
-    sessionTemplate?: ChatSessionTemplateId;
-  } | null;
+  const locationState = location.state as AgentLocationState | null;
   const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
   const [initialTemplate] = useState(() => locationState?.sessionTemplate);
+  const [focusAttention] = useState(() => locationState?.focusAttention);
+  const [focusSessionId] = useState(() => locationState?.sessionId);
   const [tab, setTab] = useState(0);
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
@@ -70,9 +77,21 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
   // Consume one-shot navigation state so refresh does not re-send the idea.
   useEffect(() => {
-    if (!locationState?.initialPrompt && !locationState?.sessionTemplate) return;
+    if (
+      !locationState?.initialPrompt &&
+      !locationState?.sessionTemplate &&
+      !locationState?.focusAttention
+    ) {
+      return;
+    }
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, locationState?.initialPrompt, locationState?.sessionTemplate, navigate]);
+  }, [
+    location.pathname,
+    locationState?.initialPrompt,
+    locationState?.sessionTemplate,
+    locationState?.focusAttention,
+    navigate,
+  ]);
 
   const agentQuery = useQuery({
     queryKey: ['agent', agentId],
@@ -406,6 +425,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             archived={archived}
             initialPrompt={initialPrompt}
             initialTemplate={initialTemplate}
+            focusAttention={focusAttention}
+            focusSessionId={focusSessionId}
           />
         </Box>
 
