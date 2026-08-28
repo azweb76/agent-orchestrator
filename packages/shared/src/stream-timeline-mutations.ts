@@ -35,15 +35,26 @@ function taskFromToolInput(
   name: string,
   input: Record<string, unknown> | undefined,
 ): ToolTaskInfo | undefined {
-  if (!isSubagentToolName(name) || !input) return undefined;
-  const description = stringField(input.description);
-  const subagentType = stringField(input.subagent_type);
-  if (!description && !subagentType) return { taskType: 'local_agent' };
-  return {
-    taskType: 'local_agent',
-    description,
-    subagentType,
-  };
+  if (isSubagentToolName(name)) {
+    if (!input) return { taskType: 'local_agent' };
+    const description = stringField(input.description);
+    const subagentType = stringField(input.subagent_type);
+    if (!description && !subagentType) return { taskType: 'local_agent' };
+    return {
+      taskType: 'local_agent',
+      description,
+      subagentType,
+    };
+  }
+  // Background Bash emits task_* events; tag it immediately so a launch
+  // tool_result does not look like the shell finished.
+  if (name === 'Bash' && input?.run_in_background === true) {
+    return {
+      taskType: 'local_bash',
+      description: stringField(input.description),
+    };
+  }
+  return undefined;
 }
 
 function mergeTask(prev?: ToolTaskInfo, patch?: ToolTaskInfo): ToolTaskInfo | undefined {

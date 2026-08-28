@@ -158,6 +158,28 @@ describe('agent lifecycle: unarchive, delete, commit, workspace cleanup', () => 
     assert.deepEqual(pushes, []);
   });
 
+  it('commitAgentChanges pushes without committing when the tree is clean', async () => {
+    seed();
+    (ctx.git as unknown as { hasChanges: () => Promise<boolean> }).hasChanges = async () => false;
+    const result = await commitAgentChanges(ctx, 'ag-1', { push: true });
+    assert.equal(result.committed, false);
+    assert.equal(result.pushed, true);
+    assert.equal(commits.length, 0);
+    assert.deepEqual(pushes, [{ path: ctx.repos.worktrees.getById('wt-1')!.path, branch: 'feat' }]);
+    assert.equal(result.message, 'Pushed without a new commit');
+  });
+
+  it('commitAgentChanges rejects a clean tree when push is disabled', async () => {
+    seed();
+    (ctx.git as unknown as { hasChanges: () => Promise<boolean> }).hasChanges = async () => false;
+    await assert.rejects(
+      () => commitAgentChanges(ctx, 'ag-1', { push: false }),
+      /No local changes to commit/,
+    );
+    assert.deepEqual(pushes, []);
+    assert.deepEqual(commits, []);
+  });
+
   it('deleteWorkspace removes clone files and worktree directories', async () => {
     seed();
     const repoPath = ctx.repos.workspaces.getById('ws-1')!.repoPath;

@@ -205,19 +205,103 @@ describe('parallel tools and subagents', () => {
     assert.equal(runningSubagentItems(parts).length, 2);
   });
 
-  it('only completes the matching tool when one of several results arrives', () => {
+  it('only completes the matching ordinary tool when one of several results arrives', () => {
     let parts: StreamPart[] = [
-      { type: 'tool', id: 'task_1', name: 'Task', status: 'running' },
-      { type: 'tool', id: 'task_2', name: 'Task', status: 'running' },
+      { type: 'tool', id: 'read_1', name: 'Read', status: 'running' },
+      { type: 'tool', id: 'read_2', name: 'Read', status: 'running' },
     ];
     parts = applyStreamEvent(parts, {
       type: 'user',
       message: {
-        content: [{ type: 'tool_result', tool_use_id: 'task_1', content: 'ok' }],
+        content: [{ type: 'tool_result', tool_use_id: 'read_1', content: 'ok' }],
       },
     });
     assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
+  });
+
+  it('keeps Task/Agent running after a launch tool_result so parent result defers', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'Task',
+            input: {
+              description: 'Explore changeset CI',
+              subagent_type: 'Explore',
+              run_in_background: true,
+            },
+          },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 't1',
+      task_type: 'local_agent',
+      tool_use_id: 'toolu_1',
+      description: 'Explore changeset CI',
+      subagent_type: 'Explore',
+      session_id: 'sess-parent',
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_1',
+            content: 'Background agent launched',
+          },
+        ],
+      },
+    });
+    assert.equal(runningSubagentItems(parts).length, 1);
+
+    parts = applyStreamEvent(
+      parts,
+      {
+        type: 'result',
+        result: 'Kicked off Explore; will report back shortly.',
+        session_id: 'sess-parent',
+        total_cost_usd: 0.14,
+      },
+      'sess-parent',
+    );
+    assert.equal(runningSubagentItems(parts).length, 1);
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
+  });
+
+  it('keeps background Bash running after its launch tool_result', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'bash_1',
+            name: 'Bash',
+            input: { command: 'sleep 30', run_in_background: true, description: 'Wait' },
+          },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'bash_1', content: 'Background bash started' }],
+      },
+    });
+    assert.equal(runningSubagentItems(parts).length, 1);
+    assert.equal(parts[0]?.type === 'tool' && parts[0].task?.taskType, 'local_bash');
   });
 
   it('keeps running subagents on the final result; completes ordinary tools', () => {

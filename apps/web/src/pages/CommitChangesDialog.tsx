@@ -8,6 +8,7 @@ import {
   FormControlLabel,
   Stack,
   TextField,
+  Typography,
 } from '@mui/material';
 import type { UseMutationResult } from '@tanstack/react-query';
 import type { CommitAgentChangesResponse } from '@agent-orchestrator/shared';
@@ -18,6 +19,8 @@ interface CommitChangesDialogProps {
   open: boolean;
   message: string;
   push: boolean;
+  /** When false, the worktree is clean and the action is push-only. */
+  hasPendingChanges: boolean;
   mutation: UseMutationResult<
     CommitAgentChangesResponse,
     Error,
@@ -33,12 +36,24 @@ export function CommitChangesDialog({
   open,
   message,
   push,
+  hasPendingChanges,
   mutation,
   onClose,
   onCommitted,
   onMessageChange,
   onPushChange,
 }: CommitChangesDialogProps) {
+  const pushOnly = !hasPendingChanges;
+  const effectivePush = pushOnly ? true : push;
+  const canSubmit = pushOnly ? !mutation.isPending : Boolean(message.trim()) && !mutation.isPending;
+  const submitLabel = mutation.isPending
+    ? 'Working…'
+    : pushOnly
+      ? 'Push'
+      : effectivePush
+        ? 'Commit and push'
+        : 'Commit';
+
   return (
     <ResponsiveDialog
       open={open}
@@ -49,39 +64,50 @@ export function CommitChangesDialog({
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>Commit changes</DialogTitle>
+      <DialogTitle>{pushOnly ? 'Push branch' : 'Commit changes'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <ControlTooltip title="Message for the git commit">
-            <TextField
-              label="Commit message"
-              value={message}
-              onChange={(e) => onMessageChange(e.target.value)}
-              fullWidth
-              required
-              autoFocus
-              multiline
-              minRows={2}
-            />
-          </ControlTooltip>
-          <ControlTooltip title="Push the commit to origin after committing locally">
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={push}
-                  onChange={(event) => onPushChange(event.target.checked)}
+          {pushOnly ? (
+            <Typography variant="body2" color="text.secondary">
+              No local changes to commit. Push the current branch to origin.
+            </Typography>
+          ) : (
+            <>
+              <ControlTooltip title="Message for the git commit">
+                <TextField
+                  label="Commit message"
+                  value={message}
+                  onChange={(e) => onMessageChange(e.target.value)}
+                  fullWidth
+                  required
+                  autoFocus
+                  multiline
+                  minRows={2}
                 />
-              }
-              label="Push to origin after committing"
-            />
-          </ControlTooltip>
+              </ControlTooltip>
+              <ControlTooltip title="Push the commit to origin after committing locally">
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={push}
+                      onChange={(event) => onPushChange(event.target.checked)}
+                    />
+                  }
+                  label="Push to origin after committing"
+                />
+              </ControlTooltip>
+            </>
+          )}
           {mutation.error ? (
             <Alert severity="error">{(mutation.error as Error).message}</Alert>
           ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <ControlTooltip title="Close without committing" disabled={mutation.isPending}>
+        <ControlTooltip
+          title={pushOnly ? 'Close without pushing' : 'Close without committing'}
+          disabled={mutation.isPending}
+        >
           <Button onClick={onClose} disabled={mutation.isPending}>
             Cancel
           </Button>
@@ -89,26 +115,30 @@ export function CommitChangesDialog({
         <ControlTooltip
           title={
             mutation.isPending
-              ? 'Committing changes…'
-              : !message.trim()
-                ? 'Enter a commit message first'
-                : push
-                  ? 'Commit pending changes and push to origin'
-                  : 'Commit pending changes locally'
+              ? pushOnly
+                ? 'Pushing…'
+                : 'Committing changes…'
+              : pushOnly
+                ? 'Push the current branch to origin'
+                : !message.trim()
+                  ? 'Enter a commit message first'
+                  : effectivePush
+                    ? 'Commit pending changes and push to origin'
+                    : 'Commit pending changes locally'
           }
-          disabled={!message.trim() || mutation.isPending}
+          disabled={!canSubmit}
         >
           <Button
             variant="contained"
-            disabled={!message.trim() || mutation.isPending}
+            disabled={!canSubmit}
             onClick={() =>
               mutation.mutate(
-                { message: message.trim(), push },
+                { message: message.trim(), push: effectivePush },
                 { onSuccess: () => onCommitted?.() },
               )
             }
           >
-            {mutation.isPending ? 'Working…' : push ? 'Commit and push' : 'Commit'}
+            {submitLabel}
           </Button>
         </ControlTooltip>
       </DialogActions>
