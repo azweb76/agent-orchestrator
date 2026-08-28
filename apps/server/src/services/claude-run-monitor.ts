@@ -65,6 +65,7 @@ export function stashPermissionRequest(
     toolName: parsed.toolName,
     input,
     toolUseId: parsed.toolUseId,
+    requestedAt: Date.now(),
   };
   tracked.pendingPermissions.clear();
   tracked.pendingPermissions.set(parsed.requestId, request);
@@ -249,6 +250,11 @@ export async function monitorClaudeRun(
 
       if (resultDeferred && !tasksRunning) {
         armWakeTimer();
+      }
+
+      const tracked = host.getTrackedRun(agentId);
+      if (tracked?.pid === handle.pid && isParentTurnActivity(record, sessionId)) {
+        tracked.lastStreamAt = Date.now();
       }
 
       handleControlEvent(host, agentId, handle.pid, record, options, {

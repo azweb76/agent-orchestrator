@@ -142,7 +142,16 @@ export function useAppNotifications(): {
   useEffect(() => {
     return onAppEvent((event) => {
       if (!event.agentId) return;
-      if (event.type !== 'run_finished' && event.type !== 'permission_request' && event.type !== 'automation_triggered') return;
+      if (
+        event.type !== 'run_finished' &&
+        event.type !== 'permission_request' &&
+        event.type !== 'automation_triggered' &&
+        event.type !== 'draft_pr_offer' &&
+        event.type !== 'spend_cap_blocked' &&
+        event.type !== 'watchdog_alert'
+      ) {
+        return;
+      }
 
       const tree = queryClient.getQueryData<SidebarWorkspace[]>(['sidebar']);
       const name = agentNameFromSidebar(tree, event.agentId);

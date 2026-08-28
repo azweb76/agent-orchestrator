@@ -6,7 +6,7 @@
     "dev": "pnpm --parallel -r dev",
     "build": "pnpm -r build",
     "start": "pnpm --filter @agent-orchestrator/server start",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter @agent-orchestrator/shared build && pnpm -r typecheck",
     "lint": "eslint ."
   },
   "packageManager": "pnpm@10.33.3",

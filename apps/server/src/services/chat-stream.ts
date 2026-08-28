@@ -29,6 +29,7 @@ import { getAgentDetail } from './agents-lifecycle.js';
 import {
   drainSessionQueue,
   enqueueBehindWorktreeLock,
+  enqueueSpendCapBlocked,
   findRunningMutatingPeer,
   isGitMutatingSession,
 } from './chat-queue.js';
@@ -41,6 +42,7 @@ import {
   stopClaudeRun,
 } from './chat-run-lifecycle.js';
 import { clearSessionRunFields } from './agent-core.js';
+import { evaluateSpendCap } from './spend-cap.js';
 
 export async function streamAgentChat(
   ctx: AppContext,
@@ -126,6 +128,23 @@ export async function streamAgentChat(
       images: body.images,
       mentions: body.mentions,
     }, res);
+    return;
+  }
+
+  const spendBlock = evaluateSpendCap(ctx, agentId);
+  if (spendBlock) {
+    await enqueueSpendCapBlocked(
+      ctx,
+      agentId,
+      latestForLock,
+      {
+        message: rawMessage,
+        images: body.images,
+        mentions: body.mentions,
+      },
+      spendBlock,
+      res,
+    );
     return;
   }
 

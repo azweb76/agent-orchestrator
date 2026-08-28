@@ -30,6 +30,16 @@ export interface ClaudePermissionRequest {
   toolName: string;
   input: Record<string, unknown>;
   toolUseId?: string;
+  requestedAt: number;
+}
+
+export interface RunHealthSnapshot {
+  lastStreamAt: number | null;
+  pendingPermissions: Array<{
+    requestId: string;
+    toolName: string;
+    requestedAt: number;
+  }>;
 }
 
 export interface ClaudeEventMeta {
@@ -92,4 +102,7 @@ export interface TrackedRun {
   canRespondToPermissions: boolean;
   /** Agent permission mode for this run (controls auto-allow vs UI prompts). */
   permissionMode: ClaudePermissionMode;
+  /** Epoch ms of the last parent stream token / turn activity. */
+  lastStreamAt: number;
+  startedAt: number;
 }

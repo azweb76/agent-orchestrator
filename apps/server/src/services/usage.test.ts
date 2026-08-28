@@ -122,6 +122,10 @@ test('getUsageSummary rolls up cost per session and agent with a daily total', a
     assert.equal(summary.todayCostUsd, 0.6);
     assert.equal(summary.totalAssistantTurns, 3);
 
+    assert.ok(summary.budget);
+    assert.equal(summary.budget.todayCostUsd, 0.6);
+    assert.equal(summary.budget.dailyCapUsd, null);
+
     assert.equal(summary.agents.length, 1);
     const agent = summary.agents[0];
     assert.equal(agent.agentId, 'ag-1');
@@ -148,6 +152,7 @@ test('getUsageSummary returns zeroes when no turns recorded cost', async () => {
     assert.equal(summary.totalCostUsd, 0);
     assert.equal(summary.todayCostUsd, 0);
     assert.equal(summary.totalAssistantTurns, 0);
+    assert.equal(summary.budget.todayCostUsd, 0);
     assert.deepEqual(summary.agents, []);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });

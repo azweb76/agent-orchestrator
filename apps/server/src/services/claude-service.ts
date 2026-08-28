@@ -36,6 +36,7 @@ import type {
   ClaudeRunHandle,
   ClaudeRunOptions,
   ClaudeRunResult,
+  RunHealthSnapshot,
   TrackedRun,
 } from './claude-types.js';
 
@@ -89,6 +90,21 @@ export class ClaudeService implements ClaudeRunMonitorHost {
     const tracked = this.running.get(agentId);
     if (!tracked) return [];
     return [...tracked.pendingPermissions.values()];
+  }
+
+  getRunHealth(sessionId: string): RunHealthSnapshot {
+    const tracked = this.running.get(sessionId);
+    if (!tracked) {
+      return { lastStreamAt: null, pendingPermissions: [] };
+    }
+    return {
+      lastStreamAt: tracked.lastStreamAt,
+      pendingPermissions: [...tracked.pendingPermissions.values()].map((item) => ({
+        requestId: item.requestId,
+        toolName: item.toolName,
+        requestedAt: item.requestedAt,
+      })),
+    };
   }
 
   async checkInstalled(): Promise<boolean> {
@@ -305,6 +321,7 @@ export class ClaudeService implements ClaudeRunMonitorHost {
     closeSync(readyFd);
 
     const handle: ClaudeRunHandle = { pid, logPath };
+    const startedAt = Date.now();
     this.running.set(agentId, {
       ...handle,
       proc,
@@ -314,6 +331,8 @@ export class ClaudeService implements ClaudeRunMonitorHost {
       pendingPermissions: new Map(),
       canRespondToPermissions: true,
       permissionMode,
+      lastStreamAt: startedAt,
+      startedAt,
     });
     options.onStarted?.(handle);
 
@@ -358,6 +377,7 @@ export class ClaudeService implements ClaudeRunMonitorHost {
     } = {},
   ): Promise<ClaudeRunResult> {
     const reopened = reopenStdinFromLog(handle.logPath);
+    const startedAt = Date.now();
     this.running.set(agentId, {
       pid: handle.pid,
       logPath: handle.logPath,
@@ -367,6 +387,8 @@ export class ClaudeService implements ClaudeRunMonitorHost {
       pendingPermissions: new Map(),
       canRespondToPermissions: reopened.canRespond,
       permissionMode: options.permissionMode ?? 'plan',
+      lastStreamAt: startedAt,
+      startedAt,
     });
     return monitorClaudeRun(this, agentId, handle, options.sessionId ?? null, options, options.signal);
   }

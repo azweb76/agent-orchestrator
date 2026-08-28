@@ -1,3 +1,4 @@
+import type { SpendBudgetStatus } from '../app-settings.js';
 import type { ChatSession } from '../chat-session.js';
 import type { Agent, Worktree, Workspace } from './entities.js';
 
@@ -38,6 +39,8 @@ export interface SidebarAgent extends Agent {
   worktree: Pick<Worktree, 'id' | 'name' | 'branch' | 'prNumber'>;
   /** Pending interactive prompts (AskUserQuestion / tool permissions) across sessions. */
   pendingPermissionCount: number;
+  /** Watchdog flagged this agent as stalled (stale permission, idle stream, etc.). */
+  stalled?: boolean;
 }
 
 /** Workspace with nested agents for the app sidebar tree. */
@@ -75,4 +78,6 @@ export interface UsageSummary {
   totalAssistantTurns: number;
   /** Per-agent rollups sorted by total cost, highest first. */
   agents: AgentUsage[];
+  /** Spend cap snapshot for dashboard hints. */
+  budget: SpendBudgetStatus;
 }

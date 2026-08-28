@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -6,6 +7,7 @@ import {
   FormControlLabel,
   Stack,
   Switch,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -15,7 +17,8 @@ import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import SettingsBrightnessOutlinedIcon from '@mui/icons-material/SettingsBrightnessOutlined';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AppSettings } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSsePollingFallback } from '../api/ssePolling';
 import { useThemePreferenceContext } from '../components/ThemePreferenceProvider';
@@ -76,6 +79,7 @@ function permissionColor(
 
 export function SettingsPage() {
   const notifications = useNotificationSettings();
+  const queryClient = useQueryClient();
   const { preference, resolvedMode, setPreference } = useThemePreferenceContext();
   const sseFallback = useSsePollingFallback();
   const { data: status } = useQuery({
@@ -83,6 +87,29 @@ export function SettingsPage() {
     queryFn: api.getStatus,
     refetchInterval: sseFallback,
   });
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+  });
+  const saveSettings = useMutation({
+    mutationFn: (body: Partial<AppSettings>) => api.updateSettings(body),
+    onSuccess: (next) => {
+      queryClient.setQueryData(['settings'], next);
+      void queryClient.invalidateQueries({ queryKey: ['usage'] });
+    },
+  });
+
+  const [dailyCapDraft, setDailyCapDraft] = useState('');
+  const [perAgentCapDraft, setPerAgentCapDraft] = useState('');
+  useEffect(() => {
+    if (!settings) return;
+    setDailyCapDraft(
+      settings.dailySpendCapUsd == null ? '' : String(settings.dailySpendCapUsd),
+    );
+    setPerAgentCapDraft(
+      settings.perAgentSpendCapUsd == null ? '' : String(settings.perAgentSpendCapUsd),
+    );
+  }, [settings]);
 
   const onThemeChange = (_event: React.MouseEvent<HTMLElement>, value: ThemePreference | null) => {
     if (value) setPreference(value);
@@ -203,6 +230,115 @@ export function SettingsPage() {
             Active scheme: {resolvedMode}
             {preference === 'system' ? ' (from system preference)' : ''}
           </Typography>
+        </Stack>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Spend caps"
+        description="Optional daily limits pause new Claude runs when recorded spend exceeds your cap. In-flight runs can finish; new messages queue with a blocked reason."
+      >
+        <Stack spacing={2} component="form" onSubmit={(event) => event.preventDefault()}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="Daily fleet cap (USD)"
+              type="number"
+              slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+              placeholder="Off"
+              value={dailyCapDraft}
+              onChange={(event) => setDailyCapDraft(event.target.value)}
+              helperText="Leave blank to disable. Uses costs already recorded on assistant turns."
+              fullWidth
+            />
+            <TextField
+              label="Per-agent daily cap (USD)"
+              type="number"
+              slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+              placeholder="Off"
+              value={perAgentCapDraft}
+              onChange={(event) => setPerAgentCapDraft(event.target.value)}
+              helperText="Optional per-agent limit for today’s spend."
+              fullWidth
+            />
+          </Stack>
+          <Button
+            variant="outlined"
+            disabled={saveSettings.isPending || !settings}
+            onClick={() => {
+              const parseCap = (raw: string) => {
+                const trimmed = raw.trim();
+                if (!trimmed) return null;
+                const value = Number(trimmed);
+                return Number.isFinite(value) && value > 0 ? value : null;
+              };
+              void saveSettings.mutateAsync({
+                dailySpendCapUsd: parseCap(dailyCapDraft),
+                perAgentSpendCapUsd: parseCap(perAgentCapDraft),
+              });
+            }}
+          >
+            Save spend caps
+          </Button>
+        </Stack>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Hung-run watchdog"
+        description="Optional background checks for stale permissions, idle streams, and dead processes still marked running. Off by default."
+      >
+        <Stack spacing={2}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={Boolean(settings?.watchdogEnabled)}
+                onChange={(event) =>
+                  void saveSettings.mutateAsync({ watchdogEnabled: event.target.checked })
+                }
+              />
+            }
+            label="Enable watchdog"
+          />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <TextField
+              label="Permission wait (minutes)"
+              type="number"
+              slotProps={{ htmlInput: { min: 1 } }}
+              value={settings?.watchdogPermissionMinutes ?? 30}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isFinite(value) && value >= 1) {
+                  void saveSettings.mutateAsync({ watchdogPermissionMinutes: Math.floor(value) });
+                }
+              }}
+              disabled={!settings?.watchdogEnabled}
+              fullWidth
+            />
+            <TextField
+              label="Stream idle (minutes)"
+              type="number"
+              slotProps={{ htmlInput: { min: 1 } }}
+              value={settings?.watchdogStreamIdleMinutes ?? 15}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (Number.isFinite(value) && value >= 1) {
+                  void saveSettings.mutateAsync({ watchdogStreamIdleMinutes: Math.floor(value) });
+                }
+              }}
+              disabled={!settings?.watchdogEnabled}
+              fullWidth
+            />
+          </Stack>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={Boolean(settings?.watchdogStaleRunEnabled)}
+                disabled={!settings?.watchdogEnabled}
+                onChange={(event) =>
+                  void saveSettings.mutateAsync({ watchdogStaleRunEnabled: event.target.checked })
+                }
+              />
+            }
+            label="Correct stale running status when the Claude process has exited"
+          />
         </Stack>
       </SettingsSection>
 

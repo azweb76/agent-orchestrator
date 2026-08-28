@@ -12,6 +12,8 @@ import type {
 import { parseGitHubUrl } from './git.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { deleteWorktree } from './worktrees.js';
+import { buildSpendBudgetStatus } from './spend-cap.js';
+import { isAgentStalled } from './watchdog.js';
 
 export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCounts[]> {
   const workspaces = ctx.repos.workspaces.list();
@@ -66,6 +68,7 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
           prNumber: worktree?.prNumber ?? null,
         },
         pendingPermissionCount: pendingByAgent.get(agent.id) ?? 0,
+        stalled: isAgentStalled(agent.id),
       };
     });
     return { ...workspace, agents };
@@ -151,6 +154,7 @@ export function getUsageSummary(ctx: AppContext): UsageSummary {
     todayCostUsd: round(todayCostUsd),
     totalAssistantTurns,
     agents,
+    budget: buildSpendBudgetStatus(ctx),
   };
 }
 

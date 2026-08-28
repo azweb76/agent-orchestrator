@@ -200,6 +200,10 @@ export function rowToQueuedMessage(row: unknown): QueuedChatMessage {
     content: String(r.content),
     attachments,
     mentions: parseJson<QueuedChatMessage['mentions']>(String(r.mentions ?? '[]'), []),
+    blockedReason:
+      r.blocked_reason == null || r.blocked_reason === ''
+        ? null
+        : (String(r.blocked_reason) as QueuedChatMessage['blockedReason']),
     createdAt: String(r.created_at),
   };
 }

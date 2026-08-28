@@ -20,11 +20,14 @@ function statusDotColor(status: AgentStatus): string {
 export function AgentStatusDot({
   status,
   size = 8,
+  stalled = false,
 }: {
   status: AgentStatus;
   size?: number;
+  stalled?: boolean;
 }) {
   const running = status === 'running';
+  const dotColor = stalled ? 'warning.main' : statusDotColor(status);
   return (
     <Box
       sx={(theme) => {
@@ -36,7 +39,7 @@ export function AgentStatusDot({
           width: size,
           height: size,
           borderRadius: '50%',
-          bgcolor: statusDotColor(status),
+          bgcolor: dotColor,
           flexShrink: 0,
           boxShadow: running ? runningShadow : 'none',
           animation: running ? 'ao-status-glow 1.2s ease-in-out infinite' : 'none',

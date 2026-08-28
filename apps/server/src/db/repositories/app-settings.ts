@@ -28,4 +28,8 @@ export class AppSettingsRepository {
   setAutomationJson(value: string): void {
     this.set(AUTOMATION_KEY, value);
   }
+
+  delete(key: string): void {
+    this.db.prepare('DELETE FROM app_settings WHERE key = ?').run(key);
+  }
 }
