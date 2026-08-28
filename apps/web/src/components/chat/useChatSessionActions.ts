@@ -5,6 +5,8 @@ import {
   type AgentDetail,
   type ChatSession,
   type ChatSessionTemplate,
+  type InstructionFileKind,
+  type InstructionFileScope,
   type Message,
   type UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
@@ -63,6 +65,11 @@ export function useChatSessionActions({
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [gradeOpen, setGradeOpen] = useState(false);
   const [improveOpen, setImproveOpen] = useState(false);
+  const [improveSeed, setImproveSeed] = useState<{
+    kind: InstructionFileKind;
+    scope?: InstructionFileScope;
+    extraNotes: string;
+  } | null>(null);
 
   const updateMutation = useMutation({
     mutationFn: (body: UpdateChatSessionRequest) =>
@@ -235,6 +242,8 @@ export function useChatSessionActions({
     setGradeOpen,
     improveOpen,
     setImproveOpen,
+    improveSeed,
+    setImproveSeed,
     updateMutation,
     renameSessionMutation,
     clearMutation,
