@@ -6,6 +6,7 @@ import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared'
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
+import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
 
 const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
   agent,
@@ -78,7 +79,11 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
             <AgentStatusIcon status={agent.status} selected={selected} />
           </Badge>
           <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
-            <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
+            {agent.worktree.prNumber != null ? (
+              <PullRequestStatusIcon status="open" sx={{ fontSize: 10 }} />
+            ) : (
+              <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
+            )}
           </Box>
           {agent.status === 'running' && (
             <LinearProgress

@@ -3,17 +3,19 @@ import { Box, Button, Chip, FormControlLabel, Stack, Switch, Typography } from '
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import AutoModeOutlinedIcon from '@mui/icons-material/AutoModeOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import MergeTypeIcon from '@mui/icons-material/MergeType';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { resolveAutopilotEnabled } from '@agent-orchestrator/shared';
 import { useAutomationSettings } from '../automation/useAutomationSettings';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
+import { PullRequestStatusIcon } from '../components/pr/PullRequestStatusIcon';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
+import { useAgentLinkedPr } from '../components/agent/useAgentLinkedPr';
+import { resolvePullRequestStatus } from '../components/pr/pullRequestStatus';
 
 interface AgentPageHeaderProps {
   agent: AgentDetail;
@@ -45,6 +47,8 @@ export function AgentPageHeader({
   const { settings: automationSettings } = useAutomationSettings();
   const effectiveAutopilot = resolveAutopilotEnabled(automationSettings, agent.autopilot);
   const prNumber = agent.worktree.prNumber;
+  const { pr } = useAgentLinkedPr(agent);
+  const prStatus = pr ? resolvePullRequestStatus(pr) : prNumber != null ? 'open' : null;
   const prUrl =
     prNumber != null
       ? `https://github.com/${agent.workspace.githubOwner}/${agent.workspace.githubRepo}/pull/${prNumber}`
@@ -82,12 +86,25 @@ export function AgentPageHeader({
             {prNumber != null && (
               <Chip
                 size="small"
+                icon={
+                  prStatus ? (
+                    <PullRequestStatusIcon status={prStatus} sx={{ ml: 0.5 }} />
+                  ) : undefined
+                }
                 label={
                   agent.worktree.prTitle
                     ? `PR #${prNumber}: ${agent.worktree.prTitle}`
                     : `PR #${prNumber}`
                 }
-                color="info"
+                color={
+                  prStatus === 'open'
+                    ? 'success'
+                    : prStatus === 'merged'
+                      ? 'secondary'
+                      : prStatus === 'closed'
+                        ? 'error'
+                        : 'default'
+                }
                 variant="outlined"
                 component="a"
                 href={prUrl!}
@@ -217,7 +234,9 @@ export function AgentPageHeader({
                 size="small"
                 variant="contained"
                 component={RouterLink}
-                startIcon={<MergeTypeIcon />}
+                startIcon={
+                  <PullRequestStatusIcon status={prStatus ?? 'open'} sx={{ color: 'inherit' }} />
+                }
                 to={pullRequestPath(
                   agent.workspace.githubOwner,
                   agent.workspace.githubRepo,
@@ -235,7 +254,7 @@ export function AgentPageHeader({
               <Button
                 size="small"
                 variant="contained"
-                startIcon={<MergeTypeIcon />}
+                startIcon={<PullRequestStatusIcon status="open" sx={{ color: 'inherit' }} />}
                 disabled={archived}
                 onClick={onCreatePr}
               >

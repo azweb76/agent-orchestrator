@@ -1,12 +1,13 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
-import MergeTypeIcon from '@mui/icons-material/MergeType';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { AgentDetail, ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { PullRequestStatusChip } from '../pr/PullRequestStatusChip';
+import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { pullRequestPath } from '../../utils/paths';
 import { buildAgentPrStripModel } from './agentPrStatusModel';
@@ -83,7 +84,7 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
   return (
     <Alert
       severity={model.checksTone === 'error' ? 'error' : model.open ? 'info' : 'success'}
-      icon={<MergeTypeIcon />}
+      icon={<PullRequestStatusIcon status={model.prStatus} fontSize="medium" />}
       sx={{ py: 0.75, '& .MuiAlert-message': { width: '100%', minWidth: 0 } }}
       action={
         <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
@@ -145,7 +146,7 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
         </Typography>
         <Box>
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            <Chip size="small" variant="outlined" label={model.stateLabel} />
+            <PullRequestStatusChip status={model.prStatus} />
             {model.checksLabel ? (
               <Chip
                 size="small"
