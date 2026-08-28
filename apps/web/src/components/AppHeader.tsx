@@ -1,4 +1,4 @@
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Box,
@@ -23,7 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { useSsePollingFallback } from '../api/ssePolling';
-import { useNotificationSettings } from '../notifications';
+import { useNotificationSettings, permissionStatusLabel } from '../notifications';
 import { paletteShortcutLabel } from './commandPalette/paletteCommands';
 import { ControlTooltip } from './ui/ControlTooltip';
 
@@ -96,7 +96,31 @@ interface AppHeaderProps {
 
 export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeaderProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const notifications = useNotificationSettings();
+
+  const notificationTooltip = (() => {
+    if (!notifications.supported) return 'Browser notifications are not supported here';
+    const status = permissionStatusLabel(notifications.permission);
+    if (notifications.permission === 'denied') {
+      return `Notifications blocked (${status}) — allow them in browser site settings (Settings page)`;
+    }
+    if (notifications.enabled) {
+      return `Notifications on (${status}) — alerts when agents finish or need input`;
+    }
+    if (notifications.permission === 'default') {
+      return `Notifications off (${status}) — click to request permission and enable alerts`;
+    }
+    return `Notifications off (${status}) — click to enable alerts for finished runs and permission prompts`;
+  })();
+
+  const onNotificationClick = () => {
+    if (notifications.permission === 'denied') {
+      navigate('/settings');
+      return;
+    }
+    void notifications.toggle();
+  };
 
   return (
     <AppBar
@@ -218,18 +242,24 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
         </ControlTooltip>
 
         {notifications.supported ? (
-          <ControlTooltip
-            title={
-              notifications.enabled
-                ? 'Notifications on — you will be alerted when agents finish or need input'
-                : 'Turn on notifications for finished runs and permission prompts'
-            }
-          >
+          <ControlTooltip title={notificationTooltip}>
             <IconButton
               size="small"
-              color={notifications.enabled ? 'secondary' : 'inherit'}
-              onClick={() => void notifications.toggle()}
-              aria-label={notifications.enabled ? 'Disable notifications' : 'Enable notifications'}
+              color={
+                notifications.permission === 'denied'
+                  ? 'warning'
+                  : notifications.enabled
+                    ? 'secondary'
+                    : 'inherit'
+              }
+              onClick={onNotificationClick}
+              aria-label={
+                notifications.permission === 'denied'
+                  ? 'Notifications blocked — open settings'
+                  : notifications.enabled
+                    ? 'Disable notifications'
+                    : 'Enable notifications'
+              }
               sx={{ mr: 0.5 }}
             >
               {notifications.enabled ? (

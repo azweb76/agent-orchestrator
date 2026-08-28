@@ -1,48 +1,52 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import type { AppEvent, SidebarWorkspace } from '@agent-orchestrator/shared';
+import type { SidebarWorkspace } from '@agent-orchestrator/shared';
 import { onAppEvent } from './api/events';
-
-const STORAGE_KEY = 'ao.notifications.enabled';
-
-function notificationsSupported(): boolean {
-  return typeof window !== 'undefined' && 'Notification' in window;
-}
-
-function loadEnabled(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function currentPermission(): NotificationPermission | 'unsupported' {
-  if (!notificationsSupported()) return 'unsupported';
-  return Notification.permission;
-}
+import {
+  agentNameFromSidebar,
+  currentNotificationPermission,
+  describeNotificationEvent,
+  navigationStateForEvent,
+  notificationsSupported,
+  readNotificationsEnabled,
+  shouldShowInAppAttention,
+  shouldShowOsNotification,
+  writeNotificationsEnabled,
+  type NotificationPermissionState,
+} from './notifications/logic';
+import {
+  clearAttentionForAgent,
+  pushAttentionAlert,
+  type AttentionAlert,
+} from './notifications/attention';
 
 /** Bell toggle state; enabling requests browser permission when needed. */
 export function useNotificationSettings(): {
   supported: boolean;
   enabled: boolean;
-  permission: NotificationPermission | 'unsupported';
-  toggle: () => Promise<void>;
-  requestPermission: () => Promise<NotificationPermission | 'unsupported'>;
+  permission: NotificationPermissionState;
+  toggle: () => Promise<'enabled' | 'disabled' | 'blocked' | 'unsupported'>;
+  requestPermission: () => Promise<NotificationPermissionState>;
   setEnabled: (value: boolean) => void;
 } {
-  const [enabled, setEnabled] = useState(loadEnabled);
-  const [permission, setPermission] = useState(currentPermission);
+  const [enabled, setEnabled] = useState(readNotificationsEnabled);
+  const [permission, setPermission] = useState(currentNotificationPermission);
 
-  const persist = (value: boolean) => {
+  useEffect(() => {
+    const refreshPermission = () => setPermission(currentNotificationPermission());
+    window.addEventListener('focus', refreshPermission);
+    document.addEventListener('visibilitychange', refreshPermission);
+    return () => {
+      window.removeEventListener('focus', refreshPermission);
+      document.removeEventListener('visibilitychange', refreshPermission);
+    };
+  }, []);
+
+  const persist = useCallback((value: boolean) => {
     setEnabled(value);
-    try {
-      localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
-    } catch {
-      // ignore storage errors
-    }
-  };
+    writeNotificationsEnabled(value);
+  }, []);
 
   const requestPermission = useCallback(async () => {
     if (!notificationsSupported()) return 'unsupported';
@@ -56,18 +60,24 @@ export function useNotificationSettings(): {
   }, []);
 
   const toggle = useCallback(async () => {
-    if (!notificationsSupported()) return;
+    if (!notificationsSupported()) return 'unsupported';
     if (enabled) {
       persist(false);
-      return;
+      return 'disabled';
     }
+    if (Notification.permission === 'denied') return 'blocked';
     const next = await requestPermission();
-    persist(next === 'granted');
-  }, [enabled, requestPermission]);
+    const granted = next === 'granted';
+    persist(granted);
+    return granted ? 'enabled' : next === 'denied' ? 'blocked' : 'disabled';
+  }, [enabled, persist, requestPermission]);
 
-  const setEnabledValue = useCallback((value: boolean) => {
-    persist(value);
-  }, []);
+  const setEnabledValue = useCallback(
+    (value: boolean) => {
+      persist(value);
+    },
+    [persist],
+  );
 
   return {
     supported: notificationsSupported(),
@@ -79,70 +89,104 @@ export function useNotificationSettings(): {
   };
 }
 
-function agentName(tree: SidebarWorkspace[] | undefined, agentId: string | null): string {
-  if (!tree || !agentId) return 'Agent';
-  for (const workspace of tree) {
-    const agent = workspace.agents.find((item) => item.id === agentId);
-    if (agent) return agent.name;
-  }
-  return 'Agent';
-}
-
-function describeEvent(event: AppEvent, name: string): { title: string; body: string } | null {
-  if (event.type === 'run_finished') {
-    const error = typeof event.data.error === 'string' && event.data.error ? event.data.error : null;
-    const stopped = Boolean(event.data.stopped);
-    if (error) return { title: `${name} failed`, body: error.slice(0, 140) };
-    if (stopped) return { title: `${name} stopped`, body: 'The run was interrupted.' };
-    return { title: `${name} finished`, body: 'The reply is ready to review.' };
-  }
-  if (event.type === 'permission_request') {
-    const tool = typeof event.data.toolName === 'string' ? event.data.toolName : 'a tool';
-    const body =
-      tool === 'AskUserQuestion'
-        ? 'Claude has a question for you.'
-        : tool === 'ExitPlanMode'
-          ? 'A plan is ready for review.'
-          : `Claude wants to use ${tool}.`;
-    return { title: `${name} needs your input`, body };
-  }
-  return null;
+function openAgentFromAlert(
+  navigate: ReturnType<typeof useNavigate>,
+  alert: AttentionAlert,
+): void {
+  navigate(`/agents/${alert.agentId}`, {
+    state: navigationStateForEvent({
+      id: alert.id,
+      type: alert.eventType,
+      agentId: alert.agentId,
+      sessionId: alert.sessionId,
+      data: {},
+      createdAt: '',
+    }),
+  });
 }
 
 /**
- * Raise browser notifications for agent events that need attention. Skipped
- * when notifications are disabled, or when the user is already looking at the
- * agent's page in a visible tab.
+ * Raise browser notifications and in-app attention alerts for agent events.
+ * OS notifications are skipped when the user is already on that agent page, or
+ * when the tab is visible (in-app fallback is clearer). In-app alerts also
+ * cover denied/unsupported Notification API cases.
  */
-export function useAppNotifications(): void {
+export function useAppNotifications(): {
+  openAttentionAlert: (alert: AttentionAlert) => void;
+} {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const [visibilityState, setVisibilityState] = useState(document.visibilityState);
+
+  useEffect(() => {
+    const onVisibilityChange = () => setVisibilityState(document.visibilityState);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
+  const openAttentionAlert = useCallback(
+    (alert: AttentionAlert) => {
+      openAgentFromAlert(navigate, alert);
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    const match = location.pathname.match(/^\/agents\/([^/]+)/);
+    if (match?.[1] && document.visibilityState === 'visible') {
+      clearAttentionForAgent(match[1]);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     return onAppEvent((event) => {
-      if (!loadEnabled() || !notificationsSupported()) return;
-      if (Notification.permission !== 'granted') return;
-      if (event.type !== 'run_finished' && event.type !== 'permission_request') return;
       if (!event.agentId) return;
-
-      const viewingAgent =
-        document.visibilityState === 'visible' &&
-        window.location.pathname === `/agents/${event.agentId}`;
-      if (viewingAgent) return;
+      if (event.type !== 'run_finished' && event.type !== 'permission_request') return;
 
       const tree = queryClient.getQueryData<SidebarWorkspace[]>(['sidebar']);
-      const described = describeEvent(event, agentName(tree, event.agentId));
-      if (!described) return;
-
-      const notification = new Notification(described.title, {
-        body: described.body,
-        tag: `${event.type}-${event.agentId}`,
-      });
-      notification.onclick = () => {
-        window.focus();
-        navigate(`/agents/${event.agentId}`);
-        notification.close();
+      const name = agentNameFromSidebar(tree, event.agentId);
+      const context = {
+        event,
+        enabled: readNotificationsEnabled(),
+        permission: currentNotificationPermission(),
+        pathname: location.pathname,
+        visibilityState,
       };
+
+      if (shouldShowInAppAttention(context)) {
+        pushAttentionAlert(event, name);
+      }
+
+      if (shouldShowOsNotification(context)) {
+        const described = describeNotificationEvent(event, name);
+        if (!described) return;
+        const alert: AttentionAlert = {
+          id: event.id,
+          agentId: event.agentId,
+          sessionId: event.sessionId,
+          title: described.title,
+          body: described.body,
+          eventType: event.type,
+        };
+        const notification = new Notification(described.title, {
+          body: described.body,
+          tag: event.id,
+        });
+        notification.onclick = () => {
+          window.focus();
+          openAgentFromAlert(navigate, alert);
+          notification.close();
+        };
+      }
     });
-  }, [navigate, queryClient]);
+  }, [location.pathname, navigate, queryClient, visibilityState]);
+
+  return { openAttentionAlert };
 }
+
+export {
+  permissionStatusLabel,
+  type AgentAttentionFocus,
+  type AgentAttentionNavigationState,
+} from './notifications/logic';

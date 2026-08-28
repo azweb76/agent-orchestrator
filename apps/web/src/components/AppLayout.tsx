@@ -10,6 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useAppEventStream } from '../api/events';
+import { AttentionSnackbar } from './AttentionSnackbar';
 import { useAppNotifications } from '../notifications';
 import { AppHeader, NAV_ITEMS, StatusChips } from './AppHeader';
 import { CommandPalette, useCommandPaletteShortcut } from './commandPalette/CommandPalette';
@@ -40,7 +41,7 @@ export function AppLayout() {
 
   // Live cache invalidation + notification fan-out over one SSE connection.
   useAppEventStream();
-  useAppNotifications();
+  const { openAttentionAlert } = useAppNotifications();
 
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   const paletteHandle = useMemo(() => ({ openPalette }), [openPalette]);
@@ -222,6 +223,7 @@ export function AppLayout() {
           open={createWorkspaceOpen}
           onClose={() => setCreateWorkspaceOpen(false)}
         />
+        <AttentionSnackbar onOpenAgent={openAttentionAlert} />
       </Box>
     </CommandPaletteProvider>
   );

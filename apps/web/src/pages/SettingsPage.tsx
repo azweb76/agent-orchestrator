@@ -21,7 +21,7 @@ import { useSsePollingFallback } from '../api/ssePolling';
 import { useThemePreferenceContext } from '../components/ThemePreferenceProvider';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageHeader } from '../components/ui/PageHeader';
-import { useNotificationSettings } from '../notifications';
+import { useNotificationSettings, permissionStatusLabel } from '../notifications';
 import type { ThemePreference } from '../themePrefs';
 
 function SettingsSection({
@@ -55,16 +55,7 @@ function SettingsSection({
 }
 
 function permissionLabel(permission: NotificationPermission | 'unsupported'): string {
-  switch (permission) {
-    case 'granted':
-      return 'Granted';
-    case 'denied':
-      return 'Blocked';
-    case 'default':
-      return 'Not requested';
-    default:
-      return 'Unsupported';
-  }
+  return permissionStatusLabel(permission);
 }
 
 function permissionColor(
@@ -123,6 +114,7 @@ export function SettingsPage() {
         ) : (
           <Stack spacing={2}>
             <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <Chip size="small" label="Supported" color="default" variant="outlined" />
               <Chip
                 size="small"
                 label={`Permission: ${permissionLabel(notifications.permission)}`}
@@ -159,7 +151,8 @@ export function SettingsPage() {
             />
             {notifications.permission === 'denied' ? (
               <Alert severity="warning">
-                Notifications are blocked in your browser. Allow them in site settings to turn this on.
+                Notifications are blocked in your browser. Re-enable them in your browser&apos;s site settings,
+                then return here to turn agent notifications back on.
               </Alert>
             ) : null}
           </Stack>
