@@ -9,10 +9,9 @@ function greetingForHour(hour: number): string {
 
 type CommandCenterHeroProps = {
   githubLogin?: string | null;
-  systemsMessage: string;
 };
 
-export function CommandCenterHero({ githubLogin, systemsMessage }: CommandCenterHeroProps) {
+export function CommandCenterHero({ githubLogin }: CommandCenterHeroProps) {
   const [now, setNow] = useState(() => new Date());
   const [greetingHour, setGreetingHour] = useState(() => new Date().getHours());
 
@@ -64,9 +63,6 @@ export function CommandCenterHero({ githubLogin, systemsMessage }: CommandCenter
         >
           {greetingForHour(greetingHour)}
           {githubLogin ? `, ${githubLogin}` : ''}
-        </Typography>
-        <Typography color="text.secondary" sx={{ maxWidth: 520, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
-          {systemsMessage}
         </Typography>
       </Box>
 
