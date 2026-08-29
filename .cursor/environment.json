@@ -1,0 +1,20 @@
+{
+  "name": "Agent Orchestrator",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "user": "node",
+  "install": "./scripts/cloud-agent-install.sh",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "HOST=0.0.0.0 pnpm dev",
+      "description": "Express API on :3001 and Vite on :5173. Vite proxies /api to the server."
+    }
+  ],
+  "ports": [
+    { "name": "API", "port": 3001 },
+    { "name": "Vite", "port": 5173 }
+  ]
+}
