@@ -68,6 +68,7 @@ describe('buildAgentPrStripModel', () => {
     expect(model.prStatus).toBe('open');
     expect(model.showFixCi).toBe(true);
     expect(model.showAddressReview).toBe(true);
+    expect(model.showOpenPr).toBe(true);
     expect(model.checksLabel).toBe('Checks failing (1/2)');
     expect(model.reviewLabel).toBe('3 review comments');
   });
@@ -87,6 +88,17 @@ describe('buildAgentPrStripModel', () => {
         checks: checks(),
       }).showFixCi,
     ).toBe(false);
+  });
+
+  it('hides Open PR in the strip once the PR is merged', () => {
+    const model = buildAgentPrStripModel({
+      pr: basePr({ merged: true, state: 'closed', draft: false }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+    });
+
+    expect(model.prStatus).toBe('merged');
+    expect(model.showOpenPr).toBe(false);
+    expect(model.open).toBe(false);
   });
 
   it('surfaces a mark-ready hint for green draft PRs', () => {

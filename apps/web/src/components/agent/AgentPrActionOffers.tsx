@@ -176,10 +176,6 @@ export function AgentPrActionOffers({
   if (pr.merged && !mergeCompleteDismissed) {
     return (
       <MergedPrCompletionBanner
-        owner={owner}
-        repo={repo}
-        prNumber={pr.number}
-        prTitle={pr.title}
         archived={archived}
         archivePending={archivePending}
         onArchive={onArchive}

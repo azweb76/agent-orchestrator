@@ -132,11 +132,13 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
               </Button>
             </ControlTooltip>
           ) : null}
-          <ControlTooltip title="Open this pull request in the app">
-            <Button color="inherit" size="small" component={RouterLink} to={inAppPath}>
-              Open PR
-            </Button>
-          </ControlTooltip>
+          {model.showOpenPr ? (
+            <ControlTooltip title="Open this pull request in the app">
+              <Button color="inherit" size="small" component={RouterLink} to={inAppPath}>
+                Open PR
+              </Button>
+            </ControlTooltip>
+          ) : null}
         </Stack>
       }
     >
