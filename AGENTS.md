@@ -22,6 +22,16 @@ Shared types compile to `packages/shared/dist`. After changing `@agent-orchestra
 
 `pnpm lint` runs ESLint (typescript-eslint flat config at the repo root) across web, server, and shared. `pnpm typecheck` is the cross-package type check; add or update `apps/server` tests for server behavior you change. Web helper tests run with Vitest and are colocated as `*.test.ts` in `apps/web/src`.
 
+## Cursor Cloud specific instructions
+
+Repo-managed Cloud Agent config lives in `.cursor/environment.json` (Dockerfile + `scripts/cloud-agent-install.sh`). After boot:
+
+- API: `http://localhost:3001` (terminal sets `HOST=0.0.0.0`)
+- Vite: `http://localhost:5173` (proxies `/api` to the server)
+- `GITHUB_TOKEN` is optional to boot the UI; add it as a Cursor secret for clone/PR features
+- Claude Code CLI is optional to boot; chat/agent runs need an authenticated `CLAUDE_BIN`
+- Do not commit `.env`, `data/`, SQLite files, or secrets
+
 ## Layout
 
 ```
