@@ -238,6 +238,7 @@ export class ClaudeService implements ClaudeRunMonitorHost {
       sessionId: options.sessionId,
       allowedTools: options.allowedTools,
       permissionMode,
+      systemPrompt: options.systemPrompt,
     });
 
     const logPath = path.join(this.runsDir, `${agentId}-${Date.now()}.log`);

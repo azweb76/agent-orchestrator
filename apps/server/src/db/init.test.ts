@@ -102,6 +102,9 @@ describe('initDatabase schema repair', () => {
         assert.equal(messages.length, 1);
         assert.equal(messages[0]?.content, 'hello from legacy');
         assert.equal(repos.workspaces.list().length, 1);
+        const fromGoal = repos.sessionProfiles.getByName('from-goal');
+        assert.ok(fromGoal);
+        assert.equal(fromGoal?.builtIn, true);
       } finally {
         db.close();
       }

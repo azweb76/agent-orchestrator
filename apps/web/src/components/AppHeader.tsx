@@ -19,6 +19,7 @@ import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
@@ -224,6 +225,20 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
             sx={{ mr: 0.5 }}
           >
             <SearchIcon fontSize="small" />
+          </IconButton>
+        </ControlTooltip>
+
+        <ControlTooltip title="Session profiles">
+          <IconButton
+            component={RouterLink}
+            to="/profiles"
+            size="small"
+            color={location.pathname === '/profiles' ? 'secondary' : 'inherit'}
+            aria-label="Session profiles"
+            aria-current={location.pathname === '/profiles' ? 'page' : undefined}
+            sx={{ mr: 0.5 }}
+          >
+            <TuneOutlinedIcon fontSize="small" />
           </IconButton>
         </ControlTooltip>
 

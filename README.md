@@ -7,7 +7,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
 - **Command center** — home dashboard with the live agent fleet, a **Needs attention** panel when agents are waiting on prompts, spend/usage rollup (today's cost, all-time, top spend per agent), system readiness, recent workspaces, and a PR inbox. Everything updates live over SSE — no manual refresh.
 - **Workspaces** — clone GitHub repos as managed workspaces.
 - **Pull requests** — browse your open PRs and review requests; open a PR to see checks, files, commits, reviews, and conversation, and start an agent from it. **Fix CI** and **Address review** kick off ready-made sessions against the PR branch.
-- **Agents** — one Claude Code agent per git worktree. Create one **From idea** (the idea is sent as the first prompt, unmodified), **From branch**, or **From PR**. Each agent page has two tabs: **Chat** and **Changes**.
+- **Agents** — one Claude Code agent per git worktree. Create one **From goal** (uses the `from-goal` session profile; default kickoff is the raw goal), **From branch**, or **From PR**. Each agent page has two tabs: **Chat** and **Changes**.
 - **Chat** — streaming conversations with follow-up support via Claude session resume:
   - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that stashes the plan session and starts a new auto-mode session to implement.
   - Multiple sessions per agent, created from templates (**New chat**, **Review**, **Create draft PR**, **Address review**, **Fix CI**). Git-mutating sessions take a per-worktree lock; a queued session shows **Waiting** until the worktree is free.

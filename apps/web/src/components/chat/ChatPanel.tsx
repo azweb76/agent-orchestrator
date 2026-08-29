@@ -276,6 +276,7 @@ export const ChatPanel = memo(function ChatPanel({
         creating={sessionActions.creatingSession}
         onSelect={(id) => void sessionActions.selectSession(id)}
         onCreate={(template) => void sessionActions.createSessionFromTemplate(template)}
+        onCreateProfile={(profile) => void sessionActions.createSessionFromProfile(profile.name)}
         onDelete={archived ? undefined : (target) => sessionActions.setDeleteTarget(target)}
         onRename={
           archived

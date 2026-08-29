@@ -2,6 +2,7 @@ import { apiAgents } from './apiAgents';
 import { apiGitHub } from './apiGitHub';
 import { apiSetup } from './apiSetup';
 import { apiWorkspaces } from './apiWorkspaces';
+import { apiSessionProfiles } from './apiSessionProfiles';
 import {
   getAutomationSettings,
   updateAutomationSettings,
@@ -22,6 +23,7 @@ export const api = {
   ...apiWorkspaces,
   ...apiGitHub,
   ...apiAgents,
+  ...apiSessionProfiles,
   getAutomationSettings,
   updateAutomationSettings,
   getSettings,

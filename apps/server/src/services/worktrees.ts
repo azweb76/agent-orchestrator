@@ -1,9 +1,10 @@
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
-import { buildIssueKickoffPrompt, parseIssueReference } from '@agent-orchestrator/shared';
+import { buildIssueKickoffPrompt, parseIssueReference, renderProfilePromptTemplate } from '@agent-orchestrator/shared';
 import type {
   Agent,
   CreateWorktreeFromBranchRequest,
+  CreateWorktreeFromGoalRequest,
   CreateWorktreeFromIdeaRequest,
   CreateWorktreeFromIssueRequest,
   CreateWorktreeFromPrRequest,
@@ -16,6 +17,7 @@ import { mergeLivePullRequest } from './pr-overlay.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { clearSessionRunFields, createAgentForWorktree } from './agent-core.js';
 import { markStreamingAssistantStopped } from './chat-run-lifecycle.js';
+import { ensureFromGoalProfile } from './session-profiles.js';
 
 // Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
 // Falls back to the worktree's existing (DB-stored) values when no GitHub token is
@@ -185,41 +187,63 @@ async function suggestBranchNameForWorkspace(
 }
 
 /**
- * Suggest a branch name from the idea, create a new worktree + agent, and return both.
- * The client should kick off chat with the idea as the first prompt.
+ * Suggest a branch name from the goal, create a new worktree + agent using the
+ * built-in `from-goal` session profile, and return the kickoff prompt.
  */
+export async function createWorktreeFromGoal(
+  ctx: AppContext,
+  workspaceId: string,
+  body: CreateWorktreeFromGoalRequest,
+) {
+  const goal = body.goal.trim();
+  if (!goal) throw new Error('Goal is required');
+
+  const profile = ensureFromGoalProfile(ctx);
+  const branchName = await suggestBranchNameForWorkspace(ctx, workspaceId, goal);
+  const workspace = ctx.repos.workspaces.getById(workspaceId);
+  if (!workspace) throw new Error('Workspace not found');
+
+  const name = body.name ?? slugify(branchName);
+  const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
+  const id = uuidv4();
+  const baseBranch = body.baseBranch ?? workspace.defaultBranch;
+  await ctx.git.fetch(workspace.repoPath);
+  await ctx.git.addWorktree(workspace.repoPath, worktreePath, branchName, {
+    createBranch: true,
+    startRef: `origin/${baseBranch}`,
+  });
+
+  const worktree = ctx.repos.worktrees.create({
+    id,
+    workspaceId,
+    name,
+    path: worktreePath,
+    branch: branchName,
+    prNumber: null,
+    prTitle: null,
+    baseBranch,
+    createdAt: nowIso(),
+  });
+
+  const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`, { profile });
+  notify(ctx, 'workspaces_changed');
+
+  const kickoffPrompt = renderProfilePromptTemplate(profile.promptTemplate, { goal });
+  return { worktree, agent, branchName, goal, kickoffPrompt };
+}
+
+/** @deprecated Prefer createWorktreeFromGoal. */
 export async function createWorktreeFromIdea(
   ctx: AppContext,
   workspaceId: string,
   body: CreateWorktreeFromIdeaRequest,
 ) {
-  const idea = body.idea.trim();
-  if (!idea) throw new Error('Idea is required');
-
-  const branchName = await suggestBranchNameForWorkspace(ctx, workspaceId, idea);
-  const { worktree, agent } = await createWorktreeFromBranch(ctx, workspaceId, {
-    branch: branchName,
-    createNew: true,
-    baseBranch: body.baseBranch,
+  const result = await createWorktreeFromGoal(ctx, workspaceId, {
+    goal: body.idea,
     name: body.name,
+    baseBranch: body.baseBranch,
   });
-
-  const configured: Agent = {
-    ...agent,
-    model: body.model?.trim() || agent.model,
-    effort: body.effort ?? agent.effort,
-    permissionMode: body.permissionMode ?? agent.permissionMode,
-    updatedAt: nowIso(),
-  };
-  if (
-    configured.model !== agent.model ||
-    configured.effort !== agent.effort ||
-    configured.permissionMode !== agent.permissionMode
-  ) {
-    ctx.repos.agents.update(configured);
-  }
-
-  return { worktree, agent: configured, branchName, idea };
+  return { ...result, idea: result.goal };
 }
 
 async function resolveIssueNumberForWorkspace(
