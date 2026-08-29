@@ -90,6 +90,7 @@ describe('invalidateForEvent', () => {
 
     expect(keys).toEqual([
       ['pulls-inbox'],
+      ['sidebar'],
       ['agent', 'ag-1'],
       ['pr', 'acme', 'app', 7],
     ]);

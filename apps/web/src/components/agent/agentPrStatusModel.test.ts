@@ -35,6 +35,7 @@ function basePr(overrides: Partial<PullRequestDetail> = {}): PullRequestDetail {
     mergeCommitSha: null,
     allowedMergeMethods: ['squash'],
     deleteBranchOnMerge: false,
+    archived: false,
     workspaceId: null,
     agentId: null,
     ...overrides,
