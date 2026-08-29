@@ -202,6 +202,26 @@ export function useChatSessionActions({
     }
   };
 
+  const createSessionFromProfile = async (profileName: string) => {
+    if (archived) return;
+    setCreatingSession(true);
+    setChatError(null);
+    try {
+      const result = await api.createSession(agentId, { profile: profileName });
+      upsertAgentSession(queryClient, agentId, result.session, { activate: true });
+      sessionIdRef.current = result.session.id;
+      setSessionId(result.session.id);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      if (result.kickoffPrompt) {
+        void runChatRef.current(result.kickoffPrompt, [], [], false, result.session.id);
+      }
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setCreatingSession(false);
+    }
+  };
+
   const requestClear = () => setClearOpen(true);
 
   const requestRewind = (message: Message) => {
@@ -243,6 +263,7 @@ export function useChatSessionActions({
     gradeMutation,
     selectSession,
     createSessionFromTemplate,
+    createSessionFromProfile,
     createFromTemplateId,
     requestClear,
     requestRewind,

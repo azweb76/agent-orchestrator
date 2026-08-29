@@ -22,8 +22,11 @@ import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
-import type { ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
+import type { ChatSession, ChatSessionTemplate, SessionProfile } from '@agent-orchestrator/shared';
 import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
 
 interface ChatSessionBarProps {
@@ -33,6 +36,7 @@ interface ChatSessionBarProps {
   creating?: boolean;
   onSelect: (sessionId: string) => void;
   onCreate: (template: ChatSessionTemplate) => void;
+  onCreateProfile?: (profile: SessionProfile) => void;
   onDelete?: (session: ChatSession) => void;
   onRename?: (session: ChatSession, title: string) => void;
 }
@@ -52,6 +56,7 @@ export function ChatSessionBar({
   creating,
   onSelect,
   onCreate,
+  onCreateProfile,
   onDelete,
   onRename,
 }: ChatSessionBarProps) {
@@ -67,6 +72,13 @@ export function ChatSessionBar({
   const canDelete = Boolean(onDelete) && !disabled;
   const canRename = Boolean(onRename) && !disabled;
   const activeSession = sessions.find((item) => item.id === activeSessionId) ?? null;
+  const listedProfilesQuery = useQuery({
+    queryKey: ['session-profiles'],
+    queryFn: api.listSessionProfiles,
+    select: (profiles) => profiles.filter((item) => item.listed),
+    enabled: Boolean(onCreateProfile),
+  });
+  const listedProfiles = listedProfilesQuery.data ?? [];
 
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
@@ -286,6 +298,28 @@ export function ChatSessionBar({
               <ListItemText
                 primary={template.title}
                 secondary={template.description}
+                slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
+              />
+            </MenuItem>
+          </ControlTooltip>
+        ))}
+        {listedProfiles.map((profile) => (
+          <ControlTooltip
+            key={profile.id}
+            title={profile.description || `${profile.model} · ${profile.effort} · ${profile.permissionMode}`}
+          >
+            <MenuItem
+              onClick={() => {
+                setAnchor(null);
+                onCreateProfile?.(profile);
+              }}
+            >
+              <ListItemIcon>
+                <TuneOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary={profile.title}
+                secondary={profile.description || profile.name}
                 slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
               />
             </MenuItem>
