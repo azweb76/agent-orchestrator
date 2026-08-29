@@ -24,6 +24,7 @@ import {
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
+  FROM_GOAL_PROFILE_NAME,
   type EffortLevel,
   type PermissionMode,
 } from '@agent-orchestrator/shared';
@@ -48,15 +49,15 @@ export function CreateWorktreeDialog({
 }: CreateWorktreeDialogProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'branch' | 'pr' | 'idea' | 'issue'>('idea');
+  const [tab, setTab] = useState<'branch' | 'pr' | 'goal' | 'issue'>('goal');
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
-  const [ideaText, setIdeaText] = useState('');
-  const [ideaModel, setIdeaModel] = useState<string>(CLAUDE_MODELS[0].id);
-  const [ideaEffort, setIdeaEffort] = useState<EffortLevel>(DEFAULT_EFFORT_LEVEL);
-  const [ideaPermissionMode, setIdeaPermissionMode] =
+  const [goalText, setGoalText] = useState('');
+  const [issueModel, setIssueModel] = useState<string>(CLAUDE_MODELS[0].id);
+  const [issueEffort, setIssueEffort] = useState<EffortLevel>(DEFAULT_EFFORT_LEVEL);
+  const [issuePermissionMode, setIssuePermissionMode] =
     useState<PermissionMode>(DEFAULT_PERMISSION_MODE);
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
   const [issueReference, setIssueReference] = useState('');
@@ -65,6 +66,13 @@ export function CreateWorktreeDialog({
     queryKey: ['workspace', workspaceId],
     queryFn: () => api.getWorkspace(workspaceId),
     enabled: open && Boolean(workspaceId),
+  });
+
+  const fromGoalProfileQuery = useQuery({
+    queryKey: ['session-profiles'],
+    queryFn: api.listSessionProfiles,
+    enabled: open && tab === 'goal',
+    select: (profiles) => profiles.find((item) => item.name === FROM_GOAL_PROFILE_NAME) ?? null,
   });
 
   const branchesQuery = useQuery({
@@ -83,15 +91,15 @@ export function CreateWorktreeDialog({
   };
 
   const resetForm = () => {
-    setTab('idea');
+    setTab('goal');
     setBranchMode('existing');
     setSelectedBranch('');
     setNewBranchName('');
     setBaseBranch('');
-    setIdeaText('');
-    setIdeaModel(CLAUDE_MODELS[0].id);
-    setIdeaEffort(DEFAULT_EFFORT_LEVEL);
-    setIdeaPermissionMode(DEFAULT_PERMISSION_MODE);
+    setGoalText('');
+    setIssueModel(CLAUDE_MODELS[0].id);
+    setIssueEffort(DEFAULT_EFFORT_LEVEL);
+    setIssuePermissionMode(DEFAULT_PERMISSION_MODE);
     setSelectedPr('');
     setIssueReference('');
   };
@@ -128,20 +136,17 @@ export function CreateWorktreeDialog({
     },
   });
 
-  const createFromIdea = useMutation({
+  const createFromGoal = useMutation({
     mutationFn: () =>
-      api.createWorktreeFromIdea(workspaceId, {
-        idea: ideaText.trim(),
+      api.createWorktreeFromGoal(workspaceId, {
+        goal: goalText.trim(),
         baseBranch: resolvedDefaultBranch || undefined,
-        model: ideaModel,
-        effort: ideaEffort,
-        permissionMode: ideaPermissionMode,
       }),
     onSuccess: (data) => {
       invalidateAfterCreate();
       handleClose();
       navigate(`/agents/${data.agent.id}`, {
-        state: { initialPrompt: data.idea },
+        state: { initialPrompt: data.kickoffPrompt },
       });
     },
   });
@@ -151,9 +156,9 @@ export function CreateWorktreeDialog({
       api.createWorktreeFromIssue(workspaceId, {
         reference: issueReference.trim(),
         baseBranch: resolvedDefaultBranch || undefined,
-        model: ideaModel,
-        effort: ideaEffort,
-        permissionMode: ideaPermissionMode,
+        model: issueModel,
+        effort: issueEffort,
+        permissionMode: issuePermissionMode,
       }),
     onSuccess: (data) => {
       invalidateAfterCreate();
@@ -165,9 +170,12 @@ export function CreateWorktreeDialog({
   });
 
   const createPending =
-    createFromBranch.isPending || createFromPr.isPending || createFromIdea.isPending || createFromIssue.isPending;
+    createFromBranch.isPending ||
+    createFromPr.isPending ||
+    createFromGoal.isPending ||
+    createFromIssue.isPending;
   const createError =
-    createFromBranch.error ?? createFromPr.error ?? createFromIdea.error ?? createFromIssue.error;
+    createFromBranch.error ?? createFromPr.error ?? createFromGoal.error ?? createFromIssue.error;
   const canCreateBranch =
     branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
   const canCreate =
@@ -177,7 +185,9 @@ export function CreateWorktreeDialog({
         ? selectedPr !== ''
         : tab === 'issue'
           ? Boolean(issueReference.trim())
-          : Boolean(ideaText.trim());
+          : Boolean(goalText.trim());
+
+  const fromGoalProfile = fromGoalProfileQuery.data;
 
   return (
     <ResponsiveDialog open={open} onClose={handleClose} maxWidth={tab === 'pr' ? 'md' : 'sm'} fullWidth>
@@ -191,19 +201,19 @@ export function CreateWorktreeDialog({
           allowScrollButtonsMobile
           sx={{ mb: 2 }}
         >
-          <Tab value="idea" label="From idea" />
+          <Tab value="goal" label="From goal" />
           <Tab value="issue" label="From issue" />
           <Tab value="branch" label="From branch" />
           <Tab value="pr" label="From PR" />
         </Tabs>
 
-        {tab === 'idea' && (
+        {tab === 'goal' && (
           <Stack spacing={1.5}>
             <ControlTooltip title="Describe what you want the agent to build or change">
               <TextField
-                label="Describe your idea"
-                value={ideaText}
-                onChange={(e) => setIdeaText(e.target.value)}
+                label="Describe your goal"
+                value={goalText}
+                onChange={(e) => setGoalText(e.target.value)}
                 placeholder="Add a dark mode toggle to the settings page"
                 fullWidth
                 multiline
@@ -211,27 +221,33 @@ export function CreateWorktreeDialog({
                 autoFocus
               />
             </ControlTooltip>
-            <CreateWorktreePlannerFields
-              model={ideaModel}
-              effort={ideaEffort}
-              permissionMode={ideaPermissionMode}
-              onModelChange={setIdeaModel}
-              onEffortChange={setIdeaEffort}
-              onPermissionModeChange={setIdeaPermissionMode}
-            />
             <Typography variant="body2" color="text.secondary">
-              A branch name is suggested automatically. Your idea is sent as the first message using
-              the selected permission mode.
+              Uses the {fromGoalProfile?.title ?? 'From goal'} session profile (
+              <code>{FROM_GOAL_PROFILE_NAME}</code>
+              {fromGoalProfile
+                ? `: ${fromGoalProfile.model}, ${fromGoalProfile.effort}, ${fromGoalProfile.permissionMode}`
+                : ''}
+              ). Edit it under Session profiles. A branch name is suggested automatically.
             </Typography>
           </Stack>
         )}
 
         {tab === 'issue' && (
-          <CreateWorktreeIssueFields
-            issueReference={issueReference}
-            placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149`}
-            onIssueReferenceChange={setIssueReference}
-          />
+          <Stack spacing={1.5}>
+            <CreateWorktreeIssueFields
+              issueReference={issueReference}
+              placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149`}
+              onIssueReferenceChange={setIssueReference}
+            />
+            <CreateWorktreePlannerFields
+              model={issueModel}
+              effort={issueEffort}
+              permissionMode={issuePermissionMode}
+              onModelChange={setIssueModel}
+              onEffortChange={setIssueEffort}
+              onPermissionModeChange={setIssuePermissionMode}
+            />
+          </Stack>
         )}
 
         {tab === 'branch' && (
@@ -329,13 +345,13 @@ export function CreateWorktreeDialog({
         <ControlTooltip
           title={
             createPending
-              ? tab === 'idea'
+              ? tab === 'goal'
                 ? 'Suggesting a branch name and creating the agent…'
                 : 'Creating the agent…'
               : !canCreate
                 ? 'Fill in the required fields first'
-                : tab === 'idea'
-                  ? 'Create agent and send your idea as the first message'
+                : tab === 'goal'
+                  ? 'Create agent and send your goal as the first message'
                   : tab === 'pr'
                     ? 'Create agent from the selected pull request'
                     : 'Create agent from the selected branch'
@@ -349,17 +365,17 @@ export function CreateWorktreeDialog({
               if (tab === 'branch') createFromBranch.mutate();
               else if (tab === 'pr') createFromPr.mutate();
               else if (tab === 'issue') createFromIssue.mutate();
-              else createFromIdea.mutate();
+              else createFromGoal.mutate();
             }}
           >
             {createPending
-              ? tab === 'idea'
+              ? tab === 'goal'
                 ? 'Suggesting & creating…'
                 : 'Creating…'
               : 'Create'}
           </Button>
         </ControlTooltip>
       </DialogActions>
-      </ResponsiveDialog>
+    </ResponsiveDialog>
   );
 }

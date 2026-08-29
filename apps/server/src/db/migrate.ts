@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
+import { defaultFromGoalProfile } from '@agent-orchestrator/shared';
 import { ADDITIVE_INDEXES, DATABASE_FILENAME, SCHEMA } from './schema.js';
 
 export { DATABASE_FILENAME };
@@ -88,7 +89,45 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'grade_analysis', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'graded_at', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'title_source', "TEXT NOT NULL DEFAULT 'default'");
+  ensureColumn(db, 'chat_sessions', 'profile_id', 'TEXT');
+  ensureColumn(db, 'chat_sessions', 'system_prompt', 'TEXT');
+  ensureColumn(db, 'chat_sessions', 'allowed_tools', 'TEXT');
   ensureColumn(db, 'agents', 'autopilot_enabled', 'INTEGER');
+  seedBuiltInSessionProfiles(db);
+}
+
+function seedBuiltInSessionProfiles(db: Database.Database): void {
+  const existing = db
+    .prepare('SELECT id FROM session_profiles WHERE name = ?')
+    .get('from-goal') as { id: string } | undefined;
+  if (existing) return;
+
+  const now = new Date().toISOString();
+  const seed = defaultFromGoalProfile();
+  db.prepare(
+    `INSERT INTO session_profiles (
+       id, name, title, description, prompt_template, system_prompt, allowed_tools,
+       model, effort, permission_mode, listed, built_in, created_at, updated_at
+     ) VALUES (
+       @id, @name, @title, @description, @promptTemplate, @systemPrompt, @allowedTools,
+       @model, @effort, @permissionMode, @listed, @builtIn, @createdAt, @updatedAt
+     )`,
+  ).run({
+    id: crypto.randomUUID(),
+    name: seed.name,
+    title: seed.title,
+    description: seed.description,
+    promptTemplate: seed.promptTemplate,
+    systemPrompt: seed.systemPrompt,
+    allowedTools: seed.allowedTools,
+    model: seed.model,
+    effort: seed.effort,
+    permissionMode: seed.permissionMode,
+    listed: seed.listed ? 1 : 0,
+    builtIn: 1,
+    createdAt: now,
+    updatedAt: now,
+  });
 }
 
 function backfillSessionSearchIndexTable(db: Database.Database): void {

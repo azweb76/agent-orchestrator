@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
   createWorktreeFromBranch,
+  createWorktreeFromGoal,
   createWorktreeFromIdea,
   createWorktreeFromIssue,
   createWorktreeFromPr,
@@ -80,6 +81,20 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromBranch(ctx, param(req.params.workspaceId), body));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/worktrees/from-goal',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          goal: z.string().min(1),
+          name: z.string().optional(),
+          baseBranch: z.string().optional(),
+        })
+        .parse(req.body);
+      res.status(201).json(await createWorktreeFromGoal(ctx, param(req.params.workspaceId), body));
     }),
   );
 

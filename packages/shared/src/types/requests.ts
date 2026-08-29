@@ -32,17 +32,29 @@ export interface CreateWorktreeFromIssueRequest {
   permissionMode?: PermissionMode;
 }
 
-/** Create a new branch + agent from a free-form idea (branch name is suggested server-side). */
-export interface CreateWorktreeFromIdeaRequest {
-  idea: string;
+/**
+ * Create a new branch + agent from a free-form goal.
+ * Uses the built-in `from-goal` session profile for model / effort / permissions /
+ * system prompt / allowed tools / prompt template.
+ */
+export interface CreateWorktreeFromGoalRequest {
+  goal: string;
   name?: string;
   /** Base ref to branch from (defaults to workspace default branch). */
   baseBranch?: string;
-  /** Claude model alias (e.g. sonnet, opus, haiku). */
+}
+
+/**
+ * @deprecated Use {@link CreateWorktreeFromGoalRequest}. Kept for older clients;
+ * `idea` maps to `goal`. Optional model/effort/permissionMode are ignored in favor
+ * of the `from-goal` session profile.
+ */
+export interface CreateWorktreeFromIdeaRequest {
+  idea: string;
+  name?: string;
+  baseBranch?: string;
   model?: string;
-  /** Claude Code effort level for runs. */
   effort?: EffortLevel;
-  /** Permission mode for the new agent session (defaults to plan). */
   permissionMode?: PermissionMode;
 }
 

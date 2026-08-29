@@ -28,6 +28,7 @@ export {
   createWorktreeFromBranch,
   createWorktreeFromPr,
   deleteWorktree,
+  createWorktreeFromGoal,
   createWorktreeFromIdea,
   createWorktreeFromIssue,
 } from './worktrees.js';

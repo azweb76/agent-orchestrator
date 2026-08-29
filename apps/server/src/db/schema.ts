@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   model TEXT NOT NULL DEFAULT 'sonnet',
   effort TEXT NOT NULL DEFAULT 'high',
   permission_mode TEXT NOT NULL DEFAULT 'plan',
+  profile_id TEXT,
+  system_prompt TEXT,
+  allowed_tools TEXT,
   claude_session_id TEXT,
   pid INTEGER,
   run_log_path TEXT,
@@ -60,6 +63,23 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
   grade_analysis TEXT,
   graded_at TEXT,
   title_source TEXT NOT NULL DEFAULT 'default'
+);
+
+CREATE TABLE IF NOT EXISTS session_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  prompt_template TEXT,
+  system_prompt TEXT,
+  allowed_tools TEXT,
+  model TEXT NOT NULL DEFAULT 'sonnet',
+  effort TEXT NOT NULL DEFAULT 'high',
+  permission_mode TEXT NOT NULL DEFAULT 'plan',
+  listed INTEGER NOT NULL DEFAULT 0,
+  built_in INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -115,6 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 CREATE INDEX IF NOT EXISTS idx_session_search_agent ON session_search_index(agent_id);
+CREATE INDEX IF NOT EXISTS idx_session_profiles_name ON session_profiles(name);
 `;
 
 /** Indexes on columns that older databases may not have until `migrateSchema` runs. */

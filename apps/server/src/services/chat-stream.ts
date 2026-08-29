@@ -262,6 +262,8 @@ export async function streamAgentChat(
       effort: runningSession.effort,
       permissionMode: runningSession.permissionMode,
       sessionId: runningSession.claudeSessionId,
+      allowedTools: runningSession.allowedTools ?? undefined,
+      systemPrompt: runningSession.systemPrompt,
       imagePaths: attachments.map((item) => item.path),
       mentionContext,
       onStarted: (handle) => {
