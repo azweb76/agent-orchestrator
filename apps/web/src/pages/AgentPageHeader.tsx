@@ -10,7 +10,6 @@ import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseCh
 import { PullRequestStatusIcon } from '../components/pr/PullRequestStatusIcon';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
-import { PrStatusChip } from '../components/pr/PrStatusChip';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
@@ -45,10 +44,6 @@ export function AgentPageHeader({
   const prNumber = agent.worktree.prNumber;
   const { pr } = useAgentLinkedPr(agent);
   const prStatus = pr ? resolvePullRequestStatus(pr) : prNumber != null ? 'open' : null;
-  const prUrl =
-    prNumber != null
-      ? `https://github.com/${agent.workspace.githubOwner}/${agent.workspace.githubRepo}/pull/${prNumber}`
-      : null;
 
   return (
     <>
@@ -79,45 +74,6 @@ export function AgentPageHeader({
               variant="outlined"
             />
             <AgentDeliveryPhaseChip agent={agent} archived={archived} />
-            {prNumber != null && (
-              <Chip
-                size="small"
-                icon={
-                  prStatus ? (
-                    <PullRequestStatusIcon status={prStatus} sx={{ ml: 0.5 }} />
-                  ) : undefined
-                }
-                label={
-                  agent.worktree.prTitle
-                    ? `PR #${prNumber}: ${agent.worktree.prTitle}`
-                    : `PR #${prNumber}`
-                }
-                color={
-                  prStatus === 'open'
-                    ? 'success'
-                    : prStatus === 'merged'
-                      ? 'secondary'
-                      : prStatus === 'closed'
-                        ? 'error'
-                        : 'default'
-                }
-                variant="outlined"
-                component="a"
-                href={prUrl!}
-                target="_blank"
-                rel="noopener noreferrer"
-                clickable
-                sx={{ maxWidth: { xs: '100%', sm: 360 } }}
-              />
-            )}
-            {agent.prStatus && (
-              <PrStatusChip
-                state={agent.prStatus.state}
-                draft={agent.prStatus.draft}
-                merged={agent.prStatus.merged}
-                checksRollup={agent.prStatus.checksRollup}
-              />
-            )}
           </Stack>
           <Typography variant="body2" color="text.secondary" noWrap>
             <Box

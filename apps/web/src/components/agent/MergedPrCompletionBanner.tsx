@@ -1,15 +1,9 @@
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import CelebrationOutlinedIcon from '@mui/icons-material/CelebrationOutlined';
-import { Link as RouterLink } from 'react-router-dom';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { pullRequestPath } from '../../utils/paths';
 
 export interface MergedPrCompletionBannerProps {
-  owner: string;
-  repo: string;
-  prNumber: number;
-  prTitle?: string;
   archived: boolean;
   archivePending?: boolean;
   onArchive?: () => void;
@@ -18,10 +12,6 @@ export interface MergedPrCompletionBannerProps {
 
 /** Shown after a successful merge from the agent page when the agent is still active. */
 export function MergedPrCompletionBanner({
-  owner,
-  repo,
-  prNumber,
-  prTitle,
   archived,
   archivePending,
   onArchive,
@@ -49,16 +39,6 @@ export function MergedPrCompletionBanner({
               </Button>
             </ControlTooltip>
           ) : null}
-          <ControlTooltip title="Open the merged pull request">
-            <Button
-              color="inherit"
-              size="small"
-              component={RouterLink}
-              to={pullRequestPath(owner, repo, prNumber)}
-            >
-              View PR
-            </Button>
-          </ControlTooltip>
           {onDismiss ? (
             <ControlTooltip title="Dismiss">
               <Button color="inherit" size="small" onClick={onDismiss}>
@@ -73,9 +53,7 @@ export function MergedPrCompletionBanner({
         Pull request merged
       </Typography>
       <Typography variant="body2" color="text.secondary">
-        #{prNumber}
-        {prTitle ? ` ${prTitle}` : ''} is merged. Archive this agent when you are done, or keep it
-        for follow-up.
+        Archive this agent when you are done, or keep it for follow-up.
       </Typography>
     </Alert>
   );

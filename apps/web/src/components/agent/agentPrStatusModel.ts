@@ -29,6 +29,8 @@ export interface AgentPrStripModel {
   showFixCi: boolean;
   showAddressReview: boolean;
   showMarkReady: boolean;
+  /** In-app PR link in the strip; omit when merged (header already has View PR). */
+  showOpenPr: boolean;
   open: boolean;
 }
 
@@ -109,6 +111,7 @@ export function buildAgentPrStripModel(input: {
     showFixCi: canAct && (checks?.failing ?? 0) > 0,
     showAddressReview: canAct,
     showMarkReady: canAct && pr.draft && checks?.rollup === 'success',
+    showOpenPr: !pr.merged,
     open,
   };
 }
