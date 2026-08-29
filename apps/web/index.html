@@ -3,7 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="dark light" />
     <title>Agent Orchestrator</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('ao.theme.preference');
+          var preference = stored === 'dark' || stored === 'light' || stored === 'system' ? stored : 'dark';
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var mode = preference === 'system' ? (prefersDark ? 'dark' : 'light') : preference;
+          document.documentElement.style.colorScheme = mode;
+        } catch (_) {}
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

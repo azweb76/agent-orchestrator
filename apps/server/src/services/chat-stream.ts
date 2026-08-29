@@ -12,6 +12,7 @@ import {
   appendStreamText,
   applyStreamEvent,
   adoptParentClaudeSessionId,
+  coalesceTimelineText,
   parentStreamTextDelta,
   type StreamPart,
 } from '@agent-orchestrator/shared';
@@ -261,6 +262,8 @@ export async function streamAgentChat(
       effort: runningSession.effort,
       permissionMode: runningSession.permissionMode,
       sessionId: runningSession.claudeSessionId,
+      allowedTools: runningSession.allowedTools ?? undefined,
+      systemPrompt: runningSession.systemPrompt,
       imagePaths: attachments.map((item) => item.path),
       mentionContext,
       onStarted: (handle) => {
@@ -301,8 +304,8 @@ export async function streamAgentChat(
         parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, record);
         const token = parentStreamTextDelta(record, parentClaudeSessionId);
         if (token) {
-          assistantText += token;
           timeline = appendStreamText(timeline, token);
+          assistantText = coalesceTimelineText(timeline);
           flushProgress();
           send('token', { text: token });
         } else if (event.type !== 'stderr') {

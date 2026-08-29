@@ -42,10 +42,11 @@ function completeToolIds(
   const wanted = new Map(results.map((result) => [result.id, result.isError]));
   return parts.map((part) => {
     if (part.type !== 'tool' || part.status === 'done' || part.status === 'error') return part;
-    // A backgrounded Task/Agent answers its tool_use immediately ("Async agent
-    // launched successfully") while the subagent keeps working. Only
-    // `task_updated` / `task_notification` may finish those rows.
-    if (part.task?.backgrounded) return part;
+    // Task/Agent (and background bash) tool_result is often only a launch ack.
+    // Real completion comes from task_notification or a nested parent_tool_use_id
+    // result. Marking them done here makes monitorRun close stdin on the parent
+    // result and kills the subagent before the CLI can wake Claude.
+    if (isSubagentItem(toolItemFields(part)) || part.task?.backgrounded) return part;
     const isError =
       wanted.get(part.id) ?? (part.task?.taskId ? wanted.get(part.task.taskId) : undefined);
     if (isError !== undefined) {
@@ -175,12 +176,15 @@ export function applyStreamEvent(
   return next;
 }
 
-/** Join all timeline text parts into one string (single chat bubble). */
+/**
+ * Join timeline text parts for a single chat bubble.
+ * Segments separated by tools stay on separate lines (paragraph breaks).
+ */
 export function coalesceTimelineText(parts: StreamPart[]): string {
   return parts
     .filter((part): part is Extract<StreamPart, { type: 'text' }> => part.type === 'text')
     .map((part) => part.text)
-    .join('');
+    .join('\n\n');
 }
 
 /** Prefer a running tool; otherwise the most recent tool event. */

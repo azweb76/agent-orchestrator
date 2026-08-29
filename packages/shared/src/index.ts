@@ -5,6 +5,7 @@ export * from './types/requests.js';
 export * from './types/views.js';
 export * from './constants.js';
 export * from './app-settings.js';
+export * from './session-profile.js';
 
 export { mergeChatMessages } from './chat-sync.js';
 
@@ -121,6 +122,12 @@ export {
   rollupChecks,
   type MergeReadiness,
 } from './pull-request.js';
+
+export {
+  resolveAgentDeliveryPhase,
+  AGENT_DELIVERY_PHASE_LABELS,
+  type AgentDeliveryPhase,
+} from './agent-delivery-phase.js';
 
 export {
   buildIssueKickoffPrompt,

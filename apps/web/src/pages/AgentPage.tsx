@@ -6,6 +6,8 @@ import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
+import { AgentPrActionOffers } from '../components/agent/AgentPrActionOffers';
+import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
@@ -27,7 +29,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
   const [initialTemplate] = useState(() => locationState?.sessionTemplate);
   const [focusAttention] = useState(() => locationState?.focusAttention);
-  const [focusSessionId] = useState(() => locationState?.sessionId);
+  const [focusSessionId, setFocusSessionId] = useState(() => locationState?.sessionId);
   const [tab, setTab] = useState(0);
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
@@ -35,6 +37,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [commitPush, setCommitPush] = useState(true);
+  const [commitHasPending, setCommitHasPending] = useState(true);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [prDraft, setPrDraft] = useState(true);
@@ -82,10 +85,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     },
   });
 
-  const openCommitDialog = () => {
+  const openCommitDialog = (hasPendingChanges: boolean) => {
     commitMutation.reset();
     setCommitMessage('');
     setCommitPush(true);
+    setCommitHasPending(hasPendingChanges);
     setCommitOpen(true);
   };
 
@@ -119,6 +123,28 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         onUnarchive={() => unarchiveMutation.mutate()}
         onCreatePr={() => setPrOpen(true)}
         onAutopilotChange={(enabled) => autopilotMutation.mutate(enabled)}
+      />
+
+      <AgentPrStatusStrip
+        agent={agent}
+        archived={archived}
+        onSessionStarted={(sessionId) => {
+          setFocusSessionId(sessionId);
+          setTab(0);
+        }}
+      />
+      <AgentPrActionOffers
+        agent={agent}
+        archived={archived}
+        archivePending={archiveMutation.isPending}
+        onArchive={() => {
+          archiveMutation.reset();
+          setArchiveOpen(true);
+        }}
+        onSessionStarted={(sessionId) => {
+          setFocusSessionId(sessionId);
+          setTab(0);
+        }}
       />
 
       {unarchiveMutation.error && (
@@ -234,6 +260,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         open={commitOpen}
         message={commitMessage}
         push={commitPush}
+        hasPendingChanges={commitHasPending}
         mutation={commitMutation}
         onClose={() => {
           setCommitOpen(false);

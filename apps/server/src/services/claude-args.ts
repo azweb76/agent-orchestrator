@@ -14,6 +14,8 @@ export function buildClaudeArgs(options: {
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
   defaultAllowedTools?: string;
+  /** Appended via `--append-system-prompt` (keeps Claude Code defaults). */
+  systemPrompt?: string | null;
 }): string[] {
   const permissionMode = options.permissionMode ?? 'plan';
   // Print mode is required for --output-format/--input-format/--include-partial-messages.
@@ -57,6 +59,11 @@ export function buildClaudeArgs(options: {
 
   if (options.effort) {
     args.push('--effort', options.effort);
+  }
+
+  const systemPrompt = options.systemPrompt?.trim();
+  if (systemPrompt) {
+    args.push('--append-system-prompt', systemPrompt);
   }
 
   if (options.sessionId) {

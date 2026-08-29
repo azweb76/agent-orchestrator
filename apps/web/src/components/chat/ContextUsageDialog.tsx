@@ -10,6 +10,7 @@ import {
   LinearProgress,
   Stack,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -26,6 +27,7 @@ interface ContextUsageButtonProps {
 }
 
 export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextUsageButtonProps) {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const query = useQuery({
@@ -48,7 +50,7 @@ export function ContextUsageButton({ agentId, sessionId, isStreaming }: ContextU
   const data = query.data;
   const percent = data?.percent ?? null;
   const color = percentChipColor(percent);
-  const fill = percentFillColor(percent);
+  const fill = percentFillColor(percent, theme.palette.mode);
   const remaining =
     data && data.currentContextTokens > 0
       ? Math.max(0, data.compactThresholdTokens - data.currentContextTokens)

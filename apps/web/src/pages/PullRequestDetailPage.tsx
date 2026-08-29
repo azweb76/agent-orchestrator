@@ -21,13 +21,13 @@ import type { ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { MergeActions } from '../components/pr/MergeActions';
 import { MergeReadinessPanel } from '../components/pr/MergeReadinessPanel';
-import { PrStatusChip } from '../components/pr/PrStatusChip';
 import { PullRequestChecksTab } from '../components/pr/PullRequestChecksTab';
 import { PullRequestCommitsTab } from '../components/pr/PullRequestCommitsTab';
 import { PullRequestConversationTab } from '../components/pr/PullRequestConversationTab';
 import { PullRequestFilesTab } from '../components/pr/PullRequestFilesTab';
 import { PullRequestOverviewTab } from '../components/pr/PullRequestOverviewTab';
 import { PullRequestReviewsTab } from '../components/pr/PullRequestReviewsTab';
+import { PullRequestStatusChip } from '../components/pr/PullRequestStatusChip';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -206,12 +206,7 @@ function PullRequestDetailContent({
             <Box component="span">
               #{pr.number} {pr.title}
             </Box>
-            <PrStatusChip
-              state={pr.state}
-              draft={pr.draft}
-              merged={pr.merged}
-              checksRollup={checksQuery.data?.rollup}
-            />
+            <PullRequestStatusChip pr={pr} />
             {pr.archived ? <Chip size="small" label="Archived" color="warning" variant="outlined" /> : null}
           </Stack>
         }

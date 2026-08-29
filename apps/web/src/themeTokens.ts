@@ -47,6 +47,9 @@ export interface AoPalette {
   };
   chart: {
     muted: string;
+    cacheRead: string;
+    cacheWrite: string;
+    freshInput: string;
   };
   gradient: {
     body: string;
@@ -129,6 +132,9 @@ export function buildAoPalette(mode: PaletteMode): AoPalette {
     },
     chart: {
       muted: isDark ? alpha('#fff', 0.45) : alpha('#0f172a', 0.42),
+      cacheRead: c.secondary,
+      cacheWrite: c.primary,
+      freshInput: c.warning,
     },
     gradient: {
       body: isDark

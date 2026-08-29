@@ -96,8 +96,10 @@ export function buildMessageTimelineView(
     streaming &&
     otherTools.length > 0 &&
     (otherRunning || lastVisibleTool);
-  const rawContent = visibleAssistantContent(message.content);
-  const textContent = rawContent || coalesceTimelineText(parts);
+  // Prefer timeline segments so tool-separated replies stay on separate lines
+  // even when persisted `content` was historically concatenated.
+  const fromTimeline = coalesceTimelineText(parts);
+  const textContent = fromTimeline || visibleAssistantContent(message.content);
   const showText = Boolean(textContent);
   const showThinking = streaming && !showText && !showToolProgress && !showSubagents;
 

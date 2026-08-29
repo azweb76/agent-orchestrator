@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Box, ButtonBase, Chip, Stack, Typography } from '@mui/material';
+import { Box, ButtonBase, Chip, Stack, Typography, useTheme } from '@mui/material';
 import type { SessionContextTurn } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { CACHE_READ, CACHE_WRITE, FRESH_INPUT, percentFillColor } from './contextUsageColors';
+import { percentFillColor } from './contextUsageColors';
 import { ContextUsageLegendItem } from './ContextUsageLegend';
 import {
   barSlotWidth,
@@ -31,9 +31,11 @@ function HistoryBar({
   width: number;
   onSelect: () => void;
 }) {
+  const theme = useTheme();
+  const { cacheRead, cacheWrite, freshInput } = theme.palette.ao.chart;
   const heightPct = share(turn.contextTokens, yMax);
   const occupancy = share(turn.contextTokens, maxTokens);
-  const occupancyColor = occupancy >= 50 ? percentFillColor(occupancy) : undefined;
+  const occupancyColor = occupancy >= 50 ? percentFillColor(occupancy, theme.palette.mode) : undefined;
   const label = `Turn ${turn.turn}: ${formatTokenCount(turn.contextTokens)} (${formatPercent(occupancy)})`;
 
   return (
@@ -109,9 +111,9 @@ function HistoryBar({
               bgcolor: 'ao.surface.codeInline',
             }}
           >
-            <Box sx={{ flexGrow: turn.usage.cacheReadInputTokens, minHeight: 0, bgcolor: CACHE_READ }} />
-            <Box sx={{ flexGrow: turn.usage.cacheCreationInputTokens, minHeight: 0, bgcolor: CACHE_WRITE }} />
-            <Box sx={{ flexGrow: turn.usage.inputTokens, minHeight: 0, bgcolor: FRESH_INPUT }} />
+            <Box sx={{ flexGrow: turn.usage.cacheReadInputTokens, minHeight: 0, bgcolor: cacheRead }} />
+            <Box sx={{ flexGrow: turn.usage.cacheCreationInputTokens, minHeight: 0, bgcolor: cacheWrite }} />
+            <Box sx={{ flexGrow: turn.usage.inputTokens, minHeight: 0, bgcolor: freshInput }} />
           </Box>
         </Box>
       </ButtonBase>
@@ -126,6 +128,7 @@ export function ContextHistoryChart({
   history: SessionContextTurn[];
   maxTokens: number;
 }) {
+  const { cacheRead, cacheWrite, freshInput } = useTheme().palette.ao.chart;
   const yMax = useMemo(() => historyAxisMax(history, maxTokens), [history, maxTokens]);
   const latestTurn = history[history.length - 1]?.turn ?? 1;
   const [pinnedTurn, setPinnedTurn] = useState<number | null>(null);
@@ -283,9 +286,9 @@ export function ContextHistoryChart({
               gap: 0.5,
             }}
           >
-            <ContextUsageLegendItem color={CACHE_READ} label="Cache read" tokens={selected.usage.cacheReadInputTokens} />
-            <ContextUsageLegendItem color={CACHE_WRITE} label="Cache write" tokens={selected.usage.cacheCreationInputTokens} />
-            <ContextUsageLegendItem color={FRESH_INPUT} label="Input" tokens={selected.usage.inputTokens} />
+            <ContextUsageLegendItem color={cacheRead} label="Cache read" tokens={selected.usage.cacheReadInputTokens} />
+            <ContextUsageLegendItem color={cacheWrite} label="Cache write" tokens={selected.usage.cacheCreationInputTokens} />
+            <ContextUsageLegendItem color={freshInput} label="Input" tokens={selected.usage.inputTokens} />
             <ContextUsageLegendItem color="ao.chart.muted" label="Output" tokens={selected.usage.outputTokens} />
           </Box>
           {selected.tools.length > 0 ? (

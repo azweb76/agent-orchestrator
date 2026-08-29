@@ -77,4 +77,22 @@ describe('invalidateForEvent', () => {
 
     expect(keys).toEqual([['queue', 'ag-1', 'sess-1']]);
   });
+
+  it('github_pr_changed invalidates inbox, agent, and the matching PR queries', () => {
+    const queryClient = new QueryClient();
+    const keys = collectInvalidatedKeys(
+      queryClient,
+      testEvent('github_pr_changed', {
+        agentId: 'ag-1',
+        data: { owner: 'acme', repo: 'app', number: 7, kind: 'checks' },
+      }),
+    );
+
+    expect(keys).toEqual([
+      ['pulls-inbox'],
+      ['sidebar'],
+      ['agent', 'ag-1'],
+      ['pr', 'acme', 'app', 7],
+    ]);
+  });
 });

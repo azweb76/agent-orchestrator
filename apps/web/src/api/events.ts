@@ -124,13 +124,20 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }
       break;
-    case 'github_pr_changed':
+    case 'github_pr_changed': {
       queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }
+      const owner = typeof event.data.owner === 'string' ? event.data.owner : null;
+      const repo = typeof event.data.repo === 'string' ? event.data.repo : null;
+      const number = typeof event.data.number === 'number' ? event.data.number : null;
+      if (owner && repo && number != null) {
+        queryClient.invalidateQueries({ queryKey: ['pr', owner, repo, number] });
+      }
       break;
+    }
     case 'automation_triggered':
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       if (agentId) {

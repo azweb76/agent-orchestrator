@@ -67,12 +67,22 @@ describe('stream timeline ordering', () => {
     assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
   });
 
-  it('coalesces split text parts into one string', () => {
+  it('joins tool-separated text parts with paragraph breaks', () => {
     const parts: StreamPart[] = [
-      { type: 'text', id: 't1', text: 'to sc' },
+      { type: 'text', id: 't1', text: 'I will ask a clarifying question.' },
       { type: 'tool', id: 'tool_1', name: 'AskUserQuestion', status: 'done' },
-      { type: 'text', id: 't2', text: 'ope this properly.' },
+      { type: 'text', id: 't2', text: 'Thanks — here is the plan.' },
     ];
+    assert.equal(
+      coalesceTimelineText(parts),
+      'I will ask a clarifying question.\n\nThanks — here is the plan.',
+    );
+  });
+
+  it('keeps contiguous token appends in one text part', () => {
+    let parts: StreamPart[] = [];
+    parts = appendStreamText(parts, 'to sc');
+    parts = appendStreamText(parts, 'ope this properly.');
     assert.equal(coalesceTimelineText(parts), 'to scope this properly.');
   });
 

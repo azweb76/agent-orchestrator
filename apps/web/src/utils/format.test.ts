@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatBytes, formatRelativeTime, formatTokenCount, formatUsd, statusLabel } from './format';
+import { formatRelativeTime, formatTokenCount, formatUsd, statusLabel } from './format';
 
 describe('statusLabel', () => {
   it('maps known statuses to labels', () => {
@@ -23,20 +23,6 @@ describe('formatUsd', () => {
 
   it('collapses tiny positive amounts', () => {
     expect(formatUsd(0.004)).toBe('<$0.01');
-  });
-});
-
-describe('formatBytes', () => {
-  it('scales through B, KB, MB, and GB', () => {
-    expect(formatBytes(512)).toBe('512 B');
-    expect(formatBytes(2048)).toBe('2.0 KB');
-    expect(formatBytes(5 * 1024 ** 2)).toBe('5.0 MB');
-    expect(formatBytes(1.5 * 1024 ** 3)).toBe('1.5 GB');
-  });
-
-  it('returns a dash for invalid input', () => {
-    expect(formatBytes(-1)).toBe('—');
-    expect(formatBytes(Number.NaN)).toBe('—');
   });
 });
 

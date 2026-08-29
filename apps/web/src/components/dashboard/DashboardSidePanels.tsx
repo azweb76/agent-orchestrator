@@ -9,11 +9,13 @@ import {
 } from '@mui/material';
 import type { InboxIssue, InboxPullRequest, UsageSummary, WorkspaceWithCounts } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { formatBytes, formatUsd } from '../../utils/format';
+import { formatUsd } from '../../utils/format';
 import { pullRequestPath } from '../../utils/paths';
 import type { SystemStatus } from '../../api/client';
 import { HudPanel } from './HudPanel';
 import { SectionLabel } from './SectionLabel';
+import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
+import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
 
 interface DashboardSidePanelsProps {
   status?: SystemStatus;
@@ -94,12 +96,6 @@ export function DashboardSidePanels({
                 onClick={onPruneClick}
                 sx={{ cursor: 'pointer' }}
               />
-            </Stack>
-          ) : null}
-          {typeof status?.dataDirBytes === 'number' ? (
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2">Data directory</Typography>
-              <Chip size="small" label={formatBytes(status.dataDirBytes)} variant="outlined" />
             </Stack>
           ) : null}
         </Stack>
@@ -275,9 +271,15 @@ export function DashboardSidePanels({
                   '&:hover .pr-title': { color: 'secondary.main' },
                 }}
               >
-                <Typography className="pr-title" variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                  #{pr.number} {pr.title}
-                </Typography>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                  <PullRequestStatusIcon
+                    status={resolvePullRequestStatus(pr)}
+                    sx={{ fontSize: 16, flexShrink: 0 }}
+                  />
+                  <Typography className="pr-title" variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                    #{pr.number} {pr.title}
+                  </Typography>
+                </Stack>
                 <Typography variant="caption" color="text.secondary">
                   {pr.owner}/{pr.repo} · {pr.category === 'authored' ? 'authored' : 'review'}
                 </Typography>

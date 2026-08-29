@@ -37,13 +37,23 @@ export async function createAgentSession(
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot create a session on an archived agent');
 
+  const profileName = body.profile?.trim();
+  const profile = profileName
+    ? (() => {
+        const found = ctx.repos.sessionProfiles.getByName(profileName);
+        if (!found) throw new Error(`Unknown session profile "${profileName}"`);
+        return found;
+      })()
+    : undefined;
+
   const template = chatSessionTemplateById(body.template ?? 'chat');
   if (body.template && !template) throw new Error('Unknown session template');
 
   const session = createSessionForAgent(ctx, agent, {
     template: template?.id ?? 'chat',
     title: body.title,
-    permissionMode: template?.permissionMode,
+    permissionMode: profile?.permissionMode ?? template?.permissionMode,
+    profile,
     activate: true,
   });
   if (session.template === 'create-draft-pr') {
@@ -54,9 +64,12 @@ export async function createAgentSession(
     makeEvent(agentId, 'session_created', {
       sessionId: session.id,
       template: session.template,
+      profileId: session.profileId,
     }),
   );
-  const basePrompt = template?.prompt ?? null;
+  const basePrompt = profile
+    ? profileKickoffPrompt(profile)
+    : (template?.prompt ?? null);
   const kickoffPrompt =
     basePrompt && (session.template === 'address-review' || session.template === 'fix-ci')
       ? await buildTemplateKickoffPrompt(
@@ -67,6 +80,16 @@ export async function createAgentSession(
         )
       : basePrompt;
   return { session, kickoffPrompt };
+}
+
+function profileKickoffPrompt(profile: {
+  promptTemplate: string | null;
+}): string | null {
+  const trimmed = profile.promptTemplate?.trim();
+  if (!trimmed) return null;
+  // Templates that require {{goal}} are only used by From goal create.
+  if (trimmed.includes('{{goal}}')) return null;
+  return trimmed;
 }
 
 export async function updateAgentSession(
@@ -86,6 +109,12 @@ export async function updateAgentSession(
     model: body.model ?? session.model,
     effort: body.effort ?? session.effort,
     permissionMode: body.permissionMode ?? session.permissionMode,
+    systemPrompt:
+      body.systemPrompt !== undefined ? body.systemPrompt?.trim() || null : session.systemPrompt,
+    allowedTools:
+      body.allowedTools !== undefined
+        ? body.allowedTools?.trim() || null
+        : session.allowedTools,
     updatedAt: nowIso(),
   });
   syncAgentFromSessions(ctx, agentId);

@@ -25,6 +25,7 @@ import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
 import { PageHeader } from '../components/ui/PageHeader';
+import { PullRequestStatusChip } from '../components/pr/PullRequestStatusChip';
 import { formatRelativeTime } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
 
@@ -240,7 +241,7 @@ export function PullRequestsPage() {
                   <ListRowTitle>
                     #{pr.number} {pr.title}
                   </ListRowTitle>
-                  {pr.draft ? <Chip size="small" label="Draft" variant="outlined" /> : null}
+                  <PullRequestStatusChip pr={pr} />
                   {pr.workspaceId ? (
                     <Chip size="small" label="Workspace ready" color="success" variant="outlined" />
                   ) : (

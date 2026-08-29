@@ -19,8 +19,9 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { AgentStatusDot, AgentStatusIcon, PrStatusDot } from './agentStatusVisuals';
+import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
+import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
 
 export function ExpandedWorkspaceTree({
   tree,
@@ -233,7 +234,7 @@ const AgentListItem = memo(function AgentListItem({
           <Typography
             variant="caption"
             sx={{ display: 'block', textTransform: 'capitalize' }}
-            color={needsInput || stalled ? 'warning.light' : undefined}
+            color={needsInput || stalled ? 'warning.main' : undefined}
           >
             {statusHint}
           </Typography>
@@ -267,8 +268,22 @@ const AgentListItem = memo(function AgentListItem({
               >
                 {agent.name}
               </Typography>
-              {agent.prStatus && <PrStatusDot status={agent.prStatus} size={6} />}
-              <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
+              {agent.worktree.prNumber != null ? (
+                <PullRequestStatusIcon
+                  status={
+                    agent.prStatus?.merged
+                      ? 'merged'
+                      : agent.prStatus?.state === 'closed'
+                        ? 'closed'
+                        : agent.prStatus?.draft
+                          ? 'draft'
+                          : 'open'
+                  }
+                  sx={{ fontSize: 14, flexShrink: 0 }}
+                />
+              ) : (
+                <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
+              )}
             </Stack>
           }
         />

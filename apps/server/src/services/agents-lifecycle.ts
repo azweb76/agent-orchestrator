@@ -328,17 +328,20 @@ export async function commitAgentChanges(
 ): Promise<CommitAgentChangesResponse> {
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot commit changes for an archived agent');
-  const message = body.message.trim();
-  if (!message) throw new Error('Commit message is required');
 
   const detail = await getAgentDetail(ctx, agentId);
   const branch = await ctx.git.getCurrentBranch(detail.worktree.path);
   const hasChanges = await ctx.git.hasChanges(detail.worktree.path);
+  const shouldPush = body.push !== false;
+  const message = body.message?.trim() ?? '';
+
   if (hasChanges) {
+    if (!message) throw new Error('Commit message is required');
     await ctx.git.commitAll(detail.worktree.path, message);
+  } else if (!shouldPush) {
+    throw new Error('No local changes to commit');
   }
 
-  const shouldPush = body.push !== false;
   if (shouldPush) {
     await ctx.git.pushBranch(detail.worktree.path, branch);
   }
@@ -355,6 +358,6 @@ export async function commitAgentChanges(
     committed: hasChanges,
     pushed: shouldPush,
     branch,
-    message: hasChanges ? message : 'No local changes to commit',
+    message: hasChanges ? message : 'Pushed without a new commit',
   };
 }
