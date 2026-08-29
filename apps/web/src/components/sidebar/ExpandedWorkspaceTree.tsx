@@ -113,8 +113,9 @@ export function ExpandedWorkspaceTree({
               title={`${workspace.githubOwner}/${workspace.githubRepo} · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}`}
             >
               <ListItemButton
+                component={RouterLink}
+                to={`/workspaces/${workspace.id}`}
                 selected={workspaceSelected}
-                onClick={() => onToggleWorkspace(workspace.id)}
                 sx={{ py: 0.5, px: 1, alignItems: 'center' }}
               >
                 <ListItemIcon sx={{ minWidth: 28 }}>
@@ -139,6 +140,7 @@ export function ExpandedWorkspaceTree({
                     size="small"
                     aria-label={`Create agent in ${workspace.name}`}
                     onClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       onCreateAgent(workspace.id);
                       if (!open) onToggleWorkspace(workspace.id);
@@ -148,30 +150,25 @@ export function ExpandedWorkspaceTree({
                     <AddIcon sx={{ fontSize: 16 }} />
                   </IconButton>
                 </ControlTooltip>
-                {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                <ControlTooltip title={`${open ? 'Collapse' : 'Expand'} ${workspace.name}`} sidebar>
+                  <IconButton
+                    size="small"
+                    aria-label={`${open ? 'Collapse' : 'Expand'} ${workspace.name}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onToggleWorkspace(workspace.id);
+                    }}
+                    sx={{ p: 0.25 }}
+                  >
+                    {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                  </IconButton>
+                </ControlTooltip>
               </ListItemButton>
             </ControlTooltip>
 
             <Collapse in={open} timeout="auto" unmountOnExit>
               <List dense disablePadding>
-                <ControlTooltip title="Open workspace overview" sidebar>
-                  <ListItemButton
-                    component={RouterLink}
-                    to={`/workspaces/${workspace.id}`}
-                    selected={workspaceSelected}
-                    sx={{ pl: 4.5, py: 0.25 }}
-                  >
-                    <ListItemText
-                      sx={{ my: 0 }}
-                      primary={
-                        <Typography variant="caption" color="text.secondary">
-                          Workspace overview
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ControlTooltip>
-
                 {workspace.agents.length === 0 ? (
                   <ControlTooltip title="Create a new agent in this workspace" sidebar>
                     <ListItemButton onClick={() => onCreateAgent(workspace.id)} sx={{ pl: 4.5, py: 0.25 }}>
@@ -203,6 +200,16 @@ export function ExpandedWorkspaceTree({
   );
 }
 
+function prStatusWord(status: SidebarAgent['prStatus']): string {
+  if (!status) return '';
+  if (status.merged) return 'Merged';
+  if (status.state === 'closed') return 'Closed';
+  if (status.checksRollup === 'failure') return 'Checks failing';
+  if (status.checksRollup === 'pending') return 'Checks pending';
+  if (status.draft) return 'Draft';
+  return 'Open';
+}
+
 const AgentListItem = memo(function AgentListItem({
   agent,
   selected,
@@ -220,7 +227,9 @@ const AgentListItem = memo(function AgentListItem({
         <Box>
           <Typography variant="caption" sx={{ display: 'block' }}>
             {agent.worktree.branch}
-            {agent.worktree.prNumber ? ` · PR #${agent.worktree.prNumber}` : ''}
+            {agent.worktree.prNumber
+              ? ` · PR #${agent.worktree.prNumber}${agent.prStatus ? ` · ${prStatusWord(agent.prStatus)}` : ''}`
+              : ''}
           </Typography>
           <Typography
             variant="caption"
@@ -260,7 +269,18 @@ const AgentListItem = memo(function AgentListItem({
                 {agent.name}
               </Typography>
               {agent.worktree.prNumber != null ? (
-                <PullRequestStatusIcon status="open" sx={{ fontSize: 14, flexShrink: 0 }} />
+                <PullRequestStatusIcon
+                  status={
+                    agent.prStatus?.merged
+                      ? 'merged'
+                      : agent.prStatus?.state === 'closed'
+                        ? 'closed'
+                        : agent.prStatus?.draft
+                          ? 'draft'
+                          : 'open'
+                  }
+                  sx={{ fontSize: 14, flexShrink: 0 }}
+                />
               ) : (
                 <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
               )}

@@ -220,7 +220,10 @@ describe('parallel tools and subagents', () => {
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
   });
 
-  it('keeps Task/Agent running after a launch tool_result so parent result defers', () => {
+  it('keeps a backgrounded agent running when its launch ack arrives', () => {
+    // Backgrounded Agent/Task calls get an immediate `tool_result` ("Async agent
+    // launched successfully") long before the subagent finishes. Completing the
+    // row there would let the parent `result` end the run mid-flight.
     let parts: StreamPart[] = [];
     parts = applyStreamEvent(parts, {
       type: 'assistant',
@@ -230,12 +233,8 @@ describe('parallel tools and subagents', () => {
           {
             type: 'tool_use',
             id: 'toolu_1',
-            name: 'Task',
-            input: {
-              description: 'Explore changeset CI',
-              subagent_type: 'Explore',
-              run_in_background: true,
-            },
+            name: 'Agent',
+            input: { description: 'Explore light theme', subagent_type: 'Explore' },
           },
         ],
       },
@@ -243,40 +242,43 @@ describe('parallel tools and subagents', () => {
     parts = applyStreamEvent(parts, {
       type: 'system',
       subtype: 'task_started',
-      task_id: 't1',
-      task_type: 'local_agent',
+      task_id: 'task_1',
       tool_use_id: 'toolu_1',
-      description: 'Explore changeset CI',
+      task_type: 'local_agent',
       subagent_type: 'Explore',
+      description: 'Explore light theme',
+      is_backgrounded: true,
       session_id: 'sess-parent',
-    });
+    }, 'sess-parent');
     parts = applyStreamEvent(parts, {
       type: 'user',
       session_id: 'sess-parent',
       message: {
         content: [
-          {
-            type: 'tool_result',
-            tool_use_id: 'toolu_1',
-            content: 'Background agent launched',
-          },
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'Async agent launched successfully.' },
         ],
       },
-    });
+    }, 'sess-parent');
+
     assert.equal(runningSubagentItems(parts).length, 1);
 
-    parts = applyStreamEvent(
-      parts,
-      {
-        type: 'result',
-        result: 'Kicked off Explore; will report back shortly.',
-        session_id: 'sess-parent',
-        total_cost_usd: 0.14,
-      },
-      'sess-parent',
-    );
+    parts = applyStreamEvent(parts, {
+      type: 'result',
+      result: "I've kicked off an exploration.",
+      session_id: 'sess-parent',
+    }, 'sess-parent');
     assert.equal(runningSubagentItems(parts).length, 1);
-    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
+
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      status: 'completed',
+      summary: 'found the theme bug',
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    assert.equal(runningSubagentItems(parts).length, 0);
   });
 
   it('keeps background Bash running after its launch tool_result', () => {
@@ -343,14 +345,10 @@ describe('visible subagent cards', () => {
   ];
 
   it('hides finished Bash/Task cards after the turn completes', () => {
-    assert.equal(visibleSubagentItems(bashTimeline, false).length, 0);
+    assert.equal(visibleSubagentItems(bashTimeline).length, 0);
   });
 
-  it('shows finished subagents while the turn is still streaming', () => {
-    assert.equal(visibleSubagentItems(bashTimeline, true).length, 3);
-  });
-
-  it('keeps a live Explore card after parent Ready, including done siblings', () => {
+  it('shows only the running Explore card, hiding done siblings', () => {
     const parts: StreamPart[] = [
       ...bashTimeline,
       {
@@ -361,9 +359,9 @@ describe('visible subagent cards', () => {
         task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
       },
     ];
-    const visible = visibleSubagentItems(parts, false);
-    assert.equal(visible.length, 4);
-    assert.equal(visible.some((item) => item.status === 'running'), true);
+    const visible = visibleSubagentItems(parts);
+    assert.equal(visible.length, 1);
+    assert.equal(visible[0]?.status, 'running');
   });
 
   it('hides every subagent card once all rows finish', () => {
@@ -376,6 +374,60 @@ describe('visible subagent cards', () => {
         task: { taskType: 'local_agent', subagentType: 'Explore', description: 'Explore auth' },
       },
     ];
-    assert.equal(visibleSubagentItems(parts, false).length, 0);
+    assert.equal(visibleSubagentItems(parts).length, 0);
+  });
+
+  it('shows a backgrounded agent as running through its launch ack, then hides it on real completion', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'Agent',
+            input: { description: 'Explore light theme', subagent_type: 'Explore' },
+          },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      task_type: 'local_agent',
+      subagent_type: 'Explore',
+      description: 'Explore light theme',
+      is_backgrounded: true,
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      session_id: 'sess-parent',
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_1', content: 'Async agent launched successfully.' },
+        ],
+      },
+    }, 'sess-parent');
+
+    let visible = visibleSubagentItems(parts);
+    assert.equal(visible.length, 1);
+    assert.equal(visible[0]?.status, 'running');
+
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 'task_1',
+      tool_use_id: 'toolu_1',
+      status: 'completed',
+      summary: 'found the theme bug',
+      session_id: 'sess-parent',
+    }, 'sess-parent');
+    visible = visibleSubagentItems(parts);
+    assert.equal(visible.length, 0);
   });
 });

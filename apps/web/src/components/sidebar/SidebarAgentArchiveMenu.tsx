@@ -16,6 +16,7 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
   const queryClient = useQueryClient();
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [pendingArchiveOpen, setPendingArchiveOpen] = useState(false);
   const archived = agent.status === 'archived';
 
   const archiveMutation = useMutation({
@@ -65,6 +66,16 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
         open={Boolean(menuAnchor)}
         onClose={() => setMenuAnchor(null)}
         onClick={(event) => event.stopPropagation()}
+        slotProps={{
+          transition: {
+            onExited: () => {
+              if (pendingArchiveOpen) {
+                setPendingArchiveOpen(false);
+                setArchiveOpen(true);
+              }
+            },
+          },
+        }}
       >
         {archived ? (
           <MenuItem
@@ -85,7 +96,7 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
             onClick={() => {
               setMenuAnchor(null);
               archiveMutation.reset();
-              setArchiveOpen(true);
+              setPendingArchiveOpen(true);
             }}
           >
             <ListItemIcon>

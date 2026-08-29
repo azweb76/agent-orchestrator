@@ -41,14 +41,7 @@ function allowedMethods(pr: PullRequestDetail): PullRequestMergeMethod[] {
   return pr.allowedMergeMethods.filter((method) => method !== 'rebase' || pr.rebaseable === true);
 }
 
-/**
- * Single source of truth for what the merge UI may offer.
- *
- * Order matters: merged/closed short-circuit before any mergeability state is
- * consulted, and an unresolved `mergeable` is reported honestly rather than
- * optimistically treated as clean.
- */
-export function evaluateMergeReadiness(pr: PullRequestDetail): MergeReadiness {
+function computeMergeReadiness(pr: PullRequestDetail): MergeReadiness {
   const base: MergeReadiness = {
     computing: false,
     canMerge: false,
@@ -128,6 +121,26 @@ export function evaluateMergeReadiness(pr: PullRequestDetail): MergeReadiness {
         severity: 'warning',
       };
   }
+}
+
+/**
+ * Single source of truth for what the merge UI may offer.
+ *
+ * Order matters: merged/closed short-circuit before any mergeability state is
+ * consulted, and an unresolved `mergeable` is reported honestly rather than
+ * optimistically treated as clean.
+ */
+export function evaluateMergeReadiness(pr: PullRequestDetail): MergeReadiness {
+  const readiness = computeMergeReadiness(pr);
+  if (pr.archived && pr.state === 'open' && !pr.merged) {
+    return {
+      ...readiness,
+      reason: 'This repository is archived and read-only.',
+      warning: null,
+      severity: 'warning',
+    };
+  }
+  return readiness;
 }
 
 /** Fields the PR picker / inbox search can match against. */

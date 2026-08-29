@@ -4,6 +4,7 @@ import { apiSetup } from './apiSetup';
 import { apiWorkspaces } from './apiWorkspaces';
 import {
   getAutomationSettings,
+  triggerAutomationPollNow,
   updateAutomationSettings,
 } from '../automation/settings';
 import { getSettings, updateSettings } from '../settings/api';
@@ -23,6 +24,7 @@ export const api = {
   ...apiGitHub,
   ...apiAgents,
   getAutomationSettings,
+  triggerAutomationPollNow,
   updateAutomationSettings,
   getSettings,
   updateSettings,

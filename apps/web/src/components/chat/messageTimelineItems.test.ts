@@ -5,7 +5,6 @@ import {
   applyEventToAssistant,
   buildMessageTimelineView,
   shouldHideInteractiveToolProgress,
-  shouldPatchAssistantTimeline,
 } from './messageTimelineItems';
 
 function assistantMessage(timeline: StreamPart[], streaming = true): Message {
@@ -59,22 +58,10 @@ describe('applyEventToAssistant', () => {
       'claude-parent',
     );
 
-    const subagents = visibleSubagentItems(message.metadata?.timeline ?? [], false);
+    const subagents = visibleSubagentItems(message.metadata?.timeline ?? []);
     expect(subagents).toHaveLength(1);
     expect(subagents[0]?.status).toBe('running');
     expect(subagents[0]?.task?.subagentType).toBe('Explore');
-  });
-});
-
-describe('shouldPatchAssistantTimeline', () => {
-  it('patches a completed parent bubble while the backend run is still active', () => {
-    const message = assistantMessage([], false);
-    expect(
-      shouldPatchAssistantTimeline(message, 'sess-1', 'sess-1', true),
-    ).toBe(true);
-    expect(
-      shouldPatchAssistantTimeline(message, 'sess-1', 'sess-1', false),
-    ).toBe(false);
   });
 });
 
@@ -107,6 +94,7 @@ describe('buildMessageTimelineView', () => {
     ];
     const view = buildMessageTimelineView(assistantMessage(doneTimeline, false), []);
     expect(view.showSubagents).toBe(false);
+    expect(view.subagents).toHaveLength(0);
   });
 
   it('hides AskUserQuestion progress when the question card is pending', () => {

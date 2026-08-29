@@ -55,7 +55,7 @@ import {
   setPullRequestState,
   updatePullRequestBranch,
 } from './pulls-write.js';
-import { searchRepositories } from './repos.js';
+import { isRepoArchived, searchRepositories } from './repos.js';
 import type { SearchedIssue, SearchedPullRequest } from './raw-types.js';
 
 export class GitHubService {
@@ -144,6 +144,10 @@ export class GitHubService {
 
   searchRepositories(query: string): Promise<GitHubRepository[]> {
     return searchRepositories(this.ctx, query);
+  }
+
+  isRepoArchived(owner: string, repo: string): Promise<boolean> {
+    return isRepoArchived(this.ctx, owner, repo);
   }
 
   getPullRequestDetail(owner: string, repo: string, prNumber: number): Promise<PullRequestDetail> {

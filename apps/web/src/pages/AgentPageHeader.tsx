@@ -2,7 +2,6 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Chip, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import AutoModeOutlinedIcon from '@mui/icons-material/AutoModeOutlined';
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { resolveAutopilotEnabled } from '@agent-orchestrator/shared';
@@ -11,6 +10,7 @@ import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseCh
 import { PullRequestStatusIcon } from '../components/pr/PullRequestStatusIcon';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
+import { PrStatusChip } from '../components/pr/PrStatusChip';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
@@ -22,11 +22,9 @@ interface AgentPageHeaderProps {
   archived: boolean;
   archivePending: boolean;
   unarchivePending: boolean;
-  deletePending: boolean;
   autopilotPending?: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
-  onDelete: () => void;
   onCreatePr: () => void;
   onAutopilotChange?: (enabled: boolean | null) => void;
 }
@@ -36,11 +34,9 @@ export function AgentPageHeader({
   archived,
   archivePending,
   unarchivePending,
-  deletePending,
   autopilotPending,
   onArchive,
   onUnarchive,
-  onDelete,
   onCreatePr,
   onAutopilotChange,
 }: AgentPageHeaderProps) {
@@ -114,6 +110,14 @@ export function AgentPageHeader({
                 sx={{ maxWidth: { xs: '100%', sm: 360 } }}
               />
             )}
+            {agent.prStatus && (
+              <PrStatusChip
+                state={agent.prStatus.state}
+                draft={agent.prStatus.draft}
+                merged={agent.prStatus.merged}
+                checksRollup={agent.prStatus.checksRollup}
+              />
+            )}
           </Stack>
           <Typography variant="body2" color="text.secondary" noWrap>
             <Box
@@ -169,64 +173,30 @@ export function AgentPageHeader({
             </ControlTooltip>
           ) : null}
           {archived ? (
-            <>
-              <ControlTooltip title="Restore this agent to the active fleet" disabled={unarchivePending}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<UnarchiveOutlinedIcon />}
-                  disabled={unarchivePending}
-                  onClick={onUnarchive}
-                >
-                  Unarchive
-                </Button>
-              </ControlTooltip>
-              <ControlTooltip
-                title="Permanently delete this agent and its chat history"
-                disabled={deletePending}
+            <ControlTooltip title="Restore this agent to the active fleet" disabled={unarchivePending}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<UnarchiveOutlinedIcon />}
+                disabled={unarchivePending}
+                onClick={onUnarchive}
               >
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteOutlinedIcon />}
-                  disabled={deletePending}
-                  onClick={onDelete}
-                >
-                  Delete
-                </Button>
-              </ControlTooltip>
-            </>
+                Unarchive
+              </Button>
+            </ControlTooltip>
           ) : (
-            <>
-              <ControlTooltip title="Archive this agent and hide it from the active fleet" disabled={archivePending}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="error"
-                  startIcon={<ArchiveOutlinedIcon />}
-                  disabled={archivePending}
-                  onClick={onArchive}
-                >
-                  Archive
-                </Button>
-              </ControlTooltip>
-              <ControlTooltip
-                title="Permanently delete this agent and its chat history"
-                disabled={deletePending}
+            <ControlTooltip title="Archive this agent and hide it from the active fleet" disabled={archivePending}>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                startIcon={<ArchiveOutlinedIcon />}
+                disabled={archivePending}
+                onClick={onArchive}
               >
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteOutlinedIcon />}
-                  disabled={deletePending}
-                  onClick={onDelete}
-                >
-                  Delete
-                </Button>
-              </ControlTooltip>
-            </>
+                Archive
+              </Button>
+            </ControlTooltip>
           )}
           {prNumber != null ? (
             <ControlTooltip title={`Open pull request #${prNumber} in the app`}>

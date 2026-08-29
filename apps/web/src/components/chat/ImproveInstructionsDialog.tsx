@@ -32,9 +32,21 @@ interface ImproveInstructionsDialogProps {
   sessionId: string;
   onClose: () => void;
   onApplied: () => void;
+  /** Pre-select a target kind, e.g. when seeded from a specific grade finding. */
+  initialKind?: InstructionFileKind;
+  /** Pre-select a scope, only meaningful when initialKind is 'skill'. */
+  initialScope?: InstructionFileScope;
+  /** Pre-fill extra notes, e.g. context from a specific grade finding. */
+  initialExtraNotes?: string;
 }
 
 type TargetMode = 'new_skill' | 'claude_md' | 'agents_md' | 'existing';
+
+const KIND_TO_MODE: Record<InstructionFileKind, TargetMode> = {
+  skill: 'new_skill',
+  claude_md: 'claude_md',
+  agents_md: 'agents_md',
+};
 
 export function ImproveInstructionsDialog({
   open,
@@ -42,12 +54,15 @@ export function ImproveInstructionsDialog({
   sessionId,
   onClose,
   onApplied,
+  initialKind,
+  initialScope,
+  initialExtraNotes,
 }: ImproveInstructionsDialogProps) {
-  const [mode, setMode] = useState<TargetMode>('new_skill');
-  const [scope, setScope] = useState<InstructionFileScope>('project');
+  const [mode, setMode] = useState<TargetMode>(() => (initialKind ? KIND_TO_MODE[initialKind] : 'new_skill'));
+  const [scope, setScope] = useState<InstructionFileScope>(initialScope ?? 'project');
   const [skillName, setSkillName] = useState('');
   const [existingKey, setExistingKey] = useState('');
-  const [extraNotes, setExtraNotes] = useState('');
+  const [extraNotes, setExtraNotes] = useState(initialExtraNotes ?? '');
   const [draft, setDraft] = useState<InstructionDraft | null>(null);
   const [content, setContent] = useState('');
   const [appliedPath, setAppliedPath] = useState<string | null>(null);
@@ -66,15 +81,15 @@ export function ImproveInstructionsDialog({
 
   useEffect(() => {
     if (!open) return;
-    setMode('new_skill');
-    setScope('project');
+    setMode(initialKind ? KIND_TO_MODE[initialKind] : 'new_skill');
+    setScope(initialScope ?? 'project');
     setSkillName('');
     setExistingKey('');
-    setExtraNotes('');
+    setExtraNotes(initialExtraNotes ?? '');
     setDraft(null);
     setContent('');
     setAppliedPath(null);
-  }, [open, agentId, sessionId]);
+  }, [open, agentId, sessionId, initialKind, initialScope, initialExtraNotes]);
 
   useEffect(() => {
     if (existingKey || existingOptions.length === 0) return;

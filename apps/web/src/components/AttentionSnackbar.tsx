@@ -36,9 +36,9 @@ export function AttentionSnackbar({ onOpenAgent }: AttentionSnackbarProps) {
       open={Boolean(current)}
       autoHideDuration={queueCount > 1 ? 8000 : 12000}
       onClose={handleClose}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       sx={{
-        bottom: { xs: 'calc(16px + env(safe-area-inset-bottom, 0px))', sm: 24 },
+        top: { xs: 'calc(16px + env(safe-area-inset-top, 0px))', sm: 24 },
         maxWidth: 'min(560px, calc(100vw - 24px))',
       }}
       message={

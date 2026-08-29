@@ -16,6 +16,7 @@ import { ChatPanelDialogs } from './ChatPanelDialogs';
 import { ChatPanelFooter } from './ChatPanelFooter';
 import { ChatPanelTranscript } from './ChatPanelTranscript';
 import { ChatSessionBar } from './ChatSessionBar';
+import { buildFindingNotes } from './GradeSessionDialog';
 import type { PendingImage } from './composerTypes';
 import type { PendingMention } from './mentionComposer';
 import { useChatScroll } from './chatScroll';
@@ -381,11 +382,24 @@ export const ChatPanel = memo(function ChatPanel({
           sessionActions.setGradeOpen(false);
           sessionActions.gradeMutation.reset();
         }}
-        onImproveClose={() => sessionActions.setImproveOpen(false)}
+        improveSeed={sessionActions.improveSeed}
+        onImproveClose={() => {
+          sessionActions.setImproveOpen(false);
+          sessionActions.setImproveSeed(null);
+        }}
         onImproveApplied={() => {
           queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
         }}
         onImproveFromGrade={() => {
+          sessionActions.setGradeOpen(false);
+          sessionActions.setImproveOpen(true);
+        }}
+        onImproveFinding={(finding) => {
+          sessionActions.setImproveSeed({
+            kind: finding.recommendedAction?.kind ?? 'skill',
+            scope: finding.recommendedAction?.scope,
+            extraNotes: buildFindingNotes(finding),
+          });
           sessionActions.setGradeOpen(false);
           sessionActions.setImproveOpen(true);
         }}

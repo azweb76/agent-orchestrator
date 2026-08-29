@@ -1,4 +1,4 @@
-import type { PullRequestChecksRollup } from '@agent-orchestrator/shared';
+import type { PrStatusSnapshot, PullRequestChecksRollup } from '@agent-orchestrator/shared';
 import { FIX_CI_RETRY_CAP } from '@agent-orchestrator/shared';
 import { GitHubApiError } from './github/errors.js';
 import type { AppContext } from './app-context.js';
@@ -9,7 +9,7 @@ import { hasActiveOrQueuedTemplate, startAutomationTemplate } from './automation
 import type { PollTarget } from './github-poll-targets.js';
 import { pollTargetKey } from './github-poll-targets.js';
 
-export type GithubPrChangeKind = 'checks' | 'reviews' | 'merged';
+export type GithubPrChangeKind = 'checks' | 'reviews' | 'merged' | 'state';
 
 export interface GithubPrChangeEvent {
   kind: GithubPrChangeKind;
@@ -38,6 +38,33 @@ function fixCiAttemptsKey(agentId: string, headSha: string): string {
 
 function mergedStateKey(target: PollTarget): string {
   return `merged:${pollTargetKey(target)}`;
+}
+
+function archivedStateKey(target: PollTarget): string {
+  return `archived:${pollTargetKey(target)}`;
+}
+
+function stateDraftKey(target: PollTarget): string {
+  return `state-draft:${pollTargetKey(target)}`;
+}
+
+function statusStateKey(target: PollTarget): string {
+  return `status:${pollTargetKey(target)}`;
+}
+
+export function getCachedPrStatus(
+  ctx: AppContext,
+  owner: string,
+  repo: string,
+  number: number,
+): PrStatusSnapshot | null {
+  const raw = ctx.repos.automationState.get(`status:${pollTargetKey({ owner, repo, number })}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PrStatusSnapshot;
+  } catch {
+    return null;
+  }
 }
 
 function emitPrChanged(ctx: AppContext, event: GithubPrChangeEvent): void {
@@ -76,22 +103,66 @@ export async function pollTargetState(
   const events: GithubPrChangeEvent[] = [];
   const detail = await ctx.github.getPullRequestDetail(target.owner, target.repo, target.number);
 
+  const stateDraftKeyValue = stateDraftKey(target);
+  const stateDraftPayload = JSON.stringify({ state: detail.state, draft: detail.draft });
+  const prevStateDraft = ctx.repos.automationState.get(stateDraftKeyValue);
+  if (prevStateDraft !== null && prevStateDraft !== stateDraftPayload) {
+    const event: GithubPrChangeEvent = {
+      kind: 'state',
+      owner: target.owner,
+      repo: target.repo,
+      number: target.number,
+      agentId: target.agentId,
+    };
+    events.push(event);
+    emitPrChanged(ctx, event);
+  }
+  ctx.repos.automationState.set(stateDraftKeyValue, stateDraftPayload);
+
   if (detail.merged) {
-    const mergedKey = mergedStateKey(target);
-    const wasMerged = ctx.repos.automationState.get(mergedKey) === '1';
-    if (!wasMerged) {
-      ctx.repos.automationState.set(mergedKey, '1');
-      const event: GithubPrChangeEvent = {
-        kind: 'merged',
-        owner: target.owner,
-        repo: target.repo,
-        number: target.number,
-        agentId: target.agentId,
-        merged: true,
-      };
-      events.push(event);
-      emitPrChanged(ctx, event);
+    if (target.agentId) {
+      const agent = ctx.repos.agents.getById(target.agentId);
+      const alreadyArchived =
+        !agent || agent.archivedAt || ctx.repos.automationState.get(archivedStateKey(target)) === '1';
+      if (!alreadyArchived) {
+        const event: GithubPrChangeEvent = {
+          kind: 'merged',
+          owner: target.owner,
+          repo: target.repo,
+          number: target.number,
+          agentId: target.agentId,
+          merged: true,
+        };
+        events.push(event);
+        emitPrChanged(ctx, event);
+      }
+    } else {
+      const mergedKey = mergedStateKey(target);
+      const wasMerged = ctx.repos.automationState.get(mergedKey) === '1';
+      if (!wasMerged) {
+        ctx.repos.automationState.set(mergedKey, '1');
+        const event: GithubPrChangeEvent = {
+          kind: 'merged',
+          owner: target.owner,
+          repo: target.repo,
+          number: target.number,
+          agentId: target.agentId,
+          merged: true,
+        };
+        events.push(event);
+        emitPrChanged(ctx, event);
+      }
     }
+    ctx.repos.automationState.set(
+      statusStateKey(target),
+      JSON.stringify({
+        state: detail.state as 'open' | 'closed',
+        draft: detail.draft,
+        merged: detail.merged,
+        checksRollup: 'none',
+        updatedAt: new Date().toISOString(),
+      }),
+    );
     return events;
   }
 
@@ -99,6 +170,16 @@ export async function pollTargetState(
     target.owner,
     target.repo,
     detail.headSha,
+  );
+  ctx.repos.automationState.set(
+    statusStateKey(target),
+    JSON.stringify({
+      state: detail.state as 'open' | 'closed',
+      draft: detail.draft,
+      merged: detail.merged,
+      checksRollup: checks.rollup,
+      updatedAt: new Date().toISOString(),
+    }),
   );
   const checksKey = checksStateKey(target);
   const prevChecks = ctx.repos.automationState.get(checksKey);
@@ -293,6 +374,7 @@ async function maybeAutoArchive(
   await archiveAgent(ctx, target.agentId, {
     deleteWorktree: settings.autoArchiveDeleteWorktree,
   });
+  ctx.repos.automationState.set(archivedStateKey(target), '1');
   emitAutomation(ctx, target.agentId, 'archive_completed', {
     owner: target.owner,
     repo: target.repo,

@@ -1,6 +1,7 @@
 import type { SpendBudgetStatus } from '../app-settings.js';
 import type { ChatSession } from '../chat-session.js';
 import type { Agent, Worktree, Workspace } from './entities.js';
+import type { PrStatusSnapshot } from './github.js';
 
 /** Diff view scope for an agent's worktree. */
 export type AgentDiffScope = 'pending' | 'pr';
@@ -32,6 +33,7 @@ export interface AgentDetail extends Agent {
   sessions: ChatSession[];
   /** Set when a completed Build session has a diff and no open PR (autopilot off). */
   draftPrOffer?: DraftPrOffer | null;
+  prStatus: PrStatusSnapshot | null;
 }
 
 /** Agent summary for sidebar navigation (includes worktree context). */
@@ -41,6 +43,7 @@ export interface SidebarAgent extends Agent {
   pendingPermissionCount: number;
   /** Watchdog flagged this agent as stalled (stale permission, idle stream, etc.). */
   stalled?: boolean;
+  prStatus: PrStatusSnapshot | null;
 }
 
 /** Workspace with nested agents for the app sidebar tree. */

@@ -77,3 +77,7 @@ export async function updateAutomationSettings(
   writeAutomationSettingsLocal(saved);
   return saved;
 }
+
+export async function triggerAutomationPollNow(): Promise<{ triggered: boolean }> {
+  return request<{ triggered: boolean }>('/settings/automation/poll-now', { method: 'POST' });
+}

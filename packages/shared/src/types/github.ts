@@ -108,6 +108,7 @@ export interface PullRequestDetail {
   /** Merge methods enabled in the repository settings. */
   allowedMergeMethods: PullRequestMergeMethod[];
   deleteBranchOnMerge: boolean;
+  archived: boolean;
   /** Existing local workspace for this repo, if any. */
   workspaceId: string | null;
   /** Existing local agent created from this PR, if any. */
@@ -141,6 +142,14 @@ export interface PullRequestChecks {
   /** True when the repo has more check runs than we fetched. */
   truncated: boolean;
   checks: PullRequestCheck[];
+}
+
+export interface PrStatusSnapshot {
+  state: 'open' | 'closed';
+  draft: boolean;
+  merged: boolean;
+  checksRollup: PullRequestChecksRollup;
+  updatedAt: string;
 }
 
 export interface PullRequestReview {

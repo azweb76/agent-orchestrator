@@ -22,18 +22,6 @@ export function claudeResultCostUsd(
   return typeof cost === 'number' && Number.isFinite(cost) ? cost : undefined;
 }
 
-/** Keep applying stream-json timeline events after the parent bubble shows Ready. */
-export function shouldPatchAssistantTimeline(
-  message: Message,
-  targetSessionId: string,
-  eventSessionId: string,
-  sessionRunActive: boolean,
-): boolean {
-  if (message.role !== 'assistant') return false;
-  if (message.metadata?.streaming) return true;
-  return eventSessionId === targetSessionId && sessionRunActive;
-}
-
 /**
  * Fold a live stream event into the streaming assistant message. A top-level
  * `result` ends the visual stream (Ready + cost) but timeline patches continue
@@ -93,7 +81,7 @@ export function buildMessageTimelineView(
   const toolItems = parts.filter(
     (part): part is Extract<(typeof parts)[number], { type: 'tool' }> => part.type === 'tool',
   );
-  const subagents = visibleSubagentItems(timeline, streaming);
+  const subagents = visibleSubagentItems(timeline);
   const otherTools = toolItems.filter(
     (item) => !isSubagentItem(item) && !shouldHideInteractiveToolProgress(item, permissionRequests),
   );

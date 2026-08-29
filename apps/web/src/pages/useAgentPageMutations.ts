@@ -32,18 +32,6 @@ export function useAgentPageMutations(agentId: string) {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteAgent(agentId, false),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: ['worktrees'] });
-      queryClient.invalidateQueries({ queryKey: ['status'] });
-      const detail = queryClient.getQueryData<{ workspace: { id: string } }>(['agent', agentId]);
-      navigate(detail?.workspace.id ? `/workspaces/${detail.workspace.id}` : '/');
-    },
-  });
-
   const commitMutation = useMutation({
     mutationFn: ({ message, push }: { message: string; push: boolean }) =>
       api.commitChanges(agentId, {
@@ -82,7 +70,6 @@ export function useAgentPageMutations(agentId: string) {
   return {
     archiveMutation,
     unarchiveMutation,
-    deleteMutation,
     commitMutation,
     createPrMutation,
     autopilotMutation,

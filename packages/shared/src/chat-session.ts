@@ -1,4 +1,5 @@
 import type { AgentStatus, EffortLevel, PermissionMode } from './index.js';
+import type { InstructionFileKind, InstructionFileScope } from './instruction-files.js';
 
 /** Built-in kickoff templates for a new chat session on an agent. */
 export type ChatSessionTemplateId =
@@ -44,6 +45,12 @@ export interface SessionGradeFinding {
   severity: SessionGradeFindingSeverity;
   title: string;
   detail: string;
+  /** Suggested remediation target, present for warning/issue findings. */
+  recommendedAction?: {
+    kind: InstructionFileKind;
+    /** Only meaningful when kind === 'skill'. */
+    scope?: InstructionFileScope;
+  };
 }
 
 export interface SessionGradeStats {

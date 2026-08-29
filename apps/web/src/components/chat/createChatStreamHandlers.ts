@@ -19,8 +19,8 @@ export interface StreamHandlerContext {
   setPermissionRequests: Dispatch<SetStateAction<PermissionRequest[]>>;
   setChatError: Dispatch<SetStateAction<string | null>>;
   streamingPatches: {
-    appendToken: (sid: string, token: string) => void;
-    patchStreaming: (sid: string, mutate: (message: Message) => Message) => void;
+    appendToken: (sid: string, messageId: string, token: string) => void;
+    patchStreaming: (sid: string, messageId: string, mutate: (message: Message) => Message) => void;
     flushAll: (sid: string) => void;
   };
   viewed: (sid: string) => boolean;
@@ -45,6 +45,7 @@ function parentSessionForEvent(
 }
 
 export function createChatStreamHandlers(ctx: StreamHandlerContext): ChatStreamHandlers {
+  let currentAssistantMessageId: string | undefined;
   return {
     onSession: (nextSession) => {
       if (!ctx.mountedRef.current) return;
@@ -79,18 +80,19 @@ export function createChatStreamHandlers(ctx: StreamHandlerContext): ChatStreamH
     },
     onAssistantMessage: (message) => {
       if (!ctx.mountedRef.current) return;
+      currentAssistantMessageId = message.id;
       setMessagesCache(ctx.queryClient, ctx.agentId, ctx.stream.sessionId, (prev) =>
         upsertMessage(prev, message),
       );
     },
     onToken: (token) => {
-      if (!ctx.mountedRef.current) return;
-      ctx.streamingPatches.appendToken(ctx.stream.sessionId, token);
+      if (!ctx.mountedRef.current || !currentAssistantMessageId) return;
+      ctx.streamingPatches.appendToken(ctx.stream.sessionId, currentAssistantMessageId, token);
     },
     onEvent: (event) => {
-      if (!ctx.mountedRef.current) return;
+      if (!ctx.mountedRef.current || !currentAssistantMessageId) return;
       const parentSessionId = parentSessionForEvent(ctx, ctx.stream.sessionId, event);
-      ctx.streamingPatches.patchStreaming(ctx.stream.sessionId, (message) =>
+      ctx.streamingPatches.patchStreaming(ctx.stream.sessionId, currentAssistantMessageId, (message) =>
         applyEventToAssistant(message, event, parentSessionId),
       );
     },

@@ -122,6 +122,7 @@ export const REPO_SETTINGS = {
   allow_squash_merge: true,
   allow_rebase_merge: true,
   delete_branch_on_merge: true,
+  archived: false,
 };
 
 /** Route mocked fetches by pathname so parallel detail+settings calls both resolve. */

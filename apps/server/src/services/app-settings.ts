@@ -9,6 +9,7 @@ const SETTINGS_KEYS = {
   watchdogPermissionMinutes: 'watchdog_permission_minutes',
   watchdogStreamIdleMinutes: 'watchdog_stream_idle_minutes',
   watchdogStaleRunEnabled: 'watchdog_stale_run_enabled',
+  analyzeSessionEnabled: 'analyze_session_enabled',
 } as const;
 
 function parseNullableUsd(raw: string | null): number | null {
@@ -47,6 +48,10 @@ export function getAppSettings(repos: AppRepositories): AppSettings {
     watchdogStaleRunEnabled: parseBool(
       get(SETTINGS_KEYS.watchdogStaleRunEnabled),
       DEFAULT_APP_SETTINGS.watchdogStaleRunEnabled,
+    ),
+    analyzeSessionEnabled: parseBool(
+      get(SETTINGS_KEYS.analyzeSessionEnabled),
+      DEFAULT_APP_SETTINGS.analyzeSessionEnabled,
     ),
   };
 }
@@ -95,6 +100,9 @@ export function updateAppSettings(
   }
   if ('watchdogStaleRunEnabled' in body) {
     set(SETTINGS_KEYS.watchdogStaleRunEnabled, body.watchdogStaleRunEnabled ? '1' : '0');
+  }
+  if ('analyzeSessionEnabled' in body) {
+    set(SETTINGS_KEYS.analyzeSessionEnabled, body.analyzeSessionEnabled ? '1' : '0');
   }
 
   return getAppSettings(repos);

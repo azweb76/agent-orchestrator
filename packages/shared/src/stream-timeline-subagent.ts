@@ -116,18 +116,13 @@ export function runningSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
 }
 
 /**
- * Subagent cards to render under an assistant turn.
- * Show them while the turn is streaming, or while any sibling is still running
- * (parent Ready must not hide a live Explore/Task). Once the turn is finished
- * and every row is done, return nothing so leftover Bash/Task chips do not
- * stick under a completed reply.
+ * Subagent cards to render under an assistant turn. A card disappears the
+ * instant its status flips to 'done' — success or failure — regardless of
+ * whether the parent turn is still streaming or siblings are still running.
+ * Backgrounded items only flip to 'done' on a real task_updated/task_notification
+ * completion (see completeToolIds), never on their launch-ack tool_result, so
+ * they correctly stay visible as running until then.
  */
-export function visibleSubagentItems(parts: StreamPart[], streaming: boolean): ToolActivityItem[] {
-  const items = parts.filter(
-    (part): part is Extract<StreamPart, { type: 'tool' }> =>
-      part.type === 'tool' && isSubagentItem(part),
-  );
-  if (items.length === 0) return [];
-  if (streaming || items.some((item) => item.status === 'running')) return items;
-  return [];
+export function visibleSubagentItems(parts: StreamPart[]): ToolActivityItem[] {
+  return runningSubagentItems(parts);
 }

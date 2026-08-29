@@ -171,9 +171,13 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
     '"score" (integer 1-5), "summary" (2-4 sentences), "findings" (array).',
     'If you cannot call a tool, respond with ONLY that JSON object (no markdown fences or extra text).',
-    'Each finding is {"category":"...","severity":"...","title":"...","detail":"..."}.',
+    'Each finding is {"category":"...","severity":"...","title":"...","detail":"...","action":{"kind":"...","scope":"..."}}.',
     'category must be one of: excessive_turns, wasted_tokens, bloated_context, instruction_files, skills.',
     'severity must be ok, warning, or issue.',
+    'For every finding with severity warning or issue, include "action" recommending how to fix it.',
+    'action.kind must be one of: skill, claude_md, agents_md. Use skill when the fix is a reusable practice or checklist for the agent to follow; use claude_md or agents_md when the fix is project-specific standing instructions (match whichever instruction file this project actually uses).',
+    'When action.kind is skill, also set action.scope to project or personal: use personal when the recommendation is a generic practice that would help in any repo (not tied to this project\'s specifics), otherwise use project.',
+    'Omit "action" for findings with severity ok.',
     'Include exactly one finding for each of those five categories. Use ok when that area looks healthy.',
     'Ground every finding in the supplied stats, session-file transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
     'Score: 5 efficient, 4 good, 3 mixed, 2 wasteful, 1 poor.',
@@ -238,6 +242,36 @@ function parseCategory(value: unknown): SessionGradeFindingCategory | null {
     : null;
 }
 
+const INSTRUCTION_FILE_KINDS = ['skill', 'claude_md', 'agents_md'] as const;
+const INSTRUCTION_FILE_SCOPES = ['project', 'personal'] as const;
+
+function parseRecommendedAction(
+  value: unknown,
+  severity: SessionGradeFindingSeverity,
+): SessionGradeFinding['recommendedAction'] {
+  if (severity === 'ok') return undefined;
+
+  const row = value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+  const kind = row ? asString(row.kind) : '';
+  const scope = row ? asString(row.scope) : '';
+
+  if (INSTRUCTION_FILE_KINDS.includes(kind as (typeof INSTRUCTION_FILE_KINDS)[number])) {
+    const validScope = INSTRUCTION_FILE_SCOPES.includes(
+      scope as (typeof INSTRUCTION_FILE_SCOPES)[number],
+    )
+      ? (scope as (typeof INSTRUCTION_FILE_SCOPES)[number])
+      : undefined;
+    return {
+      kind: kind as (typeof INSTRUCTION_FILE_KINDS)[number],
+      scope: validScope,
+    };
+  }
+
+  return { kind: 'skill', scope: 'project' };
+}
+
 function scoreFromFindings(findings: SessionGradeFinding[]): SessionGradeScore {
   const issues = findings.filter((item) => item.severity === 'issue').length;
   const warnings = findings.filter((item) => item.severity === 'warning').length;
@@ -269,11 +303,13 @@ export function parseSessionGradeResponse(
       const category = parseCategory(row.category);
       if (!category) continue;
       const title = asString(row.title) || 'Finding';
+      const severity = parseSeverity(row.severity);
       findings.push({
         category,
-        severity: parseSeverity(row.severity),
+        severity,
         title,
         detail: asString(row.detail),
+        recommendedAction: parseRecommendedAction(row.action, severity),
       });
     }
   }

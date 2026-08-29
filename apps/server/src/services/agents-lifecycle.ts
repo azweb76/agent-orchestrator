@@ -28,6 +28,7 @@ import { clearSessionQueue, drainWaitingMutatingSessions } from './chat-queue.js
 import { markStreamingAssistantStopped } from './chat-run-lifecycle.js';
 import { deleteWorktree, overlayLivePullRequest } from './worktrees.js';
 import { getDraftPrOfferSessionId } from './autopilot.js';
+import { getCachedPrStatus } from './github-automation.js';
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
   const agent = ctx.repos.agents.getById(agentId);
@@ -56,6 +57,9 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
     worktree: liveWorktree,
     workspace,
     sessions: ctx.repos.sessions.listByAgent(agentId),
+    prStatus: liveWorktree.prNumber
+      ? getCachedPrStatus(ctx, workspace.githubOwner, workspace.githubRepo, liveWorktree.prNumber)
+      : null,
     draftPrOffer: (() => {
       const offerSessionId = getDraftPrOfferSessionId(ctx, agentId);
       return offerSessionId ? { sessionId: offerSessionId } : null;
