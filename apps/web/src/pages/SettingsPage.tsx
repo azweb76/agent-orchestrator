@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -17,6 +18,7 @@ import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import SettingsBrightnessOutlinedIcon from '@mui/icons-material/SettingsBrightnessOutlined';
+import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppSettings } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
@@ -132,6 +134,22 @@ export function SettingsPage() {
         title="Settings"
         description="Manage notifications, appearance, and how this orchestrator instance is protected."
       />
+
+      <SettingsSection
+        title="Session profiles"
+        description="Configure prompt templates, system prompts, models, effort, and permissions used when starting agent sessions (including Create agent → From goal)."
+      >
+        <ControlTooltip title="Open the session profile manager">
+          <Button
+            component={RouterLink}
+            to="/profiles"
+            variant="outlined"
+            startIcon={<TuneOutlinedIcon />}
+          >
+            Manage session profiles
+          </Button>
+        </ControlTooltip>
+      </SettingsSection>
 
       <SettingsSection
         title="Notifications"

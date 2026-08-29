@@ -56,6 +56,8 @@ export interface ClaudeRunOptions {
   sessionId?: string | null;
   allowedTools?: string;
   permissionMode?: ClaudePermissionMode;
+  /** Appended via `--append-system-prompt`. */
+  systemPrompt?: string | null;
   /** Absolute image paths to reference in the prompt for Claude's Read tool. */
   imagePaths?: string[];
   /** Resolved @-mention file/diff context appended to the prompt. */

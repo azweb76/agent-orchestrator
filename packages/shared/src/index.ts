@@ -5,6 +5,7 @@ export * from './types/requests.js';
 export * from './types/views.js';
 export * from './constants.js';
 export * from './app-settings.js';
+export * from './session-profile.js';
 
 export { mergeChatMessages } from './chat-sync.js';
 

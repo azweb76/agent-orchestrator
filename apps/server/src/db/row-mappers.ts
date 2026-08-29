@@ -13,6 +13,7 @@ import type {
   SessionGrade,
   SessionGradeAnalysis,
   SessionGradeScore,
+  SessionProfile,
   Worktree,
   Workspace,
 } from '@agent-orchestrator/shared';
@@ -149,6 +150,11 @@ export function rowToChatSession(row: unknown): ChatSession {
     model: String(r.model),
     effort: parseEffort(r.effort),
     permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
+    profileId: r.profile_id == null || r.profile_id === '' ? null : String(r.profile_id),
+    systemPrompt:
+      r.system_prompt == null || r.system_prompt === '' ? null : String(r.system_prompt),
+    allowedTools:
+      r.allowed_tools == null || r.allowed_tools === '' ? null : String(r.allowed_tools),
     claudeSessionId: r.claude_session_id == null ? null : String(r.claude_session_id),
     pid: r.pid == null ? null : Number(r.pid),
     runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
@@ -156,6 +162,29 @@ export function rowToChatSession(row: unknown): ChatSession {
     updatedAt: String(r.updated_at),
     grade: rowToGrade(r),
     titleSource: parseTitleSource(r.title_source),
+  };
+}
+
+export function rowToSessionProfile(row: unknown): SessionProfile {
+  const r = row as Record<string, unknown>;
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    title: String(r.title),
+    description: r.description == null ? '' : String(r.description),
+    promptTemplate:
+      r.prompt_template == null || r.prompt_template === '' ? null : String(r.prompt_template),
+    systemPrompt:
+      r.system_prompt == null || r.system_prompt === '' ? null : String(r.system_prompt),
+    allowedTools:
+      r.allowed_tools == null || r.allowed_tools === '' ? null : String(r.allowed_tools),
+    model: String(r.model ?? 'sonnet'),
+    effort: parseEffort(r.effort),
+    permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
+    listed: Number(r.listed) === 1,
+    builtIn: Number(r.built_in) === 1,
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
   };
 }
 
