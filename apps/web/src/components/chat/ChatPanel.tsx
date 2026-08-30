@@ -64,6 +64,7 @@ export const ChatPanel = memo(function ChatPanel({
       effort: data.effort,
       permissionMode: data.permissionMode ?? 'plan',
       draftPrOffer: data.draftPrOffer ?? null,
+      taskSuggestions: data.taskSuggestions ?? null,
     }),
   });
 
@@ -306,7 +307,14 @@ export const ChatPanel = memo(function ChatPanel({
 
       <ChatPanelFooter
         agentId={agentId}
-        agent={agentDefaults ? { draftPrOffer: agentDefaults.draftPrOffer } : undefined}
+        agent={
+          agentDefaults
+            ? {
+                draftPrOffer: agentDefaults.draftPrOffer,
+                taskSuggestions: agentDefaults.taskSuggestions,
+              }
+            : undefined
+        }
         archived={archived}
         activeSessionId={activeSessionId}
         session={session}
@@ -362,6 +370,10 @@ export const ChatPanel = memo(function ChatPanel({
           if (template) void sessionActions.createSessionFromTemplate(template);
         }}
         creatingDraftPr={sessionActions.creatingSession}
+        onSelectTaskSuggestion={(suggestion) =>
+          void sessionActions.createSessionFromSuggestion(suggestion)
+        }
+        creatingFromSuggestion={sessionActions.creatingSession}
       />
 
       <ChatPanelDialogs

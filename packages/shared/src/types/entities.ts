@@ -116,6 +116,7 @@ export type AppEventType =
   | 'github_pr_changed'
   | 'automation_triggered'
   | 'draft_pr_offer'
+  | 'task_suggestions_offer'
   | 'spend_cap_blocked'
   | 'watchdog_alert';
 

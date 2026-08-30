@@ -9,6 +9,7 @@ import {
   type InstructionDraft,
   type SessionGradeAnalysis,
   type SessionGradeScore,
+  type TaskSuggestion,
 } from '@agent-orchestrator/shared';
 import {
   buildInstructionDraftPrompt,
@@ -20,6 +21,11 @@ import {
   parseSessionGradeResponse,
   type SessionGradeContext,
 } from './session-grade.js';
+import {
+  buildTaskSuggestionsPrompt,
+  parseTaskSuggestionsResponse,
+  type TaskSuggestionsContext,
+} from './task-suggestions.js';
 import {
   buildCompactSummaryPrompt,
   parseCompactSummaryResponse,
@@ -115,6 +121,30 @@ const SESSION_GRADE_TOOL: Anthropic.Tool = {
   },
 };
 
+const TASK_SUGGESTIONS_TOOL: Anthropic.Tool = {
+  name: 'submit_task_suggestions',
+  description: 'Submit 2-4 concrete follow-up tasks for this finished session.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      suggestions: {
+        type: 'array',
+        minItems: 2,
+        maxItems: 4,
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            prompt: { type: 'string' },
+          },
+          required: ['title', 'prompt'],
+        },
+      },
+    },
+    required: ['suggestions'],
+  },
+};
+
 export class AnthropicService {
   async suggestBranchName(idea: string): Promise<string> {
     const { apiKey, baseUrl } = await resolveCredentials();
@@ -206,6 +236,32 @@ export class AnthropicService {
       .join('');
 
     return parseSessionGradeResponse(text, input.stats);
+  }
+
+  async generateTaskSuggestions(input: TaskSuggestionsContext): Promise<TaskSuggestion[]> {
+    const { apiKey, baseUrl } = await resolveCredentials();
+    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const { system, user } = buildTaskSuggestionsPrompt(input);
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 1500,
+      system,
+      messages: [{ role: 'user', content: user }],
+      tools: [TASK_SUGGESTIONS_TOOL],
+      tool_choice: { type: 'tool', name: TASK_SUGGESTIONS_TOOL.name },
+    });
+
+    const toolBlock = response.content.find((block) => block.type === 'tool_use');
+    if (toolBlock && toolBlock.type === 'tool_use') {
+      return parseTaskSuggestionsResponse(toolBlock.input);
+    }
+
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+
+    return parseTaskSuggestionsResponse(text);
   }
 
   async generateInstructionDraft(input: InstructionDraftPromptInput): Promise<InstructionDraft> {

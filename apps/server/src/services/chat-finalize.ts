@@ -72,6 +72,14 @@ export function finalizeSessionRun(
         console.warn(`[autopilot] post-build hook failed for session ${latest.id}:`, error);
       }),
     );
+    void import('./task-suggestions.js').then(({ maybeSuggestFollowUpTasks }) =>
+      maybeSuggestFollowUpTasks(ctx, latest, {
+        stopped: result.stopped,
+        error: result.error,
+      }).catch((error) => {
+        console.warn(`[task-suggestions] failed for session ${latest.id}:`, error);
+      }),
+    );
   }
 
   const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;

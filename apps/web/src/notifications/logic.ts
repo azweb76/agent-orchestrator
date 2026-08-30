@@ -75,6 +75,12 @@ export function describeNotificationEvent(
       body: 'Build finished with changes. Open a draft PR when you are ready.',
     };
   }
+  if (event.type === 'task_suggestions_offer') {
+    return {
+      title: `${name}: follow-up tasks ready`,
+      body: 'The session finished. Suggested next steps are ready to review.',
+    };
+  }
   if (event.type === 'automation_triggered') {
     const action = typeof event.data.action === 'string' ? event.data.action : '';
     const pr =
@@ -199,7 +205,12 @@ export function navigationStateForEvent(event: AppEvent): AgentAttentionNavigati
       sessionId: event.sessionId ?? undefined,
     };
   }
-  if (event.type === 'run_finished' || event.type === 'automation_triggered' || event.type === 'draft_pr_offer') {
+  if (
+    event.type === 'run_finished' ||
+    event.type === 'automation_triggered' ||
+    event.type === 'draft_pr_offer' ||
+    event.type === 'task_suggestions_offer'
+  ) {
     return {
       focusAttention: 'run-finished',
       sessionId: event.sessionId ?? undefined,

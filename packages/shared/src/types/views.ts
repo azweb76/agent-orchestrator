@@ -27,12 +27,25 @@ export interface DraftPrOffer {
   sessionId: string;
 }
 
+export interface TaskSuggestion {
+  id: string;
+  title: string;
+  prompt: string;
+}
+
+export interface TaskSuggestionsOffer {
+  sessionId: string;
+  suggestions: TaskSuggestion[];
+}
+
 export interface AgentDetail extends Agent {
   worktree: Worktree;
   workspace: Workspace;
   sessions: ChatSession[];
   /** Set when a completed Build session has a diff and no open PR (autopilot off). */
   draftPrOffer?: DraftPrOffer | null;
+  /** Set after any completed session, offering LLM-generated follow-up tasks. */
+  taskSuggestions?: TaskSuggestionsOffer | null;
   prStatus: PrStatusSnapshot | null;
 }
 
