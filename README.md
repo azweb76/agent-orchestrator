@@ -18,7 +18,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
   - Model, effort, and permission-mode controls; manual/plan modes prompt in the UI for tool permissions. `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved.
   - Image attachments (paste or upload), markdown replies, compact tool-use progress bar.
   - Analyze and grade a session with AI (turns, tokens, context, instruction files, skills). After a graded Build or Fix CI session, the app may offer an instruction-file draft (a skill, `CLAUDE.md`, or `AGENTS.md`) — review and apply it, or dismiss; nothing is written until you apply.
-  - New chats are auto-named from the first prompt via the Anthropic API; rename from the session bar.
+  - New chats are auto-named from the first prompt via the Claude Agent SDK (same local CLI auth as the agent runs, OAuth included); rename from the session bar.
 - **Changes** — file-tree diff of the agent's worktree, scoped to pending changes or all PR changes; **Commit & push** from the UI; create or view the pull request on GitHub.
 - **Notifications** — optional browser notifications (bell in the app bar) when a run finishes or an agent needs your input.
 - **Unlock screen** — when `AUTH_TOKEN` is set, the UI asks for the token once and stores it locally.

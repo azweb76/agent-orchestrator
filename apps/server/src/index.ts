@@ -35,7 +35,7 @@ const ctx: AppContext = {
   git: new GitService(),
   github: new GitHubService({ token: process.env.GITHUB_TOKEN }),
   claude: new ClaudeService(claudeBin, path.join(dataDir, 'runs')),
-  anthropic: new AnthropicService(),
+  anthropic: new AnthropicService(claudeBin),
   dataDir,
   notifier: new Notifier(),
 };

@@ -1,15 +1,5 @@
-import { exec } from 'node:child_process';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { promisify } from 'node:util';
-import Anthropic from '@anthropic-ai/sdk';
-import {
-  SESSION_GRADE_FINDING_CATEGORIES,
-  type InstructionDraft,
-  type SessionGradeAnalysis,
-  type SessionGradeScore,
-} from '@agent-orchestrator/shared';
+import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import type { InstructionDraft, SessionGradeAnalysis, SessionGradeScore } from '@agent-orchestrator/shared';
 import {
   buildInstructionDraftPrompt,
   parseInstructionDraftResponse,
@@ -26,203 +16,94 @@ import {
   type CompactSummaryInput,
 } from './compact-session.js';
 
-const execAsync = promisify(exec);
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const SONNET_MODEL = 'claude-sonnet-4-5-20250929';
 
-interface ClaudeSettings {
-  apiKeyHelper?: string;
-  apiBaseUrl?: string;
+interface OneShotInput {
+  model: string;
+  systemPrompt: string;
+  prompt: string;
 }
 
-interface AnthropicCredentials {
-  apiKey: string;
-  baseUrl?: string;
-}
-
-async function resolveCredentials(): Promise<AnthropicCredentials> {
-  const claudeDir = path.join(os.homedir(), '.claude');
-  const settingsPath = path.join(claudeDir, 'settings.json');
-  const apiKeyPath = path.join(claudeDir, '.api_key');
-
-  let settings: ClaudeSettings = {};
-  try {
-    const raw = await fs.readFile(settingsPath, 'utf-8');
-    settings = JSON.parse(raw) as ClaudeSettings;
-  } catch {
-    // settings.json missing, unreadable, or invalid JSON — fall through to the API key file
-  }
-
-  if (settings.apiKeyHelper) {
-    const { stdout } = await execAsync(settings.apiKeyHelper);
-    const apiKey = stdout.trim();
-    if (apiKey) {
-      return { apiKey, baseUrl: settings.apiBaseUrl };
-    }
-  }
-
-  try {
-    const raw = await fs.readFile(apiKeyPath, 'utf-8');
-    const apiKey = raw.trim();
-    if (apiKey) {
-      return { apiKey, baseUrl: settings.apiBaseUrl };
-    }
-  } catch {
-    // .api_key missing or unreadable
-  }
-
-  throw new Error(
-    `Unable to resolve an Anthropic API key. Configure "apiKeyHelper" in ${settingsPath} or create ${apiKeyPath}.`,
-  );
-}
-
-const SESSION_GRADE_TOOL: Anthropic.Tool = {
-  name: 'submit_session_grade',
-  description: 'Submit the completed session grade analysis as a JSON object.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      score: {
-        type: 'integer',
-        description: 'Overall score from 1 (poor) to 5 (efficient).',
-        minimum: 1,
-        maximum: 5,
-      },
-      summary: {
-        type: 'string',
-        description: '2-4 sentence overall summary.',
-      },
-      findings: {
-        type: 'array',
-        description: 'Exactly one finding for each analysis category.',
-        items: {
-          type: 'object',
-          properties: {
-            category: {
-              type: 'string',
-              enum: [...SESSION_GRADE_FINDING_CATEGORIES],
-            },
-            severity: {
-              type: 'string',
-              enum: ['ok', 'warning', 'issue'],
-            },
-            title: { type: 'string' },
-            detail: { type: 'string' },
-          },
-          required: ['category', 'severity', 'title', 'detail'],
-        },
-      },
-    },
-    required: ['score', 'summary', 'findings'],
-  },
-};
-
+/**
+ * Runs the local Claude Code CLI (via the Agent SDK) for a single text-only turn.
+ * Reuses whatever credentials the CLI already has configured — OAuth (Claude
+ * Pro/Max subscription login) included — instead of requiring a separate
+ * Anthropic API key.
+ */
 export class AnthropicService {
-  async suggestBranchName(idea: string): Promise<string> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+  constructor(private claudeBin: string = process.env.CLAUDE_BIN?.trim() || 'claude') {}
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 30,
-      system:
+  setBin(bin: string): void {
+    this.claudeBin = bin;
+  }
+
+  private async runOneShot(input: OneShotInput): Promise<string> {
+    const options: Options = {
+      model: input.model,
+      systemPrompt: input.systemPrompt,
+      maxTurns: 1,
+      tools: [],
+      pathToClaudeCodeExecutable: this.claudeBin,
+    };
+
+    for await (const message of query({ prompt: input.prompt, options })) {
+      if (message.type !== 'result') continue;
+      if (message.subtype !== 'success') {
+        throw new Error(`Claude query failed: ${message.subtype}`);
+      }
+      return message.result;
+    }
+
+    throw new Error('Claude query returned no result');
+  }
+
+  async suggestBranchName(idea: string): Promise<string> {
+    const text = await this.runOneShot({
+      model: HAIKU_MODEL,
+      systemPrompt:
         'You turn a short feature idea into a git branch name. Respond with ONLY the branch name slug: ' +
         'lowercase, words separated by hyphens, optionally with a conventional prefix like "feature/" or ' +
         '"fix/" if it fits the idea. Do not include any explanation, quoting, or punctuation other than ' +
         'hyphens and slashes.',
-      messages: [{ role: 'user', content: idea }],
+      prompt: idea,
     });
-
-    const text = response.content
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .join('');
 
     return sanitizeBranchName(text);
   }
 
   async suggestChatTitle(prompt: string): Promise<string> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined, timeout: 8_000 });
     const clipped = prompt.trim().slice(0, 2000) || 'The user sent an image.';
-
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 40,
-      system:
+    const text = await this.runOneShot({
+      model: HAIKU_MODEL,
+      systemPrompt:
         "You name a chat session from the user's first message. " +
         'Respond with ONLY a short title: 2 to 6 words, Title Case, no quotes, no trailing punctuation. ' +
         'Capture the intent; do not copy the prompt verbatim unless it is already a short name.',
-      messages: [{ role: 'user', content: clipped }],
+      prompt: clipped,
     });
-
-    const text = response.content
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .join('');
 
     return sanitizeChatTitle(text, prompt);
   }
 
   /** Continuation summary for compact-and-continue (seeds the fresh session). */
   async summarizeSessionForContinuation(input: CompactSummaryInput): Promise<string> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
     const { system, user } = buildCompactSummaryPrompt(input);
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4000,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-
-    const text = response.content
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .join('');
-
+    const text = await this.runOneShot({ model: SONNET_MODEL, systemPrompt: system, prompt: user });
     return parseCompactSummaryResponse(text);
   }
 
   async analyzeSessionGrade(
     input: SessionGradeContext,
   ): Promise<SessionGradeAnalysis & { score: SessionGradeScore }> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
     const { system, user } = buildSessionGradePrompt(input);
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4000,
-      system,
-      messages: [{ role: 'user', content: user }],
-      tools: [SESSION_GRADE_TOOL],
-      tool_choice: { type: 'tool', name: SESSION_GRADE_TOOL.name },
-    });
-
-    const toolBlock = response.content.find((block) => block.type === 'tool_use');
-    if (toolBlock && toolBlock.type === 'tool_use') {
-      return parseSessionGradeResponse(toolBlock.input, input.stats);
-    }
-
-    const text = response.content
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .join('');
-
+    const text = await this.runOneShot({ model: SONNET_MODEL, systemPrompt: system, prompt: user });
     return parseSessionGradeResponse(text, input.stats);
   }
 
   async generateInstructionDraft(input: InstructionDraftPromptInput): Promise<InstructionDraft> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
     const { system, user } = buildInstructionDraftPrompt(input);
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4000,
-      system,
-      messages: [{ role: 'user', content: user }],
-    });
-
-    const text = response.content
-      .map((block) => (block.type === 'text' ? block.text : ''))
-      .join('');
+    const text = await this.runOneShot({ model: SONNET_MODEL, systemPrompt: system, prompt: user });
 
     return parseInstructionDraftResponse(
       text,

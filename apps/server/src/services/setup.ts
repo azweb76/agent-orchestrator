@@ -104,5 +104,6 @@ export async function configureClaudeBin(ctx: AppContext, claudeBin: string): Pr
   await writeSecret(ctx.dataDir, CLAUDE_BIN_FILE, trimmed);
   process.env.CLAUDE_BIN = trimmed;
   ctx.claude.setBin(trimmed);
+  ctx.anthropic.setBin(trimmed);
   invalidateStatusCache();
 }
