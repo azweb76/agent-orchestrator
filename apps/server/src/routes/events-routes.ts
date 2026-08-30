@@ -1,6 +1,6 @@
 import express from 'express';
 import type { AppContext } from '../services/app.js';
-import { getUsageSummary } from '../services/app.js';
+import { getUsageSummary, listClaudeProcesses } from '../services/app.js';
 
 export function registerEventsRoutes(router: express.Router, ctx: AppContext): void {
   // Global live-update stream: agent/session status, permission prompts, queue
@@ -56,5 +56,9 @@ export function registerEventsRoutes(router: express.Router, ctx: AppContext): v
 
   router.get('/usage', (_req, res) => {
     res.json(getUsageSummary(ctx));
+  });
+
+  router.get('/claude/processes', (_req, res) => {
+    res.json(listClaudeProcesses(ctx));
   });
 }

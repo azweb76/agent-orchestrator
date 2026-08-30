@@ -6,6 +6,8 @@ import type { UsageSummary } from '@agent-orchestrator/shared';
 
 interface DashboardMetricsRowProps {
   runningCount: number;
+  orchestratorProcessCount: number;
+  externalProcessCount: number;
   idleCount: number;
   workspaceCount: number;
   prCount: number;
@@ -16,12 +18,19 @@ interface DashboardMetricsRowProps {
 
 export function DashboardMetricsRow({
   runningCount,
+  orchestratorProcessCount,
+  externalProcessCount,
   idleCount,
   workspaceCount,
   prCount,
   githubConfigured,
   usage,
 }: DashboardMetricsRowProps) {
+  const runningHint =
+    runningCount === 0
+      ? 'No Claude processes'
+      : `${orchestratorProcessCount} orchestrator · ${externalProcessCount} external`;
+
   return (
     <Box
       sx={{
@@ -46,7 +55,7 @@ export function DashboardMetricsRow({
         },
       }}
     >
-      <MetricTile label="Running" value={runningCount} hint="Active runs" accent="info.main" />
+      <MetricTile label="Running" value={runningCount} hint={runningHint} accent="info.main" />
       <MetricTile label="Ready" value={idleCount} hint="Idle agents" accent="success.main" />
       <MetricTile label="Workspaces" value={workspaceCount} hint="Local repos" />
       <MetricTile

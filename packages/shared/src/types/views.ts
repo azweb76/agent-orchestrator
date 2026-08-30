@@ -106,3 +106,20 @@ export interface UsageSummary {
   /** Spend cap snapshot for dashboard hints. */
   budget: SpendBudgetStatus;
 }
+
+/** Whether a live Claude Code process is managed by this orchestrator. */
+export type ClaudeProcessOwnership = 'orchestrator' | 'external';
+
+/** One Claude Code CLI process discovered on the host (`GET /api/claude/processes`). */
+export interface ClaudeProcessInfo {
+  pid: number;
+  ppid: number;
+  /** Truncated process argv / command line. */
+  command: string;
+  cwd: string | null;
+  ownership: ClaudeProcessOwnership;
+  agentId: string | null;
+  agentName: string | null;
+  sessionId: string | null;
+  workspaceName: string | null;
+}

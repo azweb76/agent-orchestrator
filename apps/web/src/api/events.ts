@@ -82,6 +82,7 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
       // Do not invalidate messages/permissions/queue prefixes — chat streams
       // and session-scoped events keep those caches current.
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['claude-processes'] });
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }
@@ -99,6 +100,7 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
       }
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['usage'] });
+      queryClient.invalidateQueries({ queryKey: ['claude-processes'] });
       break;
     case 'permission_request':
       if (agentId && sessionId) {

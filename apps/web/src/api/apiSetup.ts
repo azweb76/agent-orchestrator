@@ -1,4 +1,4 @@
-import type { UsageSummary } from '@agent-orchestrator/shared';
+import type { ClaudeProcessInfo, UsageSummary } from '@agent-orchestrator/shared';
 import { request } from './request';
 import type { SetupInfo, SystemStatus } from './types';
 
@@ -18,4 +18,5 @@ export const apiSetup = {
   submitAuth: (token: string) =>
     request<{ ok?: true } | void>('/auth', { method: 'POST', body: JSON.stringify({ token }) }),
   getUsageSummary: () => request<UsageSummary>('/usage'),
+  listClaudeProcesses: () => request<ClaudeProcessInfo[]>('/claude/processes'),
 };

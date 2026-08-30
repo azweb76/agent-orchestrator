@@ -42,6 +42,15 @@ export function useDashboardData(query: string) {
     },
   });
 
+  const {
+    data: claudeProcesses = [],
+    isLoading: claudeProcessesLoading,
+  } = useQuery({
+    queryKey: ['claude-processes'],
+    queryFn: api.listClaudeProcesses,
+    refetchInterval: 8_000,
+  });
+
   const { data: workspaces, isLoading: workspacesLoading } = useQuery({
     queryKey: ['workspaces'],
     queryFn: api.listWorkspaces,
@@ -72,8 +81,12 @@ export function useDashboardData(query: string) {
     () => agents.filter((agent) => agent.status !== 'archived'),
     [agents],
   );
-  const runningCount = activeAgents.filter((a) => a.status === 'running').length;
   const idleCount = activeAgents.filter((a) => a.status === 'idle').length;
+  const systemRunningCount = claudeProcesses.length;
+  const orchestratorProcessCount = claudeProcesses.filter(
+    (p) => p.ownership === 'orchestrator',
+  ).length;
+  const externalProcessCount = systemRunningCount - orchestratorProcessCount;
   const blockedAgents = useMemo(
     () => activeAgents.filter((agent) => (agent.pendingPermissionCount ?? 0) > 0),
     [activeAgents],
@@ -109,13 +122,17 @@ export function useDashboardData(query: string) {
     issueInboxQuery,
     usageQuery,
     activeAgents,
-    runningCount,
+    runningCount: systemRunningCount,
+    orchestratorProcessCount,
+    externalProcessCount,
     idleCount,
     blockedAgents,
     prCount,
     systemsOk,
     systemsPartial,
     filteredAgents,
+    claudeProcesses,
+    claudeProcessesLoading,
     recentWorkspaces,
     recentPrs,
     recentIssues,

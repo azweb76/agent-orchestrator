@@ -32,14 +32,14 @@ function collectInvalidatedKeys(queryClient: QueryClient, event: AppEvent): stri
 }
 
 describe('invalidateForEvent', () => {
-  it('agent_changed invalidates sidebar and agent only, not message prefixes', () => {
+  it('agent_changed invalidates sidebar, process inventory, and agent only, not message prefixes', () => {
     const queryClient = new QueryClient();
     const keys = collectInvalidatedKeys(
       queryClient,
       testEvent('agent_changed', { agentId: 'ag-1' }),
     );
 
-    expect(keys).toEqual([['sidebar'], ['agent', 'ag-1']]);
+    expect(keys).toEqual([['sidebar'], ['claude-processes'], ['agent', 'ag-1']]);
     expect(keys.some((key) => key[0] === 'messages')).toBe(false);
     expect(keys.some((key) => key[0] === 'permissions')).toBe(false);
     expect(keys.some((key) => key[0] === 'queue')).toBe(false);

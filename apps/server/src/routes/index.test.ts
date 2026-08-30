@@ -93,6 +93,15 @@ test('GET /api/sidebar returns an empty tree', async () => {
   });
 });
 
+test('GET /api/claude/processes returns an array', async () => {
+  await withServer(async (url) => {
+    const res = await fetch(`${url}/api/claude/processes`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body));
+  });
+});
+
 test('POST /api/workspaces rejects an invalid body', async () => {
   await withServer(async (url) => {
     const res = await fetch(`${url}/api/workspaces`, {

@@ -46,6 +46,8 @@ export function DashboardPage() {
 
       <DashboardMetricsRow
         runningCount={data.runningCount}
+        orchestratorProcessCount={data.orchestratorProcessCount}
+        externalProcessCount={data.externalProcessCount}
         idleCount={data.idleCount}
         workspaceCount={data.workspaces?.length ?? 0}
         prCount={data.prCount}
@@ -62,16 +64,13 @@ export function DashboardPage() {
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}>
         <DashboardAgentsPanel
-          loading={data.sidebarLoading}
-          query={query}
-          agents={data.filteredAgents}
-          runningCount={data.runningCount}
-          totalCount={data.activeAgents.length}
+          loading={data.claudeProcessesLoading}
+          processes={data.claudeProcesses}
         />
 
         <DashboardSidePanels
           status={data.status}
-          runningCount={data.runningCount}
+          runningCount={data.orchestratorProcessCount}
           activeAgentCount={data.activeAgents.length}
           archivedCount={data.archivedCount}
           onPruneClick={openPrune}
