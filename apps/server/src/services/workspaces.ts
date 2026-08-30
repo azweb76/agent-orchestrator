@@ -15,6 +15,7 @@ import { deleteWorktree } from './worktrees.js';
 import { buildSpendBudgetStatus } from './spend-cap.js';
 import { isAgentStalled } from './watchdog.js';
 import { getCachedPrStatus } from './github-automation.js';
+import { listWorktreeFiles } from './chat-mentions.js';
 
 export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCounts[]> {
   const workspaces = ctx.repos.workspaces.list();
@@ -194,6 +195,13 @@ export async function getWorkspace(ctx: AppContext, workspaceId: string) {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
   return workspace;
+}
+
+export async function listWorkspaceMentionFiles(ctx: AppContext, workspaceId: string) {
+  const workspace = ctx.repos.workspaces.getById(workspaceId);
+  if (!workspace) throw new Error('Workspace not found');
+  const paths = await listWorktreeFiles(workspace.repoPath);
+  return paths.map((filePath) => ({ path: filePath }));
 }
 
 export async function deleteWorkspace(ctx: AppContext, workspaceId: string) {

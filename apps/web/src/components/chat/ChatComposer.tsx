@@ -43,6 +43,12 @@ export function ChatComposer({
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const { images, clearImages, addFiles, removeImage } = useComposerImages();
+  const filesQuery = useQuery({
+    queryKey: ['mention-files', agentId],
+    queryFn: () => api.listMentionFiles(agentId),
+    enabled: Boolean(agentId),
+    staleTime: 60_000,
+  });
   const {
     mentions,
     mentionHighlight,
@@ -54,7 +60,7 @@ export function ChatComposer({
     removeMention,
     applyMentionSelection,
     buildOutgoingMessage,
-  } = useComposerMentions(agentId, draft, onDraftChange);
+  } = useComposerMentions(filesQuery.data, draft, onDraftChange);
 
   const slashQuery = useQuery({
     queryKey: ['slash-commands', agentId],

@@ -10,6 +10,7 @@ import type {
   Workspace,
   WorkspacePullRequestList,
   WorkspaceWithCounts,
+  WorktreeFileEntry,
   WorktreeWithAgent,
 } from '@agent-orchestrator/shared';
 import { request } from './request';
@@ -23,6 +24,8 @@ export const apiWorkspaces = {
   deleteWorkspace: (id: string) => request<void>(`/workspaces/${id}`, { method: 'DELETE' }),
   listWorktrees: (workspaceId: string) =>
     request<WorktreeWithAgent[]>(`/workspaces/${workspaceId}/worktrees`),
+  listWorkspaceMentionFiles: (workspaceId: string) =>
+    request<WorktreeFileEntry[]>(`/workspaces/${workspaceId}/mention-files`),
   createWorktreeFromBranch: (workspaceId: string, body: CreateWorktreeFromBranchRequest) =>
     request<{ worktree: WorktreeWithAgent; agent: Agent }>(
       `/workspaces/${workspaceId}/worktrees/from-branch`,
