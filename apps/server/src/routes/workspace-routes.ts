@@ -14,6 +14,7 @@ import {
   listGitHubBranches,
   listGitHubPullRequests,
   listSidebarTree,
+  listWorkspaceMentionFiles,
   listWorkspaces,
   listWorktrees,
 } from '../services/app.js';
@@ -66,6 +67,13 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
     '/workspaces/:workspaceId/worktrees',
     asyncHandler(async (req, res) => {
       res.json(await listWorktrees(ctx, param(req.params.workspaceId)));
+    }),
+  );
+
+  router.get(
+    '/workspaces/:workspaceId/mention-files',
+    asyncHandler(async (req, res) => {
+      res.json(await listWorkspaceMentionFiles(ctx, param(req.params.workspaceId)));
     }),
   );
 

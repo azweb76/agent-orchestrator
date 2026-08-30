@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../../api/client';
+import type { WorktreeFileEntry } from '@agent-orchestrator/shared';
 import type { MentionMenuOption } from './MentionMenu';
 import {
   appendMentionTokens,
@@ -12,17 +11,14 @@ import {
   type PendingMention,
 } from './mentionComposer';
 
-export function useComposerMentions(agentId: string, draft: string, onDraftChange: (value: string) => void) {
+export function useComposerMentions(
+  files: WorktreeFileEntry[] | undefined,
+  draft: string,
+  onDraftChange: (value: string) => void,
+) {
   const [mentions, setMentions] = useState<PendingMention[]>([]);
   const [mentionDismissed, setMentionDismissed] = useState(false);
   const [mentionHighlight, setMentionHighlight] = useState(0);
-
-  const filesQuery = useQuery({
-    queryKey: ['mention-files', agentId],
-    queryFn: () => api.listMentionFiles(agentId),
-    enabled: Boolean(agentId),
-    staleTime: 60_000,
-  });
 
   const mentionMatch = useMemo(() => getMentionQueryAtEnd(draft), [draft]);
   const mentionOptions = useMemo((): MentionMenuOption[] => {
@@ -36,8 +32,8 @@ export function useComposerMentions(agentId: string, draft: string, onDraftChang
         description: 'Current worktree patch',
       });
     }
-    const files = filesQuery.data?.map((item) => item.path) ?? [];
-    for (const filePath of filterMentionFiles(files, query)) {
+    const filePaths = files?.map((item) => item.path) ?? [];
+    for (const filePath of filterMentionFiles(filePaths, query)) {
       options.push({
         kind: 'file',
         path: filePath,
@@ -46,7 +42,7 @@ export function useComposerMentions(agentId: string, draft: string, onDraftChang
       });
     }
     return options.slice(0, 12);
-  }, [filesQuery.data, mentionMatch]);
+  }, [files, mentionMatch]);
 
   const showMentionMenu =
     !mentionDismissed &&

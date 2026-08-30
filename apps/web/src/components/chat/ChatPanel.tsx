@@ -31,6 +31,8 @@ interface ChatPanelProps {
   archived: boolean;
   active?: boolean;
   initialPrompt?: string;
+  initialImages?: PendingImage[];
+  initialMentions?: PendingMention[];
   initialTemplate?: ChatSessionTemplateId;
   focusAttention?: AgentAttentionFocus;
   focusSessionId?: string;
@@ -41,6 +43,8 @@ export const ChatPanel = memo(function ChatPanel({
   archived,
   active = true,
   initialPrompt,
+  initialImages,
+  initialMentions,
   initialTemplate,
   focusAttention,
   focusSessionId,
@@ -146,6 +150,8 @@ export const ChatPanel = memo(function ChatPanel({
     setLastFailed,
     stickToBottom: scroll.stickToBottom,
     initialPrompt,
+    initialImages,
+    initialMentions,
     autoStartedRef,
     messagesLoading: messagesQuery.isLoading,
     messagesData: messagesQuery.data,

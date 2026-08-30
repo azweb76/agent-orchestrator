@@ -27,6 +27,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const navigate = useNavigate();
   const locationState = location.state as AgentLocationState | null;
   const [initialPrompt] = useState(() => locationState?.initialPrompt?.trim() || undefined);
+  const [initialImages] = useState(() => locationState?.initialImages);
+  const [initialMentions] = useState(() => locationState?.initialMentions);
   const [initialTemplate] = useState(() => locationState?.sessionTemplate);
   const [focusAttention] = useState(() => locationState?.focusAttention);
   const [focusSessionId, setFocusSessionId] = useState(() => locationState?.sessionId);
@@ -195,6 +197,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             active={tab === 0}
             archived={archived}
             initialPrompt={initialPrompt}
+            initialImages={initialImages}
+            initialMentions={initialMentions}
             initialTemplate={initialTemplate}
             focusAttention={focusAttention}
             focusSessionId={focusSessionId}

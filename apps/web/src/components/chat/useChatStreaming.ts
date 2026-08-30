@@ -48,6 +48,8 @@ interface UseChatStreamingOptions {
   >;
   stickToBottom: () => void;
   initialPrompt?: string;
+  initialImages?: PendingImage[];
+  initialMentions?: PendingMention[];
   autoStartedRef: MutableRefObject<boolean>;
   messagesLoading: boolean;
   messagesData?: Message[];
@@ -70,6 +72,8 @@ export function useChatStreaming({
   setLastFailed,
   stickToBottom,
   initialPrompt,
+  initialImages,
+  initialMentions,
   messagesLoading,
   messagesData,
 }: UseChatStreamingOptions) {
@@ -315,8 +319,8 @@ export function useChatStreaming({
     if (!initialPrompt || archived) return;
     if (messagesLoading) return;
     if ((messagesData?.length ?? 0) > 0) return;
-    void runChatRef.current(initialPrompt, [], [], false);
-  }, [initialPrompt, archived, messagesLoading, messagesData]);
+    void runChatRef.current(initialPrompt, initialImages ?? [], initialMentions ?? [], false);
+  }, [initialPrompt, initialImages, initialMentions, archived, messagesLoading, messagesData]);
 
   return {
     queue,

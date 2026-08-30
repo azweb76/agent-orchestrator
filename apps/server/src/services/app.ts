@@ -20,6 +20,7 @@ export {
   createWorkspace,
   getWorkspace,
   deleteWorkspace,
+  listWorkspaceMentionFiles,
 } from './workspaces.js';
 
 export {
