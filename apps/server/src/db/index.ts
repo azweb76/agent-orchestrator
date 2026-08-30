@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { AgentTaskRepository } from './repositories/agent-task.js';
 import { AppSettingsRepository } from './repositories/app-settings.js';
 import { AutomationStateRepository } from './repositories/automation-state.js';
 import { AgentRepository } from './repositories/agent.js';
@@ -9,9 +10,9 @@ import { QueuedMessageRepository } from './repositories/queued-message.js';
 import { WorkspaceRepository } from './repositories/workspace.js';
 import { WorktreeRepository } from './repositories/worktree.js';
 import { SessionSearchIndexRepository } from './repositories/session-search-index.js';
-import { SessionProfileRepository } from './repositories/session-profile.js';
 
 export { DATABASE_FILENAME, initDatabase } from './migrate.js';
+export { AgentTaskRepository } from './repositories/agent-task.js';
 export { AppSettingsRepository } from './repositories/app-settings.js';
 export { AutomationStateRepository } from './repositories/automation-state.js';
 export { AgentRepository } from './repositories/agent.js';
@@ -22,7 +23,6 @@ export { QueuedMessageRepository } from './repositories/queued-message.js';
 export { WorkspaceRepository } from './repositories/workspace.js';
 export { WorktreeRepository } from './repositories/worktree.js';
 export { SessionSearchIndexRepository } from './repositories/session-search-index.js';
-export { SessionProfileRepository } from './repositories/session-profile.js';
 
 export type AppRepositories = {
   workspaces: WorkspaceRepository;
@@ -35,7 +35,7 @@ export type AppRepositories = {
   settings: AppSettingsRepository;
   automationState: AutomationStateRepository;
   sessionSearch: SessionSearchIndexRepository;
-  sessionProfiles: SessionProfileRepository;
+  agentTasks: AgentTaskRepository;
 };
 
 export function createRepositories(db: Database.Database): AppRepositories {
@@ -50,6 +50,6 @@ export function createRepositories(db: Database.Database): AppRepositories {
     settings: new AppSettingsRepository(db),
     automationState: new AutomationStateRepository(db),
     sessionSearch: new SessionSearchIndexRepository(db),
-    sessionProfiles: new SessionProfileRepository(db),
+    agentTasks: new AgentTaskRepository(db),
   };
 }

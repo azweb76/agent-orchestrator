@@ -1,7 +1,6 @@
 import { memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Badge, Box, IconButton, LinearProgress, Stack, Typography } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
@@ -121,34 +120,15 @@ export function CollapsedAgentRail({
   selectedAgentId,
   selectedWorkspaceId,
   pathname,
-  onCreateWorkspace,
 }: {
   agents: Array<{ agent: SidebarAgent; workspace: SidebarWorkspace }>;
   selectedAgentId?: string;
   selectedWorkspaceId: string | null;
   pathname: string;
-  onCreateWorkspace: () => void;
 }) {
   if (agents.length === 0) {
     return (
       <Stack spacing={1} sx={{ alignItems: 'center', px: 1, pt: 2 }}>
-        <ControlTooltip title="New workspace" sidebar>
-          <IconButton
-            size="small"
-            onClick={onCreateWorkspace}
-            aria-label="New workspace"
-            color="secondary"
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-            }}
-          >
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </ControlTooltip>
         <Typography variant="caption" color="text.secondary" sx={{ writingMode: 'vertical-rl' }}>
           No agents
         </Typography>
@@ -158,24 +138,6 @@ export function CollapsedAgentRail({
 
   return (
     <Stack spacing={0.75} sx={{ alignItems: 'center', px: 1, py: 1 }}>
-      <ControlTooltip title="New workspace" sidebar>
-        <IconButton
-          size="small"
-          onClick={onCreateWorkspace}
-          aria-label="New workspace"
-          color="secondary"
-          sx={{
-            width: 40,
-            height: 40,
-            borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'divider',
-            bgcolor: 'ao.accent.secondaryTint',
-          }}
-        >
-          <AddIcon fontSize="small" />
-        </IconButton>
-      </ControlTooltip>
       {agents.map(({ agent, workspace }) => (
         <CollapsedAgentRailItem
           key={agent.id}

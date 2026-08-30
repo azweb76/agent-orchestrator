@@ -5,7 +5,8 @@ export * from './types/requests.js';
 export * from './types/views.js';
 export * from './constants.js';
 export * from './app-settings.js';
-export * from './session-profile.js';
+export * from './agent-task.js';
+export * from './claude-tools.js';
 
 export { mergeChatMessages } from './chat-sync.js';
 

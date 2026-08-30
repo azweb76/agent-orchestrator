@@ -100,9 +100,9 @@ export interface ChatSession {
   model: string;
   effort: EffortLevel;
   permissionMode: PermissionMode;
-  /** Session profile this session was created from, when applicable. */
-  profileId?: string | null;
-  /** Appended Claude system prompt from the profile (or session override). */
+  /** Agent task this session was created from, when applicable. */
+  agentTaskId?: string | null;
+  /** Appended Claude system prompt from the agent task (or session override). */
   systemPrompt?: string | null;
   /** `--allowedTools` override; null derives from permissionMode. */
   allowedTools?: string | null;
@@ -285,8 +285,8 @@ export function uniqueSessionTitle(existingTitles: Iterable<string>, base: strin
 
 export interface CreateChatSessionRequest {
   template?: ChatSessionTemplateId;
-  /** Create from a session profile by slug (e.g. `from-goal`). */
-  profile?: string;
+  /** Create from an agent task by slug. */
+  task?: string;
   title?: string;
 }
 

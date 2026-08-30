@@ -34,25 +34,31 @@ export interface CreateWorktreeFromIssueRequest {
 
 /**
  * Create a new branch + agent from a free-form goal.
- * Uses the built-in `from-goal` session profile for model / effort / permissions /
- * system prompt / allowed tools / prompt template.
+ * Resolves an AgentTask (`task` slug or `"auto"` via purpose), then applies that
+ * task’s permissions / prompts / tools. Optional model/effort override the task defaults.
  */
 export interface CreateWorktreeFromGoalRequest {
   goal: string;
   name?: string;
   /** Base ref to branch from (defaults to workspace default branch). */
   baseBranch?: string;
+  /** AgentTask slug, or `"auto"` to pick via purpose. */
+  task: string;
+  /** Omit to use the resolved AgentTask’s model. */
+  model?: string;
+  /** Omit to use the resolved AgentTask’s effort. */
+  effort?: EffortLevel;
 }
 
 /**
  * @deprecated Use {@link CreateWorktreeFromGoalRequest}. Kept for older clients;
- * `idea` maps to `goal`. Optional model/effort/permissionMode are ignored in favor
- * of the `from-goal` session profile.
+ * `idea` maps to `goal`. Requires `task` (or fails).
  */
 export interface CreateWorktreeFromIdeaRequest {
   idea: string;
   name?: string;
   baseBranch?: string;
+  task: string;
   model?: string;
   effort?: EffortLevel;
   permissionMode?: PermissionMode;

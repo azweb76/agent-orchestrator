@@ -1,8 +1,9 @@
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
-import { buildIssueKickoffPrompt, parseIssueReference, renderProfilePromptTemplate } from '@agent-orchestrator/shared';
+import { buildIssueKickoffPrompt, parseIssueReference, renderAgentTaskPromptTemplate } from '@agent-orchestrator/shared';
 import type {
   Agent,
+  AgentTask,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromGoalRequest,
   CreateWorktreeFromIdeaRequest,
@@ -17,7 +18,7 @@ import { mergeLivePullRequest } from './pr-overlay.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { clearSessionRunFields, createAgentForWorktree } from './agent-core.js';
 import { markStreamingAssistantStopped } from './chat-run-lifecycle.js';
-import { ensureFromGoalProfile } from './session-profiles.js';
+import { requireAgentTaskByName } from './agent-tasks.js';
 
 // Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
 // Falls back to the worktree's existing (DB-stored) values when no GitHub token is
@@ -187,8 +188,51 @@ async function suggestBranchNameForWorkspace(
 }
 
 /**
+ * Resolve an AgentTask for From goal: explicit slug, or Auto via purpose matching.
+ */
+export async function resolveAgentTaskForGoal(
+  ctx: AppContext,
+  goal: string,
+  taskRef: string,
+): Promise<AgentTask> {
+  const ref = taskRef.trim().toLowerCase();
+  if (!ref) throw new Error('Task is required');
+
+  if (ref !== 'auto') {
+    return requireAgentTaskByName(ctx, ref);
+  }
+
+  const candidates = ctx.repos.agentTasks
+    .list()
+    .filter((item) => item.purpose.trim().length > 0)
+    .map((item) => ({
+      name: item.name,
+      title: item.title,
+      purpose: item.purpose.trim(),
+    }));
+
+  if (candidates.length === 0) {
+    throw new Error('No tasks with a purpose are configured for Auto');
+  }
+
+  let selected: string | null;
+  try {
+    selected = await ctx.anthropic.selectAgentTaskForGoal(goal, candidates);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not match goal to a task: ${message}`);
+  }
+
+  if (!selected) {
+    throw new Error('Could not match goal to a task');
+  }
+
+  return requireAgentTaskByName(ctx, selected);
+}
+
+/**
  * Suggest a branch name from the goal, create a new worktree + agent using the
- * built-in `from-goal` session profile, and return the kickoff prompt.
+ * resolved AgentTask, and return the kickoff prompt.
  */
 export async function createWorktreeFromGoal(
   ctx: AppContext,
@@ -197,8 +241,9 @@ export async function createWorktreeFromGoal(
 ) {
   const goal = body.goal.trim();
   if (!goal) throw new Error('Goal is required');
+  if (!body.task?.trim()) throw new Error('Task is required');
 
-  const profile = ensureFromGoalProfile(ctx);
+  const task = await resolveAgentTaskForGoal(ctx, goal, body.task);
   const branchName = await suggestBranchNameForWorkspace(ctx, workspaceId, goal);
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
@@ -225,11 +270,15 @@ export async function createWorktreeFromGoal(
     createdAt: nowIso(),
   });
 
-  const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`, { profile });
+  const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`, {
+    task,
+    model: body.model,
+    effort: body.effort,
+  });
   notify(ctx, 'workspaces_changed');
 
-  const kickoffPrompt = renderProfilePromptTemplate(profile.promptTemplate, { goal });
-  return { worktree, agent, branchName, goal, kickoffPrompt };
+  const kickoffPrompt = renderAgentTaskPromptTemplate(task.promptTemplate, { goal });
+  return { worktree, agent, branchName, goal, kickoffPrompt, task };
 }
 
 /** @deprecated Prefer createWorktreeFromGoal. */
@@ -242,6 +291,9 @@ export async function createWorktreeFromIdea(
     goal: body.idea,
     name: body.name,
     baseBranch: body.baseBranch,
+    task: body.task,
+    model: body.model,
+    effort: body.effort,
   });
   return { ...result, idea: result.goal };
 }

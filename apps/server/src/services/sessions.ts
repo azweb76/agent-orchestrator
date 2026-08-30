@@ -37,11 +37,11 @@ export async function createAgentSession(
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot create a session on an archived agent');
 
-  const profileName = body.profile?.trim();
-  const profile = profileName
+  const taskName = body.task?.trim();
+  const task = taskName
     ? (() => {
-        const found = ctx.repos.sessionProfiles.getByName(profileName);
-        if (!found) throw new Error(`Unknown session profile "${profileName}"`);
+        const found = ctx.repos.agentTasks.getByName(taskName);
+        if (!found) throw new Error(`Unknown task "${taskName}"`);
         return found;
       })()
     : undefined;
@@ -52,8 +52,8 @@ export async function createAgentSession(
   const session = createSessionForAgent(ctx, agent, {
     template: template?.id ?? 'chat',
     title: body.title,
-    permissionMode: profile?.permissionMode ?? template?.permissionMode,
-    profile,
+    permissionMode: task?.permissionMode ?? template?.permissionMode,
+    task,
     activate: true,
   });
   if (session.template === 'create-draft-pr') {
@@ -64,11 +64,11 @@ export async function createAgentSession(
     makeEvent(agentId, 'session_created', {
       sessionId: session.id,
       template: session.template,
-      profileId: session.profileId,
+      agentTaskId: session.agentTaskId,
     }),
   );
-  const basePrompt = profile
-    ? profileKickoffPrompt(profile)
+  const basePrompt = task
+    ? taskKickoffPrompt(task)
     : (template?.prompt ?? null);
   const kickoffPrompt =
     basePrompt && (session.template === 'address-review' || session.template === 'fix-ci')
@@ -82,10 +82,10 @@ export async function createAgentSession(
   return { session, kickoffPrompt };
 }
 
-function profileKickoffPrompt(profile: {
+function taskKickoffPrompt(task: {
   promptTemplate: string | null;
 }): string | null {
-  const trimmed = profile.promptTemplate?.trim();
+  const trimmed = task.promptTemplate?.trim();
   if (!trimmed) return null;
   // Templates that require {{goal}} are only used by From goal create.
   if (trimmed.includes('{{goal}}')) return null;

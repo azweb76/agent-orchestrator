@@ -10,11 +10,11 @@ export class ChatSessionRepository {
       .prepare(
         `INSERT INTO chat_sessions (
            id, agent_id, title, template, status, model, effort, permission_mode,
-           profile_id, system_prompt, allowed_tools,
+           agent_task_id, system_prompt, allowed_tools,
            claude_session_id, pid, run_log_path, created_at, updated_at, title_source
          ) VALUES (
            @id, @agentId, @title, @template, @status, @model, @effort, @permissionMode,
-           @profileId, @systemPrompt, @allowedTools,
+           @agentTaskId, @systemPrompt, @allowedTools,
            @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @titleSource
          )`,
       )
@@ -27,7 +27,7 @@ export class ChatSessionRepository {
         model: session.model,
         effort: session.effort,
         permissionMode: session.permissionMode,
-        profileId: session.profileId ?? null,
+        agentTaskId: session.agentTaskId ?? null,
         systemPrompt: session.systemPrompt ?? null,
         allowedTools: session.allowedTools ?? null,
         claudeSessionId: session.claudeSessionId,
@@ -79,7 +79,7 @@ export class ChatSessionRepository {
       .prepare(
         `UPDATE chat_sessions SET title = @title, template = @template, status = @status,
          model = @model, effort = @effort, permission_mode = @permissionMode,
-         profile_id = @profileId, system_prompt = @systemPrompt, allowed_tools = @allowedTools,
+         agent_task_id = @agentTaskId, system_prompt = @systemPrompt, allowed_tools = @allowedTools,
          claude_session_id = @claudeSessionId, pid = @pid, run_log_path = @runLogPath,
          updated_at = @updatedAt, title_source = @titleSource
          WHERE id = @id`,
@@ -92,7 +92,7 @@ export class ChatSessionRepository {
         model: session.model,
         effort: session.effort,
         permissionMode: session.permissionMode,
-        profileId: session.profileId ?? null,
+        agentTaskId: session.agentTaskId ?? null,
         systemPrompt: session.systemPrompt ?? null,
         allowedTools: session.allowedTools ?? null,
         claudeSessionId: session.claudeSessionId,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { sanitizeBranchName, sanitizeChatTitle, fallbackTitleFromPrompt } from './anthropic.js';
+import { sanitizeBranchName, sanitizeChatTitle, fallbackTitleFromPrompt, sanitizeAgentTaskSelection } from './anthropic.js';
 
 test('sanitizeBranchName converts a normal idea into a hyphenated slug', () => {
   assert.equal(sanitizeBranchName('Add dark mode toggle'), 'add-dark-mode-toggle');
@@ -60,4 +60,10 @@ test('sanitizeChatTitle falls back to the first words of the prompt', () => {
 
 test('fallbackTitleFromPrompt uses a generic name for empty input', () => {
   assert.equal(fallbackTitleFromPrompt('   '), 'Chat');
+});
+
+test('sanitizeAgentTaskSelection accepts only catalog slugs', () => {
+  assert.equal(sanitizeAgentTaskSelection('fix-bugs\n', ['fix-bugs', 'ship']), 'fix-bugs');
+  assert.equal(sanitizeAgentTaskSelection('none', ['fix-bugs']), null);
+  assert.equal(sanitizeAgentTaskSelection('other', ['fix-bugs']), null);
 });

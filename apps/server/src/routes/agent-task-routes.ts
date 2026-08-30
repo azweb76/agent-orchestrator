@@ -3,12 +3,12 @@ import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import { asyncHandler, param } from './helpers.js';
 import {
-  createSessionProfile,
-  deleteSessionProfile,
-  getSessionProfile,
-  listSessionProfiles,
-  updateSessionProfile,
-} from '../services/session-profiles.js';
+  createAgentTask,
+  deleteAgentTask,
+  getAgentTask,
+  listAgentTasks,
+  updateAgentTask,
+} from '../services/agent-tasks.js';
 
 const permissionMode = z.enum([
   'default',
@@ -25,9 +25,10 @@ const createBody = z.object({
   name: z.string().min(1).max(63),
   title: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
+  purpose: z.string().max(4000).optional(),
   promptTemplate: z.string().max(20_000).nullable().optional(),
   systemPrompt: z.string().max(20_000).nullable().optional(),
-  allowedTools: z.string().max(2000).nullable().optional(),
+  allowedTools: z.string().max(8000).nullable().optional(),
   model: z.string().min(1).max(64).optional(),
   effort: effort.optional(),
   permissionMode: permissionMode.optional(),
@@ -38,50 +39,51 @@ const updateBody = z.object({
   name: z.string().min(1).max(63).optional(),
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(2000).optional(),
+  purpose: z.string().max(4000).optional(),
   promptTemplate: z.string().max(20_000).nullable().optional(),
   systemPrompt: z.string().max(20_000).nullable().optional(),
-  allowedTools: z.string().max(2000).nullable().optional(),
+  allowedTools: z.string().max(8000).nullable().optional(),
   model: z.string().min(1).max(64).optional(),
   effort: effort.optional(),
   permissionMode: permissionMode.optional(),
   listed: z.boolean().optional(),
 });
 
-export function registerSessionProfileRoutes(router: express.Router, ctx: AppContext): void {
+export function registerAgentTaskRoutes(router: express.Router, ctx: AppContext): void {
   router.get(
-    '/session-profiles',
+    '/agent-tasks',
     asyncHandler(async (_req, res) => {
-      res.json(listSessionProfiles(ctx));
+      res.json(listAgentTasks(ctx));
     }),
   );
 
   router.get(
-    '/session-profiles/:profileId',
+    '/agent-tasks/:taskId',
     asyncHandler(async (req, res) => {
-      res.json(getSessionProfile(ctx, param(req.params.profileId)));
+      res.json(getAgentTask(ctx, param(req.params.taskId)));
     }),
   );
 
   router.post(
-    '/session-profiles',
+    '/agent-tasks',
     asyncHandler(async (req, res) => {
       const body = createBody.parse(req.body ?? {});
-      res.status(201).json(createSessionProfile(ctx, body));
+      res.status(201).json(createAgentTask(ctx, body));
     }),
   );
 
   router.put(
-    '/session-profiles/:profileId',
+    '/agent-tasks/:taskId',
     asyncHandler(async (req, res) => {
       const body = updateBody.parse(req.body ?? {});
-      res.json(updateSessionProfile(ctx, param(req.params.profileId), body));
+      res.json(updateAgentTask(ctx, param(req.params.taskId), body));
     }),
   );
 
   router.delete(
-    '/session-profiles/:profileId',
+    '/agent-tasks/:taskId',
     asyncHandler(async (req, res) => {
-      deleteSessionProfile(ctx, param(req.params.profileId));
+      deleteAgentTask(ctx, param(req.params.taskId));
       res.status(204).end();
     }),
   );

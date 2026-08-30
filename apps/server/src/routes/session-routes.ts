@@ -39,7 +39,7 @@ export function registerSessionRoutes(router: express.Router, ctx: AppContext): 
       const body = z
         .object({
           template: sessionTemplate.optional(),
-          profile: z.string().trim().min(1).max(63).optional(),
+          task: z.string().trim().min(1).max(63).optional(),
           title: z.string().trim().min(1).max(80).optional(),
         })
         .parse(req.body ?? {});

@@ -136,17 +136,53 @@ export function SettingsPage() {
       />
 
       <SettingsSection
-        title="Session profiles"
-        description="Configure prompt templates, system prompts, models, effort, and permissions used when starting agent sessions (including Create agent → From goal)."
+        title="Connections"
+        description="Claude Code CLI and GitHub token status for this instance. Configure via environment variables on the server."
       >
-        <ControlTooltip title="Open the session profile manager">
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          <ControlTooltip
+            title={
+              status?.claudeInstalled
+                ? 'Claude Code CLI detected'
+                : 'Install and authenticate Claude Code'
+            }
+          >
+            <Chip
+              size="small"
+              label={status?.claudeInstalled ? 'Claude ready' : 'Claude missing'}
+              color={status?.claudeInstalled ? 'success' : 'warning'}
+              variant="outlined"
+            />
+          </ControlTooltip>
+          <ControlTooltip
+            title={
+              status?.githubTokenConfigured
+                ? 'GitHub token configured'
+                : 'Set GITHUB_TOKEN in your environment'
+            }
+          >
+            <Chip
+              size="small"
+              label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
+              color={status?.githubTokenConfigured ? 'success' : 'default'}
+              variant="outlined"
+            />
+          </ControlTooltip>
+        </Stack>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Tasks"
+        description="Configure purpose, prompt templates, system prompts, models, effort, and permissions used when starting agent sessions (including Create agent → From goal Auto)."
+      >
+        <ControlTooltip title="Open the task manager">
           <Button
             component={RouterLink}
-            to="/profiles"
+            to="/tasks"
             variant="outlined"
             startIcon={<TuneOutlinedIcon />}
           >
-            Manage session profiles
+            Manage tasks
           </Button>
         </ControlTooltip>
       </SettingsSection>

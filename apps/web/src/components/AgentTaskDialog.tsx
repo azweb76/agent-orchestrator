@@ -21,19 +21,21 @@ import {
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
   PERMISSION_MODES,
-  type CreateSessionProfileRequest,
+  type AgentTask,
+  type CreateAgentTaskRequest,
   type EffortLevel,
   type PermissionMode,
-  type SessionProfile,
-  type UpdateSessionProfileRequest,
+  type UpdateAgentTaskRequest,
 } from '@agent-orchestrator/shared';
+import { AllowedToolsEditor } from './AllowedToolsEditor';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 
-export type SessionProfileFormValues = {
+export type AgentTaskFormValues = {
   name: string;
   title: string;
   description: string;
+  purpose: string;
   promptTemplate: string;
   systemPrompt: string;
   allowedTools: string;
@@ -43,10 +45,11 @@ export type SessionProfileFormValues = {
   listed: boolean;
 };
 
-const emptyValues = (): SessionProfileFormValues => ({
+const emptyValues = (): AgentTaskFormValues => ({
   name: '',
   title: '',
   description: '',
+  purpose: '',
   promptTemplate: '',
   systemPrompt: '',
   allowedTools: '',
@@ -56,26 +59,28 @@ const emptyValues = (): SessionProfileFormValues => ({
   listed: false,
 });
 
-function valuesFromProfile(profile: SessionProfile): SessionProfileFormValues {
+function valuesFromTask(task: AgentTask): AgentTaskFormValues {
   return {
-    name: profile.name,
-    title: profile.title,
-    description: profile.description,
-    promptTemplate: profile.promptTemplate ?? '',
-    systemPrompt: profile.systemPrompt ?? '',
-    allowedTools: profile.allowedTools ?? '',
-    model: profile.model,
-    effort: profile.effort,
-    permissionMode: profile.permissionMode,
-    listed: profile.listed,
+    name: task.name,
+    title: task.title,
+    description: task.description,
+    purpose: task.purpose,
+    promptTemplate: task.promptTemplate ?? '',
+    systemPrompt: task.systemPrompt ?? '',
+    allowedTools: task.allowedTools ?? '',
+    model: task.model,
+    effort: task.effort,
+    permissionMode: task.permissionMode,
+    listed: task.listed,
   };
 }
 
-function toCreateBody(values: SessionProfileFormValues): CreateSessionProfileRequest {
+function toCreateBody(values: AgentTaskFormValues): CreateAgentTaskRequest {
   return {
     name: values.name.trim(),
     title: values.title.trim(),
     description: values.description.trim(),
+    purpose: values.purpose.trim(),
     promptTemplate: values.promptTemplate.trim() || null,
     systemPrompt: values.systemPrompt.trim() || null,
     allowedTools: values.allowedTools.trim() || null,
@@ -86,7 +91,7 @@ function toCreateBody(values: SessionProfileFormValues): CreateSessionProfileReq
   };
 }
 
-function toUpdateBody(values: SessionProfileFormValues, builtIn: boolean): UpdateSessionProfileRequest {
+function toUpdateBody(values: AgentTaskFormValues, builtIn: boolean): UpdateAgentTaskRequest {
   const body = toCreateBody(values);
   if (builtIn) {
     const { name: _name, ...rest } = body;
@@ -95,51 +100,51 @@ function toUpdateBody(values: SessionProfileFormValues, builtIn: boolean): Updat
   return body;
 }
 
-type SessionProfileDialogProps = {
+type AgentTaskDialogProps = {
   open: boolean;
-  profile: SessionProfile | null;
+  task: AgentTask | null;
   saving: boolean;
   error: string | null;
   onClose: () => void;
-  onSave: (body: CreateSessionProfileRequest | UpdateSessionProfileRequest) => void;
+  onSave: (body: CreateAgentTaskRequest | UpdateAgentTaskRequest) => void;
 };
 
-export function SessionProfileDialog({
+export function AgentTaskDialog({
   open,
-  profile,
+  task,
   saving,
   error,
   onClose,
   onSave,
-}: SessionProfileDialogProps) {
-  const editing = Boolean(profile);
-  const [values, setValues] = useState<SessionProfileFormValues>(emptyValues);
+}: AgentTaskDialogProps) {
+  const editing = Boolean(task);
+  const [values, setValues] = useState<AgentTaskFormValues>(emptyValues);
 
   useEffect(() => {
     if (!open) return;
-    setValues(profile ? valuesFromProfile(profile) : emptyValues());
-  }, [open, profile]);
+    setValues(task ? valuesFromTask(task) : emptyValues());
+  }, [open, task]);
 
   const canSave = Boolean(values.title.trim() && (editing || values.name.trim()));
 
   return (
     <ResponsiveDialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{editing ? 'Edit session profile' : 'New session profile'}</DialogTitle>
+      <DialogTitle>{editing ? 'Edit task' : 'New task'}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <ControlTooltip title="Unique slug used by actions (e.g. from-goal)">
+            <ControlTooltip title="Unique slug used by APIs and From goal">
               <TextField
                 label="Name"
                 value={values.name}
                 onChange={(e) => setValues((prev) => ({ ...prev, name: e.target.value }))}
-                disabled={profile?.builtIn}
-                helperText={profile?.builtIn ? 'Built-in profile name is locked' : 'lowercase-slug'}
+                disabled={task?.builtIn}
+                helperText={task?.builtIn ? 'Built-in task name is locked' : 'lowercase-slug'}
                 fullWidth
                 required={!editing}
               />
             </ControlTooltip>
-            <ControlTooltip title="Display title in the profile manager">
+            <ControlTooltip title="Display title in the task manager">
               <TextField
                 label="Title"
                 value={values.title}
@@ -157,6 +162,16 @@ export function SessionProfileDialog({
             fullWidth
             multiline
             minRows={2}
+          />
+
+          <TextField
+            label="Purpose"
+            value={values.purpose}
+            onChange={(e) => setValues((prev) => ({ ...prev, purpose: e.target.value }))}
+            fullWidth
+            multiline
+            minRows={2}
+            helperText="Used by From goal Auto to decide when this task fits the work."
           />
 
           <TextField
@@ -179,13 +194,9 @@ export function SessionProfileDialog({
             helperText="Appended to Claude Code’s default system prompt."
           />
 
-          <TextField
-            label="Allowed tools"
+          <AllowedToolsEditor
             value={values.allowedTools}
-            onChange={(e) => setValues((prev) => ({ ...prev, allowedTools: e.target.value }))}
-            fullWidth
-            placeholder="Read,Glob,Grep"
-            helperText="Comma-separated --allowedTools override. Blank derives from permission mode."
+            onChange={(allowedTools) => setValues((prev) => ({ ...prev, allowedTools }))}
           />
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -262,11 +273,7 @@ export function SessionProfileDialog({
           variant="contained"
           disabled={!canSave || saving}
           onClick={() =>
-            onSave(
-              editing && profile
-                ? toUpdateBody(values, profile.builtIn)
-                : toCreateBody(values),
-            )
+            onSave(editing && task ? toUpdateBody(values, task.builtIn) : toCreateBody(values))
           }
         >
           {saving ? 'Saving…' : 'Save'}

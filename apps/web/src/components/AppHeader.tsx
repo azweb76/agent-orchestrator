@@ -20,10 +20,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
-import { useSsePollingFallback } from '../api/ssePolling';
 import { useNotificationSettings, permissionStatusLabel } from '../notifications';
 import { paletteShortcutLabel } from './commandPalette/paletteCommands';
 import { ControlTooltip } from './ui/ControlTooltip';
@@ -44,46 +41,16 @@ export const NAV_ITEMS = [
   },
 ] as const;
 
-/** Claude / GitHub readiness chips (used in the app bar and the mobile drawer). */
+/** Live-connection chip (used in the app bar and the mobile drawer). */
 export function StatusChips({ sx }: { sx?: SxProps<Theme> }) {
   const sseState = useSseConnectionState();
-  const sseFallback = useSsePollingFallback();
-  const { data: status } = useQuery({
-    queryKey: ['status'],
-    queryFn: api.getStatus,
-    refetchInterval: sseFallback,
-  });
+
+  if (sseState !== 'disconnected') return null;
 
   return (
     <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', ...sx }}>
-      {sseState === 'disconnected' ? (
-        <ControlTooltip title="Live updates paused — reconnecting…">
-          <Chip size="small" label="Offline" color="warning" variant="outlined" />
-        </ControlTooltip>
-      ) : null}
-      <ControlTooltip
-        title={status?.claudeInstalled ? 'Claude Code CLI detected' : 'Install and authenticate Claude Code'}
-      >
-        <Chip
-          size="small"
-          label={status?.claudeInstalled ? 'Claude ready' : 'Claude missing'}
-          color={status?.claudeInstalled ? 'success' : 'warning'}
-          variant="outlined"
-        />
-      </ControlTooltip>
-      <ControlTooltip
-        title={
-          status?.githubTokenConfigured
-            ? 'GitHub token configured'
-            : 'Set GITHUB_TOKEN in your environment'
-        }
-      >
-        <Chip
-          size="small"
-          label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
-          color={status?.githubTokenConfigured ? 'success' : 'default'}
-          variant="outlined"
-        />
+      <ControlTooltip title="Live updates paused — reconnecting…">
+        <Chip size="small" label="Offline" color="warning" variant="outlined" />
       </ControlTooltip>
     </Stack>
   );
@@ -127,11 +94,17 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
     <AppBar
       position="sticky"
       elevation={0}
+      color="transparent"
       sx={{
         bgcolor: 'ao.surface.header',
+        color: 'text.primary',
         backdropFilter: 'blur(14px)',
         borderBottom: '1px solid',
         borderColor: 'divider',
+        // MuiPaper applies a full border; keep only the bottom edge.
+        borderLeft: 0,
+        borderRight: 0,
+        borderTop: 0,
         zIndex: (t) => t.zIndex.drawer + 1,
         pt: 'env(safe-area-inset-top)',
       }}
@@ -228,14 +201,14 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
           </IconButton>
         </ControlTooltip>
 
-        <ControlTooltip title="Session profiles">
+        <ControlTooltip title="Tasks">
           <IconButton
             component={RouterLink}
-            to="/profiles"
+            to="/tasks"
             size="small"
-            color={location.pathname === '/profiles' ? 'secondary' : 'inherit'}
-            aria-label="Session profiles"
-            aria-current={location.pathname === '/profiles' ? 'page' : undefined}
+            color={location.pathname === '/tasks' ? 'secondary' : 'inherit'}
+            aria-label="Tasks"
+            aria-current={location.pathname === '/tasks' ? 'page' : undefined}
             sx={{ mr: 0.5 }}
           >
             <TuneOutlinedIcon fontSize="small" />

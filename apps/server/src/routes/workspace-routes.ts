@@ -100,6 +100,9 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           goal: z.string().min(1),
           name: z.string().optional(),
           baseBranch: z.string().optional(),
+          task: z.string().min(1).max(63),
+          model: z.string().min(1).max(64).optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromGoal(ctx, param(req.params.workspaceId), body));
@@ -114,6 +117,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           idea: z.string().min(1),
           name: z.string().optional(),
           baseBranch: z.string().optional(),
+          task: z.string().min(1).max(63),
           model: z.string().optional(),
           effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
           permissionMode: z

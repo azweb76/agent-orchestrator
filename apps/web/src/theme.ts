@@ -238,10 +238,15 @@ export function createAppTheme(mode: PaletteMode) {
         styleOverrides: {
           tooltip: {
             fontSize: '0.75rem',
-            bgcolor: isDark ? '#1e2838' : '#ffffff',
-            color: isDark ? 'rgba(255,255,255,0.94)' : 'rgba(15,23,42,0.92)',
-            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)'}`,
-            boxShadow: isDark ? 'none' : '0 4px 16px rgba(15,23,42,0.1)',
+            // Light mode needs a dark chip so labels stay readable on pale surfaces
+            // (white-on-white tooltips disappear against paper/header fills).
+            bgcolor: isDark ? '#1e2838' : '#1e293b',
+            color: isDark ? 'rgba(255,255,255,0.94)' : 'rgba(248,250,252,0.96)',
+            border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.2)'}`,
+            boxShadow: isDark ? 'none' : '0 6px 20px rgba(15,23,42,0.18)',
+          },
+          arrow: {
+            color: isDark ? '#1e2838' : '#1e293b',
           },
         },
       },

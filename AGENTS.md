@@ -60,7 +60,7 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOS
 - New sessions start in **plan** mode unless a template says otherwise. `AskUserQuestion` and `ExitPlanMode` always prompt in the UI and must **never** appear in `--allowedTools` (that flag auto-approves). See `allowedToolsForPermissionMode` and `shouldAutoAllowToolPermission`.
 - **Build** stashes the current plan session (keeps its messages and Claude session) and creates a new auto-mode session to implement. Do not delete the plan transcript.
 - Shared DTOs and stream/permission helpers belong in `packages/shared`. Keep `apps/web/src/api/client.ts` aligned with `apps/server/src/routes/index.ts`.
-- From-goal kickoff uses the built-in `from-goal` session profile. Default prompt template sends the raw goal; do not hard-code extra instructions in the create path (edit the profile instead).
+- From-goal kickoff resolves an **AgentTask** (`task` slug or `"auto"` via purpose). Optional `model`/`effort` override the task defaults; prompt template / system prompt / permissions / tools come from the task. Auto fails if no purpose-bearing task matches. Do not hard-code extra kickoff instructions in the create path (edit the task instead).
 - Session grades persist on `chat_sessions` (`grade_score` / comment / transcript snapshot). Instruction drafts write only allowed paths: `CLAUDE.md`, `AGENTS.md`, `.claude/CLAUDE.md`, and `.claude/skills/<slug>/SKILL.md`.
 - Agent **delivery phase** (`resolveAgentDeliveryPhase` in `@agent-orchestrator/shared`) is derived from sessions + linked PR checks/reviews — plan → build → needs PR → draft → CI/review → ready → merged → archived. Prefer this for “where is this agent?” UI over inventing a second workflow engine.
 

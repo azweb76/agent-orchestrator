@@ -23,7 +23,7 @@ import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
-import type { ChatSession, ChatSessionTemplate, SessionProfile } from '@agent-orchestrator/shared';
+import type { AgentTask, ChatSession, ChatSessionTemplate } from '@agent-orchestrator/shared';
 import { CHAT_TITLE_MAX_LENGTH, LISTED_CHAT_SESSION_TEMPLATES } from '@agent-orchestrator/shared';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
@@ -36,7 +36,7 @@ interface ChatSessionBarProps {
   creating?: boolean;
   onSelect: (sessionId: string) => void;
   onCreate: (template: ChatSessionTemplate) => void;
-  onCreateProfile?: (profile: SessionProfile) => void;
+  onCreateTask?: (task: AgentTask) => void;
   onDelete?: (session: ChatSession) => void;
   onRename?: (session: ChatSession, title: string) => void;
 }
@@ -56,7 +56,7 @@ export function ChatSessionBar({
   creating,
   onSelect,
   onCreate,
-  onCreateProfile,
+  onCreateTask,
   onDelete,
   onRename,
 }: ChatSessionBarProps) {
@@ -72,13 +72,13 @@ export function ChatSessionBar({
   const canDelete = Boolean(onDelete) && !disabled;
   const canRename = Boolean(onRename) && !disabled;
   const activeSession = sessions.find((item) => item.id === activeSessionId) ?? null;
-  const listedProfilesQuery = useQuery({
-    queryKey: ['session-profiles'],
-    queryFn: api.listSessionProfiles,
-    select: (profiles) => profiles.filter((item) => item.listed),
-    enabled: Boolean(onCreateProfile),
+  const listedTasksQuery = useQuery({
+    queryKey: ['agent-tasks'],
+    queryFn: api.listAgentTasks,
+    select: (tasks) => tasks.filter((item) => item.listed),
+    enabled: Boolean(onCreateTask),
   });
-  const listedProfiles = listedProfilesQuery.data ?? [];
+  const listedTasks = listedTasksQuery.data ?? [];
 
   useEffect(() => {
     if (editingId) inputRef.current?.focus();
@@ -303,23 +303,23 @@ export function ChatSessionBar({
             </MenuItem>
           </ControlTooltip>
         ))}
-        {listedProfiles.map((profile) => (
+        {listedTasks.map((task) => (
           <ControlTooltip
-            key={profile.id}
-            title={profile.description || `${profile.model} · ${profile.effort} · ${profile.permissionMode}`}
+            key={task.id}
+            title={task.description || `${task.model} · ${task.effort} · ${task.permissionMode}`}
           >
             <MenuItem
               onClick={() => {
                 setAnchor(null);
-                onCreateProfile?.(profile);
+                onCreateTask?.(task);
               }}
             >
               <ListItemIcon>
                 <TuneOutlinedIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText
-                primary={profile.title}
-                secondary={profile.description || profile.name}
+                primary={task.title}
+                secondary={task.description || task.name}
                 slotProps={{ secondary: { sx: { maxWidth: 260, whiteSpace: 'normal' } } }}
               />
             </MenuItem>

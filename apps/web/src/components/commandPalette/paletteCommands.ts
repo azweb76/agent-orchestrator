@@ -66,11 +66,11 @@ export function buildPaletteCommands(
       action: { kind: 'navigate', to: '/settings' },
     },
     {
-      id: 'action:go-profiles',
+      id: 'action:go-tasks',
       group: 'Actions',
-      label: 'Go to session profiles',
-      keywords: 'agent profiles templates prompt system model effort permissions from-goal',
-      action: { kind: 'navigate', to: '/profiles' },
+      label: 'Go to tasks',
+      keywords: 'agent tasks templates prompt system model effort permissions purpose from-goal',
+      action: { kind: 'navigate', to: '/tasks' },
     },
     {
       id: 'action:go-dashboard',

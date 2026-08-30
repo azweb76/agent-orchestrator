@@ -13,7 +13,7 @@ import type {
   SessionGrade,
   SessionGradeAnalysis,
   SessionGradeScore,
-  SessionProfile,
+  AgentTask,
   Worktree,
   Workspace,
 } from '@agent-orchestrator/shared';
@@ -150,7 +150,7 @@ export function rowToChatSession(row: unknown): ChatSession {
     model: String(r.model),
     effort: parseEffort(r.effort),
     permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
-    profileId: r.profile_id == null || r.profile_id === '' ? null : String(r.profile_id),
+    agentTaskId: r.agent_task_id == null || r.agent_task_id === '' ? null : String(r.agent_task_id),
     systemPrompt:
       r.system_prompt == null || r.system_prompt === '' ? null : String(r.system_prompt),
     allowedTools:
@@ -165,13 +165,14 @@ export function rowToChatSession(row: unknown): ChatSession {
   };
 }
 
-export function rowToSessionProfile(row: unknown): SessionProfile {
+export function rowToAgentTask(row: unknown): AgentTask {
   const r = row as Record<string, unknown>;
   return {
     id: String(r.id),
     name: String(r.name),
     title: String(r.title),
     description: r.description == null ? '' : String(r.description),
+    purpose: r.purpose == null ? '' : String(r.purpose),
     promptTemplate:
       r.prompt_template == null || r.prompt_template === '' ? null : String(r.prompt_template),
     systemPrompt:

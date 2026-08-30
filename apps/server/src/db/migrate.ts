@@ -1,10 +1,22 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
-import { defaultFromGoalProfile } from '@agent-orchestrator/shared';
 import { ADDITIVE_INDEXES, DATABASE_FILENAME, SCHEMA } from './schema.js';
 
 export { DATABASE_FILENAME };
+
+function tableExists(db: Database.Database, table: string): boolean {
+  const row = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`)
+    .get(table) as { name: string } | undefined;
+  return Boolean(row);
+}
+
+function columnNames(db: Database.Database, table: string): string[] {
+  return (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
+    (col) => col.name,
+  );
+}
 
 function ensureColumn(
   db: Database.Database,
@@ -12,10 +24,32 @@ function ensureColumn(
   column: string,
   definition: string,
 ): void {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-  if (!cols.some((col) => col.name === column)) {
+  if (!columnNames(db, table).includes(column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
+}
+
+function renameColumnIfPresent(
+  db: Database.Database,
+  table: string,
+  from: string,
+  to: string,
+): void {
+  const cols = columnNames(db, table);
+  if (cols.includes(from) && !cols.includes(to)) {
+    db.exec(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`);
+  }
+}
+
+function migrateAgentTasks(db: Database.Database): void {
+  if (tableExists(db, 'session_profiles') && !tableExists(db, 'agent_tasks')) {
+    db.exec('ALTER TABLE session_profiles RENAME TO agent_tasks');
+  }
+  if (!tableExists(db, 'agent_tasks')) return;
+
+  ensureColumn(db, 'agent_tasks', 'purpose', "TEXT NOT NULL DEFAULT ''");
+  db.prepare(`DELETE FROM agent_tasks WHERE name = 'from-goal' AND built_in = 1`).run();
+  db.exec('CREATE INDEX IF NOT EXISTS idx_agent_tasks_name ON agent_tasks(name)');
 }
 
 function migrateChatSessions(db: Database.Database): void {
@@ -89,45 +123,15 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'grade_analysis', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'graded_at', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'title_source', "TEXT NOT NULL DEFAULT 'default'");
-  ensureColumn(db, 'chat_sessions', 'profile_id', 'TEXT');
+  if (!columnNames(db, 'chat_sessions').includes('agent_task_id')) {
+    ensureColumn(db, 'chat_sessions', 'profile_id', 'TEXT');
+    renameColumnIfPresent(db, 'chat_sessions', 'profile_id', 'agent_task_id');
+  }
+  ensureColumn(db, 'chat_sessions', 'agent_task_id', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'system_prompt', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'allowed_tools', 'TEXT');
   ensureColumn(db, 'agents', 'autopilot_enabled', 'INTEGER');
-  seedBuiltInSessionProfiles(db);
-}
-
-function seedBuiltInSessionProfiles(db: Database.Database): void {
-  const existing = db
-    .prepare('SELECT id FROM session_profiles WHERE name = ?')
-    .get('from-goal') as { id: string } | undefined;
-  if (existing) return;
-
-  const now = new Date().toISOString();
-  const seed = defaultFromGoalProfile();
-  db.prepare(
-    `INSERT INTO session_profiles (
-       id, name, title, description, prompt_template, system_prompt, allowed_tools,
-       model, effort, permission_mode, listed, built_in, created_at, updated_at
-     ) VALUES (
-       @id, @name, @title, @description, @promptTemplate, @systemPrompt, @allowedTools,
-       @model, @effort, @permissionMode, @listed, @builtIn, @createdAt, @updatedAt
-     )`,
-  ).run({
-    id: crypto.randomUUID(),
-    name: seed.name,
-    title: seed.title,
-    description: seed.description,
-    promptTemplate: seed.promptTemplate,
-    systemPrompt: seed.systemPrompt,
-    allowedTools: seed.allowedTools,
-    model: seed.model,
-    effort: seed.effort,
-    permissionMode: seed.permissionMode,
-    listed: seed.listed ? 1 : 0,
-    builtIn: 1,
-    createdAt: now,
-    updatedAt: now,
-  });
+  migrateAgentTasks(db);
 }
 
 function backfillSessionSearchIndexTable(db: Database.Database): void {

@@ -6,37 +6,28 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  FormControlLabel,
-  IconButton,
-  InputLabel,
-  MenuItem,
-  Radio,
-  RadioGroup,
-  Select,
   Stack,
   Tab,
   Tabs,
-  TextField,
-  Typography,
 } from '@mui/material';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
-  FROM_GOAL_PROFILE_NAME,
   type EffortLevel,
   type PermissionMode,
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { PullRequestPicker } from './pr/PullRequestPicker';
+import { CreateWorktreeBranchFields } from './CreateWorktreeBranchFields';
 import { CreateWorktreeIssueFields, CreateWorktreePlannerFields } from './CreateWorktreePlannerFields';
+import {
+  CreateWorktreeGoalFields,
+  TASK_DEFAULT_SENTINEL,
+} from './CreateWorktreeGoalFields';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
-import { ComposerPendingAttachments } from './chat/ComposerPendingAttachments';
-import { MentionMenu } from './chat/MentionMenu';
 import { useComposerImages } from './chat/useComposerImages';
 import { useComposerMentions } from './chat/useComposerMentions';
 
@@ -61,6 +52,11 @@ export function CreateWorktreeDialog({
   const [newBranchName, setNewBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
   const [goalText, setGoalText] = useState('');
+  const [goalTask, setGoalTask] = useState<string>('auto');
+  const [goalModel, setGoalModel] = useState<string>(TASK_DEFAULT_SENTINEL);
+  const [goalEffort, setGoalEffort] = useState<EffortLevel | typeof TASK_DEFAULT_SENTINEL>(
+    TASK_DEFAULT_SENTINEL,
+  );
   const [issueModel, setIssueModel] = useState<string>(CLAUDE_MODELS[0].id);
   const [issueEffort, setIssueEffort] = useState<EffortLevel>(DEFAULT_EFFORT_LEVEL);
   const [issuePermissionMode, setIssuePermissionMode] =
@@ -95,11 +91,10 @@ export function CreateWorktreeDialog({
     enabled: open && Boolean(workspaceId),
   });
 
-  const fromGoalProfileQuery = useQuery({
-    queryKey: ['session-profiles'],
-    queryFn: api.listSessionProfiles,
+  const agentTasksQuery = useQuery({
+    queryKey: ['agent-tasks'],
+    queryFn: api.listAgentTasks,
     enabled: open && tab === 'goal',
-    select: (profiles) => profiles.find((item) => item.name === FROM_GOAL_PROFILE_NAME) ?? null,
   });
 
   const branchesQuery = useQuery({
@@ -124,6 +119,9 @@ export function CreateWorktreeDialog({
     setNewBranchName('');
     setBaseBranch('');
     setGoalText('');
+    setGoalTask('auto');
+    setGoalModel(TASK_DEFAULT_SENTINEL);
+    setGoalEffort(TASK_DEFAULT_SENTINEL);
     setIssueModel(CLAUDE_MODELS[0].id);
     setIssueEffort(DEFAULT_EFFORT_LEVEL);
     setIssuePermissionMode(DEFAULT_PERMISSION_MODE);
@@ -170,6 +168,9 @@ export function CreateWorktreeDialog({
       api.createWorktreeFromGoal(workspaceId, {
         goal: buildOutgoingMessage(goalText.trim()),
         baseBranch: resolvedDefaultBranch || undefined,
+        task: goalTask,
+        ...(goalModel !== TASK_DEFAULT_SENTINEL ? { model: goalModel } : {}),
+        ...(goalEffort !== TASK_DEFAULT_SENTINEL ? { effort: goalEffort } : {}),
       }),
     onSuccess: (data) => {
       invalidateAfterCreate();
@@ -219,9 +220,26 @@ export function CreateWorktreeDialog({
         ? selectedPr !== ''
         : tab === 'issue'
           ? Boolean(issueReference.trim())
-          : Boolean(goalText.trim());
+          : Boolean(goalText.trim()) && Boolean(goalTask);
 
-  const fromGoalProfile = fromGoalProfileQuery.data;
+  const agentTasks = agentTasksQuery.data ?? [];
+
+  const applyTaskDefaults = (taskName: string) => {
+    setGoalTask(taskName);
+    if (taskName === 'auto') {
+      setGoalModel(TASK_DEFAULT_SENTINEL);
+      setGoalEffort(TASK_DEFAULT_SENTINEL);
+      return;
+    }
+    const task = agentTasks.find((item) => item.name === taskName);
+    if (task) {
+      setGoalModel(task.model);
+      setGoalEffort(task.effort);
+    } else {
+      setGoalModel(TASK_DEFAULT_SENTINEL);
+      setGoalEffort(TASK_DEFAULT_SENTINEL);
+    }
+  };
 
   return (
     <ResponsiveDialog open={open} onClose={handleClose} maxWidth={tab === 'pr' ? 'md' : 'sm'} fullWidth>
@@ -242,98 +260,30 @@ export function CreateWorktreeDialog({
         </Tabs>
 
         {tab === 'goal' && (
-          <Stack spacing={1.5}>
-            {showMentionMenu && (
-              <MentionMenu
-                options={mentionOptions}
-                highlight={mentionHighlight}
-                onHighlight={setMentionHighlight}
-                onSelect={applyMentionSelection}
-              />
-            )}
-            <ComposerPendingAttachments
-              mentions={mentions}
-              images={images}
-              onRemoveMention={removeMention}
-              onRemoveImage={removeImage}
-            />
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-              <ControlTooltip title="Describe what you want the agent to build or change">
-                <TextField
-                  label="Describe your goal"
-                  value={goalText}
-                  onChange={(e) => {
-                    setMentionDismissed(false);
-                    setGoalText(e.target.value);
-                  }}
-                  onPaste={(e) => {
-                    const files = Array.from(e.clipboardData.files).filter((f) =>
-                      f.type.startsWith('image/'),
-                    );
-                    if (files.length > 0) {
-                      e.preventDefault();
-                      void addFiles(files);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (!showMentionMenu) return;
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setMentionHighlight((prev) => Math.min(prev + 1, mentionOptions.length - 1));
-                      return;
-                    }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setMentionHighlight((prev) => Math.max(prev - 1, 0));
-                      return;
-                    }
-                    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
-                      const selected = mentionOptions[mentionHighlight];
-                      if (selected) {
-                        e.preventDefault();
-                        applyMentionSelection(selected);
-                      }
-                      return;
-                    }
-                    if (e.key === 'Escape') {
-                      e.preventDefault();
-                      setMentionDismissed(true);
-                    }
-                  }}
-                  placeholder="Add a dark mode toggle to the settings page"
-                  fullWidth
-                  multiline
-                  minRows={4}
-                  autoFocus
-                />
-              </ControlTooltip>
-              <input
-                ref={goalFileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                multiple
-                hidden
-                onChange={(e) => {
-                  if (e.target.files) void addFiles(e.target.files);
-                  e.target.value = '';
-                }}
-              />
-              <ControlTooltip title="Attach a screenshot">
-                <IconButton size="small" onClick={() => goalFileInputRef.current?.click()} aria-label="Attach a screenshot">
-                  <AttachFileIcon fontSize="small" />
-                </IconButton>
-              </ControlTooltip>
-            </Stack>
-            <Typography variant="body2" color="text.secondary">
-              Uses the {fromGoalProfile?.title ?? 'From goal'} session profile (
-              <code>{FROM_GOAL_PROFILE_NAME}</code>
-              {fromGoalProfile
-                ? `: ${fromGoalProfile.model}, ${fromGoalProfile.effort}, ${fromGoalProfile.permissionMode}`
-                : ''}
-              ). Edit it under Session profiles. A branch name is suggested automatically. Type{' '}
-              <code>@</code> to reference a repo file, or paste/attach a screenshot.
-            </Typography>
-          </Stack>
+          <CreateWorktreeGoalFields
+            goalText={goalText}
+            goalTask={goalTask}
+            goalModel={goalModel}
+            goalEffort={goalEffort}
+            agentTasks={agentTasks}
+            mentions={mentions}
+            images={images}
+            mentionOptions={mentionOptions}
+            mentionHighlight={mentionHighlight}
+            showMentionMenu={showMentionMenu}
+            fileInputRef={goalFileInputRef}
+            onGoalTextChange={setGoalText}
+            onClearMentionDismissed={() => setMentionDismissed(false)}
+            onDismissMentionMenu={() => setMentionDismissed(true)}
+            onMentionHighlight={setMentionHighlight}
+            onApplyMention={applyMentionSelection}
+            onRemoveMention={removeMention}
+            onRemoveImage={removeImage}
+            onAddFiles={addFiles}
+            onTaskChange={applyTaskDefaults}
+            onModelChange={setGoalModel}
+            onEffortChange={setGoalEffort}
+          />
         )}
 
         {tab === 'issue' && (
@@ -355,74 +305,17 @@ export function CreateWorktreeDialog({
         )}
 
         {tab === 'branch' && (
-          <Stack spacing={2}>
-            <FormControl>
-              <RadioGroup
-                row
-                value={branchMode}
-                onChange={(e) => setBranchMode(e.target.value as 'existing' | 'new')}
-                sx={{
-                  flexDirection: { xs: 'column', sm: 'row' },
-                  '& .MuiFormControlLabel-root': { mr: { xs: 0, sm: 2 } },
-                }}
-              >
-                <ControlTooltip title="Check out an existing branch for the new worktree">
-                  <FormControlLabel value="existing" control={<Radio />} label="Existing branch" />
-                </ControlTooltip>
-                <ControlTooltip title="Create a new branch from a base branch">
-                  <FormControlLabel value="new" control={<Radio />} label="New branch" />
-                </ControlTooltip>
-              </RadioGroup>
-            </FormControl>
-
-            {branchMode === 'existing' ? (
-              <ControlTooltip title="Branch to check out for the new worktree">
-                <FormControl fullWidth>
-                  <InputLabel>Branch</InputLabel>
-                  <Select
-                    label="Branch"
-                    value={selectedBranch}
-                    onChange={(e) => setSelectedBranch(e.target.value)}
-                  >
-                    {branchesQuery.data?.map((branch) => (
-                      <MenuItem key={branch.name} value={branch.name}>
-                        {branch.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </ControlTooltip>
-            ) : (
-              <>
-                <ControlTooltip title="Name for the new git branch">
-                  <TextField
-                    label="New branch name"
-                    value={newBranchName}
-                    onChange={(e) => setNewBranchName(e.target.value)}
-                    placeholder="feature/my-change"
-                    fullWidth
-                    required
-                  />
-                </ControlTooltip>
-                <ControlTooltip title="Branch to fork from when creating the new branch">
-                  <FormControl fullWidth>
-                    <InputLabel>Base branch</InputLabel>
-                    <Select
-                      label="Base branch"
-                      value={resolvedDefaultBranch}
-                      onChange={(e) => setBaseBranch(e.target.value)}
-                    >
-                      {branchesQuery.data?.map((branch) => (
-                        <MenuItem key={branch.name} value={branch.name}>
-                          {branch.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </ControlTooltip>
-              </>
-            )}
-          </Stack>
+          <CreateWorktreeBranchFields
+            branchMode={branchMode}
+            selectedBranch={selectedBranch}
+            newBranchName={newBranchName}
+            baseBranch={resolvedDefaultBranch}
+            branches={branchesQuery.data ?? []}
+            onBranchModeChange={setBranchMode}
+            onSelectedBranchChange={setSelectedBranch}
+            onNewBranchNameChange={setNewBranchName}
+            onBaseBranchChange={setBaseBranch}
+          />
         )}
 
         {tab === 'pr' && (

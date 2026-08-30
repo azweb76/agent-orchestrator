@@ -210,12 +210,12 @@ export function useChatSessionActions({
     }
   };
 
-  const createSessionFromProfile = async (profileName: string) => {
+  const createSessionFromTask = async (taskName: string) => {
     if (archived) return;
     setCreatingSession(true);
     setChatError(null);
     try {
-      const result = await api.createSession(agentId, { profile: profileName });
+      const result = await api.createSession(agentId, { task: taskName });
       upsertAgentSession(queryClient, agentId, result.session, { activate: true });
       sessionIdRef.current = result.session.id;
       setSessionId(result.session.id);
@@ -291,7 +291,7 @@ export function useChatSessionActions({
     gradeMutation,
     selectSession,
     createSessionFromTemplate,
-    createSessionFromProfile,
+    createSessionFromTask,
     createSessionFromSuggestion,
     createFromTemplateId,
     requestClear,

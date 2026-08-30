@@ -1,8 +1,8 @@
+import { apiAgentTasks } from './apiAgentTasks';
 import { apiAgents } from './apiAgents';
 import { apiGitHub } from './apiGitHub';
 import { apiSetup } from './apiSetup';
 import { apiWorkspaces } from './apiWorkspaces';
-import { apiSessionProfiles } from './apiSessionProfiles';
 import {
   getAutomationSettings,
   triggerAutomationPollNow,
@@ -24,7 +24,7 @@ export const api = {
   ...apiWorkspaces,
   ...apiGitHub,
   ...apiAgents,
-  ...apiSessionProfiles,
+  ...apiAgentTasks,
   getAutomationSettings,
   triggerAutomationPollNow,
   updateAutomationSettings,

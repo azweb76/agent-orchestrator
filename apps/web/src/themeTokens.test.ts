@@ -42,4 +42,17 @@ describe('createAppTheme light contrast', () => {
     const dark = createAppTheme('dark');
     expect(dark.palette.primary.contrastText).toBe('#0b0f17');
   });
+
+  it('uses high-contrast tooltip surfaces in light mode', () => {
+    const light = createAppTheme('light');
+    const tooltip = light.components?.MuiTooltip?.styleOverrides?.tooltip;
+    const arrow = light.components?.MuiTooltip?.styleOverrides?.arrow;
+    expect(tooltip).toEqual(
+      expect.objectContaining({
+        bgcolor: '#1e293b',
+        color: 'rgba(248,250,252,0.96)',
+      }),
+    );
+    expect(arrow).toEqual(expect.objectContaining({ color: '#1e293b' }));
+  });
 });

@@ -1,17 +1,17 @@
 import { v4 as uuidv4 } from 'uuid';
 import type {
   Agent,
+  AgentTask,
   ChatSession,
   ChatSessionTemplateId,
   EffortLevel,
   PermissionMode,
-  SessionProfile,
 } from '@agent-orchestrator/shared';
 import {
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
   chatSessionTemplateById,
-  sanitizeProfileAllowedTools,
+  sanitizeAgentTaskAllowedTools,
   uniqueSessionTitle,
 } from '@agent-orchestrator/shared';
 import { fallbackTitleFromPrompt, sanitizeChatTitle } from './anthropic.js';
@@ -26,7 +26,7 @@ export async function createAgentForWorktree(
     model?: string;
     effort?: EffortLevel;
     permissionMode?: PermissionMode;
-    profile?: SessionProfile;
+    task?: AgentTask;
   },
 ): Promise<Agent> {
   const existing = ctx.repos.agents.getByWorktreeId(worktreeId);
@@ -34,17 +34,17 @@ export async function createAgentForWorktree(
     throw new Error('This worktree already has an active agent');
   }
 
-  const profile = options?.profile;
+  const task = options?.task;
   const timestamp = nowIso();
   const agent: Agent = {
     id: uuidv4(),
     worktreeId,
     name,
     status: 'idle',
-    model: options?.model?.trim() || profile?.model || 'sonnet',
-    effort: options?.effort ?? profile?.effort ?? DEFAULT_EFFORT_LEVEL,
+    model: options?.model?.trim() || task?.model || 'sonnet',
+    effort: options?.effort ?? task?.effort ?? DEFAULT_EFFORT_LEVEL,
     permissionMode:
-      options?.permissionMode ?? profile?.permissionMode ?? DEFAULT_PERMISSION_MODE,
+      options?.permissionMode ?? task?.permissionMode ?? DEFAULT_PERMISSION_MODE,
     claudeSessionId: null,
     pid: null,
     runLogPath: null,
@@ -59,7 +59,9 @@ export async function createAgentForWorktree(
   const session = createSessionForAgent(ctx, agent, {
     template: 'chat',
     permissionMode: agent.permissionMode,
-    profile,
+    model: agent.model,
+    effort: agent.effort,
+    task,
   });
   return { ...agent, activeSessionId: session.id };
 }
@@ -130,11 +132,13 @@ export function createSessionForAgent(
     title?: string;
     template?: ChatSessionTemplateId;
     permissionMode?: PermissionMode;
-    profile?: SessionProfile;
+    model?: string;
+    effort?: EffortLevel;
+    task?: AgentTask;
     activate?: boolean;
   } = {},
 ): ChatSession {
-  const profile = options.profile;
+  const task = options.task;
   const template = chatSessionTemplateById(options.template ?? 'chat');
   const timestamp = nowIso();
   const existing = ctx.repos.sessions.listByAgent(agent.id);
@@ -143,7 +147,7 @@ export function createSessionForAgent(
     requestedTitle ||
     uniqueSessionTitle(
       existing.map((item) => item.title),
-      profile?.title ?? template?.title ?? 'Chat',
+      task?.title ?? template?.title ?? 'Chat',
     );
   const session: ChatSession = {
     id: uuidv4(),
@@ -151,16 +155,16 @@ export function createSessionForAgent(
     title,
     template: template?.id ?? 'chat',
     status: 'idle',
-    model: profile?.model ?? agent.model,
-    effort: profile?.effort ?? agent.effort,
+    model: options.model?.trim() || task?.model || agent.model,
+    effort: options.effort ?? task?.effort ?? agent.effort,
     permissionMode:
       options.permissionMode ??
-      profile?.permissionMode ??
+      task?.permissionMode ??
       template?.permissionMode ??
       DEFAULT_PERMISSION_MODE,
-    profileId: profile?.id ?? null,
-    systemPrompt: profile?.systemPrompt?.trim() || null,
-    allowedTools: sanitizeProfileAllowedTools(profile?.allowedTools),
+    agentTaskId: task?.id ?? null,
+    systemPrompt: task?.systemPrompt?.trim() || null,
+    allowedTools: sanitizeAgentTaskAllowedTools(task?.allowedTools),
     claudeSessionId: null,
     pid: null,
     runLogPath: null,

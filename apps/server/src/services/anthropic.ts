@@ -1,8 +1,3 @@
-import { exec } from 'node:child_process';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { promisify } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
 import {
   SESSION_GRADE_FINDING_CATEGORIES,
@@ -11,6 +6,7 @@ import {
   type SessionGradeScore,
   type TaskSuggestion,
 } from '@agent-orchestrator/shared';
+import { createAnthropicClient, resolveAnthropicAuth } from './anthropic-credentials.js';
 import {
   buildInstructionDraftPrompt,
   parseInstructionDraftResponse,
@@ -32,52 +28,8 @@ import {
   type CompactSummaryInput,
 } from './compact-session.js';
 
-const execAsync = promisify(exec);
-
-interface ClaudeSettings {
-  apiKeyHelper?: string;
-  apiBaseUrl?: string;
-}
-
-interface AnthropicCredentials {
-  apiKey: string;
-  baseUrl?: string;
-}
-
-async function resolveCredentials(): Promise<AnthropicCredentials> {
-  const claudeDir = path.join(os.homedir(), '.claude');
-  const settingsPath = path.join(claudeDir, 'settings.json');
-  const apiKeyPath = path.join(claudeDir, '.api_key');
-
-  let settings: ClaudeSettings = {};
-  try {
-    const raw = await fs.readFile(settingsPath, 'utf-8');
-    settings = JSON.parse(raw) as ClaudeSettings;
-  } catch {
-    // settings.json missing, unreadable, or invalid JSON — fall through to the API key file
-  }
-
-  if (settings.apiKeyHelper) {
-    const { stdout } = await execAsync(settings.apiKeyHelper);
-    const apiKey = stdout.trim();
-    if (apiKey) {
-      return { apiKey, baseUrl: settings.apiBaseUrl };
-    }
-  }
-
-  try {
-    const raw = await fs.readFile(apiKeyPath, 'utf-8');
-    const apiKey = raw.trim();
-    if (apiKey) {
-      return { apiKey, baseUrl: settings.apiBaseUrl };
-    }
-  } catch {
-    // .api_key missing or unreadable
-  }
-
-  throw new Error(
-    `Unable to resolve an Anthropic API key. Configure "apiKeyHelper" in ${settingsPath} or create ${apiKeyPath}.`,
-  );
+async function client(options: { timeout?: number } = {}): Promise<Anthropic> {
+  return createAnthropicClient(await resolveAnthropicAuth(), options);
 }
 
 const SESSION_GRADE_TOOL: Anthropic.Tool = {
@@ -147,10 +99,9 @@ const TASK_SUGGESTIONS_TOOL: Anthropic.Tool = {
 
 export class AnthropicService {
   async suggestBranchName(idea: string): Promise<string> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const anthropic = await client();
 
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 30,
       system:
@@ -168,12 +119,50 @@ export class AnthropicService {
     return sanitizeBranchName(text);
   }
 
+  /**
+   * Pick an agent task slug for a goal from candidates with non-empty purpose.
+   * Returns the matching candidate `name`, or `null` when none fit.
+   */
+  async selectAgentTaskForGoal(
+    goal: string,
+    candidates: Array<{ name: string; title: string; purpose: string }>,
+  ): Promise<string | null> {
+    if (candidates.length === 0) return null;
+    const anthropic = await client();
+    const catalog = candidates
+      .map(
+        (item, index) =>
+          `${index + 1}. slug=${item.name}\ntitle=${item.title}\npurpose=${item.purpose}`,
+      )
+      .join('\n\n');
+
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 40,
+      system:
+        'You match a user goal to exactly one agent task. ' +
+        'Respond with ONLY the task slug from the catalog, or NONE if no task purpose fits. ' +
+        'Do not invent slugs. No explanation.',
+      messages: [
+        {
+          role: 'user',
+          content: `Goal:\n${goal.trim()}\n\nTasks:\n${catalog}`,
+        },
+      ],
+    });
+
+    const text = response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+
+    return sanitizeAgentTaskSelection(text, candidates.map((item) => item.name));
+  }
+
   async suggestChatTitle(prompt: string): Promise<string> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined, timeout: 8_000 });
+    const anthropic = await client({ timeout: 8_000 });
     const clipped = prompt.trim().slice(0, 2000) || 'The user sent an image.';
 
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 40,
       system:
@@ -192,11 +181,10 @@ export class AnthropicService {
 
   /** Continuation summary for compact-and-continue (seeds the fresh session). */
   async summarizeSessionForContinuation(input: CompactSummaryInput): Promise<string> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const anthropic = await client();
     const { system, user } = buildCompactSummaryPrompt(input);
 
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4000,
       system,
@@ -213,11 +201,10 @@ export class AnthropicService {
   async analyzeSessionGrade(
     input: SessionGradeContext,
   ): Promise<SessionGradeAnalysis & { score: SessionGradeScore }> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const anthropic = await client();
     const { system, user } = buildSessionGradePrompt(input);
 
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4000,
       system,
@@ -239,11 +226,10 @@ export class AnthropicService {
   }
 
   async generateTaskSuggestions(input: TaskSuggestionsContext): Promise<TaskSuggestion[]> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const anthropic = await client();
     const { system, user } = buildTaskSuggestionsPrompt(input);
 
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1500,
       system,
@@ -265,11 +251,10 @@ export class AnthropicService {
   }
 
   async generateInstructionDraft(input: InstructionDraftPromptInput): Promise<InstructionDraft> {
-    const { apiKey, baseUrl } = await resolveCredentials();
-    const client = new Anthropic({ apiKey, baseURL: baseUrl || undefined });
+    const anthropic = await client();
     const { system, user } = buildInstructionDraftPrompt(input);
 
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 4000,
       system,
@@ -310,6 +295,26 @@ export function sanitizeBranchName(input: string): string {
   }
 
   return slug || fallback;
+}
+
+/** Parse model output to a candidate task slug, or null for NONE / invalid. */
+export function sanitizeAgentTaskSelection(
+  input: string,
+  candidateNames: string[],
+): string | null {
+  if (typeof input !== 'string') return null;
+  const cleaned = input
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/^[\s"'`]+|[\s"'`]+$/g, '')
+    .trim()
+    .toLowerCase();
+  if (!cleaned || cleaned === 'none') return null;
+  const firstToken = cleaned.split(/\s+/)[0] ?? '';
+  const allowed = new Set(candidateNames.map((name) => name.toLowerCase()));
+  if (allowed.has(firstToken)) {
+    return candidateNames.find((name) => name.toLowerCase() === firstToken) ?? null;
+  }
+  return null;
 }
 
 const AUTO_CHAT_TITLE_MAX_LENGTH = 60;

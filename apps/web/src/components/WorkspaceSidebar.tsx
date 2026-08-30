@@ -256,7 +256,6 @@ export function WorkspaceSidebar({
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
             pathname={location.pathname}
-            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
           />
         ) : (
           <ExpandedWorkspaceTree
@@ -265,7 +264,6 @@ export function WorkspaceSidebar({
             forceExpandAll={filterActive}
             onToggleWorkspace={toggleWorkspace}
             onCreateAgent={(workspaceId) => setCreateWorkspaceId(workspaceId)}
-            onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
             onClearFilters={filterActive ? clearFilters : undefined}
             selectedAgentId={routeAgentId}
             selectedWorkspaceId={selectedWorkspaceId}
