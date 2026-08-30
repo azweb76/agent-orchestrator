@@ -10,6 +10,7 @@ const EVENT_TYPES: AppEventType[] = [
   'workspaces_changed',
   'instruction_draft_offer',
   'draft_pr_offer',
+  'task_suggestions_offer',
   'github_pr_changed',
   'automation_triggered',
 ];
@@ -122,6 +123,7 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
       break;
     case 'instruction_draft_offer':
     case 'draft_pr_offer':
+    case 'task_suggestions_offer':
       if (agentId) {
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }

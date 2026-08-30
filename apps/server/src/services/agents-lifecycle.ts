@@ -28,6 +28,7 @@ import { clearSessionQueue, drainWaitingMutatingSessions } from './chat-queue.js
 import { markStreamingAssistantStopped } from './chat-run-lifecycle.js';
 import { deleteWorktree, overlayLivePullRequest } from './worktrees.js';
 import { getDraftPrOfferSessionId } from './autopilot.js';
+import { getTaskSuggestionsOffer } from './task-suggestions.js';
 import { getCachedPrStatus } from './github-automation.js';
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
@@ -64,6 +65,7 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
       const offerSessionId = getDraftPrOfferSessionId(ctx, agentId);
       return offerSessionId ? { sessionId: offerSessionId } : null;
     })(),
+    taskSuggestions: getTaskSuggestionsOffer(ctx, agentId),
   };
 }
 
