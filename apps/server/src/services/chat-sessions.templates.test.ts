@@ -371,7 +371,7 @@ test('createAgentSession resolve-conflicts kickoff includes PR mergeability cont
     assert.equal(created.session.template, 'resolve-conflicts');
     assert.equal(created.session.permissionMode, 'auto');
     assert.ok(created.kickoffPrompt?.includes('PR #11'));
-    assert.ok(created.kickoffPrompt?.includes('mergeable state'));
+    assert.ok(created.kickoffPrompt?.includes('Mergeable state'));
     assert.ok(created.kickoffPrompt?.includes('dirty'));
     assert.ok(created.kickoffPrompt?.includes('Resolve conflicts against base'));
     assert.ok(created.kickoffPrompt?.includes('This pull request has merge conflicts'));
