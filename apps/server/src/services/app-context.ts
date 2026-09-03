@@ -5,12 +5,14 @@ import type { AppRepositories } from '../db/index.js';
 import type { Notifier } from './notifier.js';
 import type { ClaudeService, GitService } from './git.js';
 import type { GitHubService } from './github.js';
+import type { JiraService } from './jira.js';
 import type { AnthropicService } from './anthropic.js';
 
 export interface AppContext {
   repos: AppRepositories;
   git: GitService;
   github: GitHubService;
+  jira: JiraService;
   claude: ClaudeService;
   anthropic: AnthropicService;
   dataDir: string;

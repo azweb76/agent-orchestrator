@@ -7,7 +7,13 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import type { InboxIssue, InboxPullRequest, UsageSummary, WorkspaceWithCounts } from '@agent-orchestrator/shared';
+import type {
+  InboxIssue,
+  InboxJiraIssue,
+  InboxPullRequest,
+  UsageSummary,
+  WorkspaceWithCounts,
+} from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { formatUsd } from '../../utils/format';
 import { pullRequestPath } from '../../utils/paths';
@@ -16,6 +22,7 @@ import { HudPanel } from './HudPanel';
 import { SectionLabel } from './SectionLabel';
 import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
 import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
+import { DashboardGithubIssuesPanel, DashboardJiraIssuesPanel } from './DashboardIssueInboxes';
 
 interface DashboardSidePanelsProps {
   status?: SystemStatus;
@@ -27,10 +34,13 @@ interface DashboardSidePanelsProps {
   workspacesLoading: boolean;
   recentWorkspaces: WorkspaceWithCounts[];
   githubConfigured: boolean;
+  jiraConfigured: boolean;
   inboxLoading: boolean;
   recentPrs: InboxPullRequest[];
   issuesLoading: boolean;
   recentIssues: InboxIssue[];
+  jiraIssuesLoading: boolean;
+  recentJiraIssues: InboxJiraIssue[];
 }
 
 export function DashboardSidePanels({
@@ -43,10 +53,13 @@ export function DashboardSidePanels({
   workspacesLoading,
   recentWorkspaces,
   githubConfigured,
+  jiraConfigured,
   inboxLoading,
   recentPrs,
   issuesLoading,
   recentIssues,
+  jiraIssuesLoading,
+  recentJiraIssues,
 }: DashboardSidePanelsProps) {
   return (
     <Stack spacing={2} sx={{ flex: 1, minWidth: 0 }}>
@@ -71,6 +84,15 @@ export function DashboardSidePanels({
               size="small"
               label={status?.githubTokenConfigured ? 'Connected' : 'No token'}
               color={status?.githubTokenConfigured ? 'success' : 'default'}
+              variant="outlined"
+            />
+          </Stack>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="body2">Jira</Typography>
+            <Chip
+              size="small"
+              label={status?.jiraConfigured ? 'Connected' : 'Not set'}
+              color={status?.jiraConfigured ? 'success' : 'default'}
               variant="outlined"
             />
           </Stack>
@@ -289,50 +311,17 @@ export function DashboardSidePanels({
         )}
       </HudPanel>
 
-      <HudPanel>
-        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-          <Box>
-            <SectionLabel>Inbox</SectionLabel>
-            <Typography variant="h6">Assigned issues</Typography>
-          </Box>
-        </Stack>
+      <DashboardGithubIssuesPanel
+        githubConfigured={githubConfigured}
+        issuesLoading={issuesLoading}
+        recentIssues={recentIssues}
+      />
 
-        {!githubConfigured ? (
-          <Typography color="text.secondary" variant="body2">
-            Set <code>GITHUB_TOKEN</code> to load issues assigned to you.
-          </Typography>
-        ) : issuesLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress size={24} />
-          </Box>
-        ) : recentIssues.length === 0 ? (
-          <Typography color="text.secondary" variant="body2">
-            No open issues assigned to you.
-          </Typography>
-        ) : (
-          <Stack spacing={0}>
-            {recentIssues.map((issue) => (
-              <Box
-                key={`${issue.owner}/${issue.repo}#${issue.number}`}
-                sx={{
-                  py: 0.9,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                  '&:last-child': { borderBottom: 'none' },
-                }}
-              >
-                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
-                  #{issue.number} {issue.title}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {issue.owner}/{issue.repo}
-                  {issue.workspaceId ? ' · workspace ready' : ' · clone on start'}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-        )}
-      </HudPanel>
+      <DashboardJiraIssuesPanel
+        jiraConfigured={jiraConfigured}
+        jiraIssuesLoading={jiraIssuesLoading}
+        recentJiraIssues={recentJiraIssues}
+      />
     </Stack>
   );
 }

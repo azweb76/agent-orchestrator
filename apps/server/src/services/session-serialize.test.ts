@@ -15,6 +15,7 @@ import {
 import { AnthropicService } from './anthropic.js';
 import { ClaudeService, GitService } from './git.js';
 import { GitHubService } from './github.js';
+import { JiraService } from './jira.js';
 
 function mockResponse(): { res: Response; chunks: string[] } {
   const chunks: string[] = [];
@@ -44,6 +45,7 @@ async function seedAgent(tmp: string): Promise<{ ctx: AppContext; agent: Agent }
     repos,
     git: new GitService(),
     github: new GitHubService({}),
+    jira: new JiraService({}),
     claude: new ClaudeService(path.join(tmp, 'unused-claude'), path.join(tmp, 'runs')),
     anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
     dataDir: tmp,

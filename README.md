@@ -4,7 +4,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
 
 ## Features
 
-- **Command center** — home dashboard with the live agent fleet, a **Needs attention** panel when agents are waiting on prompts, spend/usage rollup (today's cost, all-time, top spend per agent), system readiness, recent workspaces, and a PR inbox. Everything updates live over SSE — no manual refresh.
+- **Command center** — home dashboard with the live agent fleet, a **Needs attention** panel when agents are waiting on prompts, spend/usage rollup (today's cost, all-time, top spend per agent), system readiness, recent workspaces, and PR / GitHub / Jira issue inboxes. Everything updates live over SSE — no manual refresh.
 - **Workspaces** — clone GitHub repos as managed workspaces.
 - **Pull requests** — browse your open PRs and review requests; open a PR to see checks, files, commits, reviews, and conversation, and start an agent from it. **Fix CI** and **Address review** kick off ready-made sessions against the PR branch.
 - **Agents** — one Claude Code agent per git worktree. Create one **From goal** (pick a **task** or **Auto** via purpose; optional model/effort override task defaults), **From branch**, or **From PR**. Each agent page has two tabs: **Chat** and **Changes**.
@@ -67,6 +67,9 @@ pnpm dev
 |----------|-------------|---------|
 | `GITHUB_TOKEN` | GitHub PAT for API access | — |
 | `GITHUB_LOGIN` | Optional GitHub username override for PR inbox searches | from token `/user` |
+| `JIRA_BASE_URL` | Jira Cloud site URL (e.g. `https://your-domain.atlassian.net`) | — |
+| `JIRA_EMAIL` | Atlassian account email for Jira API auth | — |
+| `JIRA_API_TOKEN` | Atlassian API token for Jira | — |
 | `CLAUDE_BIN` | Path to Claude Code binary | `claude` |
 | `DATA_DIR` | Directory for repos, worktrees, and SQLite DB | `./data` |
 | `PORT` | Server port | `3001` |

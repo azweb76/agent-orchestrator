@@ -78,10 +78,13 @@ export function DashboardPage() {
           workspacesLoading={data.workspacesLoading}
           recentWorkspaces={data.recentWorkspaces}
           githubConfigured={Boolean(data.status?.githubTokenConfigured)}
+          jiraConfigured={Boolean(data.status?.jiraConfigured)}
           inboxLoading={data.inboxQuery.isLoading}
           recentPrs={data.recentPrs}
           issuesLoading={data.issueInboxQuery.isLoading}
           recentIssues={data.recentIssues}
+          jiraIssuesLoading={data.jiraInboxQuery.isLoading}
+          recentJiraIssues={data.recentJiraIssues}
         />
       </Stack>
 

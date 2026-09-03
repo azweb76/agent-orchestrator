@@ -22,6 +22,7 @@ function tempCtx(anthropicOverrides: Partial<AppContext['anthropic']> = {}): {
       repos,
       git: {} as AppContext['git'],
       github: {} as AppContext['github'],
+      jira: {} as AppContext['jira'],
       claude: {} as AppContext['claude'],
       anthropic: {
         selectAgentTaskForGoal: async () => null,

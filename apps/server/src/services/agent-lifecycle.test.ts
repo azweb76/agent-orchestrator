@@ -97,6 +97,7 @@ describe('agent lifecycle: unarchive, delete, commit, workspace cleanup', () => 
         },
       } as unknown as GitService,
       github: {} as AppContext['github'],
+      jira: {} as AppContext['jira'],
       claude: { stop: () => true } as unknown as ClaudeService,
       anthropic: {} as AppContext['anthropic'],
       dataDir,

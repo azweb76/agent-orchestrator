@@ -70,6 +70,13 @@ export function useDashboardData(query: string) {
     refetchInterval: sseFallback,
   });
 
+  const jiraInboxQuery = useQuery({
+    queryKey: ['jira-issues-inbox'],
+    queryFn: api.getJiraIssueInbox,
+    enabled: Boolean(status?.jiraConfigured),
+    refetchInterval: sseFallback,
+  });
+
   const usageQuery = useQuery({
     queryKey: ['usage'],
     queryFn: api.getUsageSummary,
@@ -109,6 +116,7 @@ export function useDashboardData(query: string) {
     ...(inboxQuery.data?.reviewRequested ?? []).slice(0, 2),
   ].slice(0, 5);
   const recentIssues = (issueInboxQuery.data?.assigned ?? []).slice(0, 5);
+  const recentJiraIssues = (jiraInboxQuery.data?.assigned ?? []).slice(0, 5);
   const archivedCount = status?.archivedAgentCount ?? 0;
 
   return {
@@ -120,6 +128,7 @@ export function useDashboardData(query: string) {
     workspacesLoading,
     inboxQuery,
     issueInboxQuery,
+    jiraInboxQuery,
     usageQuery,
     activeAgents,
     runningCount: systemRunningCount,
@@ -136,6 +145,7 @@ export function useDashboardData(query: string) {
     recentWorkspaces,
     recentPrs,
     recentIssues,
+    recentJiraIssues,
     archivedCount,
     workspaces,
   };

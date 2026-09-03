@@ -29,6 +29,7 @@ async function makeCtx(github: Partial<GitHubService>): Promise<AppContext> {
     repos,
     git: {} as AppContext['git'],
     github: github as unknown as GitHubService,
+    jira: {} as AppContext['jira'],
     claude: {} as AppContext['claude'],
     anthropic: {} as AppContext['anthropic'],
     dataDir: tmp,

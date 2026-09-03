@@ -8,6 +8,7 @@ import { streamAgentChat, type AppContext } from './app.js';
 import { AnthropicService } from './anthropic.js';
 import { ClaudeService, GitService } from './git.js';
 import { GitHubService } from './github.js';
+import { JiraService } from './jira.js';
 import { mockResponse, writeFakeClaude } from './chat-sessions.test-helpers.js';
 
 test('streamAgentChat goes idle after a result even if Claude keeps running', async () => {
@@ -44,6 +45,7 @@ setInterval(() => {}, 1000);
       repos,
       git: new GitService(),
       github: new GitHubService({}),
+      jira: new JiraService({}),
       claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
       anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
       dataDir: tmp,
@@ -177,6 +179,7 @@ rl.on('line', (line) => {
       repos,
       git: new GitService(),
       github: new GitHubService({}),
+      jira: new JiraService({}),
       claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
       anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
       dataDir: tmp,
@@ -285,6 +288,7 @@ rl.on('line', (line) => {
       repos,
       git: new GitService(),
       github: new GitHubService({}),
+      jira: new JiraService({}),
       claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
       anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
       dataDir: tmp,

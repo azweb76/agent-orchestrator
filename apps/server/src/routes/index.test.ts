@@ -10,6 +10,7 @@ import type { AppContext } from '../services/app.js';
 import { AnthropicService } from '../services/anthropic.js';
 import { ClaudeService, GitService } from '../services/git.js';
 import { GitHubService } from '../services/github.js';
+import { JiraService } from '../services/jira.js';
 import { Notifier } from '../services/notifier.js';
 import { createRouter, errorHandler } from './index.js';
 
@@ -23,6 +24,7 @@ async function withServer(
       repos: createRepositories(db),
       git: new GitService(),
       github: new GitHubService({}),
+      jira: new JiraService({}),
       claude: {
         checkInstalled: async () => false,
         getBin: () => 'claude',
@@ -64,12 +66,16 @@ test('GET /api/status returns system readiness fields', async () => {
       claudeInstalled: boolean;
       githubTokenConfigured: boolean;
       githubLogin: string | null;
+      jiraConfigured: boolean;
+      jiraDisplayName: string | null;
       archivedAgentCount: number;
       dataDirBytes?: number;
     };
     assert.equal(body.claudeInstalled, false);
     assert.equal(body.githubTokenConfigured, false);
     assert.equal(body.githubLogin, null);
+    assert.equal(body.jiraConfigured, false);
+    assert.equal(body.jiraDisplayName, null);
     assert.equal(body.archivedAgentCount, 0);
     assert.equal(body.dataDirBytes, undefined);
   });

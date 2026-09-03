@@ -3,6 +3,7 @@ import type {
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromGoalRequest,
   CreateWorktreeFromIssueRequest,
+  CreateWorktreeFromJiraIssueRequest,
   CreateWorktreeFromPrRequest,
   CreateWorkspaceRequest,
   GitHubBranch,
@@ -50,6 +51,11 @@ export const apiWorkspaces = {
   createWorktreeFromIssue: (workspaceId: string, body: CreateWorktreeFromIssueRequest) =>
     request<{ worktree: WorktreeWithAgent; agent: Agent; branchName: string; issueNumber: number; prompt: string }>(
       `/workspaces/${workspaceId}/worktrees/from-issue`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  createWorktreeFromJiraIssue: (workspaceId: string, body: CreateWorktreeFromJiraIssueRequest) =>
+    request<{ worktree: WorktreeWithAgent; agent: Agent; branchName: string; issueKey: string; prompt: string }>(
+      `/workspaces/${workspaceId}/worktrees/from-jira`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
   deleteWorktree: (worktreeId: string) =>

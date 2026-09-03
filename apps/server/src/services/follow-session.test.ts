@@ -10,6 +10,7 @@ import { followAgentSession, streamAgentChat, type AppContext } from './app.js';
 import { AnthropicService } from './anthropic.js';
 import { ClaudeService, GitService } from './git.js';
 import { GitHubService } from './github.js';
+import { JiraService } from './jira.js';
 
 async function writeFakeClaude(binPath: string, script: string): Promise<void> {
   await fs.writeFile(binPath, script, { mode: 0o755 });
@@ -83,6 +84,7 @@ rl.on('line', (line) => {
     repos,
     git: new GitService(),
     github: new GitHubService({}),
+    jira: new JiraService({}),
     claude: new ClaudeService(binPath, path.join(tmp, 'runs')),
     anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
     dataDir: tmp,

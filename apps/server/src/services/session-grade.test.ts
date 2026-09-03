@@ -126,6 +126,7 @@ describe('session grading and instruction files', () => {
       repos: createRepositories(initDatabase(dataDir)),
       git: {} as GitService,
       github: {} as AppContext['github'],
+      jira: {} as AppContext['jira'],
       claude: { stop: () => true } as unknown as ClaudeService,
       anthropic: {
         generateInstructionDraft: async () => ({

@@ -87,6 +87,7 @@ describe('archiveAgent and pruneArchivedAgents', () => {
         },
       } as unknown as GitService,
       github: {} as AppContext['github'],
+      jira: {} as AppContext['jira'],
       claude: {
         stop: () => true,
       } as unknown as ClaudeService,

@@ -6,6 +6,7 @@ import cors from 'cors';
 import { initDatabase, createRepositories } from './db/index.js';
 import { ClaudeService, GitService } from './services/git.js';
 import { GitHubService } from './services/github.js';
+import { JiraService } from './services/jira.js';
 import { AnthropicService } from './services/anthropic.js';
 import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
@@ -34,6 +35,11 @@ const ctx: AppContext = {
   repos,
   git: new GitService(),
   github: new GitHubService({ token: process.env.GITHUB_TOKEN }),
+  jira: new JiraService({
+    baseUrl: process.env.JIRA_BASE_URL,
+    email: process.env.JIRA_EMAIL,
+    apiToken: process.env.JIRA_API_TOKEN,
+  }),
   claude: new ClaudeService(claudeBin, path.join(dataDir, 'runs')),
   anthropic: new AnthropicService(),
   dataDir,
