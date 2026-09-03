@@ -5,7 +5,7 @@ const JIRA_KEYCHAIN_SERVICE = 'jira-api-token';
 
 /**
  * Read the Jira API token from the macOS keychain.
- * Equivalent to: `security find-generic-password -a "$USER" -s jira-api-token -w`
+ * Equivalent to: `security find-generic-password -a "$USER" -s jira-api-token -g -w`
  */
 export function readJiraApiTokenFromKeychain(
   account: string = process.env.USER?.trim() || os.userInfo().username,
@@ -16,7 +16,15 @@ export function readJiraApiTokenFromKeychain(
   try {
     const stdout = execFileSync(
       'security',
-      ['find-generic-password', '-a', trimmedAccount, '-s', JIRA_KEYCHAIN_SERVICE, '-w'],
+      [
+        'find-generic-password',
+        '-a',
+        trimmedAccount,
+        '-s',
+        JIRA_KEYCHAIN_SERVICE,
+        '-g',
+        '-w',
+      ],
       { encoding: 'utf8', timeout: 5_000, maxBuffer: 1024 * 1024 },
     );
     return stdout.trim() || null;
