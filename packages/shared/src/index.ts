@@ -1,6 +1,7 @@
 export * from './types/entities.js';
 export * from './types/automation.js';
 export * from './types/github.js';
+export * from './types/jira.js';
 export * from './types/requests.js';
 export * from './types/views.js';
 export * from './constants.js';
@@ -136,3 +137,9 @@ export {
   type IssueKickoffComment,
   type ParsedIssueReference,
 } from './github-issue.js';
+
+export {
+  buildJiraKickoffPrompt,
+  parseJiraIssueKey,
+  type JiraKickoffComment,
+} from './jira-issue.js';

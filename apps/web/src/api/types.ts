@@ -5,6 +5,8 @@ export interface SystemStatus {
   claudeBin: string;
   githubTokenConfigured: boolean;
   githubLogin: string | null;
+  jiraConfigured: boolean;
+  jiraDisplayName: string | null;
   authRequired: boolean;
   archivedAgentCount: number;
   setupDocsUrl?: string;
@@ -16,6 +18,7 @@ export interface SetupInfo {
   claudeBin: string;
   claudeInstalled: boolean;
   githubTokenConfigured: boolean;
+  jiraConfigured: boolean;
   setupDocsUrl: string;
   claudeDocsUrl: string;
 }

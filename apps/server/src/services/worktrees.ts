@@ -220,7 +220,7 @@ export async function resolveAgentTaskForGoal(
     selected = await ctx.anthropic.selectAgentTaskForGoal(goal, candidates);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Could not match goal to a task: ${message}`);
+    throw new Error(`Could not match goal to a task: ${message}`, { cause: err });
   }
 
   if (!selected) {

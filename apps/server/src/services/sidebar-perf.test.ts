@@ -10,6 +10,7 @@ import type { ClaudeService } from './git.js';
 import { cachedClaudeInstalled, invalidateStatusCache } from './status-cache.js';
 import { configureGithubToken } from './setup.js';
 import { GitHubService } from './github.js';
+import { JiraService } from './jira.js';
 
 describe('listSidebarTree pending permission batching', () => {
   let dataDir: string;
@@ -32,6 +33,7 @@ describe('listSidebarTree pending permission batching', () => {
       repos,
       git: {} as AppContext['git'],
       github: {} as AppContext['github'],
+      jira: {} as AppContext['jira'],
       claude: {
         listPendingPermissions: () => [],
       } as unknown as ClaudeService,
@@ -144,6 +146,7 @@ describe('configureGithubToken', () => {
       repos: createRepositories(db),
       git: {} as AppContext['git'],
       github: new GitHubService({}),
+      jira: new JiraService({}),
       claude: { setBin: () => undefined, getBin: () => 'claude' } as unknown as ClaudeService,
       anthropic: {} as AppContext['anthropic'],
       dataDir,

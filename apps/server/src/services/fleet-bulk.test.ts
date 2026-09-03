@@ -9,6 +9,7 @@ import type { AppContext } from './app.js';
 import { AnthropicService } from './anthropic.js';
 import { ClaudeService, GitService } from './git.js';
 import { GitHubService } from './github.js';
+import { JiraService } from './jira.js';
 import { Notifier } from './notifier.js';
 import { listMergedFleetAgents } from './fleet-bulk.js';
 
@@ -19,6 +20,7 @@ function makeCtx(tmp: string, github: GitHubService): AppContext {
     repos,
     git: new GitService(),
     github,
+    jira: new JiraService({}),
     claude: new ClaudeService('claude', path.join(tmp, 'runs')),
     anthropic: {} as AnthropicService,
     dataDir: tmp,

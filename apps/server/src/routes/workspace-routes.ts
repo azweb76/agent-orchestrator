@@ -6,6 +6,7 @@ import {
   createWorktreeFromGoal,
   createWorktreeFromIdea,
   createWorktreeFromIssue,
+  createWorktreeFromJiraIssue,
   createWorktreeFromPr,
   createWorkspace,
   deleteWorktree,
@@ -162,6 +163,25 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromIssue(ctx, param(req.params.workspaceId), body));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/worktrees/from-jira',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          issueKey: z.string().min(1),
+          name: z.string().optional(),
+          baseBranch: z.string().optional(),
+          model: z.string().optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+          permissionMode: z
+            .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
+            .optional(),
+        })
+        .parse(req.body);
+      res.status(201).json(await createWorktreeFromJiraIssue(ctx, param(req.params.workspaceId), body));
     }),
   );
 

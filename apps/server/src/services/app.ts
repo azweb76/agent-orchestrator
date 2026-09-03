@@ -110,6 +110,12 @@ export {
 } from './github-issues.js';
 
 export {
+  getJiraIssueInbox,
+  createAgentFromJiraIssue,
+  createWorktreeFromJiraIssue,
+} from './jira-issues.js';
+
+export {
   listGitHubBranches,
   listGitHubPullRequests,
   searchGitHubRepositories,

@@ -15,6 +15,7 @@ import {
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
+  parseJiraIssueKey,
   type EffortLevel,
   type PermissionMode,
 } from '@agent-orchestrator/shared';
@@ -187,14 +188,26 @@ export function CreateWorktreeDialog({
   });
 
   const createFromIssue = useMutation({
-    mutationFn: () =>
-      api.createWorktreeFromIssue(workspaceId, {
-        reference: issueReference.trim(),
+    mutationFn: async (): Promise<{ agent: { id: string }; prompt: string }> => {
+      const reference = issueReference.trim();
+      const jiraKey = parseJiraIssueKey(reference);
+      if (jiraKey) {
+        return api.createWorktreeFromJiraIssue(workspaceId, {
+          issueKey: jiraKey,
+          baseBranch: resolvedDefaultBranch || undefined,
+          model: issueModel,
+          effort: issueEffort,
+          permissionMode: issuePermissionMode,
+        });
+      }
+      return api.createWorktreeFromIssue(workspaceId, {
+        reference,
         baseBranch: resolvedDefaultBranch || undefined,
         model: issueModel,
         effort: issueEffort,
         permissionMode: issuePermissionMode,
-      }),
+      });
+    },
     onSuccess: (data) => {
       invalidateAfterCreate();
       handleClose();
@@ -290,7 +303,7 @@ export function CreateWorktreeDialog({
           <Stack spacing={1.5}>
             <CreateWorktreeIssueFields
               issueReference={issueReference}
-              placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149`}
+              placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149 or PROJ-123`}
               onIssueReferenceChange={setIssueReference}
             />
             <CreateWorktreePlannerFields

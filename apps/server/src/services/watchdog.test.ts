@@ -10,6 +10,7 @@ import type { AppContext } from './app.js';
 import { AnthropicService } from './anthropic.js';
 import { ClaudeService, GitService } from './git.js';
 import { GitHubService } from './github.js';
+import { JiraService } from './jira.js';
 import { Notifier } from './notifier.js';
 import { resetWatchdogState, runWatchdogTick, isAgentStalled } from './watchdog.js';
 
@@ -20,6 +21,7 @@ async function seed(tmp: string): Promise<AppContext> {
     repos,
     git: new GitService(),
     github: new GitHubService({}),
+    jira: new JiraService({}),
     claude: new ClaudeService('claude', path.join(tmp, 'runs')),
     anthropic: {} as AnthropicService,
     dataDir: tmp,

@@ -137,7 +137,7 @@ export function SettingsPage() {
 
       <SettingsSection
         title="Connections"
-        description="Claude Code CLI and GitHub token status for this instance. Configure via environment variables on the server."
+        description="Claude Code CLI, GitHub, and Jira status for this instance. Configure via environment variables on the server."
       >
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <ControlTooltip
@@ -165,6 +165,22 @@ export function SettingsPage() {
               size="small"
               label={status?.githubTokenConfigured ? 'GitHub connected' : 'No GitHub token'}
               color={status?.githubTokenConfigured ? 'success' : 'default'}
+              variant="outlined"
+            />
+          </ControlTooltip>
+          <ControlTooltip
+            title={
+              status?.jiraConfigured
+                ? status.jiraDisplayName
+                  ? `Jira connected as ${status.jiraDisplayName}`
+                  : 'Jira credentials configured'
+                : 'Set JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN'
+            }
+          >
+            <Chip
+              size="small"
+              label={status?.jiraConfigured ? 'Jira connected' : 'No Jira token'}
+              color={status?.jiraConfigured ? 'success' : 'default'}
               variant="outlined"
             />
           </ControlTooltip>

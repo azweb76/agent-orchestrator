@@ -96,9 +96,9 @@ export function CreateWorktreeIssueFields({
 }: CreateWorktreeIssueFieldsProps) {
   return (
     <Stack spacing={1.5}>
-      <ControlTooltip title="Paste owner/repo#n or a GitHub issue URL for this workspace repository">
+      <ControlTooltip title="Paste owner/repo#n, a GitHub issue URL, a Jira key (PROJ-123), or a Jira browse URL">
         <TextField
-          label="GitHub issue"
+          label="Issue"
           value={issueReference}
           onChange={(e) => onIssueReferenceChange(e.target.value)}
           placeholder={placeholder}
@@ -107,8 +107,9 @@ export function CreateWorktreeIssueFields({
         />
       </ControlTooltip>
       <Typography variant="body2" color="text.secondary">
-        Creates a plan-mode agent with the issue title, body, and recent comments as the first
-        message.
+        Accepts a GitHub issue for this workspace repo, or a Jira issue key when{' '}
+        <code>JIRA_API_TOKEN</code> is configured. Creates a plan-mode agent with the issue title,
+        body, and recent comments as the first message.
       </Typography>
     </Stack>
   );

@@ -50,11 +50,21 @@ export async function getSystemStatus(ctx: AppContext) {
       githubLogin = null;
     }
   }
+  let jiraDisplayName: string | null = null;
+  if (ctx.jira.isConfigured()) {
+    try {
+      jiraDisplayName = await ctx.jira.getAuthenticatedDisplayName();
+    } catch {
+      jiraDisplayName = null;
+    }
+  }
   return {
     claudeInstalled,
     claudeBin: ctx.claude.getBin(),
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
     githubLogin,
+    jiraConfigured: ctx.jira.isConfigured(),
+    jiraDisplayName,
     authRequired: Boolean(process.env.AUTH_TOKEN?.trim()),
     archivedAgentCount: ctx.repos.agents.countArchived(),
     setupDocsUrl: SETUP_DOCS_URL,
@@ -69,6 +79,7 @@ export async function getSetupInfo(ctx: AppContext) {
     claudeBin: ctx.claude.getBin(),
     claudeInstalled: await cachedClaudeInstalled(ctx.claude),
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
+    jiraConfigured: ctx.jira.isConfigured(),
     setupDocsUrl: SETUP_DOCS_URL,
     claudeDocsUrl: CLAUDE_DOCS_URL,
   };

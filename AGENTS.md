@@ -29,6 +29,7 @@ Repo-managed Cloud Agent config lives in `.cursor/environment.json` (Dockerfile 
 - API: `http://localhost:3001` (terminal sets `HOST=0.0.0.0`)
 - Vite: `http://localhost:5173` (proxies `/api` to the server)
 - `GITHUB_TOKEN` is optional to boot the UI; add it as a Cursor secret for clone/PR features
+- Jira is optional (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`); assigned issues appear on the dashboard when set
 - Claude Code CLI is optional to boot; chat/agent runs need an authenticated `CLAUDE_BIN`
 - Do not commit `.env`, `data/`, SQLite files, or secrets
 
@@ -51,7 +52,7 @@ packages/shared/src/      types and helpers used by both apps
 data/                     clones, worktrees, SQLite, run logs (gitignored)
 ```
 
-Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOST`, `AUTH_TOKEN`) are documented in `README.md` and `.env.example`. The server loads `.env` from the repo root.
+Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `CLAUDE_BIN`, `DATA_DIR`, `PORT`, `HOST`, `AUTH_TOKEN`) are documented in `README.md` and `.env.example`. The server loads `.env` from the repo root.
 
 ## Architecture
 

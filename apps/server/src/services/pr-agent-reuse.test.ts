@@ -68,6 +68,7 @@ function seedPrAgent(tmp: string, options: { prNumber?: number | null; branch: s
         updatedAt: '2026-01-01T00:00:00Z',
       }),
     } as unknown as GitHubService,
+    jira: {} as AppContext['jira'],
     claude: {} as AppContext['claude'],
     anthropic: {} as AppContext['anthropic'],
     dataDir: tmp,
