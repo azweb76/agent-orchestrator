@@ -12,9 +12,16 @@ import { createAgentSession } from './app.js';
 import { GitHubService } from './github.js';
 import { seedAgent } from './chat-sessions.test-helpers.js';
 
-test('listed templates include Create draft PR, Review, Address review, and Fix CI', () => {
+test('listed templates include Create draft PR, Review, Address review, Fix CI, and Resolve conflicts', () => {
   const ids = LISTED_CHAT_SESSION_TEMPLATES.map((item) => item.id);
-  assert.deepEqual(ids, ['chat', 'create-draft-pr', 'review', 'address-review', 'fix-ci']);
+  assert.deepEqual(ids, [
+    'chat',
+    'create-draft-pr',
+    'review',
+    'address-review',
+    'fix-ci',
+    'resolve-conflicts',
+  ]);
   for (const template of CHAT_SESSION_TEMPLATES) {
     assert.ok(!template.prompt?.includes('ExitPlanMode'));
     assert.ok(!template.prompt?.includes('AskUserQuestion'));
@@ -329,6 +336,45 @@ test('createAgentSession kickoff falls back to inspect prompt when GitHub fetch 
     assert.ok(created.kickoffPrompt?.includes('Could not load PR/CI context'));
     assert.ok(created.kickoffPrompt?.includes('rate limited'));
     assert.ok(created.kickoffPrompt?.includes('Start by inspecting'));
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('createAgentSession resolve-conflicts kickoff includes PR mergeability context', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-resolve-conflicts-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const headSha = 'e'.repeat(40);
+    ctx.github = {
+      getOpenPullRequestForBranch: async () => ({
+        number: 11,
+        title: 'Conflicted PR',
+        state: 'open',
+        headRef: 'feat',
+        baseRef: 'main',
+        htmlUrl: 'https://github.com/example/demo/pull/11',
+        draft: false,
+        authorLogin: 'alice',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }),
+      getPullRequestDetail: async () => ({
+        headSha,
+        number: 11,
+        title: 'Conflicted PR',
+        baseRef: 'main',
+        mergeableState: 'dirty',
+      }),
+    } as unknown as GitHubService;
+
+    const created = await createAgentSession(ctx, agent.id, { template: 'resolve-conflicts' });
+    assert.equal(created.session.template, 'resolve-conflicts');
+    assert.equal(created.session.permissionMode, 'auto');
+    assert.ok(created.kickoffPrompt?.includes('PR #11'));
+    assert.ok(created.kickoffPrompt?.includes('Mergeable state'));
+    assert.ok(created.kickoffPrompt?.includes('dirty'));
+    assert.ok(created.kickoffPrompt?.includes('Resolve conflicts against base'));
+    assert.ok(created.kickoffPrompt?.includes('This pull request has merge conflicts'));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

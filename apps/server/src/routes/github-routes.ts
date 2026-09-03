@@ -71,7 +71,7 @@ export function registerGitHubRoutes(router: express.Router, ctx: AppContext): v
           repo: z.string().min(1),
           prNumber: z.number().int().positive(),
           name: z.string().optional(),
-          template: z.enum(['fix-ci', 'address-review']).optional(),
+          template: z.enum(['fix-ci', 'address-review', 'resolve-conflicts']).optional(),
         })
         .parse(req.body);
       const result = await createAgentFromPullRequest(ctx, body);

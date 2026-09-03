@@ -1,6 +1,7 @@
 import { Link as RouterLink } from 'react-router-dom';
 import { Alert, Box, Button, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import CallMergeOutlinedIcon from '@mui/icons-material/CallMergeOutlined';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +14,11 @@ import { pullRequestPath } from '../../utils/paths';
 import { buildAgentPrStripModel } from './agentPrStatusModel';
 import { useAgentLinkedPr } from './useAgentLinkedPr';
 
+type PrKickoffTemplate = Extract<
+  ChatSessionTemplateId,
+  'resolve-conflicts' | 'fix-ci' | 'address-review'
+>;
+
 export interface AgentPrStatusStripProps {
   agent: AgentDetail;
   archived: boolean;
@@ -21,7 +27,7 @@ export interface AgentPrStatusStripProps {
 
 /**
  * Persistent PR health strip on the agent page: draft/open, checks, review
- * comments, and one-click Fix CI / Address review using the linked PR.
+ * comments, conflicts, and one-click session actions using the linked PR.
  */
 export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentPrStatusStripProps) {
   const queryClient = useQueryClient();
@@ -29,7 +35,7 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
     useAgentLinkedPr(agent);
 
   const startTemplate = useMutation({
-    mutationFn: async (template: Extract<ChatSessionTemplateId, 'fix-ci' | 'address-review'>) => {
+    mutationFn: async (template: PrKickoffTemplate) => {
       const result = await api.createAgentFromPr({
         owner,
         repo,
@@ -80,14 +86,34 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
     archived,
   });
   const inAppPath = pullRequestPath(owner, repo, pr.number);
+  const stripSeverity =
+    model.conflicted || model.checksTone === 'error' ? 'error' : model.open ? 'info' : 'success';
 
   return (
     <Alert
-      severity={model.checksTone === 'error' ? 'error' : model.open ? 'info' : 'success'}
+      severity={stripSeverity}
       icon={<PullRequestStatusIcon status={model.prStatus} fontSize="medium" />}
       sx={{ py: 0.75, '& .MuiAlert-message': { width: '100%', minWidth: 0 } }}
       action={
         <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+          {model.showResolveConflicts ? (
+            <ControlTooltip
+              title="Start a Resolve conflicts session for this pull request"
+              disabled={startTemplate.isPending}
+            >
+              <Button
+                color="inherit"
+                size="small"
+                startIcon={<CallMergeOutlinedIcon />}
+                disabled={startTemplate.isPending}
+                onClick={() => startTemplate.mutate('resolve-conflicts')}
+              >
+                {startTemplate.isPending && startTemplate.variables === 'resolve-conflicts'
+                  ? 'Starting…'
+                  : 'Resolve conflicts'}
+              </Button>
+            </ControlTooltip>
+          ) : null}
           {model.showFixCi ? (
             <ControlTooltip title="Start a Fix CI session for this pull request" disabled={startTemplate.isPending}>
               <Button
@@ -149,11 +175,14 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
         <Box>
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
             <PullRequestStatusChip status={model.prStatus} />
+            {model.conflicted ? (
+              <Chip size="small" color="error" variant="outlined" label="Conflicts with base" />
+            ) : null}
             {model.checksLabel ? (
               <Chip
                 size="small"
                 variant="outlined"
-                color={model.checksTone === 'default' ? undefined : model.checksTone}
+                color={model.checksTone === 'default' || model.conflicted ? undefined : model.checksTone}
                 label={model.checksLabel}
               />
             ) : checksQuery.isLoading ? (
@@ -162,7 +191,7 @@ export function AgentPrStatusStrip({ agent, archived, onSessionStarted }: AgentP
             {model.reviewLabel ? (
               <Chip size="small" variant="outlined" label={model.reviewLabel} />
             ) : null}
-            {model.mergeHint ? (
+            {model.mergeHint && !model.conflicted ? (
               <Chip size="small" variant="outlined" label={model.mergeHint} />
             ) : null}
           </Stack>

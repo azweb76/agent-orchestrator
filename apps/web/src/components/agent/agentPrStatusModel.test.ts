@@ -101,6 +101,31 @@ describe('buildAgentPrStripModel', () => {
     expect(model.open).toBe(false);
   });
 
+  it('surfaces conflicts and Resolve conflicts for dirty open PRs', () => {
+    const model = buildAgentPrStripModel({
+      pr: basePr({ draft: false, mergeable: false, mergeableState: 'dirty' }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+    });
+
+    expect(model.conflicted).toBe(true);
+    expect(model.mergeHint).toBe('Conflicts with base');
+    expect(model.showResolveConflicts).toBe(true);
+    expect(model.showMarkReady).toBe(false);
+    expect(model.checksTone).toBe('error');
+  });
+
+  it('surfaces conflicts on draft PRs that keep mergeable_state draft', () => {
+    const model = buildAgentPrStripModel({
+      pr: basePr({ draft: true, mergeable: false, mergeableState: 'draft' }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+    });
+
+    expect(model.conflicted).toBe(true);
+    expect(model.showResolveConflicts).toBe(true);
+    expect(model.showMarkReady).toBe(false);
+    expect(model.mergeHint).toBe('Conflicts with base');
+  });
+
   it('surfaces a mark-ready hint for green draft PRs', () => {
     const model = buildAgentPrStripModel({
       pr: basePr({ draft: true }),
@@ -110,11 +135,21 @@ describe('buildAgentPrStripModel', () => {
     expect(model.stateLabel).toBe('Draft');
     expect(model.prStatus).toBe('draft');
     expect(model.showFixCi).toBe(false);
+    expect(model.showResolveConflicts).toBe(false);
     expect(model.mergeHint).toBe('Mark ready when you are happy');
   });
 });
 
 describe('buildAgentPrActionOffers', () => {
+  it('prioritizes Resolve conflicts over Fix CI when the branch is dirty', () => {
+    const offers = buildAgentPrActionOffers({
+      pr: basePr({ draft: false, mergeable: false, mergeableState: 'dirty', reviewCommentCount: 2 }),
+      checks: checks(),
+    });
+    expect(offers).toHaveLength(1);
+    expect(offers[0]?.kind).toBe('resolve_conflicts');
+  });
+
   it('prioritizes Fix CI over review when checks are red', () => {
     const offers = buildAgentPrActionOffers({
       pr: basePr({ draft: false, reviewCommentCount: 2 }),
@@ -147,5 +182,14 @@ describe('buildAgentPrActionOffers', () => {
       sessions: [{ template: 'fix-ci', status: 'running' }],
     });
     expect(offers.some((item) => item.kind === 'fix_ci')).toBe(false);
+  });
+
+  it('skips Resolve conflicts when a resolve-conflicts session is already running', () => {
+    const offers = buildAgentPrActionOffers({
+      pr: basePr({ draft: false, mergeable: false, mergeableState: 'dirty' }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+      sessions: [{ template: 'resolve-conflicts', status: 'running' }],
+    });
+    expect(offers.some((item) => item.kind === 'resolve_conflicts')).toBe(false);
   });
 });

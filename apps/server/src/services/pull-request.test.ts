@@ -113,6 +113,18 @@ test('evaluateMergeReadiness blocks a draft but still allows updating the branch
   assert.match(readiness.reason, /Draft/);
 });
 
+test('evaluateMergeReadiness reports conflicts on draft PRs with mergeable false', () => {
+  const readiness = evaluateMergeReadiness(
+    detail({ draft: true, mergeable: false, mergeableState: 'draft' }),
+  );
+
+  assert.equal(readiness.conflicted, true);
+  assert.equal(readiness.canMerge, false);
+  assert.equal(readiness.canUpdateBranch, false);
+  assert.equal(readiness.severity, 'error');
+  assert.match(readiness.reason, /conflicts/i);
+});
+
 test('evaluateMergeReadiness reports computing while mergeable is null', () => {
   const readiness = evaluateMergeReadiness(detail({ mergeable: null, mergeableState: 'unknown' }));
 

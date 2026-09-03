@@ -30,6 +30,20 @@ describe('resolveAgentDeliveryPhase', () => {
 
     expect(
       resolveAgentDeliveryPhase({
+        pr: { ...base, mergeable: false, mergeableState: 'dirty' },
+        checks: { rollup: 'failure', failing: 2 },
+      }),
+    ).toBe('has_conflicts');
+
+    expect(
+      resolveAgentDeliveryPhase({
+        pr: { ...base, draft: true, mergeable: false, mergeableState: 'draft' },
+        checks: { rollup: 'success', failing: 0 },
+      }),
+    ).toBe('has_conflicts');
+
+    expect(
+      resolveAgentDeliveryPhase({
         pr: base,
         checks: { rollup: 'failure', failing: 2 },
       }),

@@ -27,7 +27,7 @@ export function hasActiveOrQueuedTemplate(
 export async function startAutomationTemplate(
   ctx: AppContext,
   agentId: string,
-  template: 'fix-ci' | 'address-review',
+  template: 'fix-ci' | 'address-review' | 'resolve-conflicts',
 ): Promise<ChatSession | null> {
   const agent = ctx.repos.agents.getById(agentId);
   if (!agent || agent.archivedAt) return null;

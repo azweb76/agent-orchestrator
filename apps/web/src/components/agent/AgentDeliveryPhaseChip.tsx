@@ -1,6 +1,7 @@
 import { Chip } from '@mui/material';
 import ArchitectureOutlinedIcon from '@mui/icons-material/ArchitectureOutlined';
 import BuildOutlinedIcon from '@mui/icons-material/BuildOutlined';
+import CallMergeOutlinedIcon from '@mui/icons-material/CallMergeOutlined';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
@@ -19,6 +20,7 @@ function phaseColor(
   phase: AgentDeliveryPhase,
 ): 'default' | 'info' | 'warning' | 'error' | 'success' | 'secondary' {
   switch (phase) {
+    case 'has_conflicts':
     case 'checks_failing':
     case 'changes_requested':
       return 'error';
@@ -49,6 +51,8 @@ function phaseIcon(phase: AgentDeliveryPhase): ReactElement {
     case 'awaiting_review':
     case 'needs_pr':
       return <PullRequestStatusIcon status="open" sx={sx} />;
+    case 'has_conflicts':
+      return <CallMergeOutlinedIcon sx={sx} />;
     case 'checks_failing':
       return <BugReportOutlinedIcon sx={sx} />;
     case 'changes_requested':
