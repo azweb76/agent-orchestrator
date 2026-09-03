@@ -7,6 +7,7 @@ import { initDatabase, createRepositories } from './db/index.js';
 import { ClaudeService, GitService } from './services/git.js';
 import { GitHubService } from './services/github.js';
 import { JiraService } from './services/jira.js';
+import { resolveJiraApiToken } from './services/jira/credentials.js';
 import { AnthropicService } from './services/anthropic.js';
 import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
@@ -38,7 +39,7 @@ const ctx: AppContext = {
   jira: new JiraService({
     baseUrl: process.env.JIRA_BASE_URL,
     email: process.env.JIRA_EMAIL,
-    apiToken: process.env.JIRA_API_TOKEN,
+    apiToken: resolveJiraApiToken(),
   }),
   claude: new ClaudeService(claudeBin, path.join(dataDir, 'runs')),
   anthropic: new AnthropicService(),

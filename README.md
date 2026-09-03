@@ -69,7 +69,7 @@ pnpm dev
 | `GITHUB_LOGIN` | Optional GitHub username override for PR inbox searches | from token `/user` |
 | `JIRA_BASE_URL` | Jira Cloud site URL (e.g. `https://your-domain.atlassian.net`) | — |
 | `JIRA_EMAIL` | Atlassian account email for Jira API auth | — |
-| `JIRA_API_TOKEN` | Atlassian API token for Jira | — |
+| `JIRA_API_TOKEN` | Atlassian API token for Jira. On macOS, falls back to keychain item `jira-api-token` for `$USER` when unset (`security find-generic-password -a "$USER" -s jira-api-token -w`) | — |
 | `CLAUDE_BIN` | Path to Claude Code binary | `claude` |
 | `DATA_DIR` | Directory for repos, worktrees, and SQLite DB | `./data` |
 | `PORT` | Server port | `3001` |
