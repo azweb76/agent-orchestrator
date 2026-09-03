@@ -28,12 +28,13 @@ function session(overrides: Partial<ChatSession> & Pick<ChatSession, 'id' | 'tem
   };
 }
 
-test('mutating templates are build, create-draft-pr, address-review, and fix-ci', () => {
+test('mutating templates are build, create-draft-pr, address-review, fix-ci, and resolve-conflicts', () => {
   assert.deepEqual([...GIT_MUTATING_SESSION_TEMPLATES], [
     'build',
     'create-draft-pr',
     'address-review',
     'fix-ci',
+    'resolve-conflicts',
   ]);
   assert.equal(isGitMutatingSessionTemplate('chat'), false);
   assert.equal(isGitMutatingSessionTemplate('review'), false);

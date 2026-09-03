@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -11,10 +11,7 @@ import {
   Tab,
   Tabs,
 } from '@mui/material';
-import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { evaluateMergeReadiness } from '@agent-orchestrator/shared';
 import type { ChatSessionTemplateId } from '@agent-orchestrator/shared';
@@ -24,6 +21,7 @@ import { MergeReadinessPanel } from '../components/pr/MergeReadinessPanel';
 import { PullRequestChecksTab } from '../components/pr/PullRequestChecksTab';
 import { PullRequestCommitsTab } from '../components/pr/PullRequestCommitsTab';
 import { PullRequestConversationTab } from '../components/pr/PullRequestConversationTab';
+import { PullRequestDetailActions } from '../components/pr/PullRequestDetailActions';
 import { PullRequestFilesTab } from '../components/pr/PullRequestFilesTab';
 import { PullRequestOverviewTab } from '../components/pr/PullRequestOverviewTab';
 import { PullRequestReviewsTab } from '../components/pr/PullRequestReviewsTab';
@@ -130,7 +128,7 @@ function PullRequestDetailContent({
         owner,
         repo,
         prNumber,
-        template: template as 'fix-ci' | 'address-review',
+        template: template as 'fix-ci' | 'address-review' | 'resolve-conflicts',
       });
       return { agentId: result.agent.id, template, sessionId: result.sessionId };
     },
@@ -212,83 +210,14 @@ function PullRequestDetailContent({
         }
         actions={
           <>
-            {pr.state === 'open' && !pr.merged && (checksQuery.data?.failing ?? 0) > 0 ? (
-              <ControlTooltip
-                title={
-                  pr.archived
-                    ? 'This repository is archived and read-only.'
-                    : 'Start a Claude agent to fix failing CI checks'
-                }
-                disabled={startTemplate.isPending || pr.archived}
-              >
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<BugReportOutlinedIcon />}
-                  disabled={startTemplate.isPending || pr.archived}
-                  onClick={() => startTemplate.mutate('fix-ci')}
-                >
-                  Fix CI
-                </Button>
-              </ControlTooltip>
-            ) : null}
-            {pr.state === 'open' && !pr.merged ? (
-              <ControlTooltip
-                title={
-                  pr.archived
-                    ? 'This repository is archived and read-only.'
-                    : 'Start a Claude agent to address review feedback'
-                }
-                disabled={startTemplate.isPending || pr.archived}
-              >
-                <Button
-                  variant="outlined"
-                  startIcon={<ReplyOutlinedIcon />}
-                  disabled={startTemplate.isPending || pr.archived}
-                  onClick={() => startTemplate.mutate('address-review')}
-                >
-                  Address review
-                </Button>
-              </ControlTooltip>
-            ) : null}
-            {pr.agentId ? (
-              <ControlTooltip title="Open the agent working on this pull request">
-                <Button
-                  component={RouterLink}
-                  to={`/agents/${pr.agentId}`}
-                  variant="outlined"
-                  startIcon={<SmartToyOutlinedIcon />}
-                >
-                  Open agent
-                </Button>
-              </ControlTooltip>
-            ) : (
-              <ControlTooltip
-                title={
-                  pr.archived
-                    ? 'This repository is archived and read-only.'
-                    : pr.workspaceId
-                      ? 'Create a worktree and Claude agent for this pull request'
-                      : 'Clone the repository and start a Claude agent for this pull request'
-                }
-                disabled={createAgent.isPending || pr.archived}
-              >
-                <Button
-                  variant="outlined"
-                  startIcon={
-                    createAgent.isPending ? (
-                      <CircularProgress size={16} color="inherit" />
-                    ) : (
-                      <SmartToyOutlinedIcon />
-                    )
-                  }
-                  disabled={createAgent.isPending || pr.archived}
-                  onClick={() => createAgent.mutate()}
-                >
-                  {pr.workspaceId ? 'Create agent' : 'Start agent'}
-                </Button>
-              </ControlTooltip>
-            )}
+            <PullRequestDetailActions
+              pr={pr}
+              failingChecks={checksQuery.data?.failing ?? 0}
+              createPending={createAgent.isPending}
+              templatePending={startTemplate.isPending}
+              onCreateAgent={() => createAgent.mutate()}
+              onStartTemplate={(template) => startTemplate.mutate(template)}
+            />
             <ControlTooltip title="Open this pull request on GitHub">
               <Button
                 variant="outlined"

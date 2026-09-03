@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, Button, Stack, Typography } from '@mui/material';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import CallMergeOutlinedIcon from '@mui/icons-material/CallMergeOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
@@ -18,6 +19,8 @@ import { MergedPrCompletionBanner } from './MergedPrCompletionBanner';
 import { useAgentLinkedPr } from './useAgentLinkedPr';
 
 const DISMISS_PREFIX = 'ao.pr-action-dismiss:';
+
+type PrKickoffTemplate = 'resolve-conflicts' | 'fix-ci' | 'address-review';
 
 function readDismissed(agentId: string): Set<string> {
   try {
@@ -40,6 +43,8 @@ function writeDismissed(agentId: string, fingerprints: Set<string>): void {
 
 function actionIcon(kind: AgentPrActionKind) {
   switch (kind) {
+    case 'resolve_conflicts':
+      return <CallMergeOutlinedIcon />;
     case 'fix_ci':
       return <BugReportOutlinedIcon />;
     case 'address_review':
@@ -54,6 +59,8 @@ function actionIcon(kind: AgentPrActionKind) {
 function primaryLabel(kind: AgentPrActionKind, pending: boolean): string {
   if (pending) return 'Working…';
   switch (kind) {
+    case 'resolve_conflicts':
+      return 'Resolve conflicts';
     case 'fix_ci':
       return 'Fix CI';
     case 'address_review':
@@ -65,6 +72,18 @@ function primaryLabel(kind: AgentPrActionKind, pending: boolean): string {
   }
 }
 
+function isKickoffKind(
+  kind: AgentPrActionKind,
+): kind is 'resolve_conflicts' | 'fix_ci' | 'address_review' {
+  return kind === 'resolve_conflicts' || kind === 'fix_ci' || kind === 'address_review';
+}
+
+function kickoffTemplate(kind: 'resolve_conflicts' | 'fix_ci' | 'address_review'): PrKickoffTemplate {
+  if (kind === 'resolve_conflicts') return 'resolve-conflicts';
+  if (kind === 'fix_ci') return 'fix-ci';
+  return 'address-review';
+}
+
 export interface AgentPrActionOffersProps {
   agent: AgentDetail;
   archived: boolean;
@@ -74,7 +93,7 @@ export interface AgentPrActionOffersProps {
 }
 
 /**
- * Dismissible PR action cards (Fix CI, Address review, Mark ready, Merge).
+ * Dismissible PR action cards (Resolve conflicts, Fix CI, Address review, …).
  * Shares PR/checks queries with the status strip via React Query cache.
  */
 export function AgentPrActionOffers({
@@ -110,7 +129,7 @@ export function AgentPrActionOffers({
   };
 
   const startTemplate = useMutation({
-    mutationFn: async (template: 'fix-ci' | 'address-review') => {
+    mutationFn: async (template: PrKickoffTemplate) => {
       const result = await api.createAgentFromPr({
         owner,
         repo,
@@ -159,13 +178,13 @@ export function AgentPrActionOffers({
   const offer = offers[0];
   const pending =
     Boolean(offer) &&
-    (((offer.kind === 'fix_ci' || offer.kind === 'address_review') && startTemplate.isPending) ||
+    ((isKickoffKind(offer.kind) && startTemplate.isPending) ||
       (offer.kind === 'mark_ready' && markReady.isPending));
 
   const actionError =
     offer == null
       ? null
-      : offer.kind === 'fix_ci' || offer.kind === 'address_review'
+      : isKickoffKind(offer.kind)
         ? (startTemplate.error as Error | null)
         : offer.kind === 'mark_ready'
           ? (markReady.error as Error | null)
@@ -199,8 +218,7 @@ export function AgentPrActionOffers({
                   size="small"
                   disabled={pending}
                   onClick={() => {
-                    if (offer.kind === 'fix_ci') startTemplate.mutate('fix-ci');
-                    else if (offer.kind === 'address_review') startTemplate.mutate('address-review');
+                    if (isKickoffKind(offer.kind)) startTemplate.mutate(kickoffTemplate(offer.kind));
                     else if (offer.kind === 'mark_ready') markReady.mutate();
                     else setMergeOffer(offer);
                   }}

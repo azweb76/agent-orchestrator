@@ -92,6 +92,7 @@ const SESSION_TEMPLATES = new Set<ChatSessionTemplateId>([
   'review',
   'address-review',
   'fix-ci',
+  'resolve-conflicts',
 ]);
 
 function parseSessionTemplate(value: unknown): ChatSessionTemplateId {

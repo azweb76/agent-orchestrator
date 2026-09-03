@@ -41,6 +41,21 @@ function allowedMethods(pr: PullRequestDetail): PullRequestMergeMethod[] {
   return pr.allowedMergeMethods.filter((method) => method !== 'rebase' || pr.rebaseable === true);
 }
 
+/**
+ * True when GitHub reports merge conflicts with the base branch.
+ *
+ * Draft PRs often keep `mergeable_state: "draft"` even when conflicted; in that
+ * case `mergeable === false` is the conflict signal. Ready PRs use `"dirty"`.
+ */
+export function isPullRequestConflicted(
+  pr: Pick<PullRequestDetail, 'state' | 'merged' | 'draft' | 'mergeable' | 'mergeableState'>,
+): boolean {
+  if (pr.merged || pr.state !== 'open') return false;
+  if (pr.mergeable === null || pr.mergeableState === 'unknown') return false;
+  if (pr.mergeableState === 'dirty') return true;
+  return pr.mergeable === false && (pr.draft || pr.mergeableState === 'draft');
+}
+
 function computeMergeReadiness(pr: PullRequestDetail): MergeReadiness {
   const base: MergeReadiness = {
     computing: false,
@@ -62,15 +77,6 @@ function computeMergeReadiness(pr: PullRequestDetail): MergeReadiness {
     return { ...base, reason: 'This pull request is closed.', severity: 'info', allowedMethods: [] };
   }
 
-  if (pr.draft) {
-    return {
-      ...base,
-      canUpdateBranch: true,
-      reason: 'Draft pull requests cannot be merged. Mark it ready for review first.',
-      severity: 'info',
-    };
-  }
-
   if (pr.mergeable === null || pr.mergeableState === 'unknown') {
     return {
       ...base,
@@ -80,14 +86,26 @@ function computeMergeReadiness(pr: PullRequestDetail): MergeReadiness {
     };
   }
 
+  // Conflicts always surface, including on draft PRs (do not hide behind draft messaging).
+  if (isPullRequestConflicted(pr)) {
+    return {
+      ...base,
+      conflicted: true,
+      reason: 'This branch has conflicts with the base branch. Resolve them, then push.',
+      severity: 'error',
+    };
+  }
+
+  if (pr.draft || pr.mergeableState === 'draft') {
+    return {
+      ...base,
+      canUpdateBranch: true,
+      reason: 'Draft pull requests cannot be merged. Mark it ready for review first.',
+      severity: 'info',
+    };
+  }
+
   switch (pr.mergeableState) {
-    case 'dirty':
-      return {
-        ...base,
-        conflicted: true,
-        reason: 'This branch has conflicts with the base branch. Resolve them locally, then push.',
-        severity: 'error',
-      };
     case 'blocked':
       return {
         ...base,

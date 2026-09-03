@@ -26,6 +26,8 @@ export interface AgentPrStripModel {
   checksTone: 'success' | 'error' | 'warning' | 'default';
   reviewLabel: string | null;
   mergeHint: string | null;
+  conflicted: boolean;
+  showResolveConflicts: boolean;
   showFixCi: boolean;
   showAddressReview: boolean;
   showMarkReady: boolean;
@@ -34,7 +36,12 @@ export interface AgentPrStripModel {
   open: boolean;
 }
 
-export type AgentPrActionKind = 'fix_ci' | 'address_review' | 'mark_ready' | 'merge';
+export type AgentPrActionKind =
+  | 'resolve_conflicts'
+  | 'fix_ci'
+  | 'address_review'
+  | 'mark_ready'
+  | 'merge';
 
 export interface AgentPrActionOffer {
   kind: AgentPrActionKind;
@@ -45,9 +52,11 @@ export interface AgentPrActionOffer {
   severity: 'error' | 'warning' | 'info' | 'success';
 }
 
+type KickoffTemplate = 'resolve-conflicts' | 'fix-ci' | 'address-review';
+
 function templateBusy(
   sessions: readonly Pick<ChatSession, 'template' | 'status'>[] | undefined,
-  template: 'fix-ci' | 'address-review',
+  template: KickoffTemplate,
 ): boolean {
   return Boolean(
     sessions?.some(
@@ -79,7 +88,8 @@ export function buildAgentPrStripModel(input: {
         : CHECKS_LABEL[rollup];
 
   let checksTone: AgentPrStripModel['checksTone'] = 'default';
-  if (rollup === 'success') checksTone = 'success';
+  if (readiness.conflicted) checksTone = 'error';
+  else if (rollup === 'success') checksTone = 'success';
   else if (rollup === 'failure') checksTone = 'error';
   else if (rollup === 'pending') checksTone = 'warning';
 
@@ -108,9 +118,11 @@ export function buildAgentPrStripModel(input: {
     checksTone,
     reviewLabel,
     mergeHint,
+    conflicted: readiness.conflicted,
+    showResolveConflicts: canAct && readiness.conflicted,
     showFixCi: canAct && (checks?.failing ?? 0) > 0,
     showAddressReview: canAct,
-    showMarkReady: canAct && pr.draft && checks?.rollup === 'success',
+    showMarkReady: canAct && pr.draft && checks?.rollup === 'success' && !readiness.conflicted,
     showOpenPr: !pr.merged,
     open,
   };
@@ -118,7 +130,8 @@ export function buildAgentPrStripModel(input: {
 
 /**
  * Event-style action cards for the agent page. Prefer one primary offer at a
- * time so CI / review / ready / merge do not stack into a wall of alerts.
+ * time so conflict / CI / review / ready / merge do not stack into a wall of alerts.
+ * Merge conflicts always win — nothing else can land until they are resolved.
  */
 export function buildAgentPrActionOffers(input: {
   pr: PullRequestDetail;
@@ -132,7 +145,15 @@ export function buildAgentPrActionOffers(input: {
   const readiness = evaluateMergeReadiness(pr);
   const offers: AgentPrActionOffer[] = [];
 
-  if ((checks?.failing ?? 0) > 0 && !templateBusy(sessions, 'fix-ci')) {
+  if (readiness.conflicted && !templateBusy(sessions, 'resolve-conflicts')) {
+    offers.push({
+      kind: 'resolve_conflicts',
+      fingerprint: `resolve_conflicts:${pr.number}:${pr.headSha}:${pr.mergeableState}`,
+      title: 'Merge conflicts with base',
+      body: 'This branch conflicts with the base branch. Start Resolve conflicts to merge or rebase and push a clean result.',
+      severity: 'error',
+    });
+  } else if ((checks?.failing ?? 0) > 0 && !templateBusy(sessions, 'fix-ci')) {
     offers.push({
       kind: 'fix_ci',
       fingerprint: `fix_ci:${pr.number}:${pr.headSha}:${checks?.failing ?? 0}`,

@@ -119,6 +119,7 @@ export type {
 
 export {
   evaluateMergeReadiness,
+  isPullRequestConflicted,
   parsePullRequestNumber,
   pullRequestMatchesQuery,
   rollupChecks,

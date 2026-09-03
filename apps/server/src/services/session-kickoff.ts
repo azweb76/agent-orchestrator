@@ -23,6 +23,8 @@ const ADDRESS_REVIEW_INSPECT =
   'Start by inspecting the open PR, its reviews, review comments, and conversation comments.';
 const FIX_CI_INSPECT =
   'Start by inspecting the open pull request (if any) and its check runs or commit statuses.';
+const RESOLVE_CONFLICTS_INSPECT =
+  'Start by fetching the base branch, merging or rebasing onto it, and listing conflicting files.';
 
 export interface SessionKickoffDeps {
   repos: AppRepositories;
@@ -32,6 +34,8 @@ export interface SessionKickoffDeps {
 interface ResolvedOpenPr {
   summary: GitHubPullRequest;
   headSha: string;
+  baseRef: string;
+  mergeableState: string;
 }
 
 export async function buildTemplateKickoffPrompt(
@@ -40,7 +44,11 @@ export async function buildTemplateKickoffPrompt(
   templateId: ChatSessionTemplateId,
   basePrompt: string,
 ): Promise<string> {
-  if (templateId !== 'address-review' && templateId !== 'fix-ci') {
+  if (
+    templateId !== 'address-review' &&
+    templateId !== 'fix-ci' &&
+    templateId !== 'resolve-conflicts'
+  ) {
     return basePrompt;
   }
 
@@ -53,15 +61,26 @@ export async function buildTemplateKickoffPrompt(
     if (templateId === 'address-review') {
       return await buildAddressReviewKickoff(deps.github, workspace, worktree, basePrompt);
     }
-    return await buildFixCiKickoff(deps.github, workspace, worktree, basePrompt);
+    if (templateId === 'fix-ci') {
+      return await buildFixCiKickoff(deps.github, workspace, worktree, basePrompt);
+    }
+    return await buildResolveConflictsKickoff(deps.github, workspace, worktree, basePrompt);
   } catch (error) {
     const note = `Could not load PR/CI context: ${formatError(error)}`;
     return joinSections([note, fallbackPrompt(templateId, basePrompt)]);
   }
 }
 
-function fallbackPrompt(templateId: 'address-review' | 'fix-ci', basePrompt: string): string {
-  const inspect = templateId === 'address-review' ? ADDRESS_REVIEW_INSPECT : FIX_CI_INSPECT;
+function fallbackPrompt(
+  templateId: 'address-review' | 'fix-ci' | 'resolve-conflicts',
+  basePrompt: string,
+): string {
+  const inspect =
+    templateId === 'address-review'
+      ? ADDRESS_REVIEW_INSPECT
+      : templateId === 'fix-ci'
+        ? FIX_CI_INSPECT
+        : RESOLVE_CONFLICTS_INSPECT;
   return `${basePrompt} ${inspect}`;
 }
 
@@ -84,7 +103,12 @@ async function resolveOpenPullRequest(
         workspace.githubRepo,
         byNumber.number,
       );
-      return { summary: byNumber, headSha: detail.headSha };
+      return {
+        summary: byNumber,
+        headSha: detail.headSha,
+        baseRef: detail.baseRef,
+        mergeableState: detail.mergeableState,
+      };
     }
   }
 
@@ -100,7 +124,12 @@ async function resolveOpenPullRequest(
     workspace.githubRepo,
     pr.number,
   );
-  return { summary: pr, headSha: detail.headSha };
+  return {
+    summary: pr,
+    headSha: detail.headSha,
+    baseRef: detail.baseRef,
+    mergeableState: detail.mergeableState,
+  };
 }
 
 async function buildAddressReviewKickoff(
@@ -214,6 +243,29 @@ async function buildFixCiKickoff(
       ),
     ),
   );
+}
+
+async function buildResolveConflictsKickoff(
+  github: GitHubService,
+  workspace: Workspace,
+  worktree: Worktree,
+  basePrompt: string,
+): Promise<string> {
+  const resolved = await resolveOpenPullRequest(github, workspace, worktree);
+  if (!resolved) {
+    return joinSections([
+      `No open pull request was found for branch \`${worktree.branch}\`.`,
+      basePrompt,
+    ]);
+  }
+
+  const { summary: pr, headSha, baseRef, mergeableState } = resolved;
+  return joinSections([
+    formatPrHeader(pr, worktree.branch, headSha),
+    `Mergeable state: \`${mergeableState}\`. Resolve conflicts against base \`${baseRef}\`.`,
+    RESOLVE_CONFLICTS_INSPECT,
+    basePrompt,
+  ]);
 }
 
 function formatPrHeader(pr: GitHubPullRequest, branch: string, headSha?: string): string {

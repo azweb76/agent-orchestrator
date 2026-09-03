@@ -1,4 +1,5 @@
 import type { ChatSession } from './chat-session.js';
+import { isPullRequestConflicted } from './pull-request.js';
 import type { AgentStatus } from './types/entities.js';
 import type { PullRequestChecks, PullRequestDetail } from './types/github.js';
 
@@ -11,6 +12,7 @@ export type AgentDeliveryPhase =
   | 'building'
   | 'needs_pr'
   | 'pr_draft'
+  | 'has_conflicts'
   | 'checks_failing'
   | 'awaiting_review'
   | 'changes_requested'
@@ -23,6 +25,7 @@ export const AGENT_DELIVERY_PHASE_LABELS: Record<AgentDeliveryPhase, string> = {
   building: 'Building',
   needs_pr: 'Needs PR',
   pr_draft: 'Draft PR',
+  has_conflicts: 'Conflicts',
   checks_failing: 'CI failing',
   awaiting_review: 'Awaiting review',
   changes_requested: 'Changes requested',
@@ -50,6 +53,7 @@ function anyBusy(
       (session.template === 'build' ||
         session.template === 'fix-ci' ||
         session.template === 'address-review' ||
+        session.template === 'resolve-conflicts' ||
         session.template === 'create-draft-pr') &&
       (session.status === 'running' || session.status === 'queued'),
   );
@@ -95,6 +99,7 @@ export function resolveAgentDeliveryPhase(input: {
   const { building, planning } = anyBusy(sessions);
 
   if (pr && pr.state === 'open') {
+    if (isPullRequestConflicted(pr)) return 'has_conflicts';
     if (input.checks && input.checks.failing > 0) return 'checks_failing';
     if (pr.reviewCommentCount > 0) return 'changes_requested';
     if (looksMergeable(pr)) return 'ready_to_merge';

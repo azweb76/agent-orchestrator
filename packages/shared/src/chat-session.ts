@@ -8,7 +8,8 @@ export type ChatSessionTemplateId =
   | 'create-draft-pr'
   | 'review'
   | 'address-review'
-  | 'fix-ci';
+  | 'fix-ci'
+  | 'resolve-conflicts';
 
 export const SESSION_GRADE_SCORES = [1, 2, 3, 4, 5] as const;
 export type SessionGradeScore = (typeof SESSION_GRADE_SCORES)[number];
@@ -190,6 +191,19 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     listed: true,
   },
   {
+    id: 'resolve-conflicts',
+    title: 'Resolve conflicts',
+    description: 'Merge the base branch and resolve conflicts on this PR.',
+    permissionMode: 'auto',
+    prompt: [
+      'This pull request has merge conflicts with the base branch.',
+      'Merge or rebase onto the base branch, resolve every conflict carefully, keep existing tests green, and push the result.',
+      'Prefer preserving intent from both sides; do not drop unrelated changes.',
+      'Do not merge the pull request. Summarize which files conflicted and how you resolved them.',
+    ].join(' '),
+    listed: true,
+  },
+  {
     id: 'build',
     title: 'Build',
     description: 'Implement an approved plan in auto mode.',
@@ -207,6 +221,7 @@ export const GIT_MUTATING_SESSION_TEMPLATES: readonly ChatSessionTemplateId[] = 
   'create-draft-pr',
   'address-review',
   'fix-ci',
+  'resolve-conflicts',
 ];
 
 const GIT_MUTATING_SESSION_TEMPLATE_SET = new Set<ChatSessionTemplateId>(

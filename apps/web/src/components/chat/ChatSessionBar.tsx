@@ -19,6 +19,7 @@ import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
+import CallMergeOutlinedIcon from '@mui/icons-material/CallMergeOutlined';
 import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
@@ -45,6 +46,7 @@ function templateIcon(id: string) {
   if (id === 'review') return <RateReviewOutlinedIcon fontSize="small" />;
   if (id === 'address-review') return <ReplyOutlinedIcon fontSize="small" />;
   if (id === 'fix-ci') return <BugReportOutlinedIcon fontSize="small" />;
+  if (id === 'resolve-conflicts') return <CallMergeOutlinedIcon fontSize="small" />;
   if (id === 'create-draft-pr') return <MergeTypeIcon fontSize="small" />;
   return <ChatOutlinedIcon fontSize="small" />;
 }

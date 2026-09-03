@@ -12,9 +12,16 @@ import { createAgentSession } from './app.js';
 import { GitHubService } from './github.js';
 import { seedAgent } from './chat-sessions.test-helpers.js';
 
-test('listed templates include Create draft PR, Review, Address review, and Fix CI', () => {
+test('listed templates include Create draft PR, Review, Address review, Fix CI, and Resolve conflicts', () => {
   const ids = LISTED_CHAT_SESSION_TEMPLATES.map((item) => item.id);
-  assert.deepEqual(ids, ['chat', 'create-draft-pr', 'review', 'address-review', 'fix-ci']);
+  assert.deepEqual(ids, [
+    'chat',
+    'create-draft-pr',
+    'review',
+    'address-review',
+    'fix-ci',
+    'resolve-conflicts',
+  ]);
   for (const template of CHAT_SESSION_TEMPLATES) {
     assert.ok(!template.prompt?.includes('ExitPlanMode'));
     assert.ok(!template.prompt?.includes('AskUserQuestion'));

@@ -254,7 +254,7 @@ export interface CreateAgentFromPrRequest {
   prNumber: number;
   name?: string;
   /** When an agent already exists for this PR, start this template on it instead of creating a worktree. */
-  template?: 'fix-ci' | 'address-review';
+  template?: 'fix-ci' | 'address-review' | 'resolve-conflicts';
 }
 
 export interface GitHubIssue {

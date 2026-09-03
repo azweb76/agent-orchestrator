@@ -9,6 +9,7 @@ export const sessionTemplate = z.enum([
   'review',
   'address-review',
   'fix-ci',
+  'resolve-conflicts',
 ]);
 
 export const mentionBody = z

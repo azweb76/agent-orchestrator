@@ -71,7 +71,10 @@ export async function createAgentSession(
     ? taskKickoffPrompt(task)
     : (template?.prompt ?? null);
   const kickoffPrompt =
-    basePrompt && (session.template === 'address-review' || session.template === 'fix-ci')
+    basePrompt &&
+    (session.template === 'address-review' ||
+      session.template === 'fix-ci' ||
+      session.template === 'resolve-conflicts')
       ? await buildTemplateKickoffPrompt(
           { repos: ctx.repos, github: ctx.github },
           agent.worktreeId,
