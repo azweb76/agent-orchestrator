@@ -150,6 +150,16 @@ function migrateSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_agent_memories_workspace ON agent_memories(workspace_id, status);
     CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_id, status);
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS assistant_messages (
+      id TEXT PRIMARY KEY,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_assistant_messages_created ON assistant_messages(created_at);
+  `);
 }
 
 function backfillSessionSearchIndexTable(db: Database.Database): void {

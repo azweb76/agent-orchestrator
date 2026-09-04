@@ -1,5 +1,6 @@
 import { apiAgentTasks } from './apiAgentTasks';
 import { apiAgents } from './apiAgents';
+import { apiAssistant } from './apiAssistant';
 import { apiGitHub } from './apiGitHub';
 import { apiJira } from './apiJira';
 import { apiSetup } from './apiSetup';
@@ -27,6 +28,7 @@ export const api = {
   ...apiJira,
   ...apiAgents,
   ...apiAgentTasks,
+  ...apiAssistant,
   getAutomationSettings,
   triggerAutomationPollNow,
   updateAutomationSettings,
