@@ -34,8 +34,8 @@ function githubPrUrl(owner: string, repo: string, prNumber: number, htmlUrl?: st
 }
 
 /**
- * Simplified agent chrome: open the linked PR on GitHub, plus a single Changes
- * menu for commit / push / draft PR / mark ready / merge.
+ * Agent header actions: Create Draft PR when none exists; Open on GitHub plus a
+ * Changes menu (commit / mark ready / merge) when a PR is linked.
  */
 export function AgentShipActions({
   agent,
@@ -91,8 +91,11 @@ export function AgentShipActions({
   const canMerge =
     open && !pr?.draft && !archived && Boolean(pr && evaluateMergeReadiness(pr).canMerge);
   const canCreateDraft = !enabled && !archived;
-  const showChangesMenu =
-    !archived && (hasPendingChanges || canCreateDraft || canMarkReady || canMerge);
+  const showPrChangesMenu =
+    enabled &&
+    !archived &&
+    (hasPendingChanges || canMarkReady || canMerge);
+  const showNoPrChangesMenu = canCreateDraft && hasPendingChanges;
 
   const busy = markReady.isPending || mergeMutation.isPending;
   const actionError = (markReady.error as Error | null) ?? (mergeMutation.error as Error | null);
@@ -100,6 +103,19 @@ export function AgentShipActions({
   return (
     <>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+        {canCreateDraft ? (
+          <ControlTooltip title="Create a draft pull request on GitHub">
+            <Button
+              size="small"
+              variant="contained"
+              startIcon={<PublishOutlinedIcon />}
+              onClick={onCreateDraftPr}
+            >
+              Create Draft PR
+            </Button>
+          </ControlTooltip>
+        ) : null}
+
         {enabled && prNumber != null ? (
           <ControlTooltip title={`Open pull request #${prNumber} on GitHub`}>
             <Button
@@ -116,8 +132,15 @@ export function AgentShipActions({
           </ControlTooltip>
         ) : null}
 
-        {showChangesMenu ? (
-          <ControlTooltip title="Commit, push, or advance the pull request" disabled={busy}>
+        {showPrChangesMenu || showNoPrChangesMenu ? (
+          <ControlTooltip
+            title={
+              showNoPrChangesMenu
+                ? 'Commit or push local changes'
+                : 'Commit, mark ready, or merge'
+            }
+            disabled={busy}
+          >
             <Button
               size="small"
               variant="outlined"
@@ -164,19 +187,6 @@ export function AgentShipActions({
               <UploadOutlinedIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>Commit &amp; push</ListItemText>
-          </MenuItem>
-        ) : null}
-        {canCreateDraft ? (
-          <MenuItem
-            onClick={() => {
-              setMenuAnchor(null);
-              onCreateDraftPr();
-            }}
-          >
-            <ListItemIcon>
-              <PublishOutlinedIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Create draft PR</ListItemText>
           </MenuItem>
         ) : null}
         {canMarkReady ? (

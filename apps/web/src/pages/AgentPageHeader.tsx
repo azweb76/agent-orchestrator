@@ -14,6 +14,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
+import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
 import { AgentShipActions } from '../components/agent/AgentShipActions';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
@@ -48,6 +49,7 @@ export function AgentPageHeader({
 }: AgentPageHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const busy = archivePending || unarchivePending;
+  const hasPr = agent.worktree.prNumber != null && agent.worktree.prNumber > 0;
 
   return (
     <Stack spacing={0.75} sx={{ flexShrink: 0 }}>
@@ -82,7 +84,10 @@ export function AgentPageHeader({
                 variant="outlined"
               />
             ) : null}
-            <AgentDeliveryPhaseChip agent={agent} archived={archived} />
+            {/* PR status strip owns delivery once a PR is linked */}
+            {!hasPr || archived ? (
+              <AgentDeliveryPhaseChip agent={agent} archived={archived} />
+            ) : null}
           </Stack>
           <Typography
             variant="caption"
@@ -118,6 +123,8 @@ export function AgentPageHeader({
           </ControlTooltip>
         </Stack>
       </Stack>
+
+      {hasPr ? <AgentPrStatusStrip agent={agent} /> : null}
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
         {archived ? (
