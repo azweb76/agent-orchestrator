@@ -9,6 +9,8 @@ import type {
   CreateWorktreeFromIdeaRequest,
   CreateWorktreeFromIssueRequest,
   CreateWorktreeFromPrRequest,
+  EffortLevel,
+  PermissionMode,
   Workspace,
   Worktree,
   WorktreeWithAgent,
@@ -17,9 +19,11 @@ import { slugify } from './git.js';
 import { resolveExplicitBranchName } from './branch-name.js';
 import { mergeLivePullRequest } from './pr-overlay.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
-import { clearSessionRunFields, createAgentForWorktree } from './agent-core.js';
-import { markStreamingAssistantStopped } from './chat-run-lifecycle.js';
+import { createAgentForWorktree } from './agent-core.js';
 import { requireAgentTaskByName } from './agent-tasks.js';
+import { addNewBranchWorktree } from './worktree-new-branch.js';
+
+export { deleteWorktree } from './worktree-delete.js';
 
 // Overlays a live GitHub PR lookup (by branch) onto a worktree's prNumber/prTitle.
 // Falls back to the worktree's existing (DB-stored) values when no GitHub token is
@@ -59,10 +63,19 @@ export async function listWorktrees(ctx: AppContext, workspaceId: string): Promi
   }));
 }
 
+type AgentCreateOptions = {
+  task?: AgentTask;
+  model?: string;
+  effort?: EffortLevel;
+  permissionMode?: PermissionMode;
+  agentName?: string;
+};
+
 export async function createWorktreeFromBranch(
   ctx: AppContext,
   workspaceId: string,
   body: CreateWorktreeFromBranchRequest,
+  agentOptions?: AgentCreateOptions,
 ) {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
@@ -72,14 +85,17 @@ export async function createWorktreeFromBranch(
   const id = uuidv4();
 
   const baseBranch = body.baseBranch ?? workspace.defaultBranch;
-  await ctx.git.fetch(workspace.repoPath);
-
   if (body.createNew) {
-    await ctx.git.addWorktree(workspace.repoPath, worktreePath, body.branch, {
-      createBranch: true,
-      startRef: `origin/${baseBranch}`,
-    });
+    await addNewBranchWorktree(
+      ctx,
+      workspace,
+      worktreePath,
+      body.branch,
+      baseBranch,
+      body.overwrite,
+    );
   } else {
+    await ctx.git.fetch(workspace.repoPath);
     await ctx.git.addWorktree(workspace.repoPath, worktreePath, body.branch);
   }
 
@@ -95,7 +111,17 @@ export async function createWorktreeFromBranch(
     createdAt: nowIso(),
   });
 
-  const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`);
+  const agent = await createAgentForWorktree(
+    ctx,
+    worktree.id,
+    agentOptions?.agentName ?? `${name} agent`,
+    {
+      task: agentOptions?.task,
+      model: agentOptions?.model,
+      effort: agentOptions?.effort,
+      permissionMode: agentOptions?.permissionMode,
+    },
+  );
   notify(ctx, 'workspaces_changed');
   return { worktree, agent };
 }
@@ -150,32 +176,6 @@ export async function createWorktreeFromPr(
   const agent = await createAgentForWorktree(ctx, worktree.id, `PR #${pr.number} agent`);
   notify(ctx, 'workspaces_changed');
   return { worktree, agent };
-}
-
-export async function deleteWorktree(ctx: AppContext, worktreeId: string) {
-  const worktree = ctx.repos.worktrees.getById(worktreeId);
-  if (!worktree) throw new Error('Worktree not found');
-
-  const workspace = ctx.repos.workspaces.getById(worktree.workspaceId);
-  if (!workspace) throw new Error('Workspace not found');
-
-  for (const agent of ctx.repos.agents.listByWorktreeId(worktreeId)) {
-    for (const session of ctx.repos.sessions.listByAgent(agent.id)) {
-      if (session.status === 'running' || session.pid != null) {
-        ctx.claude.stop(session.id, session.pid, session.runLogPath);
-        ctx.repos.sessions.update(
-          clearSessionRunFields(session, {
-            status: session.status === 'running' ? 'idle' : session.status,
-          }),
-        );
-        markStreamingAssistantStopped(ctx, agent.id, session.id);
-      }
-    }
-  }
-
-  await ctx.git.removeWorktree(workspace.repoPath, worktree.path);
-  ctx.repos.worktrees.delete(worktreeId);
-  notify(ctx, 'workspaces_changed');
 }
 
 async function suggestBranchNameForWorkspace(
@@ -248,37 +248,25 @@ export async function createWorktreeFromGoal(
   const branchName =
     resolveExplicitBranchName(body.branch) ??
     (await suggestBranchNameForWorkspace(ctx, workspaceId, goal));
-  const workspace = ctx.repos.workspaces.getById(workspaceId);
-  if (!workspace) throw new Error('Workspace not found');
-
   const name = body.name ?? slugify(branchName);
-  const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
-  const id = uuidv4();
-  const baseBranch = body.baseBranch ?? workspace.defaultBranch;
-  await ctx.git.fetch(workspace.repoPath);
-  await ctx.git.addWorktree(workspace.repoPath, worktreePath, branchName, {
-    createBranch: true,
-    startRef: `origin/${baseBranch}`,
-  });
 
-  const worktree = ctx.repos.worktrees.create({
-    id,
+  const { worktree, agent } = await createWorktreeFromBranch(
+    ctx,
     workspaceId,
-    name,
-    path: worktreePath,
-    branch: branchName,
-    prNumber: null,
-    prTitle: null,
-    baseBranch,
-    createdAt: nowIso(),
-  });
-
-  const agent = await createAgentForWorktree(ctx, worktree.id, `${name} agent`, {
-    task,
-    model: body.model,
-    effort: body.effort,
-  });
-  notify(ctx, 'workspaces_changed');
+    {
+      branch: branchName,
+      createNew: true,
+      baseBranch: body.baseBranch,
+      name: body.name,
+      overwrite: body.overwrite,
+    },
+    {
+      task,
+      model: body.model,
+      effort: body.effort,
+      agentName: `${name} agent`,
+    },
+  );
 
   const kickoffPrompt = renderAgentTaskPromptTemplate(task.promptTemplate, { goal });
   return { worktree, agent, branchName, goal, kickoffPrompt, task };
@@ -298,6 +286,7 @@ export async function createWorktreeFromIdea(
     task: body.task,
     model: body.model,
     effort: body.effort,
+    overwrite: body.overwrite,
   });
   return { ...result, idea: result.goal };
 }
@@ -353,6 +342,7 @@ export async function createWorktreeFromIssue(
     createNew: true,
     baseBranch: body.baseBranch,
     name: body.name,
+    overwrite: body.overwrite,
   });
 
   const configured: Agent = {

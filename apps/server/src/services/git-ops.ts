@@ -27,17 +27,31 @@ export class GitService {
     mainRepoPath: string,
     worktreePath: string,
     branch: string,
-    options: { createBranch?: boolean; startRef?: string } = {},
+    options: { createBranch?: boolean; startRef?: string; overwrite?: boolean } = {},
   ): Promise<void> {
     await fs.mkdir(path.dirname(worktreePath), { recursive: true });
     const args = ['-C', mainRepoPath, 'worktree', 'add'];
     if (options.createBranch) {
       const startRef = options.startRef ?? branch;
-      args.push('-b', branch, worktreePath, startRef);
+      const branchFlag = options.overwrite ? '-B' : '-b';
+      args.push(branchFlag, branch, worktreePath, startRef);
     } else {
       args.push(worktreePath, branch);
     }
     await execFileAsync('git', args, { maxBuffer: 10 * 1024 * 1024 });
+  }
+
+  /** True when `refs/heads/<branch>` exists in the main repo. */
+  async localBranchExists(mainRepoPath: string, branch: string): Promise<boolean> {
+    try {
+      await execFileAsync(
+        'git',
+        ['-C', mainRepoPath, 'show-ref', '--verify', '--quiet', `refs/heads/${branch}`],
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

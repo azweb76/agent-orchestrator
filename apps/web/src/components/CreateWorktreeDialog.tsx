@@ -31,11 +31,12 @@ import {
   CreateWorktreeNameField,
 } from './CreateWorktreeNameField';
 import { useCreateWorktreeMutations } from './useCreateWorktreeMutations';
+import { getBranchExistsConflict } from './branchExistsConflict';
+import { CreateAgentOverwriteConfirm } from './CreateAgentOverwriteConfirm';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 import { useComposerImages } from './chat/useComposerImages';
 import { useComposerMentions } from './chat/useComposerMentions';
-
 type CreateTab = 'branch' | 'pr' | 'goal' | 'issue' | 'jira';
 
 interface CreateWorktreeDialogProps {
@@ -145,6 +146,7 @@ export function CreateWorktreeDialog({
     createFromGoal,
     createFromIssue,
     createFromJira,
+    resetCreateErrors,
     createPending,
     createError,
   } = useCreateWorktreeMutations(
@@ -172,6 +174,7 @@ export function CreateWorktreeDialog({
     { onCloseForm: handleClose },
   );
 
+  const branchConflict = getBranchExistsConflict(createError);
   const canCreateBranch =
     branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
   const canCreate =
@@ -204,12 +207,25 @@ export function CreateWorktreeDialog({
     }
   };
 
+  const runCreate = (overwrite = false) => {
+    const opts = overwrite ? { overwrite: true } : undefined;
+    if (tab === 'branch') createFromBranch.mutate(opts);
+    else if (tab === 'pr') createFromPr.mutate();
+    else if (tab === 'issue') createFromIssue.mutate(opts);
+    else if (tab === 'jira') createFromJira.mutate(opts);
+    else createFromGoal.mutate(opts);
+  };
+
+  const showBranchNameField = tab === 'goal' || tab === 'issue' || tab === 'jira';
+  const creatingWithSuggest =
+    createPending &&
+    showBranchNameField &&
+    (worktreeBranchName.trim().toLowerCase() === 'auto' || !worktreeBranchName.trim());
+
   const createTooltip =
     createPending
-      ? tab === 'goal' || tab === 'issue' || tab === 'jira'
-        ? worktreeBranchName.trim().toLowerCase() === 'auto' || !worktreeBranchName.trim()
-          ? 'Suggesting a branch name and creating the agent…'
-          : 'Creating the agent…'
+      ? creatingWithSuggest
+        ? 'Suggesting a branch name and creating the agent…'
         : 'Creating the agent…'
       : !canCreate
         ? 'Fill in the required fields first'
@@ -223,164 +239,162 @@ export function CreateWorktreeDialog({
                 ? 'Create agent from the GitHub or Jira issue reference'
                 : 'Create agent from the selected branch';
 
-  const showBranchNameField = tab === 'goal' || tab === 'issue' || tab === 'jira';
-  const creatingWithSuggest =
-    createPending &&
-    showBranchNameField &&
-    (worktreeBranchName.trim().toLowerCase() === 'auto' || !worktreeBranchName.trim());
-
   return (
-    <ResponsiveDialog
-      open={open}
-      onClose={handleClose}
-      maxWidth={tab === 'pr' || tab === 'jira' ? 'md' : 'sm'}
-      fullWidth
-    >
-      <DialogTitle>Create agent</DialogTitle>
-      <DialogContent>
-        <Tabs
-          value={tab}
-          onChange={(_, value) => setTab(value)}
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
-          sx={{ mb: 2 }}
-        >
-          <Tab value="goal" label="From goal" />
-          <Tab value="issue" label="From issue" />
-          <Tab value="jira" label="From Jira" />
-          <Tab value="branch" label="From branch" />
-          <Tab value="pr" label="From PR" />
-        </Tabs>
-
-        {tab === 'goal' && (
-          <CreateWorktreeGoalFields
-            goalText={goalText}
-            goalTask={goalTask}
-            goalModel={goalModel}
-            goalEffort={goalEffort}
-            agentTasks={agentTasks}
-            mentions={mentions}
-            images={images}
-            mentionOptions={mentionOptions}
-            mentionHighlight={mentionHighlight}
-            showMentionMenu={showMentionMenu}
-            fileInputRef={goalFileInputRef}
-            onGoalTextChange={setGoalText}
-            onClearMentionDismissed={() => setMentionDismissed(false)}
-            onDismissMentionMenu={() => setMentionDismissed(true)}
-            onMentionHighlight={setMentionHighlight}
-            onApplyMention={applyMentionSelection}
-            onRemoveMention={removeMention}
-            onRemoveImage={removeImage}
-            onAddFiles={addFiles}
-            onTaskChange={applyTaskDefaults}
-            onModelChange={setGoalModel}
-            onEffortChange={setGoalEffort}
-          />
-        )}
-
-        {tab === 'issue' && (
-          <Stack spacing={1.5}>
-            <CreateWorktreeIssueFields
-              issueReference={issueReference}
-              placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149 or PROJ-123`}
-              onIssueReferenceChange={setIssueReference}
-            />
-            <CreateWorktreePlannerFields
-              model={issueModel}
-              effort={issueEffort}
-              permissionMode={issuePermissionMode}
-              onModelChange={setIssueModel}
-              onEffortChange={setIssueEffort}
-              onPermissionModeChange={setIssuePermissionMode}
-            />
-          </Stack>
-        )}
-
-        {tab === 'jira' && (
-          <Stack spacing={1.5}>
-            <JiraIssuePicker
-              workspaceId={workspaceId}
-              selectedKey={jiraIssueKey}
-              onSelect={setJiraIssueKey}
-              enabled={open && tab === 'jira'}
-            />
-            <CreateWorktreePlannerFields
-              model={issueModel}
-              effort={issueEffort}
-              permissionMode={issuePermissionMode}
-              onModelChange={setIssueModel}
-              onEffortChange={setIssueEffort}
-              onPermissionModeChange={setIssuePermissionMode}
-            />
-          </Stack>
-        )}
-
-        {showBranchNameField && (
-          <Stack sx={{ mt: 1.5 }}>
-            <CreateWorktreeNameField
-              value={worktreeBranchName}
-              onChange={setWorktreeBranchName}
-            />
-          </Stack>
-        )}
-
-        {tab === 'branch' && (
-          <CreateWorktreeBranchFields
-            branchMode={branchMode}
-            selectedBranch={selectedBranch}
-            newBranchName={newBranchName}
-            baseBranch={resolvedDefaultBranch}
-            branches={branchesQuery.data ?? []}
-            onBranchModeChange={setBranchMode}
-            onSelectedBranchChange={setSelectedBranch}
-            onNewBranchNameChange={setNewBranchName}
-            onBaseBranchChange={setBaseBranch}
-          />
-        )}
-
-        {tab === 'pr' && (
-          <PullRequestPicker
-            workspaceId={workspaceId}
-            owner={workspaceQuery.data?.githubOwner ?? ''}
-            repo={workspaceQuery.data?.githubRepo ?? ''}
-            selectedPr={selectedPr}
-            onSelect={setSelectedPr}
-            onView={handleClose}
-          />
-        )}
-
-        {createError && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {(createError as Error).message}
-          </Alert>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <ControlTooltip title="Discard and close without creating an agent">
-          <Button onClick={handleClose}>Cancel</Button>
-        </ControlTooltip>
-        <ControlTooltip title={createTooltip} disabled={createPending || !canCreate}>
-          <Button
-            variant="contained"
-            disabled={createPending || !canCreate}
-            onClick={() => {
-              if (tab === 'branch') createFromBranch.mutate();
-              else if (tab === 'pr') createFromPr.mutate();
-              else if (tab === 'issue') createFromIssue.mutate();
-              else if (tab === 'jira') createFromJira.mutate();
-              else createFromGoal.mutate();
-            }}
+    <>
+      <ResponsiveDialog
+        open={open}
+        onClose={handleClose}
+        maxWidth={tab === 'pr' || tab === 'jira' ? 'md' : 'sm'}
+        fullWidth
+      >
+        <DialogTitle>Create agent</DialogTitle>
+        <DialogContent>
+          <Tabs
+            value={tab}
+            onChange={(_, value) => setTab(value)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{ mb: 2 }}
           >
-            {createPending
-              ? creatingWithSuggest
-                ? 'Suggesting & creating…'
-                : 'Creating…'
-              : 'Create'}
-          </Button>
-        </ControlTooltip>
-      </DialogActions>
-    </ResponsiveDialog>
+            <Tab value="goal" label="From goal" />
+            <Tab value="issue" label="From issue" />
+            <Tab value="jira" label="From Jira" />
+            <Tab value="branch" label="From branch" />
+            <Tab value="pr" label="From PR" />
+          </Tabs>
+
+          {tab === 'goal' && (
+            <CreateWorktreeGoalFields
+              goalText={goalText}
+              goalTask={goalTask}
+              goalModel={goalModel}
+              goalEffort={goalEffort}
+              agentTasks={agentTasks}
+              mentions={mentions}
+              images={images}
+              mentionOptions={mentionOptions}
+              mentionHighlight={mentionHighlight}
+              showMentionMenu={showMentionMenu}
+              fileInputRef={goalFileInputRef}
+              onGoalTextChange={setGoalText}
+              onClearMentionDismissed={() => setMentionDismissed(false)}
+              onDismissMentionMenu={() => setMentionDismissed(true)}
+              onMentionHighlight={setMentionHighlight}
+              onApplyMention={applyMentionSelection}
+              onRemoveMention={removeMention}
+              onRemoveImage={removeImage}
+              onAddFiles={addFiles}
+              onTaskChange={applyTaskDefaults}
+              onModelChange={setGoalModel}
+              onEffortChange={setGoalEffort}
+            />
+          )}
+
+          {tab === 'issue' && (
+            <Stack spacing={1.5}>
+              <CreateWorktreeIssueFields
+                issueReference={issueReference}
+                placeholder={`${workspaceQuery.data?.githubOwner ?? 'owner'}/${workspaceQuery.data?.githubRepo ?? 'repo'}#149 or PROJ-123`}
+                onIssueReferenceChange={setIssueReference}
+              />
+              <CreateWorktreePlannerFields
+                model={issueModel}
+                effort={issueEffort}
+                permissionMode={issuePermissionMode}
+                onModelChange={setIssueModel}
+                onEffortChange={setIssueEffort}
+                onPermissionModeChange={setIssuePermissionMode}
+              />
+            </Stack>
+          )}
+
+          {tab === 'jira' && (
+            <Stack spacing={1.5}>
+              <JiraIssuePicker
+                workspaceId={workspaceId}
+                selectedKey={jiraIssueKey}
+                onSelect={setJiraIssueKey}
+                enabled={open && tab === 'jira'}
+              />
+              <CreateWorktreePlannerFields
+                model={issueModel}
+                effort={issueEffort}
+                permissionMode={issuePermissionMode}
+                onModelChange={setIssueModel}
+                onEffortChange={setIssueEffort}
+                onPermissionModeChange={setIssuePermissionMode}
+              />
+            </Stack>
+          )}
+
+          {showBranchNameField && (
+            <Stack sx={{ mt: 1.5 }}>
+              <CreateWorktreeNameField
+                value={worktreeBranchName}
+                onChange={setWorktreeBranchName}
+              />
+            </Stack>
+          )}
+
+          {tab === 'branch' && (
+            <CreateWorktreeBranchFields
+              branchMode={branchMode}
+              selectedBranch={selectedBranch}
+              newBranchName={newBranchName}
+              baseBranch={resolvedDefaultBranch}
+              branches={branchesQuery.data ?? []}
+              onBranchModeChange={setBranchMode}
+              onSelectedBranchChange={setSelectedBranch}
+              onNewBranchNameChange={setNewBranchName}
+              onBaseBranchChange={setBaseBranch}
+            />
+          )}
+
+          {tab === 'pr' && (
+            <PullRequestPicker
+              workspaceId={workspaceId}
+              owner={workspaceQuery.data?.githubOwner ?? ''}
+              repo={workspaceQuery.data?.githubRepo ?? ''}
+              selectedPr={selectedPr}
+              onSelect={setSelectedPr}
+              onView={handleClose}
+            />
+          )}
+
+          {createError && !branchConflict && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {(createError as Error).message}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <ControlTooltip title="Discard and close without creating an agent">
+            <Button onClick={handleClose}>Cancel</Button>
+          </ControlTooltip>
+          <ControlTooltip title={createTooltip} disabled={createPending || !canCreate}>
+            <Button
+              variant="contained"
+              disabled={createPending || !canCreate}
+              onClick={() => runCreate(false)}
+            >
+              {createPending
+                ? creatingWithSuggest
+                  ? 'Suggesting & creating…'
+                  : 'Creating…'
+                : 'Create'}
+            </Button>
+          </ControlTooltip>
+        </DialogActions>
+      </ResponsiveDialog>
+
+      <CreateAgentOverwriteConfirm
+        branch={branchConflict?.branch ?? null}
+        baseBranch={resolvedDefaultBranch}
+        loading={createPending}
+        onCancel={resetCreateErrors}
+        onConfirm={() => runCreate(true)}
+      />
+    </>
   );
 }

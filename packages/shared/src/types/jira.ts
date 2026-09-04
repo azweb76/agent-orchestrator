@@ -64,4 +64,6 @@ export interface CreateWorktreeFromJiraIssueRequest {
   model?: string;
   effort?: EffortLevel;
   permissionMode?: PermissionMode;
+  /** Reset the suggested branch if it already exists locally. */
+  overwrite?: boolean;
 }

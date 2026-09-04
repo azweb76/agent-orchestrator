@@ -1,6 +1,7 @@
 import express from 'express';
 import { z } from 'zod';
 import { GitHubApiError } from '../services/github.js';
+import { BranchExistsError } from '../services/git-errors.js';
 
 export function errorHandler(
   err: unknown,
@@ -10,6 +11,11 @@ export function errorHandler(
 ) {
   if (err instanceof z.ZodError) {
     res.status(400).json({ error: 'Validation error', details: err.issues });
+    return;
+  }
+
+  if (err instanceof BranchExistsError) {
+    res.status(err.status).json({ error: err.message, code: err.code, branch: err.branch });
     return;
   }
 

@@ -87,6 +87,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           name: z.string().optional(),
           createNew: z.boolean().optional(),
           baseBranch: z.string().optional(),
+          overwrite: z.boolean().optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromBranch(ctx, param(req.params.workspaceId), body));
@@ -105,6 +106,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           task: z.string().min(1).max(63),
           model: z.string().min(1).max(64).optional(),
           effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+          overwrite: z.boolean().optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromGoal(ctx, param(req.params.workspaceId), body));
@@ -126,6 +128,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           permissionMode: z
             .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
             .optional(),
+          overwrite: z.boolean().optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromIdea(ctx, param(req.params.workspaceId), body));
@@ -160,6 +163,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           permissionMode: z
             .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
             .optional(),
+          overwrite: z.boolean().optional(),
         })
         .refine((value) => Boolean(value.issueNumber) || Boolean(value.reference?.trim()), {
           message: 'issueNumber or reference is required',
@@ -183,6 +187,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           permissionMode: z
             .enum(['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'])
             .optional(),
+          overwrite: z.boolean().optional(),
         })
         .parse(req.body);
       res.status(201).json(await createWorktreeFromJiraIssue(ctx, param(req.params.workspaceId), body));
