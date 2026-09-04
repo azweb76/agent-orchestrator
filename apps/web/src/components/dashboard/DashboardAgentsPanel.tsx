@@ -8,9 +8,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import type { ClaudeProcessInfo } from '@agent-orchestrator/shared';
-import { EmptyState } from '../ui/EmptyState';
 import { HudPanel } from './HudPanel';
 import { SectionLabel } from './SectionLabel';
 
@@ -47,6 +45,22 @@ export function DashboardAgentsPanel({ loading, processes }: DashboardAgentsPane
   const ours = processes.filter((p) => p.ownership === 'orchestrator').length;
   const total = processes.length;
 
+  if (!loading && total === 0) {
+    return (
+      <HudPanel sx={{ flex: 1.4, minWidth: 0, py: 1.5 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box>
+            <SectionLabel>Agent fleet</SectionLabel>
+            <Typography variant="body2" color="text.secondary">
+              No live Claude processes
+            </Typography>
+          </Box>
+          <Chip size="small" label="0 on system" variant="outlined" />
+        </Stack>
+      </HudPanel>
+    );
+  }
+
   return (
     <HudPanel sx={{ flex: 1.4, minWidth: 0 }}>
       <Stack
@@ -58,29 +72,18 @@ export function DashboardAgentsPanel({ loading, processes }: DashboardAgentsPane
           <SectionLabel>Agent fleet</SectionLabel>
           <Typography variant="h6">Live agents</Typography>
         </Box>
-        {total > 0 ? (
-          <Chip
-            size="small"
-            color="info"
-            label={`${total} on system · ${ours} ours`}
-            variant="outlined"
-          />
-        ) : (
-          <Chip size="small" label="0 on system" variant="outlined" />
-        )}
+        <Chip
+          size="small"
+          color="info"
+          label={`${total} on system · ${ours} ours`}
+          variant="outlined"
+        />
       </Stack>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress size={28} />
         </Box>
-      ) : processes.length === 0 ? (
-        <EmptyState
-          compact
-          icon={<SmartToyOutlinedIcon />}
-          title="No Claude processes on this machine"
-          description="Start a chat from an agent, or launch Claude Code in a terminal, to see it here."
-        />
       ) : (
         <Stack spacing={0.75}>
           {processes.map((process) => {

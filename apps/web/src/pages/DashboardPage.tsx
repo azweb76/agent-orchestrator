@@ -1,5 +1,4 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { Alert, Stack } from '@mui/material';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DashboardAgentsPanel } from '../components/dashboard/DashboardAgentsPanel';
@@ -7,22 +6,11 @@ import { DashboardBlockedAgentsPanel } from '../components/dashboard/DashboardBl
 import { DashboardHeroSection } from '../components/dashboard/DashboardHeroSection';
 import { DashboardMetricsRow } from '../components/dashboard/DashboardMetricsRow';
 import { DashboardSidePanels } from '../components/dashboard/DashboardSidePanels';
-import { FlightBoard } from '../components/dashboard/FlightBoard';
 import { useDashboardData } from '../components/dashboard/useDashboardData';
 
 export function DashboardPage() {
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
   const [pruneOpen, setPruneOpen] = useState(false);
-
-  const data = useDashboardData(query);
-  const flightLanes = data.flightLanes;
-
-  const onCommandSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    const first = data.filteredAgents[0];
-    if (first) navigate(`/agents/${first.id}`);
-  };
+  const data = useDashboardData('');
 
   const openPrune = () => {
     data.pruneMutation.reset();
@@ -32,9 +20,6 @@ export function DashboardPage() {
   return (
     <Stack spacing={2.5}>
       <DashboardHeroSection
-        query={query}
-        onQueryChange={setQuery}
-        onCommandSubmit={onCommandSubmit}
         githubLogin={data.status?.githubLogin}
         systemsOk={data.systemsOk}
         systemsPartial={data.systemsPartial}
@@ -59,21 +44,11 @@ export function DashboardPage() {
         githubConfigured={Boolean(data.status?.githubTokenConfigured)}
         usage={data.usageQuery.data}
         status={data.status}
-        boardingCount={flightLanes.boarding.length}
-        airborneCount={flightLanes.en_route.length}
-        approachCount={flightLanes.approach.length}
-        landedCount={flightLanes.landed.length}
       />
 
       {(data.sidebarError as Error | undefined) && (
         <Alert severity="error">{(data.sidebarError as Error).message}</Alert>
       )}
-
-      <FlightBoard
-        agents={data.filteredFlightAgents}
-        loading={data.sidebarLoading}
-        onOpenAgent={(agentId) => navigate(`/agents/${agentId}`)}
-      />
 
       <DashboardBlockedAgentsPanel agents={data.blockedAgents} />
 
@@ -85,8 +60,6 @@ export function DashboardPage() {
 
         <DashboardSidePanels
           status={data.status}
-          runningCount={data.orchestratorProcessCount}
-          activeAgentCount={data.activeAgents.length}
           archivedCount={data.archivedCount}
           onPruneClick={openPrune}
           usage={data.usageQuery.data}

@@ -1,19 +1,7 @@
-import type { FormEvent } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import {
-  Box,
-  Button,
-  InputAdornment,
-  Stack,
-  TextField,
-  useTheme,
-} from '@mui/material';
-import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
+import { Box, Button, Stack, useTheme } from '@mui/material';
 import DeleteSweepOutlinedIcon from '@mui/icons-material/DeleteSweepOutlined';
-import MergeTypeIcon from '@mui/icons-material/MergeType';
-import SearchIcon from '@mui/icons-material/Search';
-import { useCommandPalette } from '../commandPalette/CommandPaletteContext';
-import { paletteShortcutLabel } from '../commandPalette/paletteCommands';
+import FlightOutlinedIcon from '@mui/icons-material/FlightOutlined';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { CommandCenterHero } from './CommandCenterHero';
 import { AssistantBriefing } from './AssistantBriefing';
@@ -28,9 +16,6 @@ import type {
 } from '@agent-orchestrator/shared';
 
 interface DashboardHeroSectionProps {
-  query: string;
-  onQueryChange: (value: string) => void;
-  onCommandSubmit: (event: FormEvent) => void;
   githubLogin?: string | null;
   systemsOk: boolean;
   systemsPartial: boolean;
@@ -46,9 +31,6 @@ interface DashboardHeroSectionProps {
 }
 
 export function DashboardHeroSection({
-  query,
-  onQueryChange,
-  onCommandSubmit,
   githubLogin,
   systemsOk,
   systemsPartial,
@@ -64,7 +46,6 @@ export function DashboardHeroSection({
 }: DashboardHeroSectionProps) {
   const theme = useTheme();
   const ao = theme.palette.ao;
-  const { openPalette } = useCommandPalette();
 
   return (
     <Box
@@ -75,7 +56,7 @@ export function DashboardHeroSection({
         borderColor: 'divider',
         overflow: 'hidden',
         px: { xs: 2, md: 3.5 },
-        py: { xs: 2.25, md: 3.5 },
+        py: { xs: 2.25, md: 3 },
         background: ao.gradient.hero,
       }}
     >
@@ -104,79 +85,22 @@ export function DashboardHeroSection({
         githubConfigured={githubConfigured}
       />
 
-      <Box component="form" onSubmit={onCommandSubmit} sx={{ mt: 2.5, maxWidth: 640 }}>
-        <ControlTooltip title="Search agents by name, workspace, or branch">
-          <TextField
-            fullWidth
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Find an agent, workspace, or branch…"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <ControlTooltip title={`Open the command palette (${paletteShortcutLabel()})`}>
-                      <Button
-                        size="small"
-                        onClick={openPalette}
-                        aria-label="Open command palette"
-                        sx={{
-                          minWidth: 0,
-                          px: 1,
-                          color: 'text.secondary',
-                          fontFamily: '"IBM Plex Mono", monospace',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {paletteShortcutLabel()}
-                      </Button>
-                    </ControlTooltip>
-                  </InputAdornment>
-                ),
-                'aria-label': 'Search agents',
-              },
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                bgcolor: 'ao.surface.overlay',
-                fontFamily: '"IBM Plex Mono", monospace',
-                fontSize: '0.9rem',
-              },
-            }}
-          />
-        </ControlTooltip>
-      </Box>
-
       <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }}>
-        <ControlTooltip title="Browse and manage cloned repositories">
+        <ControlTooltip title="Open the flight controller airspace map">
           <Button
             component={RouterLink}
-            to="/workspaces"
-            variant="contained"
-            startIcon={<FolderOpenOutlinedIcon />}
-            size="small"
-          >
-            Workspaces
-          </Button>
-        </ControlTooltip>
-        <ControlTooltip title="Open your pull request inbox">
-          <Button
-            component={RouterLink}
-            to="/pull-requests"
+            to="/flight"
             variant="outlined"
-            startIcon={<MergeTypeIcon />}
+            startIcon={<FlightOutlinedIcon />}
             size="small"
           >
-            Pull requests
+            Flight board
           </Button>
         </ControlTooltip>
         {archivedCount > 0 ? (
-          <ControlTooltip title={`Permanently delete ${archivedCount} archived agent${archivedCount === 1 ? '' : 's'}`}>
+          <ControlTooltip
+            title={`Permanently delete ${archivedCount} archived agent${archivedCount === 1 ? '' : 's'}`}
+          >
             <Button
               variant="outlined"
               color="warning"

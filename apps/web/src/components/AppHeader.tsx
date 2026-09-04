@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import FlightOutlinedIcon from '@mui/icons-material/FlightOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
@@ -27,6 +28,12 @@ import { ControlTooltip } from './ui/ControlTooltip';
 
 export const NAV_ITEMS = [
   { to: '/', label: 'Command', icon: <DashboardOutlinedIcon />, match: (path: string) => path === '/' },
+  {
+    to: '/flight',
+    label: 'Flight',
+    icon: <FlightOutlinedIcon />,
+    match: (path: string) => path === '/flight' || path.startsWith('/flight/'),
+  },
   {
     to: '/workspaces',
     label: 'Workspaces',

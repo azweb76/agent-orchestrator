@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './components/AppLayout';
 import { AgentPage } from './pages/AgentPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { FlightControllerPage } from './pages/FlightControllerPage';
 import { PullRequestDetailPage } from './pages/PullRequestDetailPage';
 import { PullRequestsPage } from './pages/PullRequestsPage';
 import { TasksPage } from './pages/TasksPage';
@@ -14,6 +15,7 @@ export default function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
+        <Route path="flight" element={<FlightControllerPage />} />
         <Route path="workspaces" element={<WorkspacesPage />} />
         <Route path="pull-requests" element={<PullRequestsPage />} />
         <Route path="pull-requests/:owner/:repo/:number" element={<PullRequestDetailPage />} />

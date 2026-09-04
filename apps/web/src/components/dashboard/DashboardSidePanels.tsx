@@ -26,8 +26,6 @@ import { DashboardGithubIssuesPanel, DashboardJiraIssuesPanel } from './Dashboar
 
 interface DashboardSidePanelsProps {
   status?: SystemStatus;
-  runningCount: number;
-  activeAgentCount: number;
   archivedCount: number;
   onPruneClick: () => void;
   usage?: UsageSummary;
@@ -46,8 +44,6 @@ interface DashboardSidePanelsProps {
 
 export function DashboardSidePanels({
   status,
-  runningCount,
-  activeAgentCount,
   archivedCount,
   onPruneClick,
   usage,
@@ -63,67 +59,47 @@ export function DashboardSidePanels({
   recentJiraIssues,
   workspaces = [],
 }: DashboardSidePanelsProps) {
+  const claudeOk = Boolean(status?.claudeInstalled);
+  const githubOk = Boolean(status?.githubTokenConfigured);
+  const showReadiness = !claudeOk || !githubOk || archivedCount > 0;
+
   return (
     <Stack spacing={2} sx={{ flex: 1, minWidth: 0 }}>
-      <HudPanel>
-        <SectionLabel>Systems</SectionLabel>
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Readiness
-        </Typography>
-        <Stack spacing={1.25}>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">Claude Code</Typography>
-            <Chip
-              size="small"
-              label={status?.claudeInstalled ? 'Online' : 'Missing'}
-              color={status?.claudeInstalled ? 'success' : 'warning'}
-              variant="outlined"
-            />
+      {showReadiness ? (
+        <HudPanel>
+          <SectionLabel>Systems</SectionLabel>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Needs attention
+          </Typography>
+          <Stack spacing={1.25}>
+            {!claudeOk ? (
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2">Claude Code</Typography>
+                <Chip size="small" label="Missing" color="warning" variant="outlined" />
+              </Stack>
+            ) : null}
+            {!githubOk ? (
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2">GitHub</Typography>
+                <Chip size="small" label="No token" color="default" variant="outlined" />
+              </Stack>
+            ) : null}
+            {archivedCount > 0 ? (
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2">Archived</Typography>
+                <Chip
+                  size="small"
+                  label={`${archivedCount} to prune`}
+                  color="warning"
+                  variant="outlined"
+                  onClick={onPruneClick}
+                  sx={{ cursor: 'pointer' }}
+                />
+              </Stack>
+            ) : null}
           </Stack>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">GitHub</Typography>
-            <Chip
-              size="small"
-              label={status?.githubTokenConfigured ? 'Connected' : 'No token'}
-              color={status?.githubTokenConfigured ? 'success' : 'default'}
-              variant="outlined"
-            />
-          </Stack>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">Jira</Typography>
-            <Chip
-              size="small"
-              label={status?.jiraConfigured ? 'Connected' : 'Not set'}
-              color={status?.jiraConfigured ? 'success' : 'default'}
-              variant="outlined"
-            />
-          </Stack>
-          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="body2">Fleet</Typography>
-            <Chip
-              size="small"
-              label={
-                runningCount > 0 ? 'Engaged' : activeAgentCount > 0 ? 'Standing by' : 'Empty'
-              }
-              color={runningCount > 0 ? 'info' : 'default'}
-              variant="outlined"
-            />
-          </Stack>
-          {archivedCount > 0 ? (
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="body2">Archived</Typography>
-              <Chip
-                size="small"
-                label={`${archivedCount} to prune`}
-                color="warning"
-                variant="outlined"
-                onClick={onPruneClick}
-                sx={{ cursor: 'pointer' }}
-              />
-            </Stack>
-          ) : null}
-        </Stack>
-      </HudPanel>
+        </HudPanel>
+      ) : null}
 
       {usage && usage.agents.length > 0 ? (
         <HudPanel>

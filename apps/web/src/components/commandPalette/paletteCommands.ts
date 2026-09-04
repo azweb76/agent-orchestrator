@@ -80,6 +80,13 @@ export function buildPaletteCommands(
       action: { kind: 'navigate', to: '/' },
     },
     {
+      id: 'action:go-flight',
+      group: 'Actions',
+      label: 'Go to flight controller',
+      keywords: 'airspace map flights boarding airborne approach landed',
+      action: { kind: 'navigate', to: '/flight' },
+    },
+    {
       id: 'action:go-workspaces',
       group: 'Actions',
       label: 'Go to workspaces',
