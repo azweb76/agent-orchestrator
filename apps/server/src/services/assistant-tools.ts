@@ -15,6 +15,7 @@ import { getIssueInbox } from './github-issues.js';
 import { getJiraIssueInbox } from './jira-issues.js';
 import { createWorktreeFromGoal } from './worktrees.js';
 import {
+  handleCreateAgentTask,
   handleGetAgentTask,
   handleListAgentTasks,
   handleUpdateAgentTask,
@@ -201,6 +202,8 @@ async function dispatchAssistantTool(
       return handleListAgentTasks(ctx);
     case 'get_agent_task':
       return handleGetAgentTask(ctx, input);
+    case 'create_agent_task':
+      return handleCreateAgentTask(ctx, input, requireConfirm);
     case 'update_agent_task':
       return handleUpdateAgentTask(ctx, input, requireConfirm);
     case 'get_status': {

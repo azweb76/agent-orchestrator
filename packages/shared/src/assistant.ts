@@ -111,6 +111,58 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
     },
   },
   {
+    name: 'create_agent_task',
+    description:
+      'Create a new AgentTask kickoff template (slug, title, purpose, prompts, model defaults). Requires confirm=true.',
+    risk: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Unique lowercase slug (a-z, 0-9, hyphens)',
+        },
+        title: { type: 'string', description: 'Display title' },
+        description: { type: 'string' },
+        purpose: {
+          type: 'string',
+          description: 'When this task fits a goal (used by From goal Auto)',
+        },
+        promptTemplate: {
+          type: ['string', 'null'],
+          description: 'Kickoff prompt template; use {{goal}}. null/omit for raw goal.',
+        },
+        systemPrompt: {
+          type: ['string', 'null'],
+          description: 'Appended system prompt',
+        },
+        allowedTools: {
+          type: ['string', 'null'],
+          description: 'Comma-separated --allowedTools override',
+        },
+        model: { type: 'string' },
+        effort: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'xhigh', 'max'],
+        },
+        permissionMode: {
+          type: 'string',
+          enum: ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'],
+        },
+        listed: {
+          type: 'boolean',
+          description: 'Show in the new-session picker (default false)',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to execute; ask the user first if unset/false',
+        },
+      },
+      required: ['name', 'title', 'confirm'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'update_agent_task',
     description:
       'Update an AgentTask template (prompt, purpose, model, tools, etc.). Identify with taskId or task slug. Built-in tasks cannot be renamed. Requires confirm=true.',
@@ -261,12 +313,12 @@ export const ASSISTANT_SYSTEM_PROMPT = `You are the Agent Orchestrator Assistant
 
 Use tools to inspect state before acting. Prefer list/get tools first.
 
-For write tools (create_agent_from_goal, archive_agent, dismiss_work_item, update_agent_task):
+For write tools (create_agent_from_goal, archive_agent, dismiss_work_item, create_agent_task, update_agent_task):
 - Explain what you will do and get the user's agreement in chat.
 - Only then call the tool with confirm=true.
 - Never invent workspace, agent, or task ids — look them up with tools.
 
-When editing agent tasks, call list_agent_tasks or get_agent_task first, then update_agent_task with confirm=true.
+When managing agent tasks, call list_agent_tasks or get_agent_task first; create with create_agent_task or edit with update_agent_task (confirm=true).
 
 When create_agent_from_goal succeeds, tell the user the new agent id and that they can open it in the UI.
 

@@ -70,8 +70,10 @@ test('ASSISTANT_TOOLS catalog exposes expected MVP tools', () => {
   assert.ok(names.includes('get_work_queue'));
   assert.ok(names.includes('list_agent_tasks'));
   assert.ok(names.includes('get_agent_task'));
+  assert.ok(names.includes('create_agent_task'));
   assert.ok(names.includes('update_agent_task'));
   assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'create_agent_from_goal')?.risk, 'write');
+  assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'create_agent_task')?.risk, 'write');
   assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'update_agent_task')?.risk, 'write');
 });
 
@@ -196,6 +198,48 @@ test('get_agent_task and update_agent_task require confirm and persist', async (
   assert.equal(payload.task.purpose, 'Fix flaky tests and regressions');
   assert.equal(payload.task.effort, 'max');
   assert.equal(ctx.repos.agentTasks.getById(created.id)?.purpose, 'Fix flaky tests and regressions');
+});
+
+test('create_agent_task requires confirm and persists', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-assistant-'));
+  const ctx = makeCtx(tmp);
+
+  const denied = await executeAssistantTool(ctx, 'create_agent_task', {
+    name: 'new-feature',
+    title: 'New Feature',
+    purpose: 'Ship a new capability',
+    confirm: false,
+  });
+  assert.equal(denied.isError, true);
+  assert.match(denied.content, /confirm=true/);
+
+  const ok = await executeAssistantTool(ctx, 'create_agent_task', {
+    name: 'new-feature',
+    title: 'New Feature',
+    purpose: 'Ship a new capability',
+    promptTemplate: 'Implement: {{goal}}',
+    listed: true,
+    confirm: true,
+  });
+  assert.equal(ok.isError, undefined);
+  const payload = JSON.parse(ok.content) as {
+    ok: boolean;
+    task: { name: string; title: string; purpose: string; listed: boolean };
+  };
+  assert.equal(payload.ok, true);
+  assert.equal(payload.task.name, 'new-feature');
+  assert.equal(payload.task.title, 'New Feature');
+  assert.equal(payload.task.purpose, 'Ship a new capability');
+  assert.equal(payload.task.listed, true);
+  assert.equal(ctx.repos.agentTasks.getByName('new-feature')?.title, 'New Feature');
+
+  const conflict = await executeAssistantTool(ctx, 'create_agent_task', {
+    name: 'new-feature',
+    title: 'Duplicate',
+    confirm: true,
+  });
+  assert.equal(conflict.isError, true);
+  assert.match(conflict.content, /already exists/);
 });
 
 test('unknown tool returns error', async () => {

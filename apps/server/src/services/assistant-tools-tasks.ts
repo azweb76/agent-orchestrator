@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import type { AgentTask, UpdateAgentTaskRequest } from '@agent-orchestrator/shared';
+import type { AgentTask, CreateAgentTaskRequest, UpdateAgentTaskRequest } from '@agent-orchestrator/shared';
 import type { AppContext } from './app-context.js';
 import {
+  createAgentTask,
   getAgentTask,
   listAgentTasks,
   requireAgentTaskByName,
@@ -33,6 +34,21 @@ const taskRefSchema = z
   .refine((value) => Boolean(value.taskId || value.task), {
     message: 'Provide taskId or task (slug)',
   });
+
+const createAgentTaskSchema = z.object({
+  name: z.string().min(1).max(63),
+  title: z.string().min(1).max(120),
+  description: z.string().max(2000).optional(),
+  purpose: z.string().max(4000).optional(),
+  promptTemplate: z.string().max(20_000).nullable().optional(),
+  systemPrompt: z.string().max(20_000).nullable().optional(),
+  allowedTools: z.string().max(8000).nullable().optional(),
+  model: z.string().min(1).max(64).optional(),
+  effort: effort.optional(),
+  permissionMode: permissionMode.optional(),
+  listed: z.boolean().optional(),
+  confirm: z.boolean(),
+});
 
 const updateAgentTaskSchema = z
   .object({
@@ -105,6 +121,34 @@ export function handleGetAgentTask(
   const ref = taskRefSchema.parse(input);
   const task = resolveAgentTaskRef(ctx, ref);
   return { content: JSON.stringify(serializeAgentTask(task)) };
+}
+
+export function handleCreateAgentTask(
+  ctx: AppContext,
+  input: Record<string, unknown>,
+  requireConfirm: (confirm: boolean | undefined, toolName: string) => void,
+): TaskToolResult {
+  const body = createAgentTaskSchema.parse(input);
+  requireConfirm(body.confirm, 'create_agent_task');
+
+  const request: CreateAgentTaskRequest = {
+    name: body.name,
+    title: body.title,
+  };
+  if (body.description !== undefined) request.description = body.description;
+  if (body.purpose !== undefined) request.purpose = body.purpose;
+  if (body.promptTemplate !== undefined) request.promptTemplate = body.promptTemplate;
+  if (body.systemPrompt !== undefined) request.systemPrompt = body.systemPrompt;
+  if (body.allowedTools !== undefined) request.allowedTools = body.allowedTools;
+  if (body.model !== undefined) request.model = body.model;
+  if (body.effort !== undefined) request.effort = body.effort;
+  if (body.permissionMode !== undefined) request.permissionMode = body.permissionMode;
+  if (body.listed !== undefined) request.listed = body.listed;
+
+  const created = createAgentTask(ctx, request);
+  return {
+    content: JSON.stringify({ ok: true, task: serializeAgentTask(created) }),
+  };
 }
 
 export function handleUpdateAgentTask(
