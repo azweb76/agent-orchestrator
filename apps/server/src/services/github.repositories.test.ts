@@ -230,3 +230,44 @@ test('setToken clears persisted repo cache', async (t) => {
     fs.rmSync(cacheDir, { recursive: true, force: true });
   }
 });
+
+
+test('getAllAccessibleRepos serves stale disk cache when GitHub refresh fails', async (t) => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-repo-cache-'));
+  const repos = [rawRepo('azweb76', 'stale-repo')];
+  try {
+    // Seed a stale disk cache (fetchedAt far in the past).
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cacheDir, 'github-user-repos.json'),
+      JSON.stringify({
+        fetchedAt: Date.now() - 60 * 60 * 1000,
+        repos: [
+          {
+            owner: 'azweb76',
+            name: 'stale-repo',
+            fullName: 'azweb76/stale-repo',
+            htmlUrl: 'https://github.com/azweb76/stale-repo',
+            description: null,
+            private: false,
+          },
+        ],
+      }),
+    );
+
+    t.mock.method(globalThis, 'fetch', async () => {
+      return {
+        ok: false,
+        status: 401,
+        text: async () => JSON.stringify({ message: 'Bad credentials' }),
+        json: async () => ({ message: 'Bad credentials' }),
+      } as unknown as Response;
+    });
+
+    const service = new GitHubService({ token: 'tok', cacheDir });
+    const results = await service.searchRepositories('');
+    assert.equal(results[0].fullName, 'azweb76/stale-repo');
+  } finally {
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
+});

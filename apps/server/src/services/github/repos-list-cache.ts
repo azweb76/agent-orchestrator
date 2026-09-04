@@ -109,6 +109,13 @@ function startRepoListRefresh(ctx: GitHubClientContext): Promise<GitHubRepositor
       savePersistedRepoCache(ctx, entry);
       return repos;
     })
+    .catch((error) => {
+      // Keep serving a prior list when refresh fails (expired token, rate limit, etc.).
+      if (ctx.repoCache && ctx.repoCache.repos.length > 0) {
+        return ctx.repoCache.repos;
+      }
+      throw error;
+    })
     .finally(() => {
       ctx.repoListRefresh = null;
     });
@@ -133,7 +140,7 @@ export async function getAllAccessibleRepos(
   }
 
   if (allowStale && ctx.repoCache && ctx.repoCache.repos.length > 0) {
-    void startRepoListRefresh(ctx);
+    void startRepoListRefresh(ctx).catch(() => {});
     return ctx.repoCache.repos;
   }
 
@@ -144,5 +151,5 @@ export async function getAllAccessibleRepos(
 export function ensureRepoListWarm(ctx: GitHubClientContext): void {
   hydrateRepoCacheFromDisk(ctx);
   if (ctx.repoCache && isFresh(ctx.repoCache.fetchedAt)) return;
-  void startRepoListRefresh(ctx);
+  void startRepoListRefresh(ctx).catch(() => {});
 }
