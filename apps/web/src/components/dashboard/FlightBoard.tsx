@@ -18,7 +18,6 @@ export function FlightBoard({ agents, loading, onOpenAgent }: FlightBoardProps) 
   const total =
     lanes.boarding.length + lanes.en_route.length + lanes.approach.length + lanes.landed.length;
   const airborne = lanes.en_route.length;
-  const turbulence = lanes.approach.filter((f) => f.turbulence).length;
   const clearance = agents.filter((a) => (a.pendingPermissionCount ?? 0) > 0 && a.status !== 'archived')
     .length;
 
@@ -36,9 +35,6 @@ export function FlightBoard({ agents, loading, onOpenAgent }: FlightBoardProps) 
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Chip size="small" variant="outlined" label={`${total} flights`} />
           <Chip size="small" color="info" variant="outlined" label={`${airborne} airborne`} />
-          {turbulence > 0 && (
-            <Chip size="small" color="error" variant="outlined" label={`${turbulence} turbulence`} />
-          )}
           {clearance > 0 && (
             <Chip
               size="small"

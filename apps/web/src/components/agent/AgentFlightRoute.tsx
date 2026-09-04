@@ -5,7 +5,6 @@ import {
   AGENT_FLIGHT_LEG_LABELS,
   AGENT_FLIGHT_LEG_VERBS,
   isFlightActivityActive,
-  isFlightTurbulence,
   resolveAgentDeliveryPhase,
   resolveAgentFlightLeg,
   type AgentDetail,
@@ -20,6 +19,12 @@ const luggageLoad = keyframes`
   100% { transform: translateY(-8px); opacity: 0; }
 `;
 
+const luggageUnload = keyframes`
+  0% { transform: translateY(-4px); opacity: 0.3; }
+  50% { transform: translateY(2px); opacity: 1; }
+  100% { transform: translateY(8px); opacity: 0; }
+`;
+
 const cruiseBob = keyframes`
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-3px); }
@@ -28,12 +33,6 @@ const cruiseBob = keyframes`
 const approachNudge = keyframes`
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(3px); }
-`;
-
-const turbulenceShake = keyframes`
-  0%, 100% { transform: translateX(0); }
-  30% { transform: translateX(-2px); }
-  60% { transform: translateX(2px); }
 `;
 
 const LEG_ORDER: AgentFlightLeg[] = ['boarding', 'en_route', 'approach', 'landed'];
@@ -56,25 +55,25 @@ export function AgentFlightRoute({ agent, archived }: AgentFlightRouteProps) {
     checks: checks ?? null,
   });
   const leg = resolveAgentFlightLeg(phase);
-  const turbulence = isFlightTurbulence(phase);
   const active = isFlightActivityActive(agent.status);
   const currentIndex = Math.max(0, LEG_ORDER.indexOf(leg === 'hangared' ? 'landed' : leg));
 
-  const planeAnimation = turbulence
-    ? `${turbulenceShake} 0.5s ease-in-out infinite`
-    : leg === 'boarding' && active
+  const planeAnimation =
+    leg === 'boarding' && active
       ? `${luggageLoad} 1.6s ease-in-out infinite`
-      : leg === 'en_route'
-        ? `${cruiseBob} 2s ease-in-out infinite`
-        : leg === 'approach'
-          ? `${approachNudge} 1.8s ease-in-out infinite`
-          : undefined;
+      : leg === 'landed'
+        ? `${luggageUnload} 1.6s ease-in-out infinite`
+        : leg === 'en_route'
+          ? `${cruiseBob} 2s ease-in-out infinite`
+          : leg === 'approach'
+            ? `${approachNudge} 1.8s ease-in-out infinite`
+            : undefined;
 
   return (
     <ControlTooltip
       title={`${AGENT_FLIGHT_LEG_LABELS[leg]} · ${AGENT_DELIVERY_PHASE_LABELS[phase]}${
-        turbulence ? ' · Turbulence' : ''
-      }${!active && leg === 'boarding' ? ' · Luggage paused' : ''}`}
+        !active && leg === 'boarding' ? ' · Luggage paused' : ''
+      }${leg === 'landed' ? ' · Unloading' : ''}`}
     >
       <Box
         sx={{
@@ -83,7 +82,7 @@ export function AgentFlightRoute({ agent, archived }: AgentFlightRouteProps) {
           py: 1,
           borderRadius: 1.5,
           border: '1px solid',
-          borderColor: turbulence ? ao.accent.errorBorder : 'divider',
+          borderColor: 'divider',
           bgcolor: ao.surface.panelMuted,
           maxWidth: 420,
         }}
@@ -91,12 +90,13 @@ export function AgentFlightRoute({ agent, archived }: AgentFlightRouteProps) {
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75 }}>
           <Box
             sx={{
-              color: turbulence ? 'error.main' : 'info.main',
+              color: 'info.main',
               display: 'inline-flex',
               animation: planeAnimation,
-              animationPlayState: active || turbulence || leg === 'approach' || leg === 'en_route'
-                ? 'running'
-                : 'paused',
+              animationPlayState:
+                active || leg === 'approach' || leg === 'en_route' || leg === 'landed'
+                  ? 'running'
+                  : 'paused',
             }}
           >
             <FlightTakeoffOutlinedIcon sx={{ fontSize: 16 }} />
@@ -148,15 +148,11 @@ export function AgentFlightRoute({ agent, archived }: AgentFlightRouteProps) {
                     height: current ? 12 : 8,
                     borderRadius: '50%',
                     bgcolor: reached
-                      ? turbulence && current
-                        ? 'error.main'
-                        : index === 3
-                          ? 'success.main'
-                          : 'info.main'
+                      ? index === 3
+                        ? 'success.main'
+                        : 'info.main'
                       : 'action.disabledBackground',
-                    boxShadow: current
-                      ? `0 0 10px ${turbulence ? theme.palette.error.main : theme.palette.info.main}`
-                      : 'none',
+                    boxShadow: current ? `0 0 10px ${theme.palette.info.main}` : 'none',
                     zIndex: 1,
                   }}
                 />
@@ -177,7 +173,7 @@ export function AgentFlightRoute({ agent, archived }: AgentFlightRouteProps) {
           })}
         </Box>
 
-        {leg === 'boarding' && (
+        {(leg === 'boarding' || leg === 'landed') && (
           <Box
             aria-hidden
             sx={{
@@ -185,10 +181,10 @@ export function AgentFlightRoute({ agent, archived }: AgentFlightRouteProps) {
               width: 8,
               height: 6,
               borderRadius: 0.4,
-              bgcolor: 'warning.main',
-              animation: `${luggageLoad} 1.6s ease-in-out infinite`,
-              animationPlayState: active ? 'running' : 'paused',
-              opacity: active ? 1 : 0.4,
+              bgcolor: leg === 'landed' ? 'success.main' : 'warning.main',
+              animation: `${leg === 'landed' ? luggageUnload : luggageLoad} 1.6s ease-in-out infinite`,
+              animationPlayState: leg === 'landed' || active ? 'running' : 'paused',
+              opacity: leg === 'landed' || active ? 1 : 0.4,
             }}
           />
         )}

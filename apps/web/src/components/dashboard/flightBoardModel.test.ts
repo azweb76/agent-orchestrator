@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   isFlightActivityActive,
-  isFlightTurbulence,
   resolveAgentDeliveryPhaseFromPrStatus,
   resolveAgentFlightLeg,
 } from '@agent-orchestrator/shared';
@@ -44,14 +43,6 @@ describe('agent flight legs', () => {
     expect(resolveAgentFlightLeg('checks_failing')).toBe('approach');
     expect(resolveAgentFlightLeg('merged')).toBe('landed');
     expect(resolveAgentFlightLeg('archived')).toBe('hangared');
-  });
-
-  it('flags turbulence only for conflict / CI / changes-requested', () => {
-    expect(isFlightTurbulence('checks_failing')).toBe(true);
-    expect(isFlightTurbulence('has_conflicts')).toBe(true);
-    expect(isFlightTurbulence('changes_requested')).toBe(true);
-    expect(isFlightTurbulence('awaiting_review')).toBe(false);
-    expect(isFlightTurbulence('building')).toBe(false);
   });
 
   it('treats idle boarding as inactive (paused luggage)', () => {
@@ -115,7 +106,6 @@ describe('groupFlightsByLane', () => {
     expect(lanes.en_route).toHaveLength(1);
     expect(lanes.approach).toHaveLength(1);
     expect(lanes.landed).toHaveLength(1);
-    expect(lanes.approach[0]?.turbulence).toBe(true);
     expect(toFlightBoardFlight(makeAgent({ status: 'idle', deliveryPhase: 'planning' })).active).toBe(
       false,
     );

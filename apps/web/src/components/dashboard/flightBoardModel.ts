@@ -2,7 +2,6 @@ import {
   AGENT_DELIVERY_PHASE_LABELS,
   AGENT_FLIGHT_LEG_LABELS,
   isFlightActivityActive,
-  isFlightTurbulence,
   resolveAgentFlightLeg,
   type AgentDeliveryPhase,
   type AgentFlightLeg,
@@ -18,7 +17,6 @@ export interface FlightBoardFlight {
   status: AgentStatus;
   phase: AgentDeliveryPhase;
   leg: AgentFlightLeg;
-  turbulence: boolean;
   active: boolean;
   awaitingClearance: boolean;
   stalled: boolean;
@@ -43,7 +41,6 @@ export function toFlightBoardFlight(agent: DashboardAgent): FlightBoardFlight {
     status: agent.status,
     phase,
     leg,
-    turbulence: isFlightTurbulence(phase),
     active: isFlightActivityActive(agent.status),
     awaitingClearance: (agent.pendingPermissionCount ?? 0) > 0,
     stalled: Boolean(agent.stalled),
@@ -66,14 +63,11 @@ export function groupFlightsByLane(agents: DashboardAgent[]): FlightBoardLanes {
   }
   const rank = (f: FlightBoardFlight) => {
     if (f.awaitingClearance) return 0;
-    if (f.turbulence) return 1;
-    if (f.active) return 2;
-    return 3;
+    if (f.active) return 1;
+    return 2;
   };
   for (const key of Object.keys(lanes) as (keyof FlightBoardLanes)[]) {
-    lanes[key].sort(
-      (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name),
-    );
+    lanes[key].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
   }
   return lanes;
 }
@@ -85,8 +79,8 @@ export function flightTooltip(flight: FlightBoardFlight): string {
     flight.workspaceName,
   ];
   if (flight.awaitingClearance) parts.push('Awaiting clearance');
-  if (flight.turbulence) parts.push('Turbulence');
   if (!flight.active && flight.leg === 'boarding') parts.push('Luggage paused');
+  if (flight.leg === 'landed') parts.push('Unloading');
   return parts.join(' · ');
 }
 

@@ -35,22 +35,22 @@ export function positionFlights(lanes: FlightBoardLanes): PositionedFlight[] {
       flight,
       laneIndex: i,
       point: {
-        x: 14 + j * 4,
-        y: 38 + i * 9 + j * 3,
-        heading: flight.active ? 8 + j * 12 : -20 + j * 10,
+        x: 12 + (i % 2) * 5 + j * 2,
+        y: 32 + i * 14 + j * 2,
+        heading: flight.active ? 8 + j * 12 : -15 + j * 8,
       },
     });
   });
 
   lanes.en_route.forEach((flight, i) => {
     const j = jitter(flight.id, 2);
-    const progress = 0.32 + ((i + j) % 3) * 0.1;
+    const progress = 0.28 + ((i + j) % 3) * 0.12;
     out.push({
       flight,
       laneIndex: i,
       point: {
-        x: 28 + progress * 42,
-        y: 28 + Math.sin(progress * Math.PI) * 18 + (i % 2 === 0 ? -6 : 8) + j * 4,
+        x: 30 + progress * 38,
+        y: 26 + Math.sin(progress * Math.PI) * 16 + (i % 2 === 0 ? -8 : 10) + j * 3,
         heading: 12 + Math.sin(progress * Math.PI) * 18,
       },
     });
@@ -62,9 +62,9 @@ export function positionFlights(lanes: FlightBoardLanes): PositionedFlight[] {
       flight,
       laneIndex: i,
       point: {
-        x: 72 + j * 5,
-        y: 34 + i * 10 + j * 4,
-        heading: flight.turbulence ? 25 + j * 30 : 18 + j * 12,
+        x: 70 + (i % 2) * 4 + j * 3,
+        y: 30 + i * 14 + j * 3,
+        heading: 18 + j * 12,
       },
     });
   });
@@ -75,9 +75,9 @@ export function positionFlights(lanes: FlightBoardLanes): PositionedFlight[] {
       flight,
       laneIndex: i,
       point: {
-        x: 86 + j * 3,
-        y: 42 + i * 9 + j * 2,
-        heading: 90 + j * 20,
+        x: 84 + (i % 2) * 3 + j * 2,
+        y: 36 + i * 14 + j * 2,
+        heading: 95 + j * 15,
       },
     });
   });

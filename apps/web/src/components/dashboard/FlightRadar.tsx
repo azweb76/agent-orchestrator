@@ -94,13 +94,14 @@ export function FlightRadar({ flights, onOpenAgent }: FlightRadarProps) {
 
       {flights.map(({ flight, point }) => {
         const { angle, radius } = radarPolar(point);
-        const color = flight.turbulence
-          ? theme.palette.error.main
-          : flight.leg === 'landed'
+        const color =
+          flight.leg === 'landed'
             ? theme.palette.success.light
             : flight.leg === 'boarding'
               ? theme.palette.warning.main
-              : theme.palette.info.light;
+              : flight.leg === 'approach'
+                ? theme.palette.secondary.light
+                : theme.palette.info.light;
         const x = 50 + Math.cos((angle * Math.PI) / 180) * radius * 45;
         const y = 50 + Math.sin((angle * Math.PI) / 180) * radius * 45;
         return (
@@ -124,7 +125,7 @@ export function FlightRadar({ flights, onOpenAgent }: FlightRadarProps) {
               bgcolor: color,
               boxShadow: `0 0 8px ${color}`,
               transform: 'translate(-50%, -50%)',
-              animation: `${blipPing} ${flight.active || flight.turbulence ? 1.2 : 2.4}s ease-in-out infinite`,
+              animation: `${blipPing} ${flight.active ? 1.2 : 2.4}s ease-in-out infinite`,
               cursor: 'pointer',
               zIndex: 2,
             }}
