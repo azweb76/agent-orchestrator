@@ -103,9 +103,8 @@ export {
 
 export {
   isBuildReadyForDraftPrStep,
-  resolveAutopilotEnabled,
   shouldOfferDraftPr,
-} from './autopilot.js';
+} from './draft-pr.js';
 
 export type {
   ApplyInstructionFileRequest,

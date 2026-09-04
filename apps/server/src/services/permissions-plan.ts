@@ -255,11 +255,7 @@ export async function buildApprovedPlan(
     activate: true,
   });
 
-  const { markAutopilotBuildHandoff } = await import('./autopilot.js');
-  markAutopilotBuildHandoff(ctx, agentId);
-
-  ctx.repos.events.create(
-    makeEvent(agentId, 'plan_build_started', {
+  ctx.repos.events.create(    makeEvent(agentId, 'plan_build_started', {
       requestId: body.requestId ?? null,
       planLength: plan.length,
       stashedSessionId: planSession.id,

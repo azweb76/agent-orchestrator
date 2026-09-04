@@ -17,7 +17,6 @@ const automationBody = z.object({
   autoArchiveOnMerge: z.boolean().optional(),
   autoArchiveDeleteWorktree: z.boolean().optional(),
   autoArchiveAllowDirty: z.boolean().optional(),
-  autopilot: z.boolean().optional(),
 });
 
 const appSettingsBody = z.object({

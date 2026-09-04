@@ -44,7 +44,7 @@ export interface AgentDetail extends Agent {
   worktree: Worktree;
   workspace: Workspace;
   sessions: ChatSession[];
-  /** Set when a completed Build session has a diff and no open PR (autopilot off). */
+  /** Set when a completed Build session has a diff and no open PR. */
   draftPrOffer?: DraftPrOffer | null;
   /** Set after any completed session, offering LLM-generated follow-up tasks. */
   taskSuggestions?: TaskSuggestionsOffer | null;

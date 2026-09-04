@@ -226,11 +226,6 @@ export interface BuildPlanRequest {
   plan?: string;
 }
 
-export interface UpdateAgentRequest {
-  /** Per-agent autopilot override; `null` clears the override (inherit global). */
-  autopilot?: boolean | null;
-}
-
 export interface CreatePrRequest {
   title: string;
   body?: string;

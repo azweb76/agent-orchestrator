@@ -125,21 +125,6 @@ export function describeNotificationEvent(
               ? 'Uncommitted changes in the worktree.'
               : 'No linked pull request.',
         };
-      case 'autopilot_build_started':
-        return { title: `${name}: Autopilot build started`, body: 'Implementing the approved plan.' };
-      case 'autopilot_draft_pr_started':
-        return {
-          title: `${name}: Autopilot draft PR started`,
-          body: 'Creating a draft pull request for this branch.',
-        };
-      case 'autopilot_blocked':
-        return {
-          title: `${name}: Autopilot blocked`,
-          body:
-            typeof event.data.message === 'string' && event.data.message
-              ? event.data.message.slice(0, 140)
-              : 'Autopilot could not continue the plan → build → draft PR chain.',
-        };
       default:
         return null;
     }
