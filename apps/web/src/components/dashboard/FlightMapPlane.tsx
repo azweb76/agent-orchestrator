@@ -16,18 +16,18 @@ const approachWobble = keyframes`
 
 /** Bags roll from the apron into the fuselage. */
 const luggageLoad = keyframes`
-  0% { transform: translate(-22px, 14px) scale(0.9); opacity: 0; }
-  15% { opacity: 1; }
-  70% { transform: translate(-2px, 2px) scale(1); opacity: 1; }
-  100% { transform: translate(6px, -2px) scale(0.75); opacity: 0; }
+  0% { transform: translate(-34px, 22px) scale(0.95); opacity: 0; }
+  12% { opacity: 1; }
+  65% { transform: translate(-6px, 4px) scale(1.05); opacity: 1; }
+  100% { transform: translate(8px, -4px) scale(0.8); opacity: 0; }
 `;
 
 /** Bags roll out of the fuselage onto the destination apron. */
 const luggageUnload = keyframes`
-  0% { transform: translate(4px, -2px) scale(0.75); opacity: 0; }
-  20% { opacity: 1; }
-  75% { transform: translate(20px, 12px) scale(1); opacity: 1; }
-  100% { transform: translate(28px, 18px) scale(0.9); opacity: 0; }
+  0% { transform: translate(6px, -4px) scale(0.8); opacity: 0; }
+  15% { opacity: 1; }
+  70% { transform: translate(28px, 18px) scale(1.05); opacity: 1; }
+  100% { transform: translate(40px, 28px) scale(0.9); opacity: 0; }
 `;
 
 const clearancePulse = keyframes`
@@ -54,24 +54,17 @@ function TopDownPlaneIcon({ color, size }: { color: string; size: number }) {
         width: size,
         height: size * (64 / 48),
         display: 'block',
-        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))',
+        filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.55))',
       }}
       aria-hidden
     >
-      {/* fuselage */}
-      <ellipse cx="24" cy="30" rx="5" ry="22" fill={color} />
-      {/* wings */}
-      <path d="M4 28 L24 22 L44 28 L24 34 Z" fill={color} />
-      <path d="M4 28 L24 22 L44 28 L24 34 Z" fill="#ffffff" opacity="0.12" />
-      {/* tail */}
-      <path d="M18 48 L24 42 L30 48 L24 52 Z" fill={color} />
-      {/* cockpit */}
-      <ellipse cx="24" cy="14" rx="3.2" ry="4" fill="#f8fafc" opacity="0.92" />
-      {/* cargo door hint */}
-      <rect x="20" y="26" width="8" height="6" rx="1" fill="#0b1220" opacity="0.35" />
-      {/* engines */}
-      <ellipse cx="12" cy="30" rx="2.2" ry="3.5" fill="#cbd5e1" opacity="0.85" />
-      <ellipse cx="36" cy="30" rx="2.2" ry="3.5" fill="#cbd5e1" opacity="0.85" />
+      <ellipse cx="24" cy="30" rx="6" ry="24" fill={color} />
+      <path d="M2 28 L24 20 L46 28 L24 36 Z" fill={color} />
+      <path d="M2 28 L24 20 L46 28 L24 36 Z" fill="#ffffff" opacity="0.14" />
+      <path d="M16 50 L24 42 L32 50 L24 55 Z" fill={color} />
+      <ellipse cx="24" cy="12" rx="3.8" ry="5" fill="#f8fafc" opacity="0.95" />
+      <rect x="18" y="25" width="12" height="10" rx="2" fill="#0b1220" opacity="0.5" />
+      <rect x="19" y="26" width="10" height="2.5" rx="1" fill="#94a3b8" opacity="0.55" />
     </Box>
   );
 }
@@ -93,27 +86,28 @@ function LuggageBag({
       sx={{
         position: 'absolute',
         left: '50%',
-        top: '42%',
-        width: 12,
-        height: 9,
-        ml: '-6px',
-        borderRadius: 0.5,
+        top: '44%',
+        width: 18,
+        height: 14,
+        ml: '-9px',
+        borderRadius: 0.7,
         bgcolor: color,
-        border: '1px solid rgba(0,0,0,0.35)',
-        boxShadow: '0 1px 2px rgba(0,0,0,0.35)',
-        animation: `${mode === 'load' ? luggageLoad : luggageUnload} 2.1s ease-in-out infinite`,
+        border: '1.5px solid rgba(0,0,0,0.5)',
+        boxShadow: '0 2px 5px rgba(0,0,0,0.45)',
+        animation: `${mode === 'load' ? luggageLoad : luggageUnload} 2.2s ease-in-out infinite`,
         animationDelay: `${delaySec}s`,
         animationPlayState: active ? 'running' : 'paused',
-        opacity: active ? 1 : 0.4,
+        opacity: active ? 1 : 0.45,
+        zIndex: 2,
         '&::after': {
           content: '""',
           position: 'absolute',
-          left: 2,
-          right: 2,
-          top: 2,
-          height: 2,
+          left: 3,
+          right: 3,
+          top: 3,
+          height: 3,
           borderRadius: 1,
-          bgcolor: 'rgba(255,255,255,0.35)',
+          bgcolor: 'rgba(255,255,255,0.45)',
         },
       }}
     />
@@ -141,7 +135,6 @@ export function FlightMapPlane({ placed, onOpen }: FlightMapPlaneProps) {
 
   const showLoad = flight.leg === 'boarding';
   const showUnload = flight.leg === 'landed';
-  /** Landed always unloads; boarding only while the agent is active. */
   const luggageActive = showUnload || (showLoad && flight.active);
 
   return (
@@ -163,8 +156,8 @@ export function FlightMapPlane({ placed, onOpen }: FlightMapPlaneProps) {
           animation: bodyMotion,
           cursor: 'pointer',
           zIndex: flight.awaitingClearance ? 4 : 3,
-          width: 72,
-          height: 88,
+          width: 96,
+          height: 112,
           '&:hover .ao-flight-label': {
             opacity: 1,
             transform: 'translateX(-50%) translateY(0)',
@@ -182,9 +175,9 @@ export function FlightMapPlane({ placed, onOpen }: FlightMapPlaneProps) {
             sx={{
               position: 'absolute',
               left: '50%',
-              top: '58%',
-              width: 22,
-              height: 10,
+              top: '60%',
+              width: 28,
+              height: 12,
               borderRadius: '50%',
               bgcolor: 'rgba(0,0,0,0.35)',
               animation: `${shadowPulse} 2.4s ease-in-out infinite`,
@@ -202,7 +195,7 @@ export function FlightMapPlane({ placed, onOpen }: FlightMapPlaneProps) {
             transition: 'transform 0.4s ease',
           }}
         >
-          <TopDownPlaneIcon color={color} size={56} />
+          <TopDownPlaneIcon color={color} size={76} />
         </Box>
 
         {showLoad && (
@@ -226,8 +219,8 @@ export function FlightMapPlane({ placed, onOpen }: FlightMapPlaneProps) {
             aria-hidden
             sx={{
               position: 'absolute',
-              top: 4,
-              right: 8,
+              top: 6,
+              right: 10,
               width: 10,
               height: 10,
               borderRadius: '50%',
@@ -245,16 +238,16 @@ export function FlightMapPlane({ placed, onOpen }: FlightMapPlaneProps) {
             position: 'absolute',
             left: '50%',
             top: '100%',
-            mt: 0.15,
+            mt: 0.1,
             transform: 'translateX(-50%) translateY(2px)',
-            opacity: 0.9,
-            px: 0.7,
-            py: 0.2,
+            opacity: 0.95,
+            px: 0.75,
+            py: 0.25,
             borderRadius: 0.75,
-            bgcolor: 'rgba(8, 12, 20, 0.82)',
+            bgcolor: 'rgba(8, 12, 20, 0.85)',
             color: '#e8eefc',
             fontFamily: 'IBM Plex Mono, monospace',
-            fontSize: '0.62rem',
+            fontSize: '0.68rem',
             fontWeight: 700,
             letterSpacing: 0.4,
             whiteSpace: 'nowrap',
