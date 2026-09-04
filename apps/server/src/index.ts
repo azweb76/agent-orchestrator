@@ -34,7 +34,7 @@ const repos = createRepositories(db);
 const ctx: AppContext = {
   repos,
   git: new GitService(),
-  github: new GitHubService({ token: process.env.GITHUB_TOKEN }),
+  github: new GitHubService({ token: process.env.GITHUB_TOKEN, cacheDir: path.join(dataDir, 'cache') }),
   jira: new JiraService({
     baseUrl: process.env.JIRA_BASE_URL,
     email: process.env.JIRA_EMAIL,
