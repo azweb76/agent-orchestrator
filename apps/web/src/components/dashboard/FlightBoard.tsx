@@ -31,7 +31,7 @@ export function FlightBoard({ agents, loading, onOpenAgent }: FlightBoardProps) 
       >
         <Box>
           <SectionLabel>Flight controller</SectionLabel>
-          <Typography variant="h6">Agent airspace</Typography>
+          <Typography variant="h6">Top-down airspace</Typography>
         </Box>
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Chip size="small" variant="outlined" label={`${total} flights`} />

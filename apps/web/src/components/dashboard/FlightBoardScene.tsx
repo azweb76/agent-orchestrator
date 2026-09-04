@@ -1,22 +1,21 @@
-import { Box, Stack, Typography, keyframes, useTheme } from '@mui/material';
-import type { FlightBoardFlight, FlightBoardLanes } from './flightBoardModel';
-import { flightTooltip } from './flightBoardModel';
-import { FlightPlaneMarker } from './FlightPlaneMarker';
-import { ControlTooltip } from '../ui/ControlTooltip';
+import { Box, Typography, keyframes, useTheme } from '@mui/material';
+import type { FlightBoardLanes } from './flightBoardModel';
+import { positionFlights } from './flightMapLayout';
+import { FlightMapPlane } from './FlightMapPlane';
+import { FlightRadar } from './FlightRadar';
 
-const waterShimmer = keyframes`
-  0% { background-position: 0% 50%; }
-  100% { background-position: 100% 50%; }
+const waterDrift = keyframes`
+  0% { background-position: 0 0, 0 0; }
+  100% { background-position: 120px 40px, -80px 60px; }
 `;
 
-const islandGlow = keyframes`
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.12); }
+const wakeDash = keyframes`
+  to { stroke-dashoffset: -28; }
 `;
 
-const corridorDash = keyframes`
-  0% { stroke-dashoffset: 24; }
-  100% { stroke-dashoffset: 0; }
+const palmSway = keyframes`
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(3deg); }
 `;
 
 interface FlightBoardSceneProps {
@@ -24,116 +23,12 @@ interface FlightBoardSceneProps {
   onOpenAgent: (agentId: string) => void;
 }
 
-function LaneStack({
-  flights,
-  onOpen,
-  align = 'center',
-}: {
-  flights: FlightBoardFlight[];
-  onOpen: (id: string) => void;
-  align?: 'flex-start' | 'center' | 'flex-end';
-}) {
-  if (flights.length === 0) {
-    return (
-      <Typography variant="caption" color="text.secondary" sx={{ opacity: 0.55, fontFamily: 'IBM Plex Mono, monospace' }}>
-        Clear
-      </Typography>
-    );
-  }
-  return (
-    <Stack spacing={0.75} sx={{ alignItems: align, width: '100%' }}>
-      {flights.slice(0, 8).map((flight) => (
-        <ControlTooltip key={flight.id} title={flightTooltip(flight)}>
-          <Box>
-            <FlightPlaneMarker flight={flight} onOpen={onOpen} />
-          </Box>
-        </ControlTooltip>
-      ))}
-      {flights.length > 8 && (
-        <Typography variant="caption" color="text.secondary">
-          +{flights.length - 8} more
-        </Typography>
-      )}
-    </Stack>
-  );
-}
-
-function Island({
-  label,
-  verb,
-  side,
-}: {
-  label: string;
-  verb: string;
-  side: 'origin' | 'dest';
-}) {
-  const theme = useTheme();
-  const fill =
-    side === 'origin' ? theme.palette.warning.main : theme.palette.success.main;
-  return (
-    <Box
-      sx={{
-        position: 'relative',
-        width: { xs: 88, sm: 110 },
-        height: { xs: 72, sm: 88 },
-        flexShrink: 0,
-        animation: `${islandGlow} 5s ease-in-out infinite`,
-      }}
-    >
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: '18% 8% 8% 8%',
-          borderRadius: '45% 55% 48% 52%',
-          bgcolor: fill,
-          opacity: 0.28,
-          boxShadow: `0 0 28px ${fill}55`,
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: '28% 18% 22% 18%',
-          borderRadius: '50% 46% 54% 48%',
-          bgcolor: fill,
-          opacity: 0.55,
-        }}
-      />
-      <Stack
-        spacing={0}
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1,
-          px: 0.5,
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            fontFamily: 'IBM Plex Mono, monospace',
-            fontWeight: 700,
-            letterSpacing: 0.8,
-            textTransform: 'uppercase',
-            fontSize: '0.62rem',
-            color: 'text.primary',
-          }}
-        >
-          {label}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.58rem' }}>
-          {verb}
-        </Typography>
-      </Stack>
-    </Box>
-  );
-}
-
 export function FlightBoardScene({ lanes, onOpenAgent }: FlightBoardSceneProps) {
   const theme = useTheme();
-  const ao = theme.palette.ao;
+  const placed = positionFlights(lanes);
+  const deep = '#0a2740';
+  const mid = '#123a57';
+  const foam = '#7ec8e3';
 
   return (
     <Box
@@ -143,127 +38,166 @@ export function FlightBoardScene({ lanes, onOpenAgent }: FlightBoardSceneProps) 
         border: '1px solid',
         borderColor: 'divider',
         overflow: 'hidden',
-        minHeight: { xs: 280, md: 320 },
-        background: `
-          linear-gradient(180deg, ${ao.surface.panelMuted} 0%, ${ao.surface.inset} 100%),
-          repeating-linear-gradient(
-            90deg,
-            transparent,
-            transparent 18px,
-            ${theme.palette.divider}22 18px,
-            ${theme.palette.divider}22 19px
-          )
+        height: { xs: 360, sm: 420, md: 460 },
+        bgcolor: deep,
+        backgroundImage: `
+          radial-gradient(ellipse at 20% 30%, ${mid} 0%, transparent 45%),
+          radial-gradient(ellipse at 80% 60%, #0d3352 0%, transparent 40%),
+          repeating-linear-gradient(115deg, transparent 0 14px, ${foam}10 14px 15px),
+          repeating-linear-gradient(20deg, transparent 0 22px, ${foam}08 22px 23px)
         `,
-        backgroundSize: '200% 100%, auto',
-        animation: `${waterShimmer} 18s linear infinite`,
+        backgroundSize: '100% 100%, 100% 100%, 120px 80px, 100px 70px',
+        animation: `${waterDrift} 28s linear infinite`,
       }}
     >
       <Box
         component="svg"
-        viewBox="0 0 1000 220"
-        preserveAspectRatio="none"
-        sx={{
-          position: 'absolute',
-          left: '12%',
-          right: '12%',
-          top: '42%',
-          height: 48,
-          width: '76%',
-          opacity: 0.7,
-          pointerEvents: 'none',
-        }}
+        viewBox="0 0 1000 560"
+        preserveAspectRatio="xMidYMid slice"
+        sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
       >
+        <defs>
+          <linearGradient id="ao-island-origin" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#c4a35a" />
+            <stop offset="55%" stopColor="#6f9e4a" />
+            <stop offset="100%" stopColor="#3f6b32" />
+          </linearGradient>
+          <linearGradient id="ao-island-dest" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#8fd3b0" />
+            <stop offset="50%" stopColor="#4f9d6e" />
+            <stop offset="100%" stopColor="#2f6b4a" />
+          </linearGradient>
+          <filter id="ao-soft">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#000" floodOpacity="0.35" />
+          </filter>
+        </defs>
+
+        {/* Decorative atolls */}
+        <ellipse cx="480" cy="90" rx="34" ry="18" fill="#2d6b4f" opacity="0.55" />
+        <ellipse cx="520" cy="470" rx="42" ry="20" fill="#2a5f48" opacity="0.45" />
+        <ellipse cx="300" cy="500" rx="28" ry="14" fill="#355f4a" opacity="0.35" />
+
+        {/* Flight corridor */}
         <path
-          d="M20 110 C 220 40, 780 180, 980 110"
+          d="M210 300 C 340 180, 660 380, 790 270"
           fill="none"
           stroke={theme.palette.info.main}
-          strokeWidth="3"
-          strokeDasharray="10 14"
-          style={{ animation: `${corridorDash} 2.4s linear infinite` }}
+          strokeWidth="2.5"
+          strokeDasharray="8 12"
+          strokeOpacity="0.55"
+          style={{ animation: `${wakeDash} 1.8s linear infinite` }}
         />
         <path
-          d="M20 118 C 220 48, 780 188, 980 118"
+          d="M210 308 C 340 188, 660 388, 790 278"
           fill="none"
-          stroke={theme.palette.secondary.main}
-          strokeWidth="1.5"
-          strokeOpacity="0.35"
+          stroke={foam}
+          strokeWidth="1"
+          strokeOpacity="0.2"
         />
+
+        {/* Origin island */}
+        <g filter="url(#ao-soft)">
+          <path
+            d="M40 220 C 70 150, 160 130, 210 170 C 250 200, 250 280, 210 330 C 160 380, 70 360, 45 300 C 30 270, 25 250, 40 220 Z"
+            fill="url(#ao-island-origin)"
+          />
+          <ellipse cx="120" cy="250" rx="48" ry="22" fill="#b89a5a" opacity="0.55" />
+          <rect x="88" y="242" width="70" height="10" rx="2" fill="#d9c48a" opacity="0.7" />
+          <circle cx="95" cy="200" r="7" fill="#2f5c28" style={{ transformOrigin: '95px 200px', animation: `${palmSway} 3.5s ease-in-out infinite` }} />
+          <circle cx="150" cy="190" r="9" fill="#356b30" style={{ transformOrigin: '150px 190px', animation: `${palmSway} 4.2s ease-in-out infinite` }} />
+          <circle cx="175" cy="230" r="6" fill="#2c5526" />
+        </g>
+        <text x="120" y="360" textAnchor="middle" fill="#f4e8c4" fontSize="14" fontFamily="IBM Plex Mono, monospace" letterSpacing="1.5">
+          ORIGIN
+        </text>
+        <text x="120" y="378" textAnchor="middle" fill="#d7c59a" fontSize="10" fontFamily="IBM Plex Mono, monospace">
+          BOARDING
+        </text>
+
+        {/* Destination island */}
+        <g filter="url(#ao-soft)">
+          <path
+            d="M780 180 C 830 140, 930 150, 960 210 C 985 260, 970 340, 910 370 C 850 400, 780 360, 760 300 C 745 260, 750 210, 780 180 Z"
+            fill="url(#ao-island-dest)"
+          />
+          <rect x="820" y="250" width="90" height="12" rx="2" fill="#e8eef5" opacity="0.75" transform="rotate(-18 865 256)" />
+          <rect x="830" y="268" width="70" height="4" rx="1" fill="#9aa7b8" opacity="0.5" transform="rotate(-18 865 270)" />
+          <circle cx="880" cy="210" r="8" fill="#2f6b4a" style={{ transformOrigin: '880px 210px', animation: `${palmSway} 3.8s ease-in-out infinite` }} />
+          <circle cx="910" cy="230" r="6" fill="#3a7a55" />
+          <circle cx="845" cy="220" r="7" fill="#2a5f42" />
+        </g>
+        <text x="870" y="400" textAnchor="middle" fill="#d8ffe8" fontSize="14" fontFamily="IBM Plex Mono, monospace" letterSpacing="1.5">
+          MERGED
+        </text>
+        <text x="870" y="418" textAnchor="middle" fill="#a8d8bc" fontSize="10" fontFamily="IBM Plex Mono, monospace">
+          DESTINATION
+        </text>
       </Box>
 
-      <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={{ xs: 2, md: 1.5 }}
+      {/* Legend strip */}
+      <Box
         sx={{
-          position: 'relative',
-          zIndex: 1,
-          p: { xs: 1.5, md: 2 },
-          alignItems: { xs: 'stretch', md: 'center' },
-          justifyContent: 'space-between',
-          minHeight: { xs: 280, md: 320 },
+          position: 'absolute',
+          left: 12,
+          top: 10,
+          display: 'flex',
+          gap: 1.25,
+          flexWrap: 'wrap',
+          zIndex: 5,
+          px: 1,
+          py: 0.5,
+          borderRadius: 1,
+          bgcolor: 'rgba(6, 14, 24, 0.55)',
+          backdropFilter: 'blur(4px)',
         }}
       >
-        <Stack spacing={1} sx={{ width: { xs: '100%', md: 160 }, alignItems: 'center' }}>
-          <Island label="Origin" verb="Kickoff" side="origin" />
+        {[
+          ['Boarding', theme.palette.warning.main],
+          ['En route', theme.palette.info.main],
+          ['Approach', theme.palette.secondary.main],
+          ['Landed', theme.palette.success.main],
+        ].map(([label, color]) => (
           <Typography
+            key={label}
             variant="caption"
             sx={{
               fontFamily: 'IBM Plex Mono, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              color: 'warning.main',
+              fontSize: '0.58rem',
+              letterSpacing: 0.6,
+              color: '#dbe7ff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 0.5,
             }}
           >
-            Boarding · Planning
+            <Box component="span" sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />
+            {label}
           </Typography>
-          <LaneStack flights={lanes.boarding} onOpen={onOpenAgent} />
-        </Stack>
+        ))}
+      </Box>
 
-        <Stack spacing={1} sx={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: 'IBM Plex Mono, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              color: 'info.main',
-            }}
-          >
-            En route · Implementing
-          </Typography>
-          <LaneStack flights={lanes.en_route} onOpen={onOpenAgent} />
-        </Stack>
+      {placed.map((item) => (
+        <FlightMapPlane key={item.flight.id} placed={item} onOpen={onOpenAgent} />
+      ))}
 
-        <Stack spacing={1} sx={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: 'IBM Plex Mono, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              color: lanes.approach.some((f) => f.turbulence) ? 'error.main' : 'secondary.main',
-            }}
-          >
-            Approach · Verifying
-          </Typography>
-          <LaneStack flights={lanes.approach} onOpen={onOpenAgent} />
-        </Stack>
+      <FlightRadar flights={placed} onOpenAgent={onOpenAgent} />
 
-        <Stack spacing={1} sx={{ width: { xs: '100%', md: 160 }, alignItems: 'center' }}>
-          <Island label="Merged" verb="Destination" side="dest" />
-          <Typography
-            variant="caption"
-            sx={{
-              fontFamily: 'IBM Plex Mono, monospace',
-              textTransform: 'uppercase',
-              letterSpacing: 1,
-              color: 'success.main',
-            }}
-          >
-            Landed
-          </Typography>
-          <LaneStack flights={lanes.landed} onOpen={onOpenAgent} />
-        </Stack>
-      </Stack>
+      {placed.length === 0 && (
+        <Typography
+          variant="body2"
+          sx={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            color: foam,
+            opacity: 0.7,
+            fontFamily: 'IBM Plex Mono, monospace',
+          }}
+        >
+          No traffic in airspace
+        </Typography>
+      )}
     </Box>
   );
 }
