@@ -6,41 +6,22 @@ import { ControlTooltip } from '../ui/ControlTooltip';
 import { CommandCenterHero } from './CommandCenterHero';
 import { AssistantBriefing } from './AssistantBriefing';
 import { FleetBulkSection } from '../commandPalette/FleetBulkSection';
-import type { DashboardAgent } from './dashboardAgents';
-import type {
-  InboxIssue,
-  InboxJiraIssue,
-  PullRequestInbox,
-  SidebarWorkspace,
-  WorkspaceWithCounts,
-} from '@agent-orchestrator/shared';
+import type { PullRequestInbox, SidebarWorkspace } from '@agent-orchestrator/shared';
 
 interface DashboardHeroSectionProps {
   githubLogin?: string | null;
-  systemsOk: boolean;
-  systemsPartial: boolean;
   githubConfigured: boolean;
-  activeAgents: DashboardAgent[];
   sidebar?: SidebarWorkspace[];
   inbox?: PullRequestInbox;
-  githubIssues?: InboxIssue[];
-  jiraIssues?: InboxJiraIssue[];
-  workspaces?: WorkspaceWithCounts[];
   archivedCount: number;
   onPruneClick: () => void;
 }
 
 export function DashboardHeroSection({
   githubLogin,
-  systemsOk,
-  systemsPartial,
   githubConfigured,
-  activeAgents,
   sidebar,
   inbox,
-  githubIssues = [],
-  jiraIssues = [],
-  workspaces = [],
   archivedCount,
   onPruneClick,
 }: DashboardHeroSectionProps) {
@@ -62,22 +43,7 @@ export function DashboardHeroSection({
     >
       <CommandCenterHero githubLogin={githubLogin} />
 
-      <AssistantBriefing
-        systemsOk={systemsOk}
-        systemsPartial={systemsPartial}
-        githubConfigured={githubConfigured}
-        agents={activeAgents.map((agent) => ({
-          id: agent.id,
-          name: agent.name,
-          workspaceName: agent.workspaceName,
-          status: agent.status,
-          pendingPermissionCount: agent.pendingPermissionCount ?? 0,
-        }))}
-        inbox={inbox}
-        githubIssues={githubIssues}
-        jiraIssues={jiraIssues}
-        workspaces={workspaces}
-      />
+      <AssistantBriefing />
 
       <FleetBulkSection
         inbox={inbox}

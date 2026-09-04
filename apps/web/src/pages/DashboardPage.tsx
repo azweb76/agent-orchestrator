@@ -21,15 +21,9 @@ export function DashboardPage() {
     <Stack spacing={2.5}>
       <DashboardHeroSection
         githubLogin={data.status?.githubLogin}
-        systemsOk={data.systemsOk}
-        systemsPartial={data.systemsPartial}
         githubConfigured={Boolean(data.status?.githubTokenConfigured)}
-        activeAgents={data.activeAgents}
         sidebar={data.sidebar}
         inbox={data.inboxQuery.data}
-        githubIssues={data.issueInboxQuery.data?.assigned ?? []}
-        jiraIssues={data.jiraInboxQuery.data?.assigned ?? []}
-        workspaces={data.workspaces ?? []}
         archivedCount={data.archivedCount}
         onPruneClick={openPrune}
       />
@@ -62,14 +56,12 @@ export function DashboardPage() {
         <DashboardAgentsPanel
           loading={data.claudeProcessesLoading}
           processes={data.claudeProcesses}
-          stoppingAgentId={
+          stoppingPid={
             data.stopAgentMutation.isPending
-              ? (data.stopAgentMutation.variables?.agentId ?? null)
+              ? (data.stopAgentMutation.variables?.pid ?? null)
               : null
           }
-          onStopAgent={(agentId, sessionId) =>
-            data.stopAgentMutation.mutate({ agentId, sessionId })
-          }
+          onStopProcess={(process) => data.stopAgentMutation.mutate({ pid: process.pid })}
         />
 
         <DashboardSidePanels
