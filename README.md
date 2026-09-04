@@ -107,7 +107,7 @@ Example Cursor MCP config (`~/.cursor/mcp.json` fragment):
 }
 ```
 
-Mutating tools (`create_agent_from_goal`, `archive_agent`, `dismiss_work_item`) require `confirm: true` after the user agrees.
+Mutating tools (`create_agent_from_goal`, `archive_agent`, `dismiss_work_item`, `update_agent_task`) require `confirm: true` after the user agrees. Use `list_agent_tasks` / `get_agent_task` before updating a template.
 
 ## Usage
 
