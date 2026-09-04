@@ -26,6 +26,10 @@ import {
   CreateWorktreeGoalFields,
   TASK_DEFAULT_SENTINEL,
 } from './CreateWorktreeGoalFields';
+import {
+  AUTO_BRANCH_NAME,
+  CreateWorktreeNameField,
+} from './CreateWorktreeNameField';
 import { useCreateWorktreeMutations } from './useCreateWorktreeMutations';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
@@ -51,6 +55,7 @@ export function CreateWorktreeDialog({
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
+  const [worktreeBranchName, setWorktreeBranchName] = useState(AUTO_BRANCH_NAME);
   const [baseBranch, setBaseBranch] = useState('');
   const [goalText, setGoalText] = useState('');
   const [goalTask, setGoalTask] = useState<string>('auto');
@@ -113,6 +118,7 @@ export function CreateWorktreeDialog({
     setBranchMode('existing');
     setSelectedBranch('');
     setNewBranchName('');
+    setWorktreeBranchName(AUTO_BRANCH_NAME);
     setBaseBranch('');
     setGoalText('');
     setGoalTask('auto');
@@ -148,6 +154,7 @@ export function CreateWorktreeDialog({
       branchMode,
       selectedBranch,
       newBranchName,
+      worktreeBranchName,
       selectedPr,
       goalText,
       goalTask,
@@ -199,8 +206,10 @@ export function CreateWorktreeDialog({
 
   const createTooltip =
     createPending
-      ? tab === 'goal'
-        ? 'Suggesting a branch name and creating the agent…'
+      ? tab === 'goal' || tab === 'issue' || tab === 'jira'
+        ? worktreeBranchName.trim().toLowerCase() === 'auto' || !worktreeBranchName.trim()
+          ? 'Suggesting a branch name and creating the agent…'
+          : 'Creating the agent…'
         : 'Creating the agent…'
       : !canCreate
         ? 'Fill in the required fields first'
@@ -213,6 +222,12 @@ export function CreateWorktreeDialog({
               : tab === 'issue'
                 ? 'Create agent from the GitHub or Jira issue reference'
                 : 'Create agent from the selected branch';
+
+  const showBranchNameField = tab === 'goal' || tab === 'issue' || tab === 'jira';
+  const creatingWithSuggest =
+    createPending &&
+    showBranchNameField &&
+    (worktreeBranchName.trim().toLowerCase() === 'auto' || !worktreeBranchName.trim());
 
   return (
     <ResponsiveDialog
@@ -302,6 +317,15 @@ export function CreateWorktreeDialog({
           </Stack>
         )}
 
+        {showBranchNameField && (
+          <Stack sx={{ mt: 1.5 }}>
+            <CreateWorktreeNameField
+              value={worktreeBranchName}
+              onChange={setWorktreeBranchName}
+            />
+          </Stack>
+        )}
+
         {tab === 'branch' && (
           <CreateWorktreeBranchFields
             branchMode={branchMode}
@@ -350,7 +374,7 @@ export function CreateWorktreeDialog({
             }}
           >
             {createPending
-              ? tab === 'goal'
+              ? creatingWithSuggest
                 ? 'Suggesting & creating…'
                 : 'Creating…'
               : 'Create'}
