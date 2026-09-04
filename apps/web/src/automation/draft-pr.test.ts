@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  isBuildReadyForDraftPrStep,
-  resolveAutopilotEnabled,
-  shouldOfferDraftPr,
-} from '@agent-orchestrator/shared';
+import { isBuildReadyForDraftPrStep, shouldOfferDraftPr } from '@agent-orchestrator/shared';
 
-describe('autopilot helpers', () => {
-  it('resolveAutopilotEnabled uses global default when agent override is null', () => {
-    expect(resolveAutopilotEnabled({ autopilot: true }, null)).toBe(true);
-    expect(resolveAutopilotEnabled({ autopilot: false }, undefined)).toBe(false);
-  });
-
+describe('draft PR helpers', () => {
   it('isBuildReadyForDraftPrStep rejects stopped or errored build sessions', () => {
     expect(
       isBuildReadyForDraftPrStep({ template: 'build', status: 'idle', stopped: true }),

@@ -49,7 +49,6 @@ function seedPrAgent(tmp: string, options: { prNumber?: number | null; branch: s
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     archivedAt: options.archived ? '2026-01-02T00:00:00.000Z' : null,
-    autopilot: null,
   };
   repos.agents.create(agent);
   const ctx: AppContext = {

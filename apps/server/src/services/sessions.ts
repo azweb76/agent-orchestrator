@@ -57,7 +57,7 @@ export async function createAgentSession(
     activate: true,
   });
   if (session.template === 'create-draft-pr') {
-    const { onCreateDraftPrSessionStarted } = await import('./autopilot.js');
+    const { onCreateDraftPrSessionStarted } = await import('./draft-pr-offer.js');
     onCreateDraftPrSessionStarted(ctx, agentId);
   }
   ctx.repos.events.create(

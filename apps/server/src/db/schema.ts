@@ -36,8 +36,7 @@ CREATE TABLE IF NOT EXISTS agents (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   archived_at TEXT,
-  active_session_id TEXT,
-  autopilot_enabled INTEGER
+  active_session_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS chat_sessions (

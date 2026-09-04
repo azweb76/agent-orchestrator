@@ -14,8 +14,6 @@ export interface AutomationSettings {
   autoArchiveDeleteWorktree: boolean;
   /** Allow auto-archive when the worktree has uncommitted changes. */
   autoArchiveAllowDirty: boolean;
-  /** After plan approval, auto-start Build then Create draft PR (opt-in). */
-  autopilot: boolean;
 }
 
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
@@ -26,7 +24,6 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   autoArchiveOnMerge: false,
   autoArchiveDeleteWorktree: false,
   autoArchiveAllowDirty: false,
-  autopilot: false,
 };
 
 /** Browser localStorage keys mirroring automation settings (see Settings page). */
@@ -38,7 +35,6 @@ export const AUTOMATION_STORAGE_KEYS = {
   autoArchiveOnMerge: 'ao.automation.autoArchiveOnMerge',
   autoArchiveDeleteWorktree: 'ao.automation.autoArchiveDeleteWorktree',
   autoArchiveAllowDirty: 'ao.automation.autoArchiveAllowDirty',
-  autopilot: 'ao.automation.autopilot',
 } as const;
 
 /** Max Fix CI auto-retries per commit SHA before giving up. */

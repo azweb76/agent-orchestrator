@@ -32,7 +32,6 @@ export function readAutomationSettingsLocal(): Partial<AutomationSettings> {
     autoArchiveOnMerge: readBool(AUTOMATION_STORAGE_KEYS.autoArchiveOnMerge),
     autoArchiveDeleteWorktree: readBool(AUTOMATION_STORAGE_KEYS.autoArchiveDeleteWorktree),
     autoArchiveAllowDirty: readBool(AUTOMATION_STORAGE_KEYS.autoArchiveAllowDirty),
-    autopilot: readBool(AUTOMATION_STORAGE_KEYS.autopilot),
   };
 }
 
@@ -43,7 +42,6 @@ export function writeAutomationSettingsLocal(settings: AutomationSettings): void
   writeBool(AUTOMATION_STORAGE_KEYS.autoArchiveOnMerge, settings.autoArchiveOnMerge);
   writeBool(AUTOMATION_STORAGE_KEYS.autoArchiveDeleteWorktree, settings.autoArchiveDeleteWorktree);
   writeBool(AUTOMATION_STORAGE_KEYS.autoArchiveAllowDirty, settings.autoArchiveAllowDirty);
-  writeBool(AUTOMATION_STORAGE_KEYS.autopilot, settings.autopilot);
   try {
     localStorage.setItem(
       AUTOMATION_STORAGE_KEYS.pollIntervalSeconds,
