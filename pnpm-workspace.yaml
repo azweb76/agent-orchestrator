@@ -1,3 +1,6 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Skip package versions published less than 7 days ago (supply-chain quarantine).
+minimumReleaseAge: 10080
