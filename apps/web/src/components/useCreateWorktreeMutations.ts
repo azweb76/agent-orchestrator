@@ -9,6 +9,7 @@ import { api } from '../api/client';
 import type { PendingImage } from './chat/composerTypes';
 import type { PendingMention } from './chat/mentionComposer';
 import { TASK_DEFAULT_SENTINEL } from './CreateWorktreeGoalFields';
+import { branchForCreateRequest } from './CreateWorktreeNameField';
 
 type GoalEffort = EffortLevel | typeof TASK_DEFAULT_SENTINEL;
 
@@ -18,6 +19,7 @@ export type CreateWorktreeFormState = {
   branchMode: 'existing' | 'new';
   selectedBranch: string;
   newBranchName: string;
+  worktreeBranchName: string;
   selectedPr: number | '';
   goalText: string;
   goalTask: string;
@@ -49,6 +51,7 @@ export function useCreateWorktreeMutations(
     branchMode,
     selectedBranch,
     newBranchName,
+    worktreeBranchName,
     selectedPr,
     goalText,
     goalTask,
@@ -98,14 +101,17 @@ export function useCreateWorktreeMutations(
   });
 
   const createFromGoal = useMutation({
-    mutationFn: () =>
-      api.createWorktreeFromGoal(workspaceId, {
+    mutationFn: () => {
+      const branch = branchForCreateRequest(worktreeBranchName);
+      return api.createWorktreeFromGoal(workspaceId, {
         goal: buildOutgoingMessage(goalText.trim()),
         baseBranch: resolvedDefaultBranch || undefined,
         task: goalTask,
+        ...(branch ? { branch } : {}),
         ...(goalModel !== TASK_DEFAULT_SENTINEL ? { model: goalModel } : {}),
         ...(goalEffort !== TASK_DEFAULT_SENTINEL ? { effort: goalEffort } : {}),
-      }),
+      });
+    },
     onSuccess: (data) => {
       invalidateAfterCreate();
       const initialImages = images.map((img) => ({
@@ -124,6 +130,7 @@ export function useCreateWorktreeMutations(
     mutationFn: async (): Promise<{ agent: { id: string }; prompt: string }> => {
       const reference = issueReference.trim();
       const jiraKey = parseJiraIssueKey(reference);
+      const branch = branchForCreateRequest(worktreeBranchName);
       if (jiraKey) {
         return api.createWorktreeFromJiraIssue(workspaceId, {
           issueKey: jiraKey,
@@ -131,6 +138,7 @@ export function useCreateWorktreeMutations(
           model: issueModel,
           effort: issueEffort,
           permissionMode: issuePermissionMode,
+          ...(branch ? { branch } : {}),
         });
       }
       return api.createWorktreeFromIssue(workspaceId, {
@@ -139,6 +147,7 @@ export function useCreateWorktreeMutations(
         model: issueModel,
         effort: issueEffort,
         permissionMode: issuePermissionMode,
+        ...(branch ? { branch } : {}),
       });
     },
     onSuccess: (data) => {
@@ -151,14 +160,17 @@ export function useCreateWorktreeMutations(
   });
 
   const createFromJira = useMutation({
-    mutationFn: () =>
-      api.createWorktreeFromJiraIssue(workspaceId, {
+    mutationFn: () => {
+      const branch = branchForCreateRequest(worktreeBranchName);
+      return api.createWorktreeFromJiraIssue(workspaceId, {
         issueKey: jiraIssueKey.trim(),
         baseBranch: resolvedDefaultBranch || undefined,
         model: issueModel,
         effort: issueEffort,
         permissionMode: issuePermissionMode,
-      }),
+        ...(branch ? { branch } : {}),
+      });
+    },
     onSuccess: (data) => {
       invalidateAfterCreate();
       queryClient.invalidateQueries({ queryKey: ['jira-issues-inbox'] });

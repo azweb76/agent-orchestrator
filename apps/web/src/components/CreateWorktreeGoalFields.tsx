@@ -226,8 +226,7 @@ export function CreateWorktreeGoalFields({
         </Alert>
       ) : null}
       <Typography variant="body2" color="text.secondary">
-        A branch name is suggested automatically. Type <code>@</code> to reference a repo file, or
-        paste/attach a screenshot.
+        Type <code>@</code> to reference a repo file, or paste/attach a screenshot.
       </Typography>
     </Stack>
   );

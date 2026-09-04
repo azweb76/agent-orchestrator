@@ -56,6 +56,10 @@ export interface CreateAgentFromJiraIssueRequest {
 export interface CreateWorktreeFromJiraIssueRequest {
   issueKey: string;
   name?: string;
+  /**
+   * Git branch / worktree name. Omit, empty, or `"auto"` to suggest from the issue.
+   */
+  branch?: string;
   baseBranch?: string;
   model?: string;
   effort?: EffortLevel;
