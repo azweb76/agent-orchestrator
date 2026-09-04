@@ -16,7 +16,7 @@ import { deleteWorktree } from './worktrees.js';
 import { buildSpendBudgetStatus } from './spend-cap.js';
 import { isAgentStalled } from './watchdog.js';
 import { getCachedPrStatus } from './github-automation.js';
-import { getDraftPrOfferSessionId } from './autopilot.js';
+import { getDraftPrOfferSessionId } from './draft-pr-offer.js';
 import { listWorktreeFiles } from './chat-mentions.js';
 
 export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCounts[]> {
