@@ -52,7 +52,6 @@ interface ChatPanelFooterProps {
   onCreateDraftPr?: () => void;
   creatingDraftPr?: boolean;
   onSelectTaskSuggestion?: (suggestion: TaskSuggestion) => void;
-  creatingFromSuggestion?: boolean;
 }
 
 export function ChatPanelFooter({
@@ -90,7 +89,6 @@ export function ChatPanelFooter({
   onCreateDraftPr,
   creatingDraftPr,
   onSelectTaskSuggestion,
-  creatingFromSuggestion,
 }: ChatPanelFooterProps) {
   const keyboardInset = useVisualViewportInset();
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: api.getSettings });
@@ -143,7 +141,6 @@ export function ChatPanelFooter({
             session={session}
             isStreaming={sessionBusy}
             onSelect={(suggestion) => onSelectTaskSuggestion?.(suggestion)}
-            creating={creatingFromSuggestion}
           />
         ) : null}
 

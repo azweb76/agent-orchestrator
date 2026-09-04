@@ -22,7 +22,7 @@ export function buildTaskSuggestionsPrompt(context: TaskSuggestionsContext): {
     'If you cannot call a tool, respond with ONLY a JSON object {"suggestions": [...]} (no markdown fences or extra text).',
     'Each suggestion is {"title":"...","prompt":"..."}.',
     '"title" is a short label, 3-6 words, no trailing punctuation.',
-    '"prompt" is a ready-to-send instruction for a new session that continues the work, written as if the user were asking for it directly.',
+    '"prompt" is a ready-to-send follow-up message for the same chat that continues the work, written as if the user were asking for it directly.',
     'Base suggestions only on what the final reply says was done, found, or left open. Do not invent unrelated work.',
     'Prefer concrete, actionable next steps (e.g. add tests, fix a mentioned issue, extend to another file) over vague ideas.',
   ].join(' ');

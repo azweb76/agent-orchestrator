@@ -9,24 +9,21 @@ interface TaskSuggestionsBannerProps {
   session: Pick<ChatSession, 'id' | 'status'> | undefined;
   isStreaming: boolean;
   onSelect: (suggestion: TaskSuggestion) => void;
-  creating?: boolean;
 }
 
 /**
- * After any session finishes, offers a set of LLM-suggested follow-up tasks
- * that each start a new session (same agent/worktree) with the suggestion
- * sent as the kickoff prompt.
+ * After any session finishes, offers LLM-suggested follow-up prompts that
+ * send into the current chat when selected.
  */
 export function TaskSuggestionsBanner({
   agent,
   session,
   isStreaming,
   onSelect,
-  creating,
 }: TaskSuggestionsBannerProps) {
   const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
   const offer = agent.taskSuggestions;
-  if (!offer || isStreaming || creating) return null;
+  if (!offer || isStreaming) return null;
   if (!session || session.id !== offer.sessionId) return null;
   if (session.status !== 'idle') return null;
   if (dismissedSessionId === offer.sessionId) return null;
@@ -54,7 +51,10 @@ export function TaskSuggestionsBanner({
                 variant="outlined"
                 color="inherit"
                 size="small"
-                onClick={() => onSelect(suggestion)}
+                onClick={() => {
+                  setDismissedSessionId(offer.sessionId);
+                  onSelect(suggestion);
+                }}
               >
                 {suggestion.title}
               </Button>

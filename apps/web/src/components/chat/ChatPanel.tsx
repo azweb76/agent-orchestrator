@@ -384,9 +384,8 @@ export const ChatPanel = memo(function ChatPanel({
         }}
         creatingDraftPr={sessionActions.creatingSession}
         onSelectTaskSuggestion={(suggestion) =>
-          void sessionActions.createSessionFromSuggestion(suggestion)
+          void streaming.runChat(suggestion.prompt, [], [], false)
         }
-        creatingFromSuggestion={sessionActions.creatingSession}
       />
 
       <ChatPanelDialogs

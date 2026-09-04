@@ -46,7 +46,7 @@ export interface AgentDetail extends Agent {
   sessions: ChatSession[];
   /** Set when a completed Build session has a diff and no open PR. */
   draftPrOffer?: DraftPrOffer | null;
-  /** Set after any completed session, offering LLM-generated follow-up tasks. */
+  /** Set after any completed session, offering LLM-generated follow-up prompts for the same chat. */
   taskSuggestions?: TaskSuggestionsOffer | null;
   /**
    * Set after a graded Build / Fix CI session with instruction/skill findings.

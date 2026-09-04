@@ -11,7 +11,6 @@ import {
   type InstructionFileScope,
   type Message,
   type SessionGradeFinding,
-  type TaskSuggestion,
   type UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
@@ -235,24 +234,6 @@ export function useChatSessionActions({
     }
   };
 
-  const createSessionFromSuggestion = async (suggestion: TaskSuggestion) => {
-    if (archived) return;
-    setCreatingSession(true);
-    setChatError(null);
-    try {
-      const result = await api.createSession(agentId, { title: suggestion.title });
-      upsertAgentSession(queryClient, agentId, result.session, { activate: true });
-      sessionIdRef.current = result.session.id;
-      setSessionId(result.session.id);
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
-      void runChatRef.current(suggestion.prompt, [], [], false, result.session.id);
-    } catch (error) {
-      setChatError((error as Error).message);
-    } finally {
-      setCreatingSession(false);
-    }
-  };
-
   const createSessionFromFinding = async (finding: SessionGradeFinding) => {
     if (archived) return;
     setCreatingSession(true);
@@ -317,7 +298,6 @@ export function useChatSessionActions({
     selectSession,
     createSessionFromTemplate,
     createSessionFromTask,
-    createSessionFromSuggestion,
     createSessionFromFinding,
     createFromTemplateId,
     requestClear,
