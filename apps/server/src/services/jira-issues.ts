@@ -115,6 +115,7 @@ export async function createWorktreeFromJiraIssue(
     createNew: true,
     baseBranch: body.baseBranch,
     name: body.name,
+    overwrite: body.overwrite,
   });
 
   const configured: Agent = {

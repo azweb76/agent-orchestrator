@@ -41,7 +41,15 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }));
-    const error = new Error(body.error ?? 'Request failed') as Error & { authRequired?: boolean };
+    const error = new Error(body.error ?? 'Request failed') as Error & {
+      authRequired?: boolean;
+      status?: number;
+      code?: string;
+      branch?: string;
+    };
+    error.status = response.status;
+    if (typeof body.code === 'string') error.code = body.code;
+    if (typeof body.branch === 'string') error.branch = body.branch;
     if (body.authRequired || response.status === 401) error.authRequired = true;
     throw error;
   }

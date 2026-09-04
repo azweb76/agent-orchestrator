@@ -13,6 +13,11 @@ export interface CreateWorktreeFromBranchRequest {
   createNew?: boolean;
   /** Base ref to branch from when createNew is true (defaults to workspace default branch). */
   baseBranch?: string;
+  /**
+   * When true with createNew, reset an existing local branch to the base ref
+   * (after removing any worktree that has it checked out).
+   */
+  overwrite?: boolean;
 }
 
 export interface CreateWorktreeFromPrRequest {
@@ -30,6 +35,8 @@ export interface CreateWorktreeFromIssueRequest {
   model?: string;
   effort?: EffortLevel;
   permissionMode?: PermissionMode;
+  /** Reset the suggested branch if it already exists locally. */
+  overwrite?: boolean;
 }
 
 /**
@@ -48,6 +55,8 @@ export interface CreateWorktreeFromGoalRequest {
   model?: string;
   /** Omit to use the resolved AgentTask’s effort. */
   effort?: EffortLevel;
+  /** Reset the suggested branch if it already exists locally. */
+  overwrite?: boolean;
 }
 
 /**
@@ -62,6 +71,7 @@ export interface CreateWorktreeFromIdeaRequest {
   model?: string;
   effort?: EffortLevel;
   permissionMode?: PermissionMode;
+  overwrite?: boolean;
 }
 
 export interface ArchiveAgentRequest {

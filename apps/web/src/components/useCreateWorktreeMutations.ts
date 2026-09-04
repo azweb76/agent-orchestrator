@@ -37,6 +37,8 @@ type FormCallbacks = {
   onCloseForm: () => void;
 };
 
+type OverwriteOpts = { overwrite?: boolean };
+
 export function useCreateWorktreeMutations(
   form: CreateWorktreeFormState,
   { onCloseForm }: FormCallbacks,
@@ -71,12 +73,13 @@ export function useCreateWorktreeMutations(
   };
 
   const createFromBranch = useMutation({
-    mutationFn: () => {
+    mutationFn: (opts?: OverwriteOpts) => {
       if (branchMode === 'new') {
         return api.createWorktreeFromBranch(workspaceId, {
           branch: newBranchName,
           createNew: true,
           baseBranch: resolvedDefaultBranch || undefined,
+          overwrite: opts?.overwrite,
         });
       }
       return api.createWorktreeFromBranch(workspaceId, { branch: selectedBranch });
@@ -98,11 +101,12 @@ export function useCreateWorktreeMutations(
   });
 
   const createFromGoal = useMutation({
-    mutationFn: () =>
+    mutationFn: (opts?: OverwriteOpts) =>
       api.createWorktreeFromGoal(workspaceId, {
         goal: buildOutgoingMessage(goalText.trim()),
         baseBranch: resolvedDefaultBranch || undefined,
         task: goalTask,
+        overwrite: opts?.overwrite,
         ...(goalModel !== TASK_DEFAULT_SENTINEL ? { model: goalModel } : {}),
         ...(goalEffort !== TASK_DEFAULT_SENTINEL ? { effort: goalEffort } : {}),
       }),
@@ -121,7 +125,7 @@ export function useCreateWorktreeMutations(
   });
 
   const createFromIssue = useMutation({
-    mutationFn: async (): Promise<{ agent: { id: string }; prompt: string }> => {
+    mutationFn: async (opts?: OverwriteOpts): Promise<{ agent: { id: string }; prompt: string }> => {
       const reference = issueReference.trim();
       const jiraKey = parseJiraIssueKey(reference);
       if (jiraKey) {
@@ -131,6 +135,7 @@ export function useCreateWorktreeMutations(
           model: issueModel,
           effort: issueEffort,
           permissionMode: issuePermissionMode,
+          overwrite: opts?.overwrite,
         });
       }
       return api.createWorktreeFromIssue(workspaceId, {
@@ -139,6 +144,7 @@ export function useCreateWorktreeMutations(
         model: issueModel,
         effort: issueEffort,
         permissionMode: issuePermissionMode,
+        overwrite: opts?.overwrite,
       });
     },
     onSuccess: (data) => {
@@ -151,13 +157,14 @@ export function useCreateWorktreeMutations(
   });
 
   const createFromJira = useMutation({
-    mutationFn: () =>
+    mutationFn: (opts?: OverwriteOpts) =>
       api.createWorktreeFromJiraIssue(workspaceId, {
         issueKey: jiraIssueKey.trim(),
         baseBranch: resolvedDefaultBranch || undefined,
         model: issueModel,
         effort: issueEffort,
         permissionMode: issuePermissionMode,
+        overwrite: opts?.overwrite,
       }),
     onSuccess: (data) => {
       invalidateAfterCreate();
@@ -169,12 +176,21 @@ export function useCreateWorktreeMutations(
     },
   });
 
+  const resetCreateErrors = () => {
+    createFromBranch.reset();
+    createFromPr.reset();
+    createFromGoal.reset();
+    createFromIssue.reset();
+    createFromJira.reset();
+  };
+
   return {
     createFromBranch,
     createFromPr,
     createFromGoal,
     createFromIssue,
     createFromJira,
+    resetCreateErrors,
     createPending:
       createFromBranch.isPending ||
       createFromPr.isPending ||

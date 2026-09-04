@@ -18,6 +18,9 @@ export const DEFAULT_EFFORT_LEVEL: EffortLevel = 'high';
 
 export const DEFAULT_PERMISSION_MODE: PermissionMode = 'plan';
 
+/** API error `code` when creating a new worktree branch that already exists locally. */
+export const BRANCH_EXISTS_ERROR_CODE = 'BRANCH_EXISTS' as const;
+
 export const PERMISSION_MODES = [
   { id: 'default', label: 'Manual' },
   { id: 'acceptEdits', label: 'Accept edits' },
