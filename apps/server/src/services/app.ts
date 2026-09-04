@@ -125,7 +125,7 @@ export {
   configureClaudeBin,
 } from './system-github.js';
 
-export { listClaudeProcesses } from './claude-process-list.js';
+export { listClaudeProcesses, stopClaudeProcess } from './claude-process-list.js';
 
 export {
   drainSessionQueue,

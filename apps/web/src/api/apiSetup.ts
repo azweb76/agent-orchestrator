@@ -24,4 +24,12 @@ export const apiSetup = {
     request<{ ok?: true } | void>('/auth', { method: 'POST', body: JSON.stringify({ token }) }),
   getUsageSummary: () => request<UsageSummary>('/usage'),
   listClaudeProcesses: () => request<ClaudeProcessInfo[]>('/claude/processes'),
+  stopClaudeProcess: (pid: number) =>
+    request<{
+      stopped: true;
+      pid: number;
+      ownership: 'orchestrator' | 'external';
+      agentId: string | null;
+      sessionId: string | null;
+    }>(`/claude/processes/${pid}/stop`, { method: 'POST' }),
 };

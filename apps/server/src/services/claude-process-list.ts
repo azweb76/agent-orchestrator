@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { realpathSync, readlinkSync } from 'node:fs';
 import path from 'node:path';
-import type { ClaudeProcessInfo } from '@agent-orchestrator/shared';
+import type { ClaudeProcessInfo, ClaudeProcessOwnership } from '@agent-orchestrator/shared';
 import type { AppContext } from './app-context.js';
-import { isPidAlive } from './claude-process.js';
+import { isPidAlive, killProcessTree, scheduleForceKill } from './claude-process.js';
+import { stopAgent, stopAgentSession } from './agents-lifecycle.js';
 
 const COMMAND_MAX = 200;
 
@@ -258,4 +259,54 @@ export function listClaudeProcesses(
     resolveCwd: deps.resolveCwd,
     isAlive: deps.isAlive,
   });
+}
+
+export interface StopClaudeProcessResult {
+  stopped: true;
+  pid: number;
+  ownership: ClaudeProcessOwnership;
+  agentId: string | null;
+  sessionId: string | null;
+}
+
+/**
+ * Stop a live Claude Code process by pid. Orchestrator-owned runs go through
+ * session stop; external CLIs are SIGTERM'd (then SIGKILL) directly.
+ */
+export async function stopClaudeProcess(
+  ctx: AppContext,
+  pid: number,
+): Promise<StopClaudeProcessResult> {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    throw new Error('Invalid process id');
+  }
+  const target = listClaudeProcesses(ctx).find((process) => process.pid === pid);
+  if (!target) {
+    throw new Error('Claude process not found');
+  }
+
+  if (target.ownership === 'orchestrator' && target.agentId) {
+    if (target.sessionId) {
+      await stopAgentSession(ctx, target.agentId, target.sessionId);
+    } else {
+      await stopAgent(ctx, target.agentId);
+    }
+    return {
+      stopped: true,
+      pid,
+      ownership: 'orchestrator',
+      agentId: target.agentId,
+      sessionId: target.sessionId,
+    };
+  }
+
+  killProcessTree(pid);
+  scheduleForceKill(pid);
+  return {
+    stopped: true,
+    pid,
+    ownership: 'external',
+    agentId: null,
+    sessionId: null,
+  };
 }

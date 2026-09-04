@@ -28,13 +28,12 @@ export function useDashboardData(query: string) {
   });
 
   const stopAgentMutation = useMutation({
-    mutationFn: ({ agentId, sessionId }: { agentId: string; sessionId: string | null }) =>
-      sessionId ? api.stopSession(agentId, sessionId) : api.stopAgent(agentId),
-    onSuccess: (_agent, variables) => {
+    mutationFn: (process: { pid: number }) => api.stopClaudeProcess(process.pid),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['claude-processes'] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       queryClient.invalidateQueries({ queryKey: ['status'] });
-      queryClient.invalidateQueries({ queryKey: ['agent', variables.agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agent'] });
     },
   });
 

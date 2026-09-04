@@ -1,6 +1,8 @@
 import express from 'express';
+import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
-import { getUsageSummary, listClaudeProcesses } from '../services/app.js';
+import { getUsageSummary, listClaudeProcesses, stopClaudeProcess } from '../services/app.js';
+import { asyncHandler, param } from './helpers.js';
 
 export function registerEventsRoutes(router: express.Router, ctx: AppContext): void {
   // Global live-update stream: agent/session status, permission prompts, queue
@@ -61,4 +63,12 @@ export function registerEventsRoutes(router: express.Router, ctx: AppContext): v
   router.get('/claude/processes', (_req, res) => {
     res.json(listClaudeProcesses(ctx));
   });
+
+  router.post(
+    '/claude/processes/:pid/stop',
+    asyncHandler(async (req, res) => {
+      const pid = z.coerce.number().int().positive().parse(param(req.params.pid));
+      res.json(await stopClaudeProcess(ctx, pid));
+    }),
+  );
 }
