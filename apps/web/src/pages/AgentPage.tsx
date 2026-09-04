@@ -195,6 +195,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             initialTemplate={initialTemplate}
             focusAttention={focusAttention}
             focusSessionId={focusSessionId}
+            onCommitAndPush={() => openCommitDialog({ push: true, hasPendingChanges: true })}
           />
         </Box>
 

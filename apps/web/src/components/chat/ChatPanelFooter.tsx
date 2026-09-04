@@ -125,7 +125,12 @@ export function ChatPanelFooter({
           />
         ) : null}
 
-        {!archived && agent && session ? (
+        {!archived &&
+        agent &&
+        session &&
+        !agent.taskSuggestions?.suggestions.some(
+          (s) => s.kind === 'start-template' && s.template === 'create-draft-pr',
+        ) ? (
           <DraftPrOfferBanner
             agent={agent}
             session={session}

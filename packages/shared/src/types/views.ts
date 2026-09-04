@@ -1,6 +1,6 @@
 import type { AgentDeliveryPhase } from '../agent-delivery-phase.js';
 import type { SpendBudgetStatus } from '../app-settings.js';
-import type { ChatSession } from '../chat-session.js';
+import type { ChatSession, ChatSessionTemplateId } from '../chat-session.js';
 import type { InstructionDraftOffer } from '../instruction-files.js';
 import type { Agent, Worktree, Workspace } from './entities.js';
 import type { PrStatusSnapshot } from './github.js';
@@ -29,10 +29,18 @@ export interface DraftPrOffer {
   sessionId: string;
 }
 
+/** How selecting a follow-up chip should behave in the chat UI. */
+export type TaskSuggestionKind = 'prompt' | 'commit-and-push' | 'start-template';
+
 export interface TaskSuggestion {
   id: string;
   title: string;
+  /** Ready-to-send chat text for `prompt` kinds; also used as tooltip copy. */
   prompt: string;
+  /** Defaults to `prompt` (send into the current chat). */
+  kind?: TaskSuggestionKind;
+  /** When `kind` is `start-template`, which session template to open. */
+  template?: ChatSessionTemplateId;
 }
 
 export interface TaskSuggestionsOffer {

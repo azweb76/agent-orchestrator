@@ -24,6 +24,7 @@ import { useChatPanelRenderers } from './useChatPanelRenderers';
 import { useChatPermissions } from './useChatPermissions';
 import { useChatSessionActions } from './useChatSessionActions';
 import { useChatStreaming } from './useChatStreaming';
+import { resolveTaskSuggestionAction } from './taskSuggestionActions';
 
 interface ChatPanelProps {
   agentId: string;
@@ -35,6 +36,8 @@ interface ChatPanelProps {
   initialTemplate?: ChatSessionTemplateId;
   focusAttention?: AgentAttentionFocus;
   focusSessionId?: string;
+  /** Opens the commit dialog (Commit and Push follow-up chip). */
+  onCommitAndPush?: () => void;
 }
 
 export const ChatPanel = memo(function ChatPanel({
@@ -47,6 +50,7 @@ export const ChatPanel = memo(function ChatPanel({
   initialTemplate,
   focusAttention,
   focusSessionId,
+  onCommitAndPush,
 }: ChatPanelProps) {
   const sseState = useSseConnectionState();
   const queryClient = useQueryClient();
@@ -383,9 +387,18 @@ export const ChatPanel = memo(function ChatPanel({
           if (template) void sessionActions.createSessionFromTemplate(template);
         }}
         creatingDraftPr={sessionActions.creatingSession}
-        onSelectTaskSuggestion={(suggestion) =>
-          void streaming.runChat(suggestion.prompt, [], [], false)
-        }
+        onSelectTaskSuggestion={(suggestion) => {
+          const action = resolveTaskSuggestionAction(suggestion);
+          if (action.type === 'commit-and-push') {
+            onCommitAndPush?.();
+            return;
+          }
+          if (action.type === 'start-template') {
+            void sessionActions.createSessionFromTemplate(action.template);
+            return;
+          }
+          void streaming.runChat(action.prompt, [], [], false);
+        }}
       />
 
       <ChatPanelDialogs

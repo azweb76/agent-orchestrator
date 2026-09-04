@@ -75,13 +75,14 @@ const SESSION_GRADE_TOOL: Anthropic.Tool = {
 
 const TASK_SUGGESTIONS_TOOL: Anthropic.Tool = {
   name: 'submit_task_suggestions',
-  description: 'Submit 2-4 concrete follow-up tasks for this finished session.',
+  description:
+    'Submit 1-4 concrete follow-up tasks for this finished session (exclude commit/push/PR/CI/review-handoff actions).',
   input_schema: {
     type: 'object',
     properties: {
       suggestions: {
         type: 'array',
-        minItems: 2,
+        minItems: 1,
         maxItems: 4,
         items: {
           type: 'object',

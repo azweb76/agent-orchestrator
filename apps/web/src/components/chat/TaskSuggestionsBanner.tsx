@@ -12,8 +12,8 @@ interface TaskSuggestionsBannerProps {
 }
 
 /**
- * After any session finishes, offers LLM-suggested follow-up prompts that
- * send into the current chat when selected.
+ * After any session finishes, offers follow-up chips (status actions + LLM
+ * prompts) that send into chat or start a handoff when selected.
  */
 export function TaskSuggestionsBanner({
   agent,
