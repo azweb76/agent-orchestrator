@@ -121,8 +121,9 @@ export function buildAgentPrStripModel(input: {
     conflicted: readiness.conflicted,
     showResolveConflicts: canAct && readiness.conflicted,
     showFixCi: canAct && (checks?.failing ?? 0) > 0,
-    showAddressReview: canAct,
+    showAddressReview: canAct && reviewCount > 0,
     showMarkReady: canAct && pr.draft && checks?.rollup === 'success' && !readiness.conflicted,
+    /** Prefer header PR button; menu may still link when useful. */
     showOpenPr: !pr.merged,
     open,
   };
