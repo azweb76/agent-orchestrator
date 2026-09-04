@@ -73,6 +73,14 @@ describe('buildAgentPrStripModel', () => {
     expect(model.reviewLabel).toBe('3 review comments');
   });
 
+  it('hides Address review in the menu when there are no review comments', () => {
+    const model = buildAgentPrStripModel({
+      pr: basePr({ draft: false, reviewCommentCount: 0 }),
+      checks: checks({ rollup: 'success', failing: 0, passing: 2 }),
+    });
+    expect(model.showAddressReview).toBe(false);
+  });
+
   it('hides mutating actions when archived or not open', () => {
     expect(
       buildAgentPrStripModel({

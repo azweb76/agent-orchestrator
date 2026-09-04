@@ -1,10 +1,21 @@
+import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Button, Chip, Stack, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  ListItemIcon,
+  Menu,
+  MenuItem,
+  Stack,
+  Typography,
+} from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
-import { AgentFlightRoute } from '../components/agent/AgentFlightRoute';
 import { PullRequestStatusIcon } from '../components/pr/PullRequestStatusIcon';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
@@ -24,6 +35,11 @@ interface AgentPageHeaderProps {
   onCreatePr: () => void;
 }
 
+/** Runtime status is redundant with delivery phase when idle — only surface active states. */
+function showRuntimeStatus(status: AgentDetail['status']): boolean {
+  return status === 'running' || status === 'queued' || status === 'stopped';
+}
+
 export function AgentPageHeader({
   agent,
   archived,
@@ -33,12 +49,14 @@ export function AgentPageHeader({
   onUnarchive,
   onCreatePr,
 }: AgentPageHeaderProps) {
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const prNumber = agent.worktree.prNumber;
   const { pr } = useAgentLinkedPr(agent);
   const prStatus = pr ? resolvePullRequestStatus(pr) : prNumber != null ? 'open' : null;
+  const busy = archivePending || unarchivePending;
 
   return (
-    <>
+    <Stack spacing={0.75} sx={{ flexShrink: 0 }}>
       <Box sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 0 }}>
         <PageBreadcrumbs
           items={[
@@ -50,70 +68,48 @@ export function AgentPageHeader({
       </Box>
 
       <Stack
-        direction={{ xs: 'column', md: 'row' }}
+        direction="row"
         spacing={1}
-        sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, flexShrink: 0 }}
+        sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}
       >
-        <Box sx={{ minWidth: 0 }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2, fontSize: { xs: '1.2rem', md: '1.4rem' } }}>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 700, lineHeight: 1.2, fontSize: { xs: '1.15rem', md: '1.35rem' } }}
+            >
               {agent.name}
             </Typography>
-            <Chip
-              size="small"
-              label={statusLabel(agent.status)}
-              color={statusColor(agent.status)}
-              variant="outlined"
-            />
-            <AgentDeliveryPhaseChip agent={agent} archived={archived} />
+            {showRuntimeStatus(agent.status) ? (
+              <Chip
+                size="small"
+                label={statusLabel(agent.status)}
+                color={statusColor(agent.status)}
+                variant="outlined"
+              />
+            ) : null}
+            {/* PR bar owns delivery status once a PR is linked */}
+            {prNumber == null || archived ? (
+              <AgentDeliveryPhaseChip agent={agent} archived={archived} />
+            ) : null}
           </Stack>
-          <AgentFlightRoute agent={agent} archived={archived} />
-          <Typography variant="body2" color="text.secondary" noWrap>
-            <Box
-              component={RouterLink}
-              to={`/workspaces/${agent.workspace.id}`}
-              sx={{
-                color: 'inherit',
-                textDecoration: 'none',
-                '&:hover': { color: 'secondary.main' },
-              }}
-            >
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            sx={{ display: 'block', mt: 0.35, fontFamily: 'IBM Plex Mono, monospace' }}
+          >
+            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
               {agent.workspace.githubOwner}/{agent.workspace.githubRepo}
+              {' · '}
             </Box>
-            {' · '}
-            {agent.worktree.name} · {agent.worktree.branch}
+            {agent.worktree.branch}
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-          {archived ? (
-            <ControlTooltip title="Restore this agent to the active fleet" disabled={unarchivePending}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<UnarchiveOutlinedIcon />}
-                disabled={unarchivePending}
-                onClick={onUnarchive}
-              >
-                Unarchive
-              </Button>
-            </ControlTooltip>
-          ) : (
-            <ControlTooltip title="Archive this agent and hide it from the active fleet" disabled={archivePending}>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                startIcon={<ArchiveOutlinedIcon />}
-                disabled={archivePending}
-                onClick={onArchive}
-              >
-                Archive
-              </Button>
-            </ControlTooltip>
-          )}
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
           {prNumber != null ? (
-            <ControlTooltip title={`Open pull request #${prNumber} in the app`}>
+            <ControlTooltip title={`Open pull request #${prNumber}`}>
               <Button
                 size="small"
                 variant="contained"
@@ -127,12 +123,12 @@ export function AgentPageHeader({
                   prNumber,
                 )}
               >
-                View PR #{prNumber}
+                PR #{prNumber}
               </Button>
             </ControlTooltip>
           ) : (
             <ControlTooltip
-              title={archived ? 'Archived agents cannot create pull requests' : 'Create a pull request for this branch'}
+              title={archived ? 'Archived agents cannot create pull requests' : 'Create a pull request'}
               disabled={archived}
             >
               <Button
@@ -146,8 +142,49 @@ export function AgentPageHeader({
               </Button>
             </ControlTooltip>
           )}
+
+          <ControlTooltip title="Agent actions" disabled={busy}>
+            <IconButton
+              size="small"
+              aria-label="Agent actions"
+              disabled={busy}
+              onClick={(event) => setMenuAnchor(event.currentTarget)}
+            >
+              <MoreVertIcon fontSize="small" />
+            </IconButton>
+          </ControlTooltip>
         </Stack>
       </Stack>
-    </>
+
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+        {archived ? (
+          <MenuItem
+            disabled={unarchivePending}
+            onClick={() => {
+              setMenuAnchor(null);
+              onUnarchive();
+            }}
+          >
+            <ListItemIcon>
+              <UnarchiveOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            Unarchive
+          </MenuItem>
+        ) : (
+          <MenuItem
+            disabled={archivePending}
+            onClick={() => {
+              setMenuAnchor(null);
+              onArchive();
+            }}
+          >
+            <ListItemIcon>
+              <ArchiveOutlinedIcon fontSize="small" />
+            </ListItemIcon>
+            Archive
+          </MenuItem>
+        )}
+      </Menu>
+    </Stack>
   );
 }

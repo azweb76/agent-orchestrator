@@ -6,8 +6,7 @@ import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
-import { AgentPrActionOffers } from '../components/agent/AgentPrActionOffers';
-import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
+import { AgentPrBar } from '../components/agent/AgentPrBar';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
@@ -125,15 +124,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         onCreatePr={() => setPrOpen(true)}
       />
 
-      <AgentPrStatusStrip
-        agent={agent}
-        archived={archived}
-        onSessionStarted={(sessionId) => {
-          setFocusSessionId(sessionId);
-          setTab(0);
-        }}
-      />
-      <AgentPrActionOffers
+      <AgentPrBar
         agent={agent}
         archived={archived}
         archivePending={archiveMutation.isPending}
