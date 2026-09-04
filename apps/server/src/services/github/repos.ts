@@ -96,7 +96,7 @@ export async function searchRepositories(
   // Warm the durable list in the background for empty-query / fallback use.
   ensureRepoListWarm(ctx);
 
-  let remote: GitHubRepository[] = [];
+  let remote: GitHubRepository[];
   try {
     remote = await searchRepositoriesViaApi(ctx, trimmed);
   } catch {

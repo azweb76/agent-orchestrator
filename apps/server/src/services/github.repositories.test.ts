@@ -234,7 +234,6 @@ test('setToken clears persisted repo cache', async (t) => {
 
 test('getAllAccessibleRepos serves stale disk cache when GitHub refresh fails', async (t) => {
   const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-repo-cache-'));
-  const repos = [rawRepo('azweb76', 'stale-repo')];
   try {
     // Seed a stale disk cache (fetchedAt far in the past).
     fs.mkdirSync(cacheDir, { recursive: true });
