@@ -12,6 +12,7 @@ import { registerWorkspaceRoutes } from './workspace-routes.js';
 import { registerSettingsRoutes } from './settings-routes.js';
 import { registerAgentTaskRoutes } from './agent-task-routes.js';
 import { registerMemoryRoutes } from './memory-routes.js';
+import { registerAssistantRoutes } from './assistant-routes.js';
 
 export { errorHandler } from './error-handler.js';
 
@@ -30,6 +31,7 @@ export function createRouter(ctx: AppContext): express.Router {
   registerChatRoutes(router, ctx);
   registerAgentToolRoutes(router, ctx);
   registerMemoryRoutes(router, ctx);
+  registerAssistantRoutes(router, ctx);
 
   return router;
 }

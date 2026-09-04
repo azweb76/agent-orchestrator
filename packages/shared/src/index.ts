@@ -184,3 +184,18 @@ export {
   type WorkQueueInput,
   type WorkQueueResult,
 } from './work-queue.js';
+
+export {
+  ASSISTANT_SYSTEM_PROMPT,
+  ASSISTANT_TOOLS,
+  assistantToolByName,
+  type AssistantChatRequest,
+  type AssistantChatResponse,
+  type AssistantJsonSchema,
+  type AssistantMessage,
+  type AssistantMessageRole,
+  type AssistantToolCall,
+  type AssistantToolDefinition,
+  type AssistantToolResultMeta,
+  type AssistantToolRisk,
+} from './assistant.js';

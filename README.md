@@ -4,7 +4,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
 
 ## Features
 
-- **Command center** — home dashboard with the live agent fleet, a **Needs attention** panel when agents are waiting on prompts, spend/usage rollup (today's cost, all-time, top spend per agent), system readiness, recent workspaces, and PR / GitHub / Jira issue inboxes. Everything updates live over SSE — no manual refresh.
+- **Command center** — home dashboard with the live agent fleet, **Assistant** (work queue + AI chat for managing workspaces/agents/tasks), spend/usage rollup, system readiness, recent workspaces, and PR / GitHub / Jira issue inboxes. Everything updates live over SSE — no manual refresh.
 - **Workspaces** — clone GitHub repos as managed workspaces.
 - **Pull requests** — browse your open PRs and review requests; open a PR to see checks, files, commits, reviews, and conversation, and start an agent from it. **Fix CI** and **Address review** kick off ready-made sessions against the PR branch.
 - **Agents** — one Claude Code agent per git worktree. Create one **From goal** (pick a **task** or **Auto** via purpose; optional model/effort override task defaults), **From branch**, or **From PR**. Each agent page has two tabs: **Chat** and **Changes**.
@@ -75,8 +75,39 @@ pnpm dev
 | `PORT` | Server port | `3001` |
 | `HOST` | Bind address | `127.0.0.1` |
 | `AUTH_TOKEN` | Optional shared secret for API access | — |
+| `ASSISTANT_MCP_TOKEN` | Required when `AUTH_TOKEN` is set and using the Assistant MCP server; must match `AUTH_TOKEN` | — |
 
 The server binds to loopback by default. Set `HOST=0.0.0.0` only if you intend to expose the UI on the network, and pair it with `AUTH_TOKEN` — the web UI will then show an unlock screen asking for the token.
+
+### Assistant MCP (Cursor / Claude Code)
+
+The same built-in tools that power in-app Assistant chat are exposed over MCP (stdio):
+
+```bash
+pnpm --filter @agent-orchestrator/server mcp
+# or after build: pnpm --filter @agent-orchestrator/server mcp:start
+```
+
+Example Cursor MCP config (`~/.cursor/mcp.json` fragment):
+
+```json
+{
+  "mcpServers": {
+    "agent-orchestrator": {
+      "command": "pnpm",
+      "args": ["--filter", "@agent-orchestrator/server", "mcp"],
+      "cwd": "/absolute/path/to/agent-orchestrator",
+      "env": {
+        "DATA_DIR": "/absolute/path/to/agent-orchestrator/data",
+        "GITHUB_TOKEN": "<same as .env>",
+        "ASSISTANT_MCP_TOKEN": "<same as AUTH_TOKEN if set>"
+      }
+    }
+  }
+}
+```
+
+Mutating tools (`create_agent_from_goal`, `archive_agent`, `dismiss_work_item`) require `confirm: true` after the user agrees.
 
 ## Usage
 

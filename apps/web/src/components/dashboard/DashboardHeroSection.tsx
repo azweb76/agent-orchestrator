@@ -16,7 +16,7 @@ import { useCommandPalette } from '../commandPalette/CommandPaletteContext';
 import { paletteShortcutLabel } from '../commandPalette/paletteCommands';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { CommandCenterHero } from './CommandCenterHero';
-import { JarvisBriefing } from './JarvisBriefing';
+import { AssistantBriefing } from './AssistantBriefing';
 import { FleetBulkSection } from '../commandPalette/FleetBulkSection';
 import type { DashboardAgent } from './dashboardAgents';
 import type {
@@ -81,7 +81,7 @@ export function DashboardHeroSection({
     >
       <CommandCenterHero githubLogin={githubLogin} />
 
-      <JarvisBriefing
+      <AssistantBriefing
         systemsOk={systemsOk}
         systemsPartial={systemsPartial}
         githubConfigured={githubConfigured}

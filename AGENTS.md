@@ -82,6 +82,7 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_A
 - After grading Build / Fix CI with instruction/skill findings, persist a human-gated `instructionDraftOffer` in `automation_state` (optional pre-generated draft). Never auto-write instruction files; apply stays manual. Prefer `automation_state` for one-offer-per-agent UX over a new table until history is needed.
 - **Agent memory** (`agent_memories` SQLite): short preferences/lessons/facts scoped `global` | `workspace` | `agent`. Inject active rows into Claude via `--append-system-prompt` (token-capped). Use memory for situational notes; standing process belongs in skills / `CLAUDE.md` / `AGENTS.md`.
 - Agent **delivery phase** (`resolveAgentDeliveryPhase` in `@agent-orchestrator/shared`) is derived from sessions + linked PR checks/reviews — plan → build → needs PR → draft → CI/review → ready → merged → archived. Prefer this for “where is this agent?” UI over inventing a second workflow engine.
+- **Assistant** (fleet manager): in-app chat on the dashboard plus MCP stdio (`apps/server/src/mcp.ts`). Shared tool registry in `packages/shared/src/assistant.ts`; handlers in `assistant-tools.ts`. Mutating tools require `confirm=true`. Do not conflate with worktree Claude agent chat.
 
 ## Conventions
 

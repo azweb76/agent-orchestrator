@@ -8,11 +8,14 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-concurrency=1 src/**/*.test.ts"
+    "test": "node --import tsx --test --test-concurrency=1 src/**/*.test.ts",
+    "mcp": "tsx src/mcp.ts",
+    "mcp:start": "node dist/mcp.js"
   },
   "dependencies": {
     "@agent-orchestrator/shared": "workspace:*",
     "@anthropic-ai/sdk": "^0.120.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
