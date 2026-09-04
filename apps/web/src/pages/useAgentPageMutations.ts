@@ -60,18 +60,10 @@ export function useAgentPageMutations(agentId: string) {
     },
   });
 
-  const autopilotMutation = useMutation({
-    mutationFn: (autopilot: boolean | null) => api.updateAgent(agentId, { autopilot }),
-    onSuccess: (detail) => {
-      queryClient.setQueryData(['agent', agentId], detail);
-    },
-  });
-
   return {
     archiveMutation,
     unarchiveMutation,
     commitMutation,
     createPrMutation,
-    autopilotMutation,
   };
 }

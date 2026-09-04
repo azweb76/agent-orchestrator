@@ -127,13 +127,6 @@ export function AutomationSettingsSection() {
         tooltip="Archive even when the worktree has local changes"
         disabled={loading || !settings.enabled || !settings.autoArchiveOnMerge}
       />
-      <AutomationToggle
-        checked={settings.autopilot}
-        onChange={(autopilot) => patch({ autopilot })}
-        label="Autopilot: plan → build → draft PR"
-        tooltip="After plan approval, auto-start Build; when Build finishes with changes and no PR, auto-start Create draft PR"
-        disabled={loading}
-      />
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', pt: 0.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: 'text.secondary' }}>
           <AutoFixHighOutlinedIcon sx={{ fontSize: 18 }} />

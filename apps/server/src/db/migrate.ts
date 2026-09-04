@@ -130,7 +130,6 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'agent_task_id', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'system_prompt', 'TEXT');
   ensureColumn(db, 'chat_sessions', 'allowed_tools', 'TEXT');
-  ensureColumn(db, 'agents', 'autopilot_enabled', 'INTEGER');
   migrateAgentTasks(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_memories (

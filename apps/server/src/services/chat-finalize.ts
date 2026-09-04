@@ -64,12 +64,12 @@ export function finalizeSessionRun(
         error: result.error ?? null,
       },
     });
-    void import('./autopilot.js').then(({ maybeAutopilotAfterBuild }) =>
-      maybeAutopilotAfterBuild(ctx, latest, {
+    void import('./draft-pr-offer.js').then(({ maybeOfferDraftPrAfterBuild }) =>
+      maybeOfferDraftPrAfterBuild(ctx, latest, {
         stopped: result.stopped,
         error: result.error,
       }).catch((error) => {
-        console.warn(`[autopilot] post-build hook failed for session ${latest.id}:`, error);
+        console.warn(`[draft-pr-offer] post-build hook failed for session ${latest.id}:`, error);
       }),
     );
     void import('./task-suggestions.js').then(({ maybeSuggestFollowUpTasks }) =>

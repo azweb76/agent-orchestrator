@@ -14,7 +14,7 @@ interface DraftPrOfferBannerProps {
 
 /**
  * After a successful Build with a diff and no open PR, offers a one-click
- * handoff to the Create draft PR session (skipped when autopilot is on).
+ * handoff to the Create draft PR session.
  */
 export function DraftPrOfferBanner({
   agent,

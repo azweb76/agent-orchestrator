@@ -52,7 +52,6 @@ export async function createAgentForWorktree(
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
-    autopilot: null,
   };
 
   ctx.repos.agents.create(agent);

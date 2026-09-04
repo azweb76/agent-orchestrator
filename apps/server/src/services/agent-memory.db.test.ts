@@ -53,7 +53,6 @@ function seedAgent(dataDir: string) {
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
-    autopilot: null,
   });
   return { repos, ctx: { repos, dataDir } as AppContext };
 }
