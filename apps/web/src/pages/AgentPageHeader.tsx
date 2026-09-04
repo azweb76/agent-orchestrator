@@ -7,6 +7,7 @@ import type { AgentDetail } from '@agent-orchestrator/shared';
 import { resolveAutopilotEnabled } from '@agent-orchestrator/shared';
 import { useAutomationSettings } from '../automation/useAutomationSettings';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
+import { AgentFlightRoute } from '../components/agent/AgentFlightRoute';
 import { PullRequestStatusIcon } from '../components/pr/PullRequestStatusIcon';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
@@ -75,6 +76,7 @@ export function AgentPageHeader({
             />
             <AgentDeliveryPhaseChip agent={agent} archived={archived} />
           </Stack>
+          <AgentFlightRoute agent={agent} archived={archived} />
           <Typography variant="body2" color="text.secondary" noWrap>
             <Box
               component={RouterLink}

@@ -7,6 +7,8 @@ import { DashboardBlockedAgentsPanel } from '../components/dashboard/DashboardBl
 import { DashboardHeroSection } from '../components/dashboard/DashboardHeroSection';
 import { DashboardMetricsRow } from '../components/dashboard/DashboardMetricsRow';
 import { DashboardSidePanels } from '../components/dashboard/DashboardSidePanels';
+import { FlightBoard } from '../components/dashboard/FlightBoard';
+import { groupFlightsByLane } from '../components/dashboard/flightBoardModel';
 import { useDashboardData } from '../components/dashboard/useDashboardData';
 
 export function DashboardPage() {
@@ -15,6 +17,7 @@ export function DashboardPage() {
   const [pruneOpen, setPruneOpen] = useState(false);
 
   const data = useDashboardData(query);
+  const flightLanes = groupFlightsByLane(data.activeAgents);
 
   const onCommandSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -57,11 +60,21 @@ export function DashboardPage() {
         githubConfigured={Boolean(data.status?.githubTokenConfigured)}
         usage={data.usageQuery.data}
         status={data.status}
+        boardingCount={flightLanes.boarding.length}
+        airborneCount={flightLanes.en_route.length}
+        approachCount={flightLanes.approach.length}
+        landedCount={flightLanes.landed.length}
       />
 
       {(data.sidebarError as Error | undefined) && (
         <Alert severity="error">{(data.sidebarError as Error).message}</Alert>
       )}
+
+      <FlightBoard
+        agents={data.filteredAgents}
+        loading={data.sidebarLoading}
+        onOpenAgent={(agentId) => navigate(`/agents/${agentId}`)}
+      />
 
       <DashboardBlockedAgentsPanel agents={data.blockedAgents} />
 

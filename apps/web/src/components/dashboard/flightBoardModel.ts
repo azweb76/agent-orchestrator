@@ -1,0 +1,99 @@
+import {
+  AGENT_DELIVERY_PHASE_LABELS,
+  AGENT_FLIGHT_LEG_LABELS,
+  isFlightActivityActive,
+  isFlightTurbulence,
+  resolveAgentFlightLeg,
+  type AgentDeliveryPhase,
+  type AgentFlightLeg,
+  type AgentStatus,
+} from '@agent-orchestrator/shared';
+import type { DashboardAgent } from './dashboardAgents';
+
+export interface FlightBoardFlight {
+  id: string;
+  name: string;
+  workspaceName: string;
+  workspaceId: string;
+  status: AgentStatus;
+  phase: AgentDeliveryPhase;
+  leg: AgentFlightLeg;
+  turbulence: boolean;
+  active: boolean;
+  awaitingClearance: boolean;
+  stalled: boolean;
+  callsign: string;
+}
+
+export interface FlightBoardLanes {
+  boarding: FlightBoardFlight[];
+  en_route: FlightBoardFlight[];
+  approach: FlightBoardFlight[];
+  landed: FlightBoardFlight[];
+}
+
+export function toFlightBoardFlight(agent: DashboardAgent): FlightBoardFlight {
+  const phase = agent.deliveryPhase;
+  const leg = resolveAgentFlightLeg(phase);
+  return {
+    id: agent.id,
+    name: agent.name,
+    workspaceName: agent.workspaceName,
+    workspaceId: agent.workspaceId,
+    status: agent.status,
+    phase,
+    leg,
+    turbulence: isFlightTurbulence(phase),
+    active: isFlightActivityActive(agent.status),
+    awaitingClearance: (agent.pendingPermissionCount ?? 0) > 0,
+    stalled: Boolean(agent.stalled),
+    callsign: shortCallsign(agent.name),
+  };
+}
+
+export function groupFlightsByLane(agents: DashboardAgent[]): FlightBoardLanes {
+  const lanes: FlightBoardLanes = {
+    boarding: [],
+    en_route: [],
+    approach: [],
+    landed: [],
+  };
+  for (const agent of agents) {
+    if (agent.status === 'archived') continue;
+    const flight = toFlightBoardFlight(agent);
+    if (flight.leg === 'hangared') continue;
+    lanes[flight.leg].push(flight);
+  }
+  const rank = (f: FlightBoardFlight) => {
+    if (f.awaitingClearance) return 0;
+    if (f.turbulence) return 1;
+    if (f.active) return 2;
+    return 3;
+  };
+  for (const key of Object.keys(lanes) as (keyof FlightBoardLanes)[]) {
+    lanes[key].sort(
+      (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name),
+    );
+  }
+  return lanes;
+}
+
+export function flightTooltip(flight: FlightBoardFlight): string {
+  const parts = [
+    AGENT_FLIGHT_LEG_LABELS[flight.leg],
+    AGENT_DELIVERY_PHASE_LABELS[flight.phase],
+    flight.workspaceName,
+  ];
+  if (flight.awaitingClearance) parts.push('Awaiting clearance');
+  if (flight.turbulence) parts.push('Turbulence');
+  if (!flight.active && flight.leg === 'boarding') parts.push('Luggage paused');
+  return parts.join(' · ');
+}
+
+function shortCallsign(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9]+/g, ' ').trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'FLT';
+  if (parts.length === 1) return parts[0].slice(0, 8).toUpperCase();
+  return `${parts[0].slice(0, 3)}${parts[1].slice(0, 3)}`.toUpperCase();
+}
