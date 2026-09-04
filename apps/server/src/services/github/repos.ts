@@ -1,61 +1,19 @@
 import type { GitHubRepository } from '@agent-orchestrator/shared';
-import { REPO_CACHE_TTL_MS } from './constants.js';
+import { REPO_CACHE_TTL_MS, REPO_SEARCH_RESULT_LIMIT } from './constants.js';
 import type { GitHubClientContext } from './client.js';
 import { request } from './client.js';
-import { mapRepository } from './mappers.js';
+import { mapRepository, sanitizePullRequestSearchText } from './mappers.js';
 import type { RawRepoSettings } from './raw-types.js';
+import {
+  ensureRepoListWarm,
+  getAllAccessibleRepos,
+} from './repos-list-cache.js';
 
-export async function getAllAccessibleRepos(ctx: GitHubClientContext): Promise<GitHubRepository[]> {
-  if (ctx.repoCache && Date.now() - ctx.repoCache.fetchedAt < REPO_CACHE_TTL_MS) {
-    return ctx.repoCache.repos;
-  }
+export { getAllAccessibleRepos } from './repos-list-cache.js';
 
-  const repos: GitHubRepository[] = [];
-  const maxPages = 5;
-
-  for (let page = 1; page <= maxPages; page++) {
-    const data = await request<
-      Array<{
-        owner: { login: string };
-        name: string;
-        full_name: string;
-        html_url: string;
-        description: string | null;
-        private: boolean;
-      }>
-    >(
-      ctx,
-      `https://api.github.com/user/repos?affiliation=owner,collaborator,organization_member&sort=pushed&per_page=100&page=${page}`,
-    );
-
-    repos.push(...data.map(mapRepository));
-
-    if (data.length < 100) {
-      break;
-    }
-  }
-
-  ctx.repoCache = { repos, fetchedAt: Date.now() };
-  return repos;
-}
-
-export async function searchRepositories(
-  ctx: GitHubClientContext,
-  query: string,
-): Promise<GitHubRepository[]> {
-  if (!ctx.options.token) {
-    throw new Error('GitHub token is not configured');
-  }
-
-  const allRepos = await getAllAccessibleRepos(ctx);
-
-  const trimmed = query.trim();
-  if (!trimmed) {
-    return allRepos.slice(0, 30);
-  }
-
-  const normalized = trimmed.toLowerCase();
-  const matches = allRepos.filter((repo) => `${repo.owner}/${repo.name}`.toLowerCase().includes(normalized));
+function filterLocalRepos(repos: GitHubRepository[], query: string): GitHubRepository[] {
+  const normalized = query.toLowerCase();
+  const matches = repos.filter((repo) => `${repo.owner}/${repo.name}`.toLowerCase().includes(normalized));
 
   const isPrefixMatch = (repo: GitHubRepository) => {
     const combined = `${repo.owner}/${repo.name}`.toLowerCase();
@@ -64,8 +22,101 @@ export async function searchRepositories(
 
   const prefixMatches = matches.filter(isPrefixMatch);
   const substringMatches = matches.filter((repo) => !isPrefixMatch(repo));
+  return [...prefixMatches, ...substringMatches];
+}
 
-  return [...prefixMatches, ...substringMatches].slice(0, 30);
+function buildRepositorySearchQuery(raw: string): string {
+  const cleaned = sanitizePullRequestSearchText(raw);
+  if (!cleaned) return '';
+  // Prefer name/description matches; include forks so org mirrors are reachable.
+  return `${cleaned} in:name,description fork:true`;
+}
+
+async function searchRepositoriesViaApi(
+  ctx: GitHubClientContext,
+  query: string,
+): Promise<GitHubRepository[]> {
+  const q = buildRepositorySearchQuery(query);
+  if (!q) return [];
+
+  const data = await request<{
+    items?: Array<{
+      owner: { login: string };
+      name: string;
+      full_name: string;
+      html_url: string;
+      description: string | null;
+      private: boolean;
+    }>;
+  }>(
+    ctx,
+    `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=updated&order=desc&per_page=${REPO_SEARCH_RESULT_LIMIT}`,
+  );
+
+  return (data.items ?? []).map(mapRepository);
+}
+
+function mergeRepositoryResults(
+  remote: GitHubRepository[],
+  local: GitHubRepository[],
+): GitHubRepository[] {
+  const seen = new Set<string>();
+  const merged: GitHubRepository[] = [];
+
+  for (const repo of [...remote, ...local]) {
+    const key = repo.fullName.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(repo);
+    if (merged.length >= REPO_SEARCH_RESULT_LIMIT) break;
+  }
+
+  return merged;
+}
+
+/**
+ * Empty query: recent accessible repos from the durable SWR cache.
+ * Typed query: GitHub Search (authenticated) merged with local-cache matches,
+ * falling back to local-only when Search fails or returns nothing useful.
+ */
+export async function searchRepositories(
+  ctx: GitHubClientContext,
+  query: string,
+): Promise<GitHubRepository[]> {
+  if (!ctx.options.token) {
+    throw new Error('GitHub token is not configured');
+  }
+
+  const trimmed = query.trim();
+  if (!trimmed) {
+    const allRepos = await getAllAccessibleRepos(ctx, { allowStale: true });
+    return allRepos.slice(0, REPO_SEARCH_RESULT_LIMIT);
+  }
+
+  // Warm the durable list in the background for empty-query / fallback use.
+  ensureRepoListWarm(ctx);
+
+  let remote: GitHubRepository[];
+  try {
+    remote = await searchRepositoriesViaApi(ctx, trimmed);
+  } catch {
+    remote = [];
+  }
+
+  // Prefer stale local matches without blocking on a cold full-list fetch.
+  let local: GitHubRepository[] = [];
+  if (ctx.repoCache?.repos.length) {
+    local = filterLocalRepos(ctx.repoCache.repos, trimmed);
+  } else if (remote.length === 0) {
+    const allRepos = await getAllAccessibleRepos(ctx, { allowStale: true });
+    local = filterLocalRepos(allRepos, trimmed);
+  }
+
+  if (remote.length === 0) {
+    return local.slice(0, REPO_SEARCH_RESULT_LIMIT);
+  }
+
+  return mergeRepositoryResults(remote, local);
 }
 
 /** Repo settings drive which merge buttons the UI may offer. */

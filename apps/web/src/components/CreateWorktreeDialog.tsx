@@ -26,14 +26,17 @@ import {
   CreateWorktreeGoalFields,
   TASK_DEFAULT_SENTINEL,
 } from './CreateWorktreeGoalFields';
+import {
+  AUTO_BRANCH_NAME,
+  CreateWorktreeNameField,
+} from './CreateWorktreeNameField';
 import { useCreateWorktreeMutations } from './useCreateWorktreeMutations';
 import { getBranchExistsConflict } from './branchExistsConflict';
-import { ConfirmDialog } from './ConfirmDialog';
+import { CreateAgentOverwriteConfirm } from './CreateAgentOverwriteConfirm';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 import { useComposerImages } from './chat/useComposerImages';
 import { useComposerMentions } from './chat/useComposerMentions';
-
 type CreateTab = 'branch' | 'pr' | 'goal' | 'issue' | 'jira';
 
 interface CreateWorktreeDialogProps {
@@ -53,6 +56,7 @@ export function CreateWorktreeDialog({
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
+  const [worktreeBranchName, setWorktreeBranchName] = useState(AUTO_BRANCH_NAME);
   const [baseBranch, setBaseBranch] = useState('');
   const [goalText, setGoalText] = useState('');
   const [goalTask, setGoalTask] = useState<string>('auto');
@@ -115,6 +119,7 @@ export function CreateWorktreeDialog({
     setBranchMode('existing');
     setSelectedBranch('');
     setNewBranchName('');
+    setWorktreeBranchName(AUTO_BRANCH_NAME);
     setBaseBranch('');
     setGoalText('');
     setGoalTask('auto');
@@ -151,6 +156,7 @@ export function CreateWorktreeDialog({
       branchMode,
       selectedBranch,
       newBranchName,
+      worktreeBranchName,
       selectedPr,
       goalText,
       goalTask,
@@ -210,9 +216,15 @@ export function CreateWorktreeDialog({
     else createFromGoal.mutate(opts);
   };
 
+  const showBranchNameField = tab === 'goal' || tab === 'issue' || tab === 'jira';
+  const creatingWithSuggest =
+    createPending &&
+    showBranchNameField &&
+    (worktreeBranchName.trim().toLowerCase() === 'auto' || !worktreeBranchName.trim());
+
   const createTooltip =
     createPending
-      ? tab === 'goal'
+      ? creatingWithSuggest
         ? 'Suggesting a branch name and creating the agent…'
         : 'Creating the agent…'
       : !canCreate
@@ -316,6 +328,15 @@ export function CreateWorktreeDialog({
             </Stack>
           )}
 
+          {showBranchNameField && (
+            <Stack sx={{ mt: 1.5 }}>
+              <CreateWorktreeNameField
+                value={worktreeBranchName}
+                onChange={setWorktreeBranchName}
+              />
+            </Stack>
+          )}
+
           {tab === 'branch' && (
             <CreateWorktreeBranchFields
               branchMode={branchMode}
@@ -358,7 +379,7 @@ export function CreateWorktreeDialog({
               onClick={() => runCreate(false)}
             >
               {createPending
-                ? tab === 'goal'
+                ? creatingWithSuggest
                   ? 'Suggesting & creating…'
                   : 'Creating…'
                 : 'Create'}
@@ -367,16 +388,9 @@ export function CreateWorktreeDialog({
         </DialogActions>
       </ResponsiveDialog>
 
-      <ConfirmDialog
-        open={Boolean(branchConflict)}
-        title="Overwrite existing branch?"
-        description={
-          branchConflict
-            ? `Branch "${branchConflict.branch}" already exists. Overwrite it from ${resolvedDefaultBranch || 'the base branch'} and create a new worktree?`
-            : ''
-        }
-        confirmLabel="Overwrite"
-        confirmColor="warning"
+      <CreateAgentOverwriteConfirm
+        branch={branchConflict?.branch ?? null}
+        baseBranch={resolvedDefaultBranch}
         loading={createPending}
         onCancel={resetCreateErrors}
         onConfirm={() => runCreate(true)}

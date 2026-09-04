@@ -1,5 +1,9 @@
 export const REPO_CACHE_TTL_MS = 5 * 60 * 1000;
 export const PR_BY_BRANCH_CACHE_TTL_MS = 60 * 1000;
+/** Soft ceiling for `/user/repos` pagination (100 per page). */
+export const MAX_USER_REPO_PAGES = 50;
+export const REPO_SEARCH_RESULT_LIMIT = 30;
+export const GITHUB_USER_REPOS_CACHE_FILE = 'github-user-repos.json';
 /** GitHub only allows path segments matching this in owner/repo/sha positions. */
 export const PATH_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
 /** `/commits/{sha}/check-runs` pages at 100; cap the fan-out for huge suites. */

@@ -31,6 +31,10 @@ export interface CreateWorktreeFromIssueRequest {
   /** `owner/repo#n` or a GitHub issue URL (overrides issueNumber when set). */
   reference?: string;
   name?: string;
+  /**
+   * Git branch / worktree name. Omit, empty, or `"auto"` to suggest from the issue.
+   */
+  branch?: string;
   baseBranch?: string;
   model?: string;
   effort?: EffortLevel;
@@ -47,6 +51,10 @@ export interface CreateWorktreeFromIssueRequest {
 export interface CreateWorktreeFromGoalRequest {
   goal: string;
   name?: string;
+  /**
+   * Git branch / worktree name. Omit, empty, or `"auto"` to suggest from the goal.
+   */
+  branch?: string;
   /** Base ref to branch from (defaults to workspace default branch). */
   baseBranch?: string;
   /** AgentTask slug, or `"auto"` to pick via purpose. */
@@ -66,6 +74,7 @@ export interface CreateWorktreeFromGoalRequest {
 export interface CreateWorktreeFromIdeaRequest {
   idea: string;
   name?: string;
+  branch?: string;
   baseBranch?: string;
   task: string;
   model?: string;

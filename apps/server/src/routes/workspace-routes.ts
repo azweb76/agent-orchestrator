@@ -101,6 +101,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
         .object({
           goal: z.string().min(1),
           name: z.string().optional(),
+          branch: z.string().optional(),
           baseBranch: z.string().optional(),
           task: z.string().min(1).max(63),
           model: z.string().min(1).max(64).optional(),
@@ -119,6 +120,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
         .object({
           idea: z.string().min(1),
           name: z.string().optional(),
+          branch: z.string().optional(),
           baseBranch: z.string().optional(),
           task: z.string().min(1).max(63),
           model: z.string().optional(),
@@ -154,6 +156,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
           issueNumber: z.number().int().positive().optional(),
           reference: z.string().optional(),
           name: z.string().optional(),
+          branch: z.string().optional(),
           baseBranch: z.string().optional(),
           model: z.string().optional(),
           effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
@@ -177,6 +180,7 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
         .object({
           issueKey: z.string().min(1),
           name: z.string().optional(),
+          branch: z.string().optional(),
           baseBranch: z.string().optional(),
           model: z.string().optional(),
           effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),

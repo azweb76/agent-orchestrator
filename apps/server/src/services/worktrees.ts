@@ -16,6 +16,7 @@ import type {
   WorktreeWithAgent,
 } from '@agent-orchestrator/shared';
 import { slugify } from './git.js';
+import { resolveExplicitBranchName } from './branch-name.js';
 import { mergeLivePullRequest } from './pr-overlay.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { createAgentForWorktree } from './agent-core.js';
@@ -244,7 +245,9 @@ export async function createWorktreeFromGoal(
   if (!body.task?.trim()) throw new Error('Task is required');
 
   const task = await resolveAgentTaskForGoal(ctx, goal, body.task);
-  const branchName = await suggestBranchNameForWorkspace(ctx, workspaceId, goal);
+  const branchName =
+    resolveExplicitBranchName(body.branch) ??
+    (await suggestBranchNameForWorkspace(ctx, workspaceId, goal));
   const name = body.name ?? slugify(branchName);
 
   const { worktree, agent } = await createWorktreeFromBranch(
@@ -278,6 +281,7 @@ export async function createWorktreeFromIdea(
   const result = await createWorktreeFromGoal(ctx, workspaceId, {
     goal: body.idea,
     name: body.name,
+    branch: body.branch,
     baseBranch: body.baseBranch,
     task: body.task,
     model: body.model,
@@ -330,7 +334,9 @@ export async function createWorktreeFromIssue(
   const issue = await ctx.github.getIssueDetail(workspace.githubOwner, workspace.githubRepo, issueNumber);
   const prompt = buildIssueKickoffPrompt(issue, issue.comments);
 
-  const branchName = await ctx.anthropic.suggestBranchName(`${issue.title}\n\n${issue.body}`.trim());
+  const branchName =
+    resolveExplicitBranchName(body.branch) ??
+    (await ctx.anthropic.suggestBranchName(`${issue.title}\n\n${issue.body}`.trim()));
   const { worktree, agent } = await createWorktreeFromBranch(ctx, workspaceId, {
     branch: branchName,
     createNew: true,
