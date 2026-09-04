@@ -9,12 +9,17 @@ import {
 import type { AppContext } from './app-context.js';
 import { listWorkspaces, listSidebarTree } from './workspaces.js';
 import { getAgentDetail, archiveAgent } from './agents-lifecycle.js';
-import { listAgentTasks } from './agent-tasks.js';
 import { getSystemStatus } from './system-github.js';
 import { getPullRequestInbox } from './pull-requests.js';
 import { getIssueInbox } from './github-issues.js';
 import { getJiraIssueInbox } from './jira-issues.js';
 import { createWorktreeFromGoal } from './worktrees.js';
+import {
+  handleCreateAgentTask,
+  handleGetAgentTask,
+  handleListAgentTasks,
+  handleUpdateAgentTask,
+} from './assistant-tools-tasks.js';
 
 const DISMISSED_KEY = 'assistant.dismissedWorkItems';
 
@@ -193,19 +198,14 @@ async function dispatchAssistantTool(
         }),
       };
     }
-    case 'list_agent_tasks': {
-      const tasks = listAgentTasks(ctx).map((task) => ({
-        id: task.id,
-        name: task.name,
-        title: task.title,
-        purpose: task.purpose,
-        listed: task.listed,
-        model: task.model,
-        effort: task.effort,
-        permissionMode: task.permissionMode,
-      }));
-      return { content: JSON.stringify(tasks) };
-    }
+    case 'list_agent_tasks':
+      return handleListAgentTasks(ctx);
+    case 'get_agent_task':
+      return handleGetAgentTask(ctx, input);
+    case 'create_agent_task':
+      return handleCreateAgentTask(ctx, input, requireConfirm);
+    case 'update_agent_task':
+      return handleUpdateAgentTask(ctx, input, requireConfirm);
     case 'get_status': {
       const status = await getSystemStatus(ctx);
       return { content: JSON.stringify(status) };

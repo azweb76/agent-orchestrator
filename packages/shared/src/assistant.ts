@@ -97,6 +97,126 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'get_agent_task',
+    description:
+      'Get one AgentTask by id (taskId) or slug (task), including prompt/system templates and tool defaults.',
+    risk: 'read',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'AgentTask id' },
+        task: { type: 'string', description: 'AgentTask slug (name)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_agent_task',
+    description:
+      'Create a new AgentTask kickoff template (slug, title, purpose, prompts, model defaults). Requires confirm=true.',
+    risk: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Unique lowercase slug (a-z, 0-9, hyphens)',
+        },
+        title: { type: 'string', description: 'Display title' },
+        description: { type: 'string' },
+        purpose: {
+          type: 'string',
+          description: 'When this task fits a goal (used by From goal Auto)',
+        },
+        promptTemplate: {
+          type: ['string', 'null'],
+          description: 'Kickoff prompt template; use {{goal}}. null/omit for raw goal.',
+        },
+        systemPrompt: {
+          type: ['string', 'null'],
+          description: 'Appended system prompt',
+        },
+        allowedTools: {
+          type: ['string', 'null'],
+          description: 'Comma-separated --allowedTools override',
+        },
+        model: { type: 'string' },
+        effort: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'xhigh', 'max'],
+        },
+        permissionMode: {
+          type: 'string',
+          enum: ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'],
+        },
+        listed: {
+          type: 'boolean',
+          description: 'Show in the new-session picker (default false)',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to execute; ask the user first if unset/false',
+        },
+      },
+      required: ['name', 'title', 'confirm'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_agent_task',
+    description:
+      'Update an AgentTask template (prompt, purpose, model, tools, etc.). Identify with taskId or task slug. Built-in tasks cannot be renamed. Requires confirm=true.',
+    risk: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'AgentTask id' },
+        task: { type: 'string', description: 'AgentTask slug (name) to find' },
+        name: {
+          type: 'string',
+          description: 'New slug (non-built-in only)',
+        },
+        title: { type: 'string', description: 'Display title' },
+        description: { type: 'string' },
+        purpose: {
+          type: 'string',
+          description: 'When this task fits a goal (used by From goal Auto)',
+        },
+        promptTemplate: {
+          type: ['string', 'null'],
+          description: 'Kickoff prompt template; use {{goal}}. null clears.',
+        },
+        systemPrompt: {
+          type: ['string', 'null'],
+          description: 'Appended system prompt. null clears.',
+        },
+        allowedTools: {
+          type: ['string', 'null'],
+          description: 'Comma-separated --allowedTools override. null clears.',
+        },
+        model: { type: 'string' },
+        effort: {
+          type: 'string',
+          enum: ['low', 'medium', 'high', 'xhigh', 'max'],
+        },
+        permissionMode: {
+          type: 'string',
+          enum: ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'],
+        },
+        listed: {
+          type: 'boolean',
+          description: 'Show in the new-session picker',
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to execute; ask the user first if unset/false',
+        },
+      },
+      required: ['confirm'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'get_status',
     description: 'System readiness: Claude CLI, GitHub token, Jira, auth, archived count.',
     risk: 'read',
@@ -193,10 +313,12 @@ export const ASSISTANT_SYSTEM_PROMPT = `You are the Agent Orchestrator Assistant
 
 Use tools to inspect state before acting. Prefer list/get tools first.
 
-For write tools (create_agent_from_goal, archive_agent, dismiss_work_item):
+For write tools (create_agent_from_goal, archive_agent, dismiss_work_item, create_agent_task, update_agent_task):
 - Explain what you will do and get the user's agreement in chat.
 - Only then call the tool with confirm=true.
-- Never invent workspace or agent ids — look them up with tools.
+- Never invent workspace, agent, or task ids — look them up with tools.
+
+When managing agent tasks, call list_agent_tasks or get_agent_task first; create with create_agent_task or edit with update_agent_task (confirm=true).
 
 When create_agent_from_goal succeeds, tell the user the new agent id and that they can open it in the UI.
 
