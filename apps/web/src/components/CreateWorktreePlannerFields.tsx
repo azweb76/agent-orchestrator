@@ -107,9 +107,9 @@ export function CreateWorktreeIssueFields({
         />
       </ControlTooltip>
       <Typography variant="body2" color="text.secondary">
-        Accepts a GitHub issue for this workspace repo, or a Jira issue key when{' '}
-        <code>JIRA_API_TOKEN</code> is configured. Creates a plan-mode agent with the issue title,
-        body, and recent comments as the first message.
+        Paste a GitHub issue for this workspace, or a Jira key / browse URL. Use the From Jira tab to
+        pick from your assigned inbox. Creates a plan-mode agent with the issue title, body, and
+        recent comments as the first message.
       </Typography>
     </Stack>
   );
