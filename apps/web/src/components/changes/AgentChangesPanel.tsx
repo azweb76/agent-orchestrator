@@ -2,7 +2,6 @@ import { memo } from 'react';
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
   IconButton,
   Stack,
@@ -11,7 +10,6 @@ import {
   Typography,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { useQuery } from '@tanstack/react-query';
 import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
@@ -22,10 +20,8 @@ import { ChangesDiffView } from './ChangesDiffView';
 export interface AgentChangesPanelProps {
   agentId: string;
   worktreePath: string;
-  archived: boolean;
   diffScope: AgentDiffScope;
   onDiffScopeChange: (scope: AgentDiffScope) => void;
-  onCommitClick: (hasPendingChanges: boolean) => void;
   enabled?: boolean;
 }
 
@@ -33,23 +29,15 @@ export interface AgentChangesPanelProps {
 export const AgentChangesPanel = memo(function AgentChangesPanel({
   agentId,
   worktreePath,
-  archived,
   diffScope,
   onDiffScopeChange,
-  onCommitClick,
   enabled = true,
 }: AgentChangesPanelProps) {
-  const pendingQuery = useQuery({
-    queryKey: ['diff', agentId, 'pending'],
-    queryFn: () => api.getDiff(agentId, 'pending'),
-    enabled: Boolean(agentId) && enabled,
-  });
   const diffQuery = useQuery({
     queryKey: ['diff', agentId, diffScope],
     queryFn: () => api.getDiff(agentId, diffScope),
     enabled: Boolean(agentId) && enabled,
   });
-  const hasPendingChanges = Boolean(pendingQuery.data?.patch);
 
   return (
     <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0, p: { xs: 1.5, md: 1.25 } }}>
@@ -99,26 +87,6 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
             >
               <RefreshIcon fontSize="small" />
             </IconButton>
-          </ControlTooltip>
-          <ControlTooltip
-            title={
-              archived
-                ? 'Archived agents cannot commit or push'
-                : hasPendingChanges
-                  ? 'Commit pending changes and push to origin'
-                  : 'No local changes — push the current branch to origin'
-            }
-            disabled={archived}
-          >
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<UploadOutlinedIcon />}
-              disabled={archived}
-              onClick={() => onCommitClick(hasPendingChanges)}
-            >
-              {hasPendingChanges ? 'Commit & push' : 'Push'}
-            </Button>
           </ControlTooltip>
         </Stack>
       </Stack>

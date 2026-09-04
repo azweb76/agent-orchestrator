@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import { pullRequestPath } from '../utils/paths';
 
 export function useAgentPageMutations(agentId: string) {
   const queryClient = useQueryClient();
@@ -47,16 +46,11 @@ export function useAgentPageMutations(agentId: string) {
   const createPrMutation = useMutation({
     mutationFn: ({ title, body, draft }: { title: string; body: string; draft: boolean }) =>
       api.createPr(agentId, { title, body, draft }),
-    onSuccess: (pr) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
       queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      const detail = queryClient.getQueryData<{
-        workspace: { githubOwner: string; githubRepo: string };
-      }>(['agent', agentId]);
-      if (detail?.workspace) {
-        navigate(pullRequestPath(detail.workspace.githubOwner, detail.workspace.githubRepo, pr.number));
-      }
+      queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
     },
   });
 

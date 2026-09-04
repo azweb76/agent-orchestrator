@@ -24,7 +24,7 @@ interface CreatePullRequestDialogProps {
     { title: string; body: string; draft: boolean }
   >;
   onClose: () => void;
-  onCreated?: () => void;
+  onCreated?: (pr: { number: number; htmlUrl: string }) => void;
   onTitleChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onDraftChange: (value: boolean) => void;
@@ -67,7 +67,7 @@ export function CreatePullRequestDialog({
               minRows={4}
             />
           </ControlTooltip>
-          <ControlTooltip title="Keep the pull request as a draft on GitHub">
+          <ControlTooltip title="Create a draft pull request on GitHub">
             <FormControlLabel
               control={
                 <Checkbox checked={draft} onChange={(e) => onDraftChange(e.target.checked)} />
@@ -100,7 +100,7 @@ export function CreatePullRequestDialog({
             onClick={() =>
               mutation.mutate(
                 { title, body, draft },
-                { onSuccess: () => onCreated?.() },
+                { onSuccess: (pr) => onCreated?.(pr) },
               )
             }
           >

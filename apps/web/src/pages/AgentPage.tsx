@@ -6,7 +6,6 @@ import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
-import { AgentPrBar } from '../components/agent/AgentPrBar';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
@@ -31,7 +30,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [initialMentions] = useState(() => locationState?.initialMentions);
   const [initialTemplate] = useState(() => locationState?.sessionTemplate);
   const [focusAttention] = useState(() => locationState?.focusAttention);
-  const [focusSessionId, setFocusSessionId] = useState(() => locationState?.sessionId);
+  const [focusSessionId] = useState(() => locationState?.sessionId);
   const [tab, setTab] = useState(0);
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
@@ -86,12 +85,20 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     },
   });
 
-  const openCommitDialog = (hasPendingChanges: boolean) => {
+  const openCommitDialog = (opts: { push: boolean; hasPendingChanges: boolean }) => {
     commitMutation.reset();
     setCommitMessage('');
-    setCommitPush(true);
-    setCommitHasPending(hasPendingChanges);
+    setCommitPush(opts.push);
+    setCommitHasPending(opts.hasPendingChanges);
     setCommitOpen(true);
+  };
+
+  const openCreateDraftPr = () => {
+    createPrMutation.reset();
+    setPrTitle(agentQuery.data?.name ?? '');
+    setPrBody('');
+    setPrDraft(true);
+    setPrOpen(true);
   };
 
   if (agentQuery.isLoading) {
@@ -121,21 +128,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           setArchiveOpen(true);
         }}
         onUnarchive={() => unarchiveMutation.mutate()}
-        onCreatePr={() => setPrOpen(true)}
-      />
-
-      <AgentPrBar
-        agent={agent}
-        archived={archived}
-        archivePending={archiveMutation.isPending}
-        onArchive={() => {
-          archiveMutation.reset();
-          setArchiveOpen(true);
-        }}
-        onSessionStarted={(sessionId) => {
-          setFocusSessionId(sessionId);
-          setTab(0);
-        }}
+        onCommit={openCommitDialog}
+        onCreateDraftPr={openCreateDraftPr}
       />
 
       {unarchiveMutation.error && (
@@ -207,10 +201,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           <AgentChangesPanel
             agentId={agentId}
             worktreePath={agent.worktree.path}
-            archived={archived}
             diffScope={diffScope}
             onDiffScopeChange={setDiffScope}
-            onCommitClick={openCommitDialog}
             enabled={tab === 1}
           />
         </Box>
@@ -240,10 +232,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         draft={prDraft}
         mutation={createPrMutation}
         onClose={() => setPrOpen(false)}
-        onCreated={() => {
+        onCreated={(pr) => {
           setPrOpen(false);
           setPrTitle('');
           setPrBody('');
+          if (pr.htmlUrl) window.open(pr.htmlUrl, '_blank', 'noopener,noreferrer');
         }}
         onTitleChange={setPrTitle}
         onBodyChange={setPrBody}

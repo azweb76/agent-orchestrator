@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import {
   Box,
-  Button,
   Chip,
   IconButton,
   ListItemIcon,
@@ -16,14 +14,11 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
-import { PullRequestStatusIcon } from '../components/pr/PullRequestStatusIcon';
+import { AgentShipActions } from '../components/agent/AgentShipActions';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
 import { statusColor } from '../theme';
 import { statusLabel } from '../utils/format';
-import { pullRequestPath } from '../utils/paths';
-import { useAgentLinkedPr } from '../components/agent/useAgentLinkedPr';
-import { resolvePullRequestStatus } from '../components/pr/pullRequestStatus';
 
 interface AgentPageHeaderProps {
   agent: AgentDetail;
@@ -32,7 +27,8 @@ interface AgentPageHeaderProps {
   unarchivePending: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
-  onCreatePr: () => void;
+  onCommit: (opts: { push: boolean; hasPendingChanges: boolean }) => void;
+  onCreateDraftPr: () => void;
 }
 
 /** Runtime status is redundant with delivery phase when idle — only surface active states. */
@@ -47,12 +43,10 @@ export function AgentPageHeader({
   unarchivePending,
   onArchive,
   onUnarchive,
-  onCreatePr,
+  onCommit,
+  onCreateDraftPr,
 }: AgentPageHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const prNumber = agent.worktree.prNumber;
-  const { pr } = useAgentLinkedPr(agent);
-  const prStatus = pr ? resolvePullRequestStatus(pr) : prNumber != null ? 'open' : null;
   const busy = archivePending || unarchivePending;
 
   return (
@@ -88,10 +82,7 @@ export function AgentPageHeader({
                 variant="outlined"
               />
             ) : null}
-            {/* PR bar owns delivery status once a PR is linked */}
-            {prNumber == null || archived ? (
-              <AgentDeliveryPhaseChip agent={agent} archived={archived} />
-            ) : null}
+            <AgentDeliveryPhaseChip agent={agent} archived={archived} />
           </Stack>
           <Typography
             variant="caption"
@@ -108,40 +99,12 @@ export function AgentPageHeader({
         </Box>
 
         <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
-          {prNumber != null ? (
-            <ControlTooltip title={`Open pull request #${prNumber}`}>
-              <Button
-                size="small"
-                variant="contained"
-                component={RouterLink}
-                startIcon={
-                  <PullRequestStatusIcon status={prStatus ?? 'open'} sx={{ color: 'inherit' }} />
-                }
-                to={pullRequestPath(
-                  agent.workspace.githubOwner,
-                  agent.workspace.githubRepo,
-                  prNumber,
-                )}
-              >
-                PR #{prNumber}
-              </Button>
-            </ControlTooltip>
-          ) : (
-            <ControlTooltip
-              title={archived ? 'Archived agents cannot create pull requests' : 'Create a pull request'}
-              disabled={archived}
-            >
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<PullRequestStatusIcon status="open" sx={{ color: 'inherit' }} />}
-                disabled={archived}
-                onClick={onCreatePr}
-              >
-                Create PR
-              </Button>
-            </ControlTooltip>
-          )}
+          <AgentShipActions
+            agent={agent}
+            archived={archived}
+            onCommit={onCommit}
+            onCreateDraftPr={onCreateDraftPr}
+          />
 
           <ControlTooltip title="Agent actions" disabled={busy}>
             <IconButton
