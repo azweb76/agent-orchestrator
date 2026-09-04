@@ -46,6 +46,8 @@ export interface SessionGradeFinding {
   severity: SessionGradeFindingSeverity;
   title: string;
   detail: string;
+  /** Concrete remediation advice; present for warning/issue findings. */
+  suggestion?: string;
   /** Suggested remediation target, present for warning/issue findings. */
   recommendedAction?: {
     kind: InstructionFileKind;

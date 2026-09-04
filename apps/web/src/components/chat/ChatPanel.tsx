@@ -16,7 +16,6 @@ import { ChatPanelDialogs } from './ChatPanelDialogs';
 import { ChatPanelFooter } from './ChatPanelFooter';
 import { ChatPanelTranscript } from './ChatPanelTranscript';
 import { ChatSessionBar } from './ChatSessionBar';
-import { buildFindingNotes } from './GradeSessionDialog';
 import type { PendingImage } from './composerTypes';
 import type { PendingMention } from './mentionComposer';
 import { useChatScroll } from './chatScroll';
@@ -424,29 +423,8 @@ export const ChatPanel = memo(function ChatPanel({
           queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
           queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
         }}
-        onImproveFromGrade={() => {
-          const offer = agentDefaults?.instructionDraftOffer;
-          if (offer && offer.sessionId === activeSessionId) {
-            sessionActions.setImproveSeed({
-              kind: offer.kind ?? offer.draft?.kind ?? 'skill',
-              scope: offer.scope ?? offer.draft?.scope,
-              extraNotes: offer.extraNotes ?? '',
-              draft: offer.draft ?? null,
-            });
-          } else {
-            sessionActions.setImproveSeed(null);
-          }
-          sessionActions.setGradeOpen(false);
-          sessionActions.setImproveOpen(true);
-        }}
-        onImproveFinding={(finding) => {
-          sessionActions.setImproveSeed({
-            kind: finding.recommendedAction?.kind ?? 'skill',
-            scope: finding.recommendedAction?.scope,
-            extraNotes: buildFindingNotes(finding),
-          });
-          sessionActions.setGradeOpen(false);
-          sessionActions.setImproveOpen(true);
+        onImplementFinding={(finding) => {
+          void sessionActions.createSessionFromFinding(finding);
         }}
       />
     </Box>

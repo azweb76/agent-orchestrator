@@ -122,6 +122,7 @@ describe('session grade analysis', () => {
     assert.match(system, /bloated context/i);
     assert.match(system, /instruction files/i);
     assert.match(system, /missing or weak skills/i);
+    assert.match(system, /suggestion/i);
     assert.match(user, /Be strict about tests/);
     assert.match(user, /CLAUDE.md/);
     assert.match(user, /\/retry-tests/);
@@ -150,8 +151,8 @@ describe('session grade analysis', () => {
   "score": 2,
   "summary": "Too many turns and no test skill.",
   "findings": [
-    { "category": "excessive_turns", "severity": "issue", "title": "Eight retries", "detail": "The user restated the same ask." },
-    { "category": "skills", "severity": "warning", "title": "No retry skill", "detail": "A skill would have helped." }
+    { "category": "excessive_turns", "severity": "issue", "title": "Eight retries", "detail": "The user restated the same ask.", "suggestion": "Capture the retry checklist in a skill so the agent follows it on the first try." },
+    { "category": "skills", "severity": "warning", "title": "No retry skill", "detail": "A skill would have helped.", "suggestion": "Add a /retry-tests skill with the verification steps." }
   ]
 }
 \`\`\``;
@@ -168,8 +169,13 @@ describe('session grade analysis', () => {
     assert.match(parsed.summary, /Too many turns/);
     assert.equal(parsed.findings.length, 5);
     assert.equal(parsed.findings[0]?.severity, 'issue');
+    assert.match(parsed.findings[0]?.suggestion ?? '', /retry checklist/);
     assert.equal(parsed.findings.find((item) => item.category === 'wasted_tokens')?.severity, 'ok');
     assert.equal(parsed.findings.find((item) => item.category === 'skills')?.title, 'No retry skill');
+    assert.match(
+      parsed.findings.find((item) => item.category === 'skills')?.suggestion ?? '',
+      /\/retry-tests/,
+    );
     assert.equal(parsed.stats.userTurns, 8);
   });
 
@@ -351,6 +357,62 @@ describe('session grade analysis', () => {
     );
     assert.equal(
       parsed.findings.find((item) => item.category === 'bloated_context')?.recommendedAction,
+      undefined,
+    );
+  });
+
+  it('falls back to detail when suggestion is missing for warning/issue findings', () => {
+    const parsed = parseSessionGradeResponse(
+      JSON.stringify({
+        score: 2,
+        summary: 'Too many turns.',
+        findings: [
+          { category: 'excessive_turns', severity: 'issue', title: 'Long', detail: 'Many turns' },
+        ],
+      }),
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.equal(
+      parsed.findings.find((item) => item.category === 'excessive_turns')?.suggestion,
+      'Many turns',
+    );
+  });
+
+  it('leaves suggestion undefined for ok findings', () => {
+    const parsed = parseSessionGradeResponse(
+      JSON.stringify({
+        score: 4,
+        summary: 'Mostly efficient.',
+        findings: [
+          {
+            category: 'bloated_context',
+            severity: 'ok',
+            title: 'Fine',
+            detail: 'No issues.',
+            suggestion: 'Should be ignored',
+          },
+        ],
+      }),
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 0,
+      },
+    );
+    assert.equal(
+      parsed.findings.find((item) => item.category === 'bloated_context')?.suggestion,
       undefined,
     );
   });

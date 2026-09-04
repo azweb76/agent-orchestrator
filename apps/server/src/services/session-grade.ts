@@ -171,13 +171,13 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
     '"score" (integer 1-5), "summary" (2-4 sentences), "findings" (array).',
     'If you cannot call a tool, respond with ONLY that JSON object (no markdown fences or extra text).',
-    'Each finding is {"category":"...","severity":"...","title":"...","detail":"...","action":{"kind":"...","scope":"..."}}.',
+    'Each finding is {"category":"...","severity":"...","title":"...","detail":"...","suggestion":"...","action":{"kind":"...","scope":"..."}}.',
     'category must be one of: excessive_turns, wasted_tokens, bloated_context, instruction_files, skills.',
     'severity must be ok, warning, or issue.',
-    'For every finding with severity warning or issue, include "action" recommending how to fix it.',
+    'For every finding with severity warning or issue, include "suggestion" (1-3 sentences: what to change and how) and "action" recommending the remediation target.',
     'action.kind must be one of: skill, claude_md, agents_md. Use skill when the fix is a reusable practice or checklist for the agent to follow; use claude_md or agents_md when the fix is project-specific standing instructions (match whichever instruction file this project actually uses).',
     'When action.kind is skill, also set action.scope to project or personal: use personal when the recommendation is a generic practice that would help in any repo (not tied to this project\'s specifics), otherwise use project.',
-    'Omit "action" for findings with severity ok.',
+    'Omit "suggestion" and "action" for findings with severity ok.',
     'Include exactly one finding for each of those five categories. Use ok when that area looks healthy.',
     'Ground every finding in the supplied stats, session-file transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
     'Score: 5 efficient, 4 good, 3 mixed, 2 wasteful, 1 poor.',
@@ -304,11 +304,15 @@ export function parseSessionGradeResponse(
       if (!category) continue;
       const title = asString(row.title) || 'Finding';
       const severity = parseSeverity(row.severity);
+      const detail = asString(row.detail);
+      const suggestion =
+        severity === 'ok' ? undefined : asString(row.suggestion) || detail || undefined;
       findings.push({
         category,
         severity,
         title,
-        detail: asString(row.detail),
+        detail,
+        suggestion,
         recommendedAction: parseRecommendedAction(row.action, severity),
       });
     }

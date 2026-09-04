@@ -40,8 +40,7 @@ interface ChatPanelDialogsProps {
   onGradeClose: () => void;
   onImproveClose: () => void;
   onImproveApplied: () => void;
-  onImproveFromGrade: () => void;
-  onImproveFinding?: (finding: SessionGradeFinding) => void;
+  onImplementFinding?: (finding: SessionGradeFinding) => void;
 }
 
 export function ChatPanelDialogs({
@@ -65,8 +64,7 @@ export function ChatPanelDialogs({
   onGradeClose,
   onImproveClose,
   onImproveApplied,
-  onImproveFromGrade,
-  onImproveFinding,
+  onImplementFinding,
 }: ChatPanelDialogsProps) {
   return (
     <>
@@ -122,8 +120,7 @@ export function ChatPanelDialogs({
         error={gradeMutation.error ? (gradeMutation.error as Error).message : null}
         onClose={onGradeClose}
         onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
-        onImprove={onImproveFromGrade}
-        onImproveFinding={onImproveFinding}
+        onImplementFinding={onImplementFinding}
       />
 
       {activeSessionId ? (

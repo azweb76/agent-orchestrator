@@ -37,15 +37,25 @@ interface GradeSessionDialogProps {
   error?: string | null;
   onClose: () => void;
   onAnalyze: (notes: string) => void;
-  /** Open the instruction-improvement flow seeded from this session. */
-  onImprove?: () => void;
-  /** Open the instruction-improvement flow seeded from a single flagged finding. */
-  onImproveFinding?: (finding: SessionGradeFinding) => void;
+  /** Create a new chat session to implement a single finding's suggestion. */
+  onImplementFinding?: (finding: SessionGradeFinding) => void;
 }
 
-/** Notes prefilled into the improve dialog when acting on a single finding. */
-export function buildFindingNotes(finding: SessionGradeFinding): string {
-  return `${SESSION_GRADE_FINDING_LABELS[finding.category]} — ${finding.title}\n${finding.detail}`;
+/** Kickoff prompt for a new chat that implements one graded finding. */
+export function buildFindingImplementPrompt(finding: SessionGradeFinding): string {
+  const category = SESSION_GRADE_FINDING_LABELS[finding.category];
+  const suggestion = finding.suggestion?.trim() || finding.detail.trim();
+  return [
+    '## Problem',
+    `${category} — ${finding.title}`,
+    finding.detail.trim(),
+    '',
+    '## Suggestion',
+    suggestion,
+    '',
+    'Implement this improvement in the worktree. Prefer writing or updating the',
+    'appropriate skill / CLAUDE.md / AGENTS.md if the suggestion calls for it.',
+  ].join('\n');
 }
 
 function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warning' | 'error' {
@@ -56,11 +66,13 @@ function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warn
 
 function FindingCard({
   finding,
-  onAct,
+  onImplement,
 }: {
   finding: SessionGradeFinding;
-  onAct?: (finding: SessionGradeFinding) => void;
+  onImplement?: (finding: SessionGradeFinding) => void;
 }) {
+  const suggestion = finding.suggestion?.trim() || (finding.severity !== 'ok' ? finding.detail.trim() : '');
+
   return (
     <Stack
       spacing={0.5}
@@ -89,11 +101,19 @@ function FindingCard({
           {finding.detail}
         </Typography>
       ) : null}
-      {finding.severity !== 'ok' && onAct ? (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <ControlTooltip title="Open the instruction improvement flow for this finding">
-            <Button size="small" onClick={() => onAct(finding)}>
-              Improve
+      {finding.severity !== 'ok' && suggestion ? (
+        <Box sx={{ pt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
+            Suggestion
+          </Typography>
+          <Typography variant="body2">{suggestion}</Typography>
+        </Box>
+      ) : null}
+      {finding.severity !== 'ok' && onImplement ? (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 0.25 }}>
+          <ControlTooltip title="Start a new chat to implement this suggestion">
+            <Button size="small" variant="outlined" onClick={() => onImplement(finding)}>
+              Start chat
             </Button>
           </ControlTooltip>
         </Box>
@@ -160,8 +180,7 @@ export function GradeSessionDialog({
   error,
   onClose,
   onAnalyze,
-  onImprove,
-  onImproveFinding,
+  onImplementFinding,
 }: GradeSessionDialogProps) {
   const [notes, setNotes] = useState('');
   const analysis = current?.analysis;
@@ -227,7 +246,11 @@ export function GradeSessionDialog({
                   {SESSION_GRADE_FINDING_CATEGORIES.map((category) => {
                     const finding = analysis.findings.find((item) => item.category === category);
                     return finding ? (
-                      <FindingCard key={category} finding={finding} onAct={onImproveFinding} />
+                      <FindingCard
+                        key={category}
+                        finding={finding}
+                        onImplement={onImplementFinding}
+                      />
                     ) : null;
                   })}
                 </Stack>
@@ -256,13 +279,6 @@ export function GradeSessionDialog({
             Close
           </Button>
         </ControlTooltip>
-        {onImprove ? (
-          <ControlTooltip title="Open instruction improvement flow">
-            <Button variant="outlined" disabled={loading} onClick={onImprove}>
-              Improve instructions
-            </Button>
-          </ControlTooltip>
-        ) : null}
         <ControlTooltip title={current ? 'Re-run AI analysis on this session' : 'Run AI analysis on this session'}>
           <Button variant="contained" disabled={loading} onClick={() => onAnalyze(notes)}>
             {loading ? 'Analyzing…' : current ? 'Analyze again' : 'Analyze session'}

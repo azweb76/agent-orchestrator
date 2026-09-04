@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  CHAT_TITLE_MAX_LENGTH,
   chatSessionTemplateById,
   type AgentDetail,
   type ChatSession,
@@ -9,11 +10,13 @@ import {
   type InstructionFileKind,
   type InstructionFileScope,
   type Message,
+  type SessionGradeFinding,
   type TaskSuggestion,
   type UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { setMessagesCache, upsertAgentSession } from './chatQueryCache';
+import { buildFindingImplementPrompt } from './GradeSessionDialog';
 
 interface UseChatSessionActionsOptions {
   agentId: string;
@@ -250,6 +253,26 @@ export function useChatSessionActions({
     }
   };
 
+  const createSessionFromFinding = async (finding: SessionGradeFinding) => {
+    if (archived) return;
+    setCreatingSession(true);
+    setChatError(null);
+    setGradeOpen(false);
+    try {
+      const title = finding.title.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || 'Implement finding';
+      const result = await api.createSession(agentId, { title });
+      upsertAgentSession(queryClient, agentId, result.session, { activate: true });
+      sessionIdRef.current = result.session.id;
+      setSessionId(result.session.id);
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      void runChatRef.current(buildFindingImplementPrompt(finding), [], [], false, result.session.id);
+    } catch (error) {
+      setChatError((error as Error).message);
+    } finally {
+      setCreatingSession(false);
+    }
+  };
+
   const requestClear = () => setClearOpen(true);
 
   const requestRewind = (message: Message) => {
@@ -295,6 +318,7 @@ export function useChatSessionActions({
     createSessionFromTemplate,
     createSessionFromTask,
     createSessionFromSuggestion,
+    createSessionFromFinding,
     createFromTemplateId,
     requestClear,
     requestRewind,
