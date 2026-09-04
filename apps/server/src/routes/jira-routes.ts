@@ -20,7 +20,7 @@ export function registerJiraRoutes(router: express.Router, ctx: AppContext): voi
     asyncHandler(async (req, res) => {
       const body = z
         .object({
-          workspaceId: z.string().min(1),
+          workspaceId: z.string().min(1).optional(),
           issueKey: z.string().min(1),
           name: z.string().optional(),
         })
