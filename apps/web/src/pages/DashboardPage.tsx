@@ -40,6 +40,9 @@ export function DashboardPage() {
         activeAgents={data.activeAgents}
         sidebar={data.sidebar}
         inbox={data.inboxQuery.data}
+        githubIssues={data.issueInboxQuery.data?.assigned ?? []}
+        jiraIssues={data.jiraInboxQuery.data?.assigned ?? []}
+        workspaces={data.workspaces ?? []}
         archivedCount={data.archivedCount}
         onPruneClick={openPrune}
       />
@@ -85,6 +88,7 @@ export function DashboardPage() {
           recentIssues={data.recentIssues}
           jiraIssuesLoading={data.jiraInboxQuery.isLoading}
           recentJiraIssues={data.recentJiraIssues}
+          workspaces={data.workspaces ?? []}
         />
       </Stack>
 

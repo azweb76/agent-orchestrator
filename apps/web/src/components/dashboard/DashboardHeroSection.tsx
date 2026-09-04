@@ -19,7 +19,13 @@ import { CommandCenterHero } from './CommandCenterHero';
 import { JarvisBriefing } from './JarvisBriefing';
 import { FleetBulkSection } from '../commandPalette/FleetBulkSection';
 import type { DashboardAgent } from './dashboardAgents';
-import type { PullRequestInbox, SidebarWorkspace } from '@agent-orchestrator/shared';
+import type {
+  InboxIssue,
+  InboxJiraIssue,
+  PullRequestInbox,
+  SidebarWorkspace,
+  WorkspaceWithCounts,
+} from '@agent-orchestrator/shared';
 
 interface DashboardHeroSectionProps {
   query: string;
@@ -32,6 +38,9 @@ interface DashboardHeroSectionProps {
   activeAgents: DashboardAgent[];
   sidebar?: SidebarWorkspace[];
   inbox?: PullRequestInbox;
+  githubIssues?: InboxIssue[];
+  jiraIssues?: InboxJiraIssue[];
+  workspaces?: WorkspaceWithCounts[];
   archivedCount: number;
   onPruneClick: () => void;
 }
@@ -47,6 +56,9 @@ export function DashboardHeroSection({
   activeAgents,
   sidebar,
   inbox,
+  githubIssues = [],
+  jiraIssues = [],
+  workspaces = [],
   archivedCount,
   onPruneClick,
 }: DashboardHeroSectionProps) {
@@ -81,6 +93,9 @@ export function DashboardHeroSection({
           pendingPermissionCount: agent.pendingPermissionCount ?? 0,
         }))}
         inbox={inbox}
+        githubIssues={githubIssues}
+        jiraIssues={jiraIssues}
+        workspaces={workspaces}
       />
 
       <FleetBulkSection

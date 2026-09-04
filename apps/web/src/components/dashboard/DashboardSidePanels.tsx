@@ -41,6 +41,7 @@ interface DashboardSidePanelsProps {
   recentIssues: InboxIssue[];
   jiraIssuesLoading: boolean;
   recentJiraIssues: InboxJiraIssue[];
+  workspaces?: WorkspaceWithCounts[];
 }
 
 export function DashboardSidePanels({
@@ -60,6 +61,7 @@ export function DashboardSidePanels({
   recentIssues,
   jiraIssuesLoading,
   recentJiraIssues,
+  workspaces = [],
 }: DashboardSidePanelsProps) {
   return (
     <Stack spacing={2} sx={{ flex: 1, minWidth: 0 }}>
@@ -321,6 +323,7 @@ export function DashboardSidePanels({
         jiraConfigured={jiraConfigured}
         jiraIssuesLoading={jiraIssuesLoading}
         recentJiraIssues={recentJiraIssues}
+        workspaces={workspaces.length > 0 ? workspaces : recentWorkspaces}
       />
     </Stack>
   );

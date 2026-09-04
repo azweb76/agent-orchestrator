@@ -158,3 +158,20 @@ export {
   parseJiraIssueKey,
   type JiraKickoffComment,
 } from './jira-issue.js';
+
+export {
+  matchJiraWorkspace,
+  normalizeJiraWorkspaceMap,
+  type JiraWorkspaceCandidate,
+} from './jira-workspace.js';
+
+export {
+  buildWorkQueue,
+  type WorkItem,
+  type WorkItemAction,
+  type WorkItemKind,
+  type WorkQueueAgent,
+  type WorkQueueFailingPr,
+  type WorkQueueInput,
+  type WorkQueueResult,
+} from './work-queue.js';

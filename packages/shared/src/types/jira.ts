@@ -35,6 +35,8 @@ export interface InboxJiraIssue {
   htmlUrl: string;
   reporterDisplayName: string;
   updatedAt: string;
+  /** Best-effort local workspace for this Jira project, if any. */
+  suggestedWorkspaceId: string | null;
 }
 
 export interface JiraIssueInbox {
@@ -42,7 +44,11 @@ export interface JiraIssueInbox {
 }
 
 export interface CreateAgentFromJiraIssueRequest {
-  workspaceId: string;
+  /**
+   * Target workspace. When omitted, the server uses the remembered project map
+   * or a heuristic match against cloned workspaces.
+   */
+  workspaceId?: string;
   issueKey: string;
   name?: string;
 }
