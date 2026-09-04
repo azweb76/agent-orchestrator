@@ -80,6 +80,14 @@ export function finalizeSessionRun(
         console.warn(`[task-suggestions] failed for session ${latest.id}:`, error);
       }),
     );
+    void import('./auto-grade.js').then(({ maybeAutoGradeBuildSession }) =>
+      maybeAutoGradeBuildSession(ctx, latest, {
+        stopped: result.stopped,
+        error: result.error,
+      }).catch((error) => {
+        console.warn(`[auto-grade] failed for session ${latest.id}:`, error);
+      }),
+    );
   }
 
   const timeline = extras.timeline ? completeRunningTools(extras.timeline) : extras.timeline;

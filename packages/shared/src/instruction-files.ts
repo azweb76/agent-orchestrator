@@ -50,3 +50,19 @@ export interface ApplyInstructionFileResponse {
   relativePath: string;
   action: 'create' | 'update';
 }
+
+/**
+ * Pending human-gated instruction improvement offer (persisted in automation_state).
+ * Writing still requires an explicit apply in the Improve-instructions dialog.
+ */
+export interface InstructionDraftOffer {
+  sessionId: string;
+  gradedAt: string;
+  findingTitles: string[];
+  /** Pre-generated draft when grade-time generation succeeded. */
+  draft?: InstructionDraft | null;
+  /** Seed for the Improve dialog when opening without a ready draft. */
+  kind?: InstructionFileKind;
+  scope?: InstructionFileScope;
+  extraNotes?: string;
+}

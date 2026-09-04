@@ -130,6 +130,21 @@ CREATE TABLE IF NOT EXISTS session_search_index (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS agent_memories (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  workspace_id TEXT,
+  agent_id TEXT,
+  kind TEXT NOT NULL DEFAULT 'fact',
+  key TEXT NOT NULL,
+  content TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'user',
+  source_session_id TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_worktrees_workspace ON worktrees(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_agents_worktree ON agents(worktree_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_agent ON chat_sessions(agent_id);
@@ -137,6 +152,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 CREATE INDEX IF NOT EXISTS idx_session_search_agent ON session_search_index(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_tasks_name ON agent_tasks(name);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_scope ON agent_memories(scope, status);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_workspace ON agent_memories(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_id, status);
 `;
 
 /** Indexes on columns that older databases may not have until `migrateSchema` runs. */

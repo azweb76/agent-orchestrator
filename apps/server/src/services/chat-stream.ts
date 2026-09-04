@@ -27,6 +27,7 @@ import {
   syncAgentFromSessions,
 } from './agent-core.js';
 import { getAgentDetail } from './agents-lifecycle.js';
+import { resolveSessionSystemPrompt } from './agent-memory.js';
 import {
   drainSessionQueue,
   enqueueBehindWorktreeLock,
@@ -263,7 +264,7 @@ export async function streamAgentChat(
       permissionMode: runningSession.permissionMode,
       sessionId: runningSession.claudeSessionId,
       allowedTools: runningSession.allowedTools ?? undefined,
-      systemPrompt: runningSession.systemPrompt,
+      systemPrompt: resolveSessionSystemPrompt(ctx, agentId, runningSession.systemPrompt),
       imagePaths: attachments.map((item) => item.path),
       mentionContext,
       onStarted: (handle) => {

@@ -38,6 +38,8 @@ interface ImproveInstructionsDialogProps {
   initialScope?: InstructionFileScope;
   /** Pre-fill extra notes, e.g. context from a specific grade finding. */
   initialExtraNotes?: string;
+  /** Pre-generated draft from a persisted instruction offer. */
+  initialDraft?: InstructionDraft | null;
 }
 
 type TargetMode = 'new_skill' | 'claude_md' | 'agents_md' | 'existing';
@@ -57,14 +59,15 @@ export function ImproveInstructionsDialog({
   initialKind,
   initialScope,
   initialExtraNotes,
+  initialDraft,
 }: ImproveInstructionsDialogProps) {
   const [mode, setMode] = useState<TargetMode>(() => (initialKind ? KIND_TO_MODE[initialKind] : 'new_skill'));
   const [scope, setScope] = useState<InstructionFileScope>(initialScope ?? 'project');
   const [skillName, setSkillName] = useState('');
   const [existingKey, setExistingKey] = useState('');
   const [extraNotes, setExtraNotes] = useState(initialExtraNotes ?? '');
-  const [draft, setDraft] = useState<InstructionDraft | null>(null);
-  const [content, setContent] = useState('');
+  const [draft, setDraft] = useState<InstructionDraft | null>(initialDraft ?? null);
+  const [content, setContent] = useState(initialDraft?.content ?? '');
   const [appliedPath, setAppliedPath] = useState<string | null>(null);
 
   const filesQuery = useQuery({
@@ -83,13 +86,13 @@ export function ImproveInstructionsDialog({
     if (!open) return;
     setMode(initialKind ? KIND_TO_MODE[initialKind] : 'new_skill');
     setScope(initialScope ?? 'project');
-    setSkillName('');
+    setSkillName(initialDraft?.name ?? '');
     setExistingKey('');
     setExtraNotes(initialExtraNotes ?? '');
-    setDraft(null);
-    setContent('');
+    setDraft(initialDraft ?? null);
+    setContent(initialDraft?.content ?? '');
     setAppliedPath(null);
-  }, [open, agentId, sessionId, initialKind, initialScope, initialExtraNotes]);
+  }, [open, agentId, sessionId, initialKind, initialScope, initialExtraNotes, initialDraft]);
 
   useEffect(() => {
     if (existingKey || existingOptions.length === 0) return;

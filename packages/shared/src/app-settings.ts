@@ -17,6 +17,11 @@ export interface AppSettings {
   watchdogStaleRunEnabled: boolean;
   /** When true, the "Analyze this session" chat action is available. */
   analyzeSessionEnabled: boolean;
+  /**
+   * When true (and session analysis is enabled), Build / Fix CI sessions are
+   * auto-graded after a clean run finish so instruction offers can appear.
+   */
+  autoGradeBuildSessionsEnabled: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -27,6 +32,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   watchdogStreamIdleMinutes: 15,
   watchdogStaleRunEnabled: true,
   analyzeSessionEnabled: false,
+  autoGradeBuildSessionsEnabled: false,
 };
 
 /** Spend cap snapshot for dashboard / gating. */

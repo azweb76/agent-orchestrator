@@ -416,17 +416,33 @@ export function SettingsPage() {
         title="Session analysis"
         description='Lets you run "Analyze this session" in chat to grade session quality with Claude. Off by default.'
       >
-        <FormControlLabel
-          control={
-            <Switch
-              checked={Boolean(settings?.analyzeSessionEnabled)}
-              onChange={(event) =>
-                void saveSettings.mutateAsync({ analyzeSessionEnabled: event.target.checked })
-              }
-            />
-          }
-          label="Enable session analysis"
-        />
+        <Stack spacing={1}>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={Boolean(settings?.analyzeSessionEnabled)}
+                onChange={(event) =>
+                  void saveSettings.mutateAsync({ analyzeSessionEnabled: event.target.checked })
+                }
+              />
+            }
+            label="Enable session analysis"
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={Boolean(settings?.autoGradeBuildSessionsEnabled)}
+                disabled={!settings?.analyzeSessionEnabled}
+                onChange={(event) =>
+                  void saveSettings.mutateAsync({
+                    autoGradeBuildSessionsEnabled: event.target.checked,
+                  })
+                }
+              />
+            }
+            label="Auto-grade Build / Fix CI sessions after a clean finish"
+          />
+        </Stack>
       </SettingsSection>
 
       <SettingsSection

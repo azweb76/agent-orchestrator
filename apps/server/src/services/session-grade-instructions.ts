@@ -4,9 +4,17 @@ import type {
   ChatSession,
   GenerateInstructionDraftRequest,
   GradeChatSessionRequest,
+  InstructionDraftOffer,
+  InstructionFileKind,
+  InstructionFileScope,
   SessionContextUsage,
+  SessionGradeFinding,
 } from '@agent-orchestrator/shared';
-import { buildSessionContextUsage } from '@agent-orchestrator/shared';
+import {
+  buildSessionContextUsage,
+  instructionGradeFindings,
+  shouldOfferInstructionDraft,
+} from '@agent-orchestrator/shared';
 import { buildSessionTranscript } from './session-transcript.js';
 import {
   applyInstructionFile,
@@ -21,12 +29,69 @@ import { discoverSlashCommands } from './slash-commands.js';
 import { type AppContext, makeEvent, nowIso } from './app-context.js';
 import { requireAgent, requireSession } from './agent-core.js';
 import { getAppSettings } from './app-settings.js';
+import {
+  clearInstructionDraftOffer,
+  publishInstructionDraftOffer,
+} from './instruction-offers.js';
 
 function instructionRoots(ctx: AppContext, agentId: string): InstructionFileRoots {
   const agent = requireAgent(ctx, agentId);
   const worktree = ctx.repos.worktrees.getById(agent.worktreeId);
   if (!worktree) throw new Error('Worktree not found');
   return { worktreePath: worktree.path };
+}
+
+function seedFromFindings(findings: SessionGradeFinding[]): {
+  kind: InstructionFileKind;
+  scope?: InstructionFileScope;
+  extraNotes: string;
+  findingTitles: string[];
+} {
+  const findingTitles = findings.map((item) => item.title).filter(Boolean);
+  const withAction = findings.find((item) => item.recommendedAction?.kind);
+  const kind = withAction?.recommendedAction?.kind ?? 'skill';
+  const scope = withAction?.recommendedAction?.scope;
+  const extraNotes = findings
+    .map((item) => `${item.title}: ${item.detail}`.trim())
+    .filter(Boolean)
+    .join('\n');
+  return { kind, scope, extraNotes, findingTitles };
+}
+
+async function offerInstructionDraftAfterGrade(
+  ctx: AppContext,
+  agentId: string,
+  session: ChatSession,
+): Promise<void> {
+  if (!shouldOfferInstructionDraft(session)) return;
+
+  const findings = instructionGradeFindings(session.grade);
+  const seed = seedFromFindings(findings);
+  const request: GenerateInstructionDraftRequest = {
+    kind: seed.kind,
+    scope: seed.scope,
+    extraNotes: seed.extraNotes || undefined,
+  };
+
+  let draft: InstructionDraftOffer['draft'] = null;
+  try {
+    draft = await generateAgentInstructionDraft(ctx, agentId, session.id, request);
+  } catch (error) {
+    console.warn(
+      `[instruction-offers] draft generation failed for session ${session.id}:`,
+      error,
+    );
+  }
+
+  publishInstructionDraftOffer(ctx, agentId, {
+    sessionId: session.id,
+    gradedAt: session.grade?.gradedAt ?? nowIso(),
+    findingTitles: seed.findingTitles,
+    draft,
+    kind: seed.kind,
+    scope: seed.scope,
+    extraNotes: seed.extraNotes || undefined,
+  });
 }
 
 export async function gradeAgentSession(
@@ -113,6 +178,13 @@ export async function gradeAgentSession(
       score: result.score,
     }),
   );
+
+  try {
+    await offerInstructionDraftAfterGrade(ctx, agentId, graded);
+  } catch (error) {
+    console.warn(`[instruction-offers] offer failed for session ${graded.id}:`, error);
+  }
+
   return graded;
 }
 
@@ -171,6 +243,7 @@ export async function applyAgentInstructionFile(
 ) {
   requireAgent(ctx, agentId);
   const result = await applyInstructionFile(instructionRoots(ctx, agentId), body);
+  clearInstructionDraftOffer(ctx, agentId);
   ctx.repos.events.create(
     makeEvent(agentId, 'instruction_file_applied', {
       kind: result.kind,

@@ -132,6 +132,25 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'allowed_tools', 'TEXT');
   ensureColumn(db, 'agents', 'autopilot_enabled', 'INTEGER');
   migrateAgentTasks(db);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_memories (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      workspace_id TEXT,
+      agent_id TEXT,
+      kind TEXT NOT NULL DEFAULT 'fact',
+      key TEXT NOT NULL,
+      content TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'user',
+      source_session_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_memories_scope ON agent_memories(scope, status);
+    CREATE INDEX IF NOT EXISTS idx_agent_memories_workspace ON agent_memories(workspace_id, status);
+    CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_id, status);
+  `);
 }
 
 function backfillSessionSearchIndexTable(db: Database.Database): void {

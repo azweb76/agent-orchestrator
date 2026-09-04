@@ -1,5 +1,6 @@
 import type { SpendBudgetStatus } from '../app-settings.js';
 import type { ChatSession } from '../chat-session.js';
+import type { InstructionDraftOffer } from '../instruction-files.js';
 import type { Agent, Worktree, Workspace } from './entities.js';
 import type { PrStatusSnapshot } from './github.js';
 
@@ -46,6 +47,11 @@ export interface AgentDetail extends Agent {
   draftPrOffer?: DraftPrOffer | null;
   /** Set after any completed session, offering LLM-generated follow-up tasks. */
   taskSuggestions?: TaskSuggestionsOffer | null;
+  /**
+   * Set after a graded Build / Fix CI session with instruction/skill findings.
+   * Applying a draft always stays manual.
+   */
+  instructionDraftOffer?: InstructionDraftOffer | null;
   prStatus: PrStatusSnapshot | null;
 }
 
