@@ -5,6 +5,7 @@ import {
   type AgentDetail,
   type ChatSession,
   type ChatSessionTemplate,
+  type InstructionDraft,
   type InstructionFileKind,
   type InstructionFileScope,
   type Message,
@@ -70,6 +71,7 @@ export function useChatSessionActions({
     kind: InstructionFileKind;
     scope?: InstructionFileScope;
     extraNotes: string;
+    draft?: InstructionDraft | null;
   } | null>(null);
 
   const updateMutation = useMutation({

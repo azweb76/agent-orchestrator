@@ -1,6 +1,6 @@
 import { Alert, Box, Button } from '@mui/material';
 import { useQuery, type UseMutationResult } from '@tanstack/react-query';
-import type { AgentDetail, ChatSession, EffortLevel, TaskSuggestion } from '@agent-orchestrator/shared';
+import type { AgentDetail, ChatSession, EffortLevel, InstructionDraftOffer, TaskSuggestion } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ControlTooltip } from '../ui/ControlTooltip';
@@ -14,7 +14,7 @@ import type { PendingMention } from './mentionComposer';
 
 interface ChatPanelFooterProps {
   agentId: string;
-  agent?: Pick<AgentDetail, 'draftPrOffer' | 'taskSuggestions'>;
+  agent?: Pick<AgentDetail, 'draftPrOffer' | 'taskSuggestions' | 'instructionDraftOffer'>;
   archived: boolean;
   activeSessionId: string;
   session?: ChatSession;
@@ -44,7 +44,7 @@ interface ChatPanelFooterProps {
   onClear: () => void;
   onRewind: () => void;
   onGradeOpen: () => void;
-  onImproveOpen: () => void;
+  onImproveOpen: (offer?: InstructionDraftOffer | null) => void;
   onCompact: () => void;
   onRemoveQueued: (id: string) => void;
   onChatErrorClose: () => void;
@@ -119,6 +119,8 @@ export function ChatPanelFooter({
       >
         {!archived && session ? (
           <InstructionDraftOfferBanner
+            agentId={agentId}
+            agent={agent}
             session={session}
             isStreaming={sessionBusy}
             onReview={onImproveOpen}

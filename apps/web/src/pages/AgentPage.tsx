@@ -10,6 +10,7 @@ import { AgentPrActionOffers } from '../components/agent/AgentPrActionOffers';
 import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
+import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import { AgentPageHeader } from './AgentPageHeader';
 import { CommitChangesDialog } from './CommitChangesDialog';
@@ -181,6 +182,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Changes" sx={{ minHeight: 40, py: 1 }} />
+          <Tab label="Memory" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
         <Box
@@ -222,6 +224,23 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             onDiffScopeChange={setDiffScope}
             onCommitClick={openCommitDialog}
             enabled={tab === 1}
+          />
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: tab === 2 ? 'flex' : 'none',
+            flexDirection: 'column',
+          }}
+        >
+          <AgentMemoryPanel
+            agentId={agentId}
+            workspaceId={agent.workspace.id}
+            archived={archived}
+            enabled={tab === 2}
           />
         </Box>
       </Paper>

@@ -1,6 +1,7 @@
 import type { UseMutationResult } from '@tanstack/react-query';
 import type {
   ChatSession,
+  InstructionDraft,
   InstructionFileKind,
   InstructionFileScope,
   SessionGradeFinding,
@@ -19,7 +20,12 @@ interface ChatPanelDialogsProps {
   deleteTarget: ChatSession | null;
   gradeOpen: boolean;
   improveOpen: boolean;
-  improveSeed?: { kind: InstructionFileKind; scope?: InstructionFileScope; extraNotes: string } | null;
+  improveSeed?: {
+    kind: InstructionFileKind;
+    scope?: InstructionFileScope;
+    extraNotes: string;
+    draft?: InstructionDraft | null;
+  } | null;
   clearMutation: UseMutationResult<{ cleared: number }, Error, void>;
   rewindMutation: UseMutationResult<
     { draft: string },
@@ -130,6 +136,7 @@ export function ChatPanelDialogs({
           initialKind={improveSeed?.kind}
           initialScope={improveSeed?.scope}
           initialExtraNotes={improveSeed?.extraNotes}
+          initialDraft={improveSeed?.draft}
         />
       ) : null}
     </>

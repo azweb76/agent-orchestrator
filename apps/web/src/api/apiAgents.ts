@@ -2,6 +2,7 @@ import type {
   Agent,
   AgentDetail,
   AgentDiff,
+  AgentMemory,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
   ArchiveAgentRequest,
@@ -9,6 +10,7 @@ import type {
   ChatSession,
   CommitAgentChangesRequest,
   CommitAgentChangesResponse,
+  CreateAgentMemoryRequest,
   CreateChatSessionRequest,
   CreatePrRequest,
   DenyPermissionRequest,
@@ -27,6 +29,7 @@ import type {
   SessionContextUsage,
   SessionSearchHit,
   SlashCommand,
+  UpdateAgentMemoryRequest,
   UpdateChatSessionRequest,
   UpdateAgentRequest,
   WorktreeFileEntry,
@@ -85,6 +88,26 @@ export const apiAgents = {
     request<ApplyInstructionFileResponse>(`/agents/${agentId}/instruction-files`, {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  dismissInstructionDraftOffer: (agentId: string) =>
+    request<{ dismissed: boolean }>(`/agents/${agentId}/instruction-draft-offer`, {
+      method: 'DELETE',
+    }),
+  listMemories: (agentId: string) =>
+    request<AgentMemory[]>(`/agents/${agentId}/memories`),
+  createMemory: (agentId: string, body: CreateAgentMemoryRequest) =>
+    request<AgentMemory>(`/agents/${agentId}/memories`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateMemory: (agentId: string, memoryId: string, body: UpdateAgentMemoryRequest) =>
+    request<AgentMemory>(`/agents/${agentId}/memories/${memoryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  deleteMemory: (agentId: string, memoryId: string) =>
+    request<{ deleted: boolean }>(`/agents/${agentId}/memories/${memoryId}`, {
+      method: 'DELETE',
     }),
   getMessages: (agentId: string, sessionId: string) =>
     request<Message[]>(`/agents/${agentId}/sessions/${sessionId}/messages`),

@@ -3,6 +3,7 @@ import { AgentTaskRepository } from './repositories/agent-task.js';
 import { AppSettingsRepository } from './repositories/app-settings.js';
 import { AutomationStateRepository } from './repositories/automation-state.js';
 import { AgentRepository } from './repositories/agent.js';
+import { AgentMemoryRepository } from './repositories/agent-memory.js';
 import { ChatSessionRepository } from './repositories/chat-session.js';
 import { EventRepository } from './repositories/event.js';
 import { MessageRepository } from './repositories/message.js';
@@ -16,6 +17,7 @@ export { AgentTaskRepository } from './repositories/agent-task.js';
 export { AppSettingsRepository } from './repositories/app-settings.js';
 export { AutomationStateRepository } from './repositories/automation-state.js';
 export { AgentRepository } from './repositories/agent.js';
+export { AgentMemoryRepository } from './repositories/agent-memory.js';
 export { ChatSessionRepository } from './repositories/chat-session.js';
 export { EventRepository } from './repositories/event.js';
 export { MessageRepository } from './repositories/message.js';
@@ -36,6 +38,7 @@ export type AppRepositories = {
   automationState: AutomationStateRepository;
   sessionSearch: SessionSearchIndexRepository;
   agentTasks: AgentTaskRepository;
+  memories: AgentMemoryRepository;
 };
 
 export function createRepositories(db: Database.Database): AppRepositories {
@@ -51,5 +54,6 @@ export function createRepositories(db: Database.Database): AppRepositories {
     automationState: new AutomationStateRepository(db),
     sessionSearch: new SessionSearchIndexRepository(db),
     agentTasks: new AgentTaskRepository(db),
+    memories: new AgentMemoryRepository(db),
   };
 }

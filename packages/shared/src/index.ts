@@ -112,10 +112,24 @@ export type {
   ApplyInstructionFileResponse,
   GenerateInstructionDraftRequest,
   InstructionDraft,
+  InstructionDraftOffer,
   InstructionFile,
   InstructionFileKind,
   InstructionFileScope,
 } from './instruction-files.js';
+
+export {
+  formatMemoriesForSystemPrompt,
+  mergeSystemPromptWithMemories,
+  rankAgentMemories,
+  AGENT_MEMORY_PROMPT_MAX_CHARS,
+  type AgentMemory,
+  type AgentMemoryKind,
+  type AgentMemoryScope,
+  type AgentMemoryStatus,
+  type CreateAgentMemoryRequest,
+  type UpdateAgentMemoryRequest,
+} from './agent-memory.js';
 
 export {
   evaluateMergeReadiness,

@@ -65,6 +65,7 @@ export const ChatPanel = memo(function ChatPanel({
       permissionMode: data.permissionMode ?? 'plan',
       draftPrOffer: data.draftPrOffer ?? null,
       taskSuggestions: data.taskSuggestions ?? null,
+      instructionDraftOffer: data.instructionDraftOffer ?? null,
     }),
   });
 
@@ -312,6 +313,7 @@ export const ChatPanel = memo(function ChatPanel({
             ? {
                 draftPrOffer: agentDefaults.draftPrOffer,
                 taskSuggestions: agentDefaults.taskSuggestions,
+                instructionDraftOffer: agentDefaults.instructionDraftOffer,
               }
             : undefined
         }
@@ -348,7 +350,19 @@ export const ChatPanel = memo(function ChatPanel({
             sessionActions.gradeMutation.mutate({});
           }
         }}
-        onImproveOpen={() => sessionActions.setImproveOpen(true)}
+        onImproveOpen={(offer) => {
+          if (offer) {
+            sessionActions.setImproveSeed({
+              kind: offer.kind ?? offer.draft?.kind ?? 'skill',
+              scope: offer.scope ?? offer.draft?.scope,
+              extraNotes: offer.extraNotes ?? '',
+              draft: offer.draft ?? null,
+            });
+          } else {
+            sessionActions.setImproveSeed(null);
+          }
+          sessionActions.setImproveOpen(true);
+        }}
         onCompact={() => void streaming.compactAndContinue()}
         onRemoveQueued={(id) => {
           const sid = activeSessionId;
@@ -408,8 +422,20 @@ export const ChatPanel = memo(function ChatPanel({
         }}
         onImproveApplied={() => {
           queryClient.invalidateQueries({ queryKey: ['instruction-files', agentId] });
+          queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
         }}
         onImproveFromGrade={() => {
+          const offer = agentDefaults?.instructionDraftOffer;
+          if (offer && offer.sessionId === activeSessionId) {
+            sessionActions.setImproveSeed({
+              kind: offer.kind ?? offer.draft?.kind ?? 'skill',
+              scope: offer.scope ?? offer.draft?.scope,
+              extraNotes: offer.extraNotes ?? '',
+              draft: offer.draft ?? null,
+            });
+          } else {
+            sessionActions.setImproveSeed(null);
+          }
           sessionActions.setGradeOpen(false);
           sessionActions.setImproveOpen(true);
         }}

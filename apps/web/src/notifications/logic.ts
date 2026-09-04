@@ -81,6 +81,13 @@ export function describeNotificationEvent(
       body: 'The session finished. Suggested next steps are ready to review.',
     };
   }
+  if (event.type === 'instruction_draft_offer') {
+    if (event.data.dismissed) return null;
+    return {
+      title: `${name}: instruction draft ready`,
+      body: 'Session analysis suggested updates to skills or project instructions.',
+    };
+  }
   if (event.type === 'automation_triggered') {
     const action = typeof event.data.action === 'string' ? event.data.action : '';
     const pr =
@@ -209,7 +216,8 @@ export function navigationStateForEvent(event: AppEvent): AgentAttentionNavigati
     event.type === 'run_finished' ||
     event.type === 'automation_triggered' ||
     event.type === 'draft_pr_offer' ||
-    event.type === 'task_suggestions_offer'
+    event.type === 'task_suggestions_offer' ||
+    event.type === 'instruction_draft_offer'
   ) {
     return {
       focusAttention: 'run-finished',
