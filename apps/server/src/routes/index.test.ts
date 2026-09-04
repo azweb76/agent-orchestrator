@@ -64,6 +64,7 @@ test('GET /api/status returns system readiness fields', async () => {
     assert.equal(res.status, 200);
     const body = (await res.json()) as {
       claudeInstalled: boolean;
+      anthropicConfigured: boolean;
       githubTokenConfigured: boolean;
       githubLogin: string | null;
       jiraConfigured: boolean;
@@ -72,12 +73,32 @@ test('GET /api/status returns system readiness fields', async () => {
       dataDirBytes?: number;
     };
     assert.equal(body.claudeInstalled, false);
+    assert.equal(typeof body.anthropicConfigured, 'boolean');
     assert.equal(body.githubTokenConfigured, false);
     assert.equal(body.githubLogin, null);
     assert.equal(body.jiraConfigured, false);
     assert.equal(body.jiraDisplayName, null);
     assert.equal(body.archivedAgentCount, 0);
     assert.equal(body.dataDirBytes, undefined);
+  });
+});
+
+test('POST /api/setup/claude-auth probes Claude login', async () => {
+  await withServer(async (url) => {
+    const res = await fetch(`${url}/api/setup/claude-auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    assert.ok(res.status === 200 || res.status === 400);
+    const body = (await res.json()) as { loggedIn?: boolean; ok?: boolean; error?: string };
+    if (res.status === 200) {
+      assert.equal(body.ok, true);
+      assert.equal(body.loggedIn, true);
+    } else {
+      assert.equal(body.loggedIn, false);
+      assert.match(String(body.error), /not logged in/i);
+    }
   });
 });
 

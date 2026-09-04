@@ -3,6 +3,8 @@ import type { ChatSession, Message, PermissionRequest } from '@agent-orchestrato
 export interface SystemStatus {
   claudeInstalled: boolean;
   claudeBin: string;
+  /** Claude Code OAuth ready for Agent SDK helpers/agents. */
+  anthropicConfigured: boolean;
   githubTokenConfigured: boolean;
   githubLogin: string | null;
   jiraConfigured: boolean;
@@ -17,6 +19,7 @@ export interface SetupInfo {
   claudeCandidates: string[];
   claudeBin: string;
   claudeInstalled: boolean;
+  anthropicConfigured: boolean;
   githubTokenConfigured: boolean;
   jiraConfigured: boolean;
   setupDocsUrl: string;

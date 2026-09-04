@@ -15,6 +15,11 @@ export const apiSetup = {
       method: 'POST',
       body: JSON.stringify({ claudeBin }),
     }),
+  verifyClaudeAuth: () =>
+    request<{ ok: true; loggedIn: boolean; email?: string }>('/setup/claude-auth', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   submitAuth: (token: string) =>
     request<{ ok?: true } | void>('/auth', { method: 'POST', body: JSON.stringify({ token }) }),
   getUsageSummary: () => request<UsageSummary>('/usage'),

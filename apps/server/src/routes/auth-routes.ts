@@ -9,6 +9,8 @@ import {
 } from '../services/app.js';
 import { authCookieName } from '../auth.js';
 import { asyncHandler } from './helpers.js';
+import { checkClaudeAuth } from '../services/claude-auth.js';
+import { invalidateStatusCache } from '../services/status-cache.js';
 
 export function registerAuthRoutes(router: express.Router, ctx: AppContext): void {
   router.post('/auth', (req, res) => {
@@ -57,6 +59,22 @@ export function registerAuthRoutes(router: express.Router, ctx: AppContext): voi
       const body = z.object({ claudeBin: z.string().min(1) }).parse(req.body ?? {});
       await configureClaudeBin(ctx, body.claudeBin);
       res.json({ ok: true });
+    }),
+  );
+
+  router.post(
+    '/setup/claude-auth',
+    asyncHandler(async (_req, res) => {
+      const status = await checkClaudeAuth(ctx.claude.getBin());
+      invalidateStatusCache();
+      if (!status.loggedIn) {
+        res.status(400).json({
+          error: 'Claude Code is not logged in. Run `claude login` in a terminal, then retry.',
+          loggedIn: false,
+        });
+        return;
+      }
+      res.json({ ok: true, ...status });
     }),
   );
 }

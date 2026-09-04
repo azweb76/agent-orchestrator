@@ -20,10 +20,16 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     queryKey: ['status'],
     queryFn: api.getStatus,
   });
+  const needsSetupDetails = Boolean(
+    statusQuery.data &&
+      (!statusQuery.data.githubTokenConfigured ||
+        !statusQuery.data.claudeInstalled ||
+        !statusQuery.data.anthropicConfigured),
+  );
   const setupQuery = useQuery({
     queryKey: ['setup'],
     queryFn: api.getSetupInfo,
-    enabled: Boolean(statusQuery.data) && !statusQuery.data?.githubTokenConfigured,
+    enabled: needsSetupDetails,
   });
 
   const [githubToken, setGithubToken] = useState('');
@@ -51,6 +57,14 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     },
   });
 
+  const claudeAuthMutation = useMutation({
+    mutationFn: () => api.verifyClaudeAuth(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['status'] });
+      void queryClient.invalidateQueries({ queryKey: ['setup'] });
+    },
+  });
+
   if (statusQuery.isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -61,7 +75,9 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
 
   const status = statusQuery.data;
   const setup = setupQuery.data;
-  const ready = Boolean(status?.claudeInstalled && status?.githubTokenConfigured);
+  const ready = Boolean(
+    status?.claudeInstalled && status?.githubTokenConfigured && status?.anthropicConfigured,
+  );
   if (ready) return children;
 
   const setupDocsUrl = status?.setupDocsUrl ?? setup?.setupDocsUrl ?? '#';
@@ -86,7 +102,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
             Welcome to Agent Orchestrator
           </Typography>
           <Typography color="text.secondary" sx={{ lineHeight: 1.6 }}>
-            Connect GitHub and Claude Code to manage workspaces and agents. See the{' '}
+            Connect GitHub and Claude Code (OAuth) to manage workspaces and agents. See the{' '}
             <Link href={setupDocsUrl} target="_blank" rel="noopener noreferrer">
               setup guide
             </Link>{' '}
@@ -160,7 +176,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
               Claude Code CLI
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Install and authenticate{' '}
+              Install{' '}
               <Link href={claudeDocsUrl} target="_blank" rel="noopener noreferrer">
                 Claude Code
                 <OpenInNewIcon sx={{ fontSize: 14, ml: 0.25, verticalAlign: 'text-bottom' }} />
@@ -175,11 +191,6 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
                 onChange={(e) => setClaudeBin(e.target.value)}
                 fullWidth
                 sx={{ mb: 2 }}
-                slotProps={
-                  candidates.length > 1
-                    ? undefined
-                    : { input: { readOnly: false } }
-                }
               >
                 {candidates.map((candidate) => (
                   <MenuItem key={candidate} value={candidate}>
@@ -199,6 +210,43 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
             >
               <Button type="submit" variant="contained" disabled={claudeMutation.isPending}>
                 {claudeMutation.isPending ? 'Checking…' : 'Verify Claude'}
+              </Button>
+            </ControlTooltip>
+          </Box>
+        ) : null}
+
+        {status?.claudeInstalled && !status?.anthropicConfigured ? (
+          <Box
+            sx={{
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 2,
+              p: 2.5,
+              bgcolor: 'ao.surface.panel',
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+              Claude authentication
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Agents and helpers use the Claude Agent SDK with your Claude Code login. In a
+              terminal run <code>claude login</code>, then verify below.
+            </Typography>
+            {claudeAuthMutation.error ? (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {(claudeAuthMutation.error as Error).message}
+              </Alert>
+            ) : null}
+            <ControlTooltip
+              title="Check that Claude Code is logged in"
+              disabled={claudeAuthMutation.isPending}
+            >
+              <Button
+                variant="contained"
+                disabled={claudeAuthMutation.isPending}
+                onClick={() => claudeAuthMutation.mutate()}
+              >
+                {claudeAuthMutation.isPending ? 'Checking…' : 'Verify Claude login'}
               </Button>
             </ControlTooltip>
           </Box>

@@ -1,4 +1,4 @@
-import { cachedClaudeInstalled } from './status-cache.js';
+import { cachedAnthropicConfigured, cachedClaudeInstalled } from './status-cache.js';
 import {
   CLAUDE_DOCS_URL,
   SETUP_DOCS_URL,
@@ -41,7 +41,11 @@ export async function searchGitHubRepositories(ctx: AppContext, query: string) {
 }
 
 export async function getSystemStatus(ctx: AppContext) {
-  const claudeInstalled = await cachedClaudeInstalled(ctx.claude);
+  const claudeBin = ctx.claude.getBin();
+  const [claudeInstalled, anthropicConfigured] = await Promise.all([
+    cachedClaudeInstalled(ctx.claude),
+    cachedAnthropicConfigured(claudeBin),
+  ]);
   let githubLogin: string | null = null;
   if (process.env.GITHUB_TOKEN || process.env.GITHUB_LOGIN?.trim()) {
     try {
@@ -60,7 +64,9 @@ export async function getSystemStatus(ctx: AppContext) {
   }
   return {
     claudeInstalled,
-    claudeBin: ctx.claude.getBin(),
+    claudeBin,
+    /** Claude Code OAuth ready for Agent SDK (legacy field name). */
+    anthropicConfigured,
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
     githubLogin,
     jiraConfigured: ctx.jira.isConfigured(),
@@ -73,11 +79,17 @@ export async function getSystemStatus(ctx: AppContext) {
 }
 
 export async function getSetupInfo(ctx: AppContext) {
-  const claudeCandidates = await detectClaudeCandidates(ctx.claude.getBin());
+  const claudeBin = ctx.claude.getBin();
+  const claudeCandidates = await detectClaudeCandidates(claudeBin);
+  const [claudeInstalled, anthropicConfigured] = await Promise.all([
+    cachedClaudeInstalled(ctx.claude),
+    cachedAnthropicConfigured(claudeBin),
+  ]);
   return {
     claudeCandidates,
-    claudeBin: ctx.claude.getBin(),
-    claudeInstalled: await cachedClaudeInstalled(ctx.claude),
+    claudeBin,
+    claudeInstalled,
+    anthropicConfigured,
     githubTokenConfigured: Boolean(process.env.GITHUB_TOKEN),
     jiraConfigured: ctx.jira.isConfigured(),
     setupDocsUrl: SETUP_DOCS_URL,
