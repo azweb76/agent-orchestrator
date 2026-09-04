@@ -150,6 +150,11 @@ export interface PrStatusSnapshot {
   merged: boolean;
   checksRollup: PullRequestChecksRollup;
   updatedAt: string;
+  /** Optional richer fields from PR poll — older cache entries may omit these. */
+  mergeable?: boolean | null;
+  mergeableState?: PullRequestMergeableState;
+  reviewCommentCount?: number;
+  checksFailing?: number;
 }
 
 export interface PullRequestReview {

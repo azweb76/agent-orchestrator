@@ -9,12 +9,14 @@ import type {
   SessionUsage,
   WorkspaceWithCounts,
 } from '@agent-orchestrator/shared';
+import { resolveAgentDeliveryPhaseFromPrStatus } from '@agent-orchestrator/shared';
 import { parseGitHubUrl } from './git.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { deleteWorktree } from './worktrees.js';
 import { buildSpendBudgetStatus } from './spend-cap.js';
 import { isAgentStalled } from './watchdog.js';
 import { getCachedPrStatus } from './github-automation.js';
+import { getDraftPrOfferSessionId } from './autopilot.js';
 import { listWorktreeFiles } from './chat-mentions.js';
 
 export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCounts[]> {
@@ -55,12 +57,22 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
     ctx.repos.agents.listByWorkspace(workspace.id).map((agent) => agent.id),
   );
   const pendingByAgent = batchPendingPermissionCounts(ctx, agentIds);
+  const sessionsByAgent = new Map<string, ReturnType<typeof ctx.repos.sessions.listByAgent>>();
+  for (const session of ctx.repos.sessions.listByAgentIds(agentIds)) {
+    const list = sessionsByAgent.get(session.agentId) ?? [];
+    list.push(session);
+    sessionsByAgent.set(session.agentId, list);
+  }
 
   return workspaces.map((workspace) => {
     const worktrees = ctx.repos.worktrees.listByWorkspace(workspace.id);
     const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]));
     const agents = ctx.repos.agents.listByWorkspace(workspace.id).map((agent) => {
       const worktree = worktreeById.get(agent.worktreeId);
+      const prStatus = worktree?.prNumber
+        ? getCachedPrStatus(ctx, workspace.githubOwner, workspace.githubRepo, worktree.prNumber)
+        : null;
+      const sessions = sessionsByAgent.get(agent.id) ?? [];
       return {
         ...agent,
         worktree: {
@@ -71,9 +83,14 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
         },
         pendingPermissionCount: pendingByAgent.get(agent.id) ?? 0,
         stalled: isAgentStalled(agent.id),
-        prStatus: worktree?.prNumber
-          ? getCachedPrStatus(ctx, workspace.githubOwner, workspace.githubRepo, worktree.prNumber)
-          : null,
+        prStatus,
+        deliveryPhase: resolveAgentDeliveryPhaseFromPrStatus({
+          archived: Boolean(agent.archivedAt) || agent.status === 'archived',
+          agentStatus: agent.status,
+          sessions,
+          needsDraftPr: Boolean(getDraftPrOfferSessionId(ctx, agent.id)),
+          prStatus,
+        }),
       };
     });
     return { ...workspace, agents };

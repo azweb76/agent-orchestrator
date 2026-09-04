@@ -110,6 +110,7 @@ describe('listSidebarTree pending permission batching', () => {
     const tree = await listSidebarTree(ctx);
     assert.equal(tree[0]?.agents.length, 3);
     assert.equal(listByAgentCalls, 0);
+    assert.equal(tree[0]?.agents[0]?.deliveryPhase, 'planning');
   });
 });
 

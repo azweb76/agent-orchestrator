@@ -146,6 +146,16 @@ export {
 } from './agent-delivery-phase.js';
 
 export {
+  resolveAgentFlightLeg,
+  resolveAgentDeliveryPhaseFromPrStatus,
+  isFlightTurbulence,
+  isFlightActivityActive,
+  AGENT_FLIGHT_LEG_LABELS,
+  AGENT_FLIGHT_LEG_VERBS,
+  type AgentFlightLeg,
+} from './agent-flight-leg.js';
+
+export {
   buildIssueKickoffPrompt,
   parseIssueReference,
   type IssueKickoffComment,

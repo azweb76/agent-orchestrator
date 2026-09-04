@@ -1,3 +1,4 @@
+import type { AgentDeliveryPhase } from '../agent-delivery-phase.js';
 import type { SpendBudgetStatus } from '../app-settings.js';
 import type { ChatSession } from '../chat-session.js';
 import type { InstructionDraftOffer } from '../instruction-files.js';
@@ -63,6 +64,11 @@ export interface SidebarAgent extends Agent {
   /** Watchdog flagged this agent as stalled (stale permission, idle stream, etc.). */
   stalled?: boolean;
   prStatus: PrStatusSnapshot | null;
+  /**
+   * Derived PR-delivery phase for fleet / flight-controller UI.
+   * Computed server-side from sessions + cached PR snapshot.
+   */
+  deliveryPhase: AgentDeliveryPhase;
 }
 
 /** Workspace with nested agents for the app sidebar tree. */

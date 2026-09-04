@@ -161,6 +161,10 @@ export async function pollTargetState(
         merged: detail.merged,
         checksRollup: 'none',
         updatedAt: new Date().toISOString(),
+        mergeable: detail.mergeable,
+        mergeableState: detail.mergeableState,
+        reviewCommentCount: 0,
+        checksFailing: 0,
       }),
     );
     return events;
@@ -170,16 +174,6 @@ export async function pollTargetState(
     target.owner,
     target.repo,
     detail.headSha,
-  );
-  ctx.repos.automationState.set(
-    statusStateKey(target),
-    JSON.stringify({
-      state: detail.state as 'open' | 'closed',
-      draft: detail.draft,
-      merged: detail.merged,
-      checksRollup: checks.rollup,
-      updatedAt: new Date().toISOString(),
-    }),
   );
   const checksKey = checksStateKey(target);
   const prevChecks = ctx.repos.automationState.get(checksKey);
@@ -217,6 +211,21 @@ export async function pollTargetState(
     ctx.github.listPullRequestReviews(target.owner, target.repo, target.number),
     ctx.github.listPullRequestReviewComments(target.owner, target.repo, target.number),
   ]);
+
+  ctx.repos.automationState.set(
+    statusStateKey(target),
+    JSON.stringify({
+      state: detail.state as 'open' | 'closed',
+      draft: detail.draft,
+      merged: detail.merged,
+      checksRollup: checks.rollup,
+      updatedAt: new Date().toISOString(),
+      mergeable: detail.mergeable,
+      mergeableState: detail.mergeableState,
+      reviewCommentCount: comments.length,
+      checksFailing: checks.failing,
+    }),
+  );
 
   const reviewIds = reviews.map((item) => String(item.id));
   const commentIds = comments.map((item) => String(item.id));
