@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { IconButton, ListItemIcon, Menu, MenuItem } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import StopIcon from '@mui/icons-material/Stop';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { SidebarAgent } from '@agent-orchestrator/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +19,7 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pendingArchiveOpen, setPendingArchiveOpen] = useState(false);
   const archived = agent.status === 'archived';
+  const live = agent.status === 'running';
 
   const archiveMutation = useMutation({
     mutationFn: (deleteWorktree: boolean) => api.archiveAgent(agent.id, { deleteWorktree }),
@@ -32,6 +34,16 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
     },
   });
 
+  const stopMutation = useMutation({
+    mutationFn: () => api.stopAgent(agent.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      void queryClient.invalidateQueries({ queryKey: ['agent', agent.id] });
+      void queryClient.invalidateQueries({ queryKey: ['claude-processes'] });
+      void queryClient.invalidateQueries({ queryKey: ['status'] });
+    },
+  });
+
   const unarchiveMutation = useMutation({
     mutationFn: () => api.unarchiveAgent(agent.id),
     onSuccess: () => {
@@ -41,7 +53,7 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
     },
   });
 
-  const busy = archiveMutation.isPending || unarchiveMutation.isPending;
+  const busy = archiveMutation.isPending || unarchiveMutation.isPending || stopMutation.isPending;
 
   return (
     <>
@@ -77,6 +89,20 @@ export function SidebarAgentArchiveMenu({ agent }: { agent: SidebarAgent }) {
           },
         }}
       >
+        {live ? (
+          <MenuItem
+            disabled={stopMutation.isPending}
+            onClick={() => {
+              setMenuAnchor(null);
+              stopMutation.mutate();
+            }}
+          >
+            <ListItemIcon>
+              <StopIcon fontSize="small" />
+            </ListItemIcon>
+            Stop agent
+          </MenuItem>
+        ) : null}
         {archived ? (
           <MenuItem
             disabled={unarchiveMutation.isPending}

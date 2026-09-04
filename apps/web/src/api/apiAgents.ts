@@ -37,6 +37,8 @@ import { request } from './request';
 
 export const apiAgents = {
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
+  stopAgent: (agentId: string) =>
+    request<Agent>(`/agents/${agentId}/stop`, { method: 'POST' }),
   archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>
     request<ArchiveAgentResponse>(`/agents/${agentId}/archive`, {
       method: 'POST',

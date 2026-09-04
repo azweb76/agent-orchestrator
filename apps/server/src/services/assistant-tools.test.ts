@@ -72,9 +72,11 @@ test('ASSISTANT_TOOLS catalog exposes expected MVP tools', () => {
   assert.ok(names.includes('get_agent_task'));
   assert.ok(names.includes('create_agent_task'));
   assert.ok(names.includes('update_agent_task'));
+  assert.ok(names.includes('stop_agent'));
   assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'create_agent_from_goal')?.risk, 'write');
   assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'create_agent_task')?.risk, 'write');
   assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'update_agent_task')?.risk, 'write');
+  assert.equal(ASSISTANT_TOOLS.find((t) => t.name === 'stop_agent')?.risk, 'write');
 });
 
 test('list_workspaces and list_agents return seeded fleet', async () => {
@@ -136,6 +138,54 @@ test('archive_agent requires confirm and archives', async () => {
   });
   assert.equal(ok.isError, undefined);
   assert.equal(ctx.repos.agents.getById('ag-1')?.status, 'archived');
+});
+
+test('stop_agent requires confirm and stops a running agent', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-assistant-stop-'));
+  const ctx = makeCtx(tmp);
+  const now = new Date().toISOString();
+  ctx.repos.sessions.create({
+    id: 'sess-1',
+    agentId: 'ag-1',
+    title: 'Plan',
+    template: 'chat',
+    status: 'running',
+    model: 'sonnet',
+    effort: 'high',
+    permissionMode: 'plan',
+    agentTaskId: null,
+    systemPrompt: null,
+    allowedTools: null,
+    claudeSessionId: null,
+    pid: 55_555,
+    runLogPath: path.join(tmp, 'run.log'),
+    createdAt: now,
+    updatedAt: now,
+    titleSource: 'default',
+  });
+  ctx.repos.agents.update({
+    ...ctx.repos.agents.getById('ag-1')!,
+    status: 'running',
+    pid: 55_555,
+    runLogPath: path.join(tmp, 'run.log'),
+    activeSessionId: 'sess-1',
+    updatedAt: now,
+  });
+
+  const denied = await executeAssistantTool(ctx, 'stop_agent', {
+    agentId: 'ag-1',
+    confirm: false,
+  });
+  assert.equal(denied.isError, true);
+
+  const ok = await executeAssistantTool(ctx, 'stop_agent', {
+    agentId: 'ag-1',
+    confirm: true,
+  });
+  assert.equal(ok.isError, undefined);
+  assert.equal(ctx.repos.agents.getById('ag-1')?.status, 'idle');
+  assert.equal(ctx.repos.sessions.getById('sess-1')?.status, 'idle');
+  assert.equal(ctx.repos.sessions.getById('sess-1')?.pid, null);
 });
 
 test('get_agent_task and update_agent_task require confirm and persist', async () => {

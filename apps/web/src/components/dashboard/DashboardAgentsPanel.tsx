@@ -3,18 +3,23 @@ import {
   Box,
   Chip,
   CircularProgress,
+  IconButton,
   LinearProgress,
   Stack,
   Typography,
   useTheme,
 } from '@mui/material';
+import StopIcon from '@mui/icons-material/Stop';
 import type { ClaudeProcessInfo } from '@agent-orchestrator/shared';
+import { ControlTooltip } from '../ui/ControlTooltip';
 import { HudPanel } from './HudPanel';
 import { SectionLabel } from './SectionLabel';
 
 interface DashboardAgentsPanelProps {
   loading: boolean;
   processes: ClaudeProcessInfo[];
+  stoppingAgentId?: string | null;
+  onStopAgent?: (agentId: string, sessionId: string | null) => void;
 }
 
 function processTitle(process: ClaudeProcessInfo): string {
@@ -39,7 +44,12 @@ function processSubtitle(process: ClaudeProcessInfo): string {
   return `PID ${process.pid}`;
 }
 
-export function DashboardAgentsPanel({ loading, processes }: DashboardAgentsPanelProps) {
+export function DashboardAgentsPanel({
+  loading,
+  processes,
+  stoppingAgentId = null,
+  onStopAgent,
+}: DashboardAgentsPanelProps) {
   const theme = useTheme();
   const ao = theme.palette.ao;
   const ours = processes.filter((p) => p.ownership === 'orchestrator').length;
@@ -88,6 +98,7 @@ export function DashboardAgentsPanel({ loading, processes }: DashboardAgentsPane
         <Stack spacing={0.75}>
           {processes.map((process) => {
             const owned = process.ownership === 'orchestrator' && process.agentId;
+            const stopping = Boolean(owned && stoppingAgentId === process.agentId);
             const rowSx = {
               display: 'block',
               textDecoration: 'none',
@@ -154,6 +165,23 @@ export function DashboardAgentsPanel({ loading, processes }: DashboardAgentsPane
                   variant="outlined"
                   sx={{ flexShrink: 0 }}
                 />
+                {owned && onStopAgent ? (
+                  <ControlTooltip title="Stop this agent">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      aria-label={`Stop ${processTitle(process)}`}
+                      disabled={stopping}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onStopAgent(process.agentId!, process.sessionId);
+                      }}
+                    >
+                      {stopping ? <CircularProgress size={16} color="inherit" /> : <StopIcon fontSize="small" />}
+                    </IconButton>
+                  </ControlTooltip>
+                ) : null}
               </Stack>
             );
 

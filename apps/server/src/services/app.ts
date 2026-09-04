@@ -38,6 +38,7 @@ export {
   getAgentDetail,
   stopAllSessions,
   stopAgentSession,
+  stopAgent,
   archiveAgent,
   unarchiveAgent,
   deleteAgent,

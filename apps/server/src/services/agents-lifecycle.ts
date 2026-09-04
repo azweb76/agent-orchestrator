@@ -100,6 +100,19 @@ export async function stopAgentSession(ctx: AppContext, agentId: string, session
   return updated;
 }
 
+/** Stop every live (running / pid-backed) session for an agent. */
+export async function stopAgent(ctx: AppContext, agentId: string): Promise<Agent> {
+  requireAgent(ctx, agentId);
+  const sessions = ctx.repos.sessions.listByAgent(agentId);
+  let updated: Agent | null = null;
+  for (const session of sessions) {
+    if (session.status === 'running' || session.pid != null) {
+      updated = await stopAgentSession(ctx, agentId, session.id);
+    }
+  }
+  return updated ?? syncAgentFromSessions(ctx, agentId);
+}
+
 export async function archiveAgent(
   ctx: AppContext,
   agentId: string,

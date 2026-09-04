@@ -158,7 +158,6 @@ test('dead endpoints from #74 are no longer routed', async () => {
     const removed = [
       { method: 'GET', path: '/api/agents/ag-1/events' },
       { method: 'GET', path: '/api/agents/ag-1/sessions' },
-      { method: 'POST', path: '/api/agents/ag-1/stop' },
       { method: 'POST', path: '/api/workspaces/ws-1/worktrees/suggest-branch-name' },
     ];
     for (const { method, path: routePath } of removed) {

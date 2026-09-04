@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import StopIcon from '@mui/icons-material/Stop';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
@@ -26,8 +27,10 @@ interface AgentPageHeaderProps {
   archived: boolean;
   archivePending: boolean;
   unarchivePending: boolean;
+  stopPending: boolean;
   onArchive: () => void;
   onUnarchive: () => void;
+  onStop: () => void;
   onCommit: (opts: { push: boolean; hasPendingChanges: boolean }) => void;
   onCreateDraftPr: () => void;
 }
@@ -37,19 +40,27 @@ function showRuntimeStatus(status: AgentDetail['status']): boolean {
   return status === 'running' || status === 'queued' || status === 'stopped';
 }
 
+function agentIsLive(agent: AgentDetail): boolean {
+  if (agent.status === 'running' || agent.pid != null) return true;
+  return agent.sessions.some((session) => session.status === 'running' || session.pid != null);
+}
+
 export function AgentPageHeader({
   agent,
   archived,
   archivePending,
   unarchivePending,
+  stopPending,
   onArchive,
   onUnarchive,
+  onStop,
   onCommit,
   onCreateDraftPr,
 }: AgentPageHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
-  const busy = archivePending || unarchivePending;
+  const busy = archivePending || unarchivePending || stopPending;
   const hasPr = agent.worktree.prNumber != null && agent.worktree.prNumber > 0;
+  const live = !archived && agentIsLive(agent);
 
   return (
     <Stack spacing={0.75} sx={{ flexShrink: 0 }}>
@@ -127,6 +138,20 @@ export function AgentPageHeader({
       {hasPr ? <AgentPrStatusStrip agent={agent} /> : null}
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+        {live ? (
+          <MenuItem
+            disabled={stopPending}
+            onClick={() => {
+              setMenuAnchor(null);
+              onStop();
+            }}
+          >
+            <ListItemIcon>
+              <StopIcon fontSize="small" />
+            </ListItemIcon>
+            Stop agent
+          </MenuItem>
+        ) : null}
         {archived ? (
           <MenuItem
             disabled={unarchivePending}

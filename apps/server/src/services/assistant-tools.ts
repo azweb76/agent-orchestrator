@@ -8,7 +8,7 @@ import {
 } from '@agent-orchestrator/shared';
 import type { AppContext } from './app-context.js';
 import { listWorkspaces, listSidebarTree } from './workspaces.js';
-import { getAgentDetail, archiveAgent } from './agents-lifecycle.js';
+import { getAgentDetail, archiveAgent, stopAgent } from './agents-lifecycle.js';
 import { getSystemStatus } from './system-github.js';
 import { getPullRequestInbox } from './pull-requests.js';
 import { getIssueInbox } from './github-issues.js';
@@ -335,6 +335,18 @@ async function dispatchAssistantTool(
           ok: true,
           agentId,
           status: result.agent?.status ?? 'deleted',
+        }),
+      };
+    }
+    case 'stop_agent': {
+      const agentId = z.string().min(1).parse(input.agentId);
+      requireConfirm(input.confirm === true, def.name);
+      const agent = await stopAgent(ctx, agentId);
+      return {
+        content: JSON.stringify({
+          ok: true,
+          agentId,
+          status: agent.status,
         }),
       };
     }

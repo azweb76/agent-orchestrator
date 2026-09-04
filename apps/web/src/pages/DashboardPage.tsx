@@ -50,12 +50,26 @@ export function DashboardPage() {
         <Alert severity="error">{(data.sidebarError as Error).message}</Alert>
       )}
 
+      {data.stopAgentMutation.error && (
+        <Alert severity="error" onClose={() => data.stopAgentMutation.reset()}>
+          {(data.stopAgentMutation.error as Error).message}
+        </Alert>
+      )}
+
       <DashboardBlockedAgentsPanel agents={data.blockedAgents} />
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}>
         <DashboardAgentsPanel
           loading={data.claudeProcessesLoading}
           processes={data.claudeProcesses}
+          stoppingAgentId={
+            data.stopAgentMutation.isPending
+              ? (data.stopAgentMutation.variables?.agentId ?? null)
+              : null
+          }
+          onStopAgent={(agentId, sessionId) =>
+            data.stopAgentMutation.mutate({ agentId, sessionId })
+          }
         />
 
         <DashboardSidePanels

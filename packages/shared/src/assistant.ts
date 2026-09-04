@@ -290,6 +290,24 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
     },
   },
   {
+    name: 'stop_agent',
+    description:
+      'Stop a live agent by killing its running Claude session(s). Does not archive. Requires confirm=true.',
+    risk: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: { type: 'string' },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to execute',
+        },
+      },
+      required: ['agentId', 'confirm'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'dismiss_work_item',
     description: 'Snooze/dismiss a work-queue item id so it leaves the needs-attention list.',
     risk: 'write',
@@ -313,7 +331,7 @@ export const ASSISTANT_SYSTEM_PROMPT = `You are the Agent Orchestrator Assistant
 
 Use tools to inspect state before acting. Prefer list/get tools first.
 
-For write tools (create_agent_from_goal, archive_agent, dismiss_work_item, create_agent_task, update_agent_task):
+For write tools (create_agent_from_goal, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task):
 - Explain what you will do and get the user's agreement in chat.
 - Only then call the tool with confirm=true.
 - Never invent workspace, agent, or task ids — look them up with tools.

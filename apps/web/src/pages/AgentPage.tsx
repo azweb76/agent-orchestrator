@@ -46,6 +46,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
   const {
     archiveMutation,
+    stopMutation,
     unarchiveMutation,
     commitMutation,
     createPrMutation,
@@ -123,14 +124,22 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         archived={archived}
         archivePending={archiveMutation.isPending}
         unarchivePending={unarchiveMutation.isPending}
+        stopPending={stopMutation.isPending}
         onArchive={() => {
           archiveMutation.reset();
           setArchiveOpen(true);
         }}
         onUnarchive={() => unarchiveMutation.mutate()}
+        onStop={() => stopMutation.mutate()}
         onCommit={openCommitDialog}
         onCreateDraftPr={openCreateDraftPr}
       />
+
+      {stopMutation.error && (
+        <Alert severity="error" onClose={() => stopMutation.reset()}>
+          {(stopMutation.error as Error).message}
+        </Alert>
+      )}
 
       {unarchiveMutation.error && (
         <Alert severity="error" onClose={() => unarchiveMutation.reset()}>

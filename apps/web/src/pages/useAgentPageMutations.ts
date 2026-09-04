@@ -22,6 +22,16 @@ export function useAgentPageMutations(agentId: string) {
     },
   });
 
+  const stopMutation = useMutation({
+    mutationFn: () => api.stopAgent(agentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['claude-processes'] });
+      queryClient.invalidateQueries({ queryKey: ['status'] });
+    },
+  });
+
   const unarchiveMutation = useMutation({
     mutationFn: () => api.unarchiveAgent(agentId),
     onSuccess: () => {
@@ -56,6 +66,7 @@ export function useAgentPageMutations(agentId: string) {
 
   return {
     archiveMutation,
+    stopMutation,
     unarchiveMutation,
     commitMutation,
     createPrMutation,

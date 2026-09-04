@@ -27,6 +27,17 @@ export function useDashboardData(query: string) {
     },
   });
 
+  const stopAgentMutation = useMutation({
+    mutationFn: ({ agentId, sessionId }: { agentId: string; sessionId: string | null }) =>
+      sessionId ? api.stopSession(agentId, sessionId) : api.stopAgent(agentId),
+    onSuccess: (_agent, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['claude-processes'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.invalidateQueries({ queryKey: ['status'] });
+      queryClient.invalidateQueries({ queryKey: ['agent', variables.agentId] });
+    },
+  });
+
   const {
     data: sidebar,
     isLoading: sidebarLoading,
@@ -140,6 +151,7 @@ export function useDashboardData(query: string) {
   return {
     status,
     pruneMutation,
+    stopAgentMutation,
     sidebar,
     sidebarLoading,
     sidebarError,
