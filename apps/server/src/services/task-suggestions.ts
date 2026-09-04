@@ -124,7 +124,11 @@ async function worktreeHasBranchDiff(
     try {
       const diff = await ctx.git.getDiff(worktreePath, ref);
       if (diff.stat.trim() || diff.patch.trim()) return true;
-      return false;
+    } catch {
+      // try commits-ahead / next ref
+    }
+    try {
+      if (await ctx.git.hasCommitsAhead(worktreePath, ref)) return true;
     } catch {
       // try next ref
     }

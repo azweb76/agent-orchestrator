@@ -61,6 +61,7 @@ export function buildStatusTaskSuggestionDrafts(
   status: TaskSuggestionChangeStatus,
 ): TaskSuggestionDraft[] {
   const drafts: TaskSuggestionDraft[] = [];
+  const hasLocalWork = status.hasBranchDiff || status.hasPendingChanges;
 
   if (status.hasPendingChanges) {
     drafts.push({
@@ -97,7 +98,8 @@ export function buildStatusTaskSuggestionDrafts(
         template: 'address-review',
       });
     }
-  } else if (status.hasBranchDiff || status.hasPendingChanges) {
+  } else {
+    // Match the agent header: offer draft PR whenever none is linked yet.
     drafts.push({
       title: 'Create PR (draft)',
       prompt: CREATE_PR_PROMPT,
@@ -106,7 +108,7 @@ export function buildStatusTaskSuggestionDrafts(
     });
   }
 
-  if (status.hasBranchDiff || status.hasPendingChanges) {
+  if (hasLocalWork) {
     drafts.push({
       title: 'Review changes',
       prompt: REVIEW_PROMPT,

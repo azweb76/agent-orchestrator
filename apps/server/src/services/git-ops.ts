@@ -190,6 +190,18 @@ export class GitService {
     return stdout.trim().length > 0;
   }
 
+  /** True when HEAD has commits not contained in `baseRef` (e.g. origin/main). */
+  async hasCommitsAhead(worktreePath: string, baseRef: string): Promise<boolean> {
+    const { stdout } = await execFileAsync('git', [
+      '-C',
+      worktreePath,
+      'rev-list',
+      '--count',
+      `${baseRef}..HEAD`,
+    ]);
+    return Number.parseInt(stdout.trim(), 10) > 0;
+  }
+
   async pushBranch(worktreePath: string, branch: string): Promise<void> {
     await execFileAsync('git', ['-C', worktreePath, 'push', '-u', 'origin', branch], {
       maxBuffer: 10 * 1024 * 1024,

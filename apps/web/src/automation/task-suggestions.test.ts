@@ -21,6 +21,15 @@ describe('status task suggestion drafts', () => {
     expect(drafts[1]?.template).toBe('create-draft-pr');
   });
 
+  it('offers Create PR even with a clean tree when no PR is linked', () => {
+    const drafts = buildStatusTaskSuggestionDrafts({
+      hasPendingChanges: false,
+      hasBranchDiff: false,
+      hasOpenPr: false,
+    });
+    expect(drafts.map((d) => d.title)).toEqual(['Create PR (draft)']);
+  });
+
   it('offers Create PR when the branch has commits but a clean tree', () => {
     const drafts = buildStatusTaskSuggestionDrafts({
       hasPendingChanges: false,
@@ -51,12 +60,13 @@ describe('status task suggestion drafts', () => {
     ]);
   });
 
-  it('returns nothing when the tree is clean and there is no branch diff', () => {
+  it('omits Review when the tree is clean and there is no branch diff', () => {
     expect(
       buildStatusTaskSuggestionDrafts({
         hasPendingChanges: false,
         hasBranchDiff: false,
-        hasOpenPr: false,
+        hasOpenPr: true,
+        pr: null,
       }),
     ).toEqual([]);
   });
