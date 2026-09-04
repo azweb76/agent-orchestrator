@@ -30,6 +30,35 @@ export interface FlightBoardLanes {
   landed: FlightBoardFlight[];
 }
 
+/**
+ * When automation poll is cold, sidebar may still say "planning" for merged PRs.
+ * Overlay live `/fleet/merged-agents` ids onto delivery phase before lane grouping.
+ */
+export function withMergedFlightPhases(
+  agents: DashboardAgent[],
+  mergedAgentIds: ReadonlySet<string> | readonly string[],
+): DashboardAgent[] {
+  const ids = mergedAgentIds instanceof Set ? mergedAgentIds : new Set(mergedAgentIds);
+  if (ids.size === 0) return agents;
+  return agents.map((agent) => {
+    if (!ids.has(agent.id)) return agent;
+    if (agent.deliveryPhase === 'merged' || agent.deliveryPhase === 'archived') return agent;
+    return {
+      ...agent,
+      deliveryPhase: 'merged',
+      prStatus: agent.prStatus
+        ? { ...agent.prStatus, merged: true, state: 'closed' as const }
+        : {
+            state: 'closed' as const,
+            draft: false,
+            merged: true,
+            checksRollup: 'none' as const,
+            updatedAt: new Date().toISOString(),
+          },
+    };
+  });
+}
+
 export function toFlightBoardFlight(agent: DashboardAgent): FlightBoardFlight {
   const phase = agent.deliveryPhase;
   const leg = resolveAgentFlightLeg(phase);

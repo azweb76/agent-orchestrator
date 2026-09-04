@@ -84,6 +84,11 @@ export function resolveAgentDeliveryPhase(input: {
   sessions?: readonly Pick<ChatSession, 'template' | 'status' | 'permissionMode'>[];
   /** True when Build finished with a diff and no open PR (draft-PR offer). */
   needsDraftPr?: boolean;
+  /**
+   * Worktree has a linked PR number but snapshot/detail may be missing
+   * (automation poll off). Prefer approach over boarding in that case.
+   */
+  hasLinkedPr?: boolean;
   pr?: Pick<
     PullRequestDetail,
     'state' | 'merged' | 'draft' | 'reviewCommentCount' | 'mergeableState' | 'mergeable'
@@ -112,5 +117,7 @@ export function resolveAgentDeliveryPhase(input: {
   if (planning) return 'planning';
 
   if (input.agentStatus === 'running') return 'building';
+  // Linked PR without a usable open/merged snapshot — not still boarding.
+  if (input.hasLinkedPr || (pr && pr.state === 'closed')) return 'awaiting_review';
   return 'planning';
 }

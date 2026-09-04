@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { useSseConnectionState } from '../../api/events';
 import { useSsePollingFallback } from '../../api/ssePolling';
 import { flattenAgents, sortAndFilterAgents } from './dashboardAgents';
+import { groupFlightsByLane, withMergedFlightPhases } from './flightBoardModel';
 
 export function useDashboardData(query: string) {
   const queryClient = useQueryClient();
@@ -83,6 +84,13 @@ export function useDashboardData(query: string) {
     refetchInterval: sseFallback,
   });
 
+  const { data: mergedAgents } = useQuery({
+    queryKey: ['fleet-merged-agents'],
+    queryFn: api.listMergedFleetAgents,
+    enabled: Boolean(status?.githubTokenConfigured),
+    staleTime: 60_000,
+  });
+
   const agents = useMemo(() => flattenAgents(sidebar ?? []), [sidebar]);
   const activeAgents = useMemo(
     () => agents.filter((agent) => agent.status !== 'archived'),
@@ -108,6 +116,16 @@ export function useDashboardData(query: string) {
   const filteredAgents = useMemo(
     () => sortAndFilterAgents(activeAgents, query),
     [activeAgents, query],
+  );
+
+  const flightAgents = useMemo(
+    () => withMergedFlightPhases(activeAgents, (mergedAgents ?? []).map((item) => item.agentId)),
+    [activeAgents, mergedAgents],
+  );
+  const flightLanes = useMemo(() => groupFlightsByLane(flightAgents), [flightAgents]);
+  const filteredFlightAgents = useMemo(
+    () => withMergedFlightPhases(filteredAgents, (mergedAgents ?? []).map((item) => item.agentId)),
+    [filteredAgents, mergedAgents],
   );
 
   const recentWorkspaces = workspaces?.slice(0, 6) ?? [];
@@ -140,6 +158,8 @@ export function useDashboardData(query: string) {
     systemsOk,
     systemsPartial,
     filteredAgents,
+    filteredFlightAgents,
+    flightLanes,
     claudeProcesses,
     claudeProcessesLoading,
     recentWorkspaces,

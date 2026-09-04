@@ -4,7 +4,7 @@ import {
   resolveAgentDeliveryPhaseFromPrStatus,
   resolveAgentFlightLeg,
 } from '@agent-orchestrator/shared';
-import { groupFlightsByLane, toFlightBoardFlight } from './flightBoardModel';
+import { groupFlightsByLane, toFlightBoardFlight, withMergedFlightPhases } from './flightBoardModel';
 import { positionFlights, radarPolar } from './flightMapLayout';
 import type { DashboardAgent } from './dashboardAgents';
 
@@ -89,6 +89,25 @@ describe('agent flight legs', () => {
         },
       }),
     ).toBe('merged');
+
+    expect(
+      resolveAgentDeliveryPhaseFromPrStatus({
+        hasLinkedPr: true,
+      }),
+    ).toBe('awaiting_review');
+  });
+});
+
+describe('withMergedFlightPhases', () => {
+  it('overrides cold planning phase when the fleet reports a merged PR', () => {
+    const agents = [
+      makeAgent({ id: 'a1', deliveryPhase: 'planning', worktree: { id: 'wt-1', name: 'feat', branch: 'feat/x', prNumber: 9 } }),
+      makeAgent({ id: 'a2', deliveryPhase: 'building', status: 'running' }),
+    ];
+    const next = withMergedFlightPhases(agents, ['a1']);
+    expect(next[0]?.deliveryPhase).toBe('merged');
+    expect(next[0]?.prStatus?.merged).toBe(true);
+    expect(next[1]?.deliveryPhase).toBe('building');
   });
 });
 

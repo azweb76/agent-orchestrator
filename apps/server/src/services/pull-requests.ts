@@ -16,6 +16,7 @@ import { createWorkspace } from './workspaces.js';
 import { createWorktreeFromPr } from './worktrees.js';
 import { resolveLocalPrContext } from './pr-agent-lookup.js';
 import { startAutomationTemplate } from './automation-templates.js';
+import { cachePrStatusFromDetail } from './pr-status-cache.js';
 
 function enrichInboxPullRequest(
   ctx: AppContext,
@@ -117,6 +118,16 @@ export async function getPullRequestDetail(
   prNumber: number,
 ): Promise<PullRequestDetail> {
   const pr = await ctx.github.getPullRequestDetail(owner, repo, prNumber);
+  // Keep sidebar / flight-controller phase warm even when automation poll is off.
+  cachePrStatusFromDetail(ctx, owner, repo, {
+    number: pr.number,
+    state: pr.state,
+    draft: pr.draft,
+    merged: pr.merged,
+    mergeable: pr.mergeable,
+    mergeableState: pr.mergeableState,
+    reviewCommentCount: pr.reviewCommentCount,
+  });
   return {
     ...pr,
     ...resolveLocalPrContext(ctx, owner, repo, prNumber, pr.headRef),
@@ -228,6 +239,16 @@ export async function mergePullRequest(
     number: prNumber,
     method: body.method,
     sha: result.sha,
+  });
+
+  cachePrStatusFromDetail(ctx, owner, repo, {
+    number: prNumber,
+    state: 'closed',
+    draft: false,
+    merged: true,
+    mergeable: null,
+    mergeableState: 'unknown',
+    reviewCommentCount: 0,
   });
 
   return result;

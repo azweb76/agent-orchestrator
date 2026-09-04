@@ -84,6 +84,8 @@ export function resolveAgentDeliveryPhaseFromPrStatus(input: {
   agentStatus?: AgentStatus;
   sessions?: readonly Pick<ChatSession, 'template' | 'status' | 'permissionMode'>[];
   needsDraftPr?: boolean;
+  /** True when the worktree stores a PR number (even if cache is cold). */
+  hasLinkedPr?: boolean;
   prStatus?: PrStatusSnapshot | null;
 }): AgentDeliveryPhase {
   const snap = input.prStatus ?? null;
@@ -103,6 +105,7 @@ export function resolveAgentDeliveryPhaseFromPrStatus(input: {
     agentStatus: input.agentStatus,
     sessions: input.sessions,
     needsDraftPr: input.needsDraftPr,
+    hasLinkedPr: Boolean(input.hasLinkedPr) || Boolean(snap),
     pr,
     checks: snap
       ? (checksFromRollup(snap.checksRollup) ?? {
