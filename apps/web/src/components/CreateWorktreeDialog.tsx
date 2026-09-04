@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -10,27 +9,30 @@ import {
   Tab,
   Tabs,
 } from '@mui/material';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
   DEFAULT_PERMISSION_MODE,
-  parseJiraIssueKey,
   type EffortLevel,
   type PermissionMode,
 } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { PullRequestPicker } from './pr/PullRequestPicker';
+import { JiraIssuePicker } from './jira/JiraIssuePicker';
 import { CreateWorktreeBranchFields } from './CreateWorktreeBranchFields';
 import { CreateWorktreeIssueFields, CreateWorktreePlannerFields } from './CreateWorktreePlannerFields';
 import {
   CreateWorktreeGoalFields,
   TASK_DEFAULT_SENTINEL,
 } from './CreateWorktreeGoalFields';
+import { useCreateWorktreeMutations } from './useCreateWorktreeMutations';
 import { ControlTooltip } from './ui/ControlTooltip';
 import { ResponsiveDialog } from './ui/ResponsiveDialog';
 import { useComposerImages } from './chat/useComposerImages';
 import { useComposerMentions } from './chat/useComposerMentions';
+
+type CreateTab = 'branch' | 'pr' | 'goal' | 'issue' | 'jira';
 
 interface CreateWorktreeDialogProps {
   open: boolean;
@@ -45,9 +47,7 @@ export function CreateWorktreeDialog({
   workspaceId,
   defaultBranch = '',
 }: CreateWorktreeDialogProps) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'branch' | 'pr' | 'goal' | 'issue'>('goal');
+  const [tab, setTab] = useState<CreateTab>('goal');
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
@@ -64,6 +64,7 @@ export function CreateWorktreeDialog({
     useState<PermissionMode>(DEFAULT_PERMISSION_MODE);
   const [selectedPr, setSelectedPr] = useState<number | ''>('');
   const [issueReference, setIssueReference] = useState('');
+  const [jiraIssueKey, setJiraIssueKey] = useState('');
   const goalFileInputRef = useRef<HTMLInputElement>(null);
 
   const { images, clearImages, addFiles, removeImage } = useComposerImages();
@@ -107,12 +108,6 @@ export function CreateWorktreeDialog({
   const resolvedDefaultBranch =
     baseBranch || defaultBranch || workspaceQuery.data?.defaultBranch || '';
 
-  const invalidateAfterCreate = () => {
-    queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
-    queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-    queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-  };
-
   const resetForm = () => {
     setTab('goal');
     setBranchMode('existing');
@@ -128,6 +123,7 @@ export function CreateWorktreeDialog({
     setIssuePermissionMode(DEFAULT_PERMISSION_MODE);
     setSelectedPr('');
     setIssueReference('');
+    setJiraIssueKey('');
     clearImages();
     clearMentions();
   };
@@ -137,93 +133,38 @@ export function CreateWorktreeDialog({
     onClose();
   };
 
-  const createFromBranch = useMutation({
-    mutationFn: () => {
-      if (branchMode === 'new') {
-        return api.createWorktreeFromBranch(workspaceId, {
-          branch: newBranchName,
-          createNew: true,
-          baseBranch: resolvedDefaultBranch || undefined,
-        });
-      }
-      return api.createWorktreeFromBranch(workspaceId, { branch: selectedBranch });
+  const {
+    createFromBranch,
+    createFromPr,
+    createFromGoal,
+    createFromIssue,
+    createFromJira,
+    createPending,
+    createError,
+  } = useCreateWorktreeMutations(
+    {
+      workspaceId,
+      resolvedDefaultBranch,
+      branchMode,
+      selectedBranch,
+      newBranchName,
+      selectedPr,
+      goalText,
+      goalTask,
+      goalModel,
+      goalEffort,
+      issueReference,
+      jiraIssueKey,
+      issueModel,
+      issueEffort,
+      issuePermissionMode,
+      images,
+      mentions,
+      buildOutgoingMessage,
     },
-    onSuccess: (data) => {
-      invalidateAfterCreate();
-      handleClose();
-      navigate(`/agents/${data.agent.id}`);
-    },
-  });
+    { onCloseForm: handleClose },
+  );
 
-  const createFromPr = useMutation({
-    mutationFn: () => api.createWorktreeFromPr(workspaceId, { prNumber: Number(selectedPr) }),
-    onSuccess: (data) => {
-      invalidateAfterCreate();
-      handleClose();
-      navigate(`/agents/${data.agent.id}`);
-    },
-  });
-
-  const createFromGoal = useMutation({
-    mutationFn: () =>
-      api.createWorktreeFromGoal(workspaceId, {
-        goal: buildOutgoingMessage(goalText.trim()),
-        baseBranch: resolvedDefaultBranch || undefined,
-        task: goalTask,
-        ...(goalModel !== TASK_DEFAULT_SENTINEL ? { model: goalModel } : {}),
-        ...(goalEffort !== TASK_DEFAULT_SENTINEL ? { effort: goalEffort } : {}),
-      }),
-    onSuccess: (data) => {
-      invalidateAfterCreate();
-      const initialImages = images.map((img) => ({
-        ...img,
-        previewUrl: `data:${img.mimeType};base64,${img.dataBase64}`,
-      }));
-      const initialMentions = mentions;
-      handleClose();
-      navigate(`/agents/${data.agent.id}`, {
-        state: { initialPrompt: data.kickoffPrompt, initialImages, initialMentions },
-      });
-    },
-  });
-
-  const createFromIssue = useMutation({
-    mutationFn: async (): Promise<{ agent: { id: string }; prompt: string }> => {
-      const reference = issueReference.trim();
-      const jiraKey = parseJiraIssueKey(reference);
-      if (jiraKey) {
-        return api.createWorktreeFromJiraIssue(workspaceId, {
-          issueKey: jiraKey,
-          baseBranch: resolvedDefaultBranch || undefined,
-          model: issueModel,
-          effort: issueEffort,
-          permissionMode: issuePermissionMode,
-        });
-      }
-      return api.createWorktreeFromIssue(workspaceId, {
-        reference,
-        baseBranch: resolvedDefaultBranch || undefined,
-        model: issueModel,
-        effort: issueEffort,
-        permissionMode: issuePermissionMode,
-      });
-    },
-    onSuccess: (data) => {
-      invalidateAfterCreate();
-      handleClose();
-      navigate(`/agents/${data.agent.id}`, {
-        state: { initialPrompt: data.prompt },
-      });
-    },
-  });
-
-  const createPending =
-    createFromBranch.isPending ||
-    createFromPr.isPending ||
-    createFromGoal.isPending ||
-    createFromIssue.isPending;
-  const createError =
-    createFromBranch.error ?? createFromPr.error ?? createFromGoal.error ?? createFromIssue.error;
   const canCreateBranch =
     branchMode === 'existing' ? Boolean(selectedBranch) : Boolean(newBranchName.trim());
   const canCreate =
@@ -233,7 +174,9 @@ export function CreateWorktreeDialog({
         ? selectedPr !== ''
         : tab === 'issue'
           ? Boolean(issueReference.trim())
-          : Boolean(goalText.trim()) && Boolean(goalTask);
+          : tab === 'jira'
+            ? Boolean(jiraIssueKey.trim())
+            : Boolean(goalText.trim()) && Boolean(goalTask);
 
   const agentTasks = agentTasksQuery.data ?? [];
 
@@ -254,8 +197,30 @@ export function CreateWorktreeDialog({
     }
   };
 
+  const createTooltip =
+    createPending
+      ? tab === 'goal'
+        ? 'Suggesting a branch name and creating the agent…'
+        : 'Creating the agent…'
+      : !canCreate
+        ? 'Fill in the required fields first'
+        : tab === 'goal'
+          ? 'Create agent and send your goal as the first message'
+          : tab === 'pr'
+            ? 'Create agent from the selected pull request'
+            : tab === 'jira'
+              ? 'Create agent from the selected Jira issue'
+              : tab === 'issue'
+                ? 'Create agent from the GitHub or Jira issue reference'
+                : 'Create agent from the selected branch';
+
   return (
-    <ResponsiveDialog open={open} onClose={handleClose} maxWidth={tab === 'pr' ? 'md' : 'sm'} fullWidth>
+    <ResponsiveDialog
+      open={open}
+      onClose={handleClose}
+      maxWidth={tab === 'pr' || tab === 'jira' ? 'md' : 'sm'}
+      fullWidth
+    >
       <DialogTitle>Create agent</DialogTitle>
       <DialogContent>
         <Tabs
@@ -268,6 +233,7 @@ export function CreateWorktreeDialog({
         >
           <Tab value="goal" label="From goal" />
           <Tab value="issue" label="From issue" />
+          <Tab value="jira" label="From Jira" />
           <Tab value="branch" label="From branch" />
           <Tab value="pr" label="From PR" />
         </Tabs>
@@ -317,6 +283,25 @@ export function CreateWorktreeDialog({
           </Stack>
         )}
 
+        {tab === 'jira' && (
+          <Stack spacing={1.5}>
+            <JiraIssuePicker
+              workspaceId={workspaceId}
+              selectedKey={jiraIssueKey}
+              onSelect={setJiraIssueKey}
+              enabled={open && tab === 'jira'}
+            />
+            <CreateWorktreePlannerFields
+              model={issueModel}
+              effort={issueEffort}
+              permissionMode={issuePermissionMode}
+              onModelChange={setIssueModel}
+              onEffortChange={setIssueEffort}
+              onPermissionModeChange={setIssuePermissionMode}
+            />
+          </Stack>
+        )}
+
         {tab === 'branch' && (
           <CreateWorktreeBranchFields
             branchMode={branchMode}
@@ -352,22 +337,7 @@ export function CreateWorktreeDialog({
         <ControlTooltip title="Discard and close without creating an agent">
           <Button onClick={handleClose}>Cancel</Button>
         </ControlTooltip>
-        <ControlTooltip
-          title={
-            createPending
-              ? tab === 'goal'
-                ? 'Suggesting a branch name and creating the agent…'
-                : 'Creating the agent…'
-              : !canCreate
-                ? 'Fill in the required fields first'
-                : tab === 'goal'
-                  ? 'Create agent and send your goal as the first message'
-                  : tab === 'pr'
-                    ? 'Create agent from the selected pull request'
-                    : 'Create agent from the selected branch'
-          }
-          disabled={createPending || !canCreate}
-        >
+        <ControlTooltip title={createTooltip} disabled={createPending || !canCreate}>
           <Button
             variant="contained"
             disabled={createPending || !canCreate}
@@ -375,6 +345,7 @@ export function CreateWorktreeDialog({
               if (tab === 'branch') createFromBranch.mutate();
               else if (tab === 'pr') createFromPr.mutate();
               else if (tab === 'issue') createFromIssue.mutate();
+              else if (tab === 'jira') createFromJira.mutate();
               else createFromGoal.mutate();
             }}
           >
