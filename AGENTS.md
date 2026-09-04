@@ -28,10 +28,26 @@ Repo-managed Cloud Agent config lives in `.cursor/environment.json` (Dockerfile 
 
 - API: `http://localhost:3001` (terminal sets `HOST=0.0.0.0`)
 - Vite: `http://localhost:5173` (proxies `/api` to the server)
-- `GITHUB_TOKEN` is optional to boot the UI; add it as a Cursor secret for clone/PR features
-- Jira is optional (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`); assigned issues appear on the dashboard when set
-- Claude Code CLI is optional to boot; chat/agent runs need an authenticated `CLAUDE_BIN`
+- `pnpm dev` from the repo root starts API + Vite + shared watch together
 - Do not commit `.env`, `data/`, SQLite files, or secrets
+
+### SetupGate (UI boot)
+
+The web app’s `SetupGate` blocks **all routes** until **both** are true from `GET /api/status`:
+
+- `githubTokenConfigured` — any non-empty `GITHUB_TOKEN` in env / secrets (clone/PR features still need a real token)
+- `claudeInstalled` — `CLAUDE_BIN --version` succeeds
+
+For Cloud Agent **UI screenshots / walkthroughs** without real secrets, set a dummy `GITHUB_TOKEN` and a stub Claude binary that answers `--version`, then restart `pnpm dev`. Prefer the playbook in `.claude/skills/cloud-agent-ui-test/SKILL.md`. Add a real `GITHUB_TOKEN` Cursor secret when clone/PR work is required.
+
+Jira remains optional (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`).
+
+### Efficient verification
+
+- Prefer API + unit/integration tests first; use the GUI only for UI-visible changes
+- Live SSE (`/api/events/stream`) keeps Chrome/`networkidle0` from finishing — use `domcontentloaded` (or equivalent) and wait on visible text
+- If `computerUse` is unavailable, take screenshots with `puppeteer-core` + `/usr/bin/google-chrome-stable` (see the skill above)
+- Seed a demo agent via `createRepositories` + `tsx` when GitHub clone is unavailable; server data often lives under `apps/server/data` when the API process cwd is `apps/server`
 
 ## Layout
 
@@ -63,6 +79,8 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_A
 - Shared DTOs and stream/permission helpers belong in `packages/shared`. Keep `apps/web/src/api/client.ts` aligned with `apps/server/src/routes/index.ts`.
 - From-goal kickoff resolves an **AgentTask** (`task` slug or `"auto"` via purpose). Optional `model`/`effort` override the task defaults; prompt template / system prompt / permissions / tools come from the task. Auto fails if no purpose-bearing task matches. Do not hard-code extra kickoff instructions in the create path (edit the task instead).
 - Session grades persist on `chat_sessions` (`grade_score` / comment / transcript snapshot). Instruction drafts write only allowed paths: `CLAUDE.md`, `AGENTS.md`, `.claude/CLAUDE.md`, and `.claude/skills/<slug>/SKILL.md`.
+- After grading Build / Fix CI with instruction/skill findings, persist a human-gated `instructionDraftOffer` in `automation_state` (optional pre-generated draft). Never auto-write instruction files; apply stays manual. Prefer `automation_state` for one-offer-per-agent UX over a new table until history is needed.
+- **Agent memory** (`agent_memories` SQLite): short preferences/lessons/facts scoped `global` | `workspace` | `agent`. Inject active rows into Claude via `--append-system-prompt` (token-capped). Use memory for situational notes; standing process belongs in skills / `CLAUDE.md` / `AGENTS.md`.
 - Agent **delivery phase** (`resolveAgentDeliveryPhase` in `@agent-orchestrator/shared`) is derived from sessions + linked PR checks/reviews — plan → build → needs PR → draft → CI/review → ready → merged → archived. Prefer this for “where is this agent?” UI over inventing a second workflow engine.
 
 ## Conventions
@@ -72,18 +90,21 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_A
 - Prefer existing MUI components and `sx` over custom CSS. Reuse `components/ui/*`; use `ResponsiveDialog` for form dialogs (full-screen on `sm` down). Theme is dark (`theme.ts`); do not introduce a second styling system.
 - Validate API bodies with Zod in the router. Persist via repositories in `db/`; put process/git/GitHub/Claude I/O in services.
 - Colocate server tests as `*.test.ts` next to the module. Use `node:test` + `node:assert/strict`.
-- Keep every source file at most **400 lines**. Split modules, components, or helpers when a file grows past that limit.
+- Keep every source file at most **400 lines**. Split modules, components, or helpers when a file grows past that limit (several pages/panels already sit near the limit — extract before adding).
 - When designing code, always prefer reuse: extend or compose existing helpers, components, and services before adding parallel implementations.
+- Keep offer/persistence helpers free of circular imports with grade/draft generators (thin `automation_state` setters + call sites that already own generation).
 
 ## Do / don't
 
 - Do add or update tests for server behavior you change; run the affected suite and `pnpm typecheck` before finishing.
 - Do keep UI changes responsive (phone and desktop). Verify chat, workspaces, and dashboard if you touch shared layout or state.
 - Do keep new and edited files within the 400-line limit; extract shared pieces instead of duplicating logic.
+- Do read `.claude/skills/cloud-agent-ui-test/SKILL.md` before spending turns on Cloud UI screenshots or SetupGate debugging.
 - Do not commit `.env`, `data/`, SQLite files, or secrets.
 - Do not auto-approve `AskUserQuestion` or `ExitPlanMode`.
 - Do not stop detached Claude processes on orchestrator shutdown.
 - Do not add dependencies or new packages unless the task needs them.
+- Do not treat `GITHUB_TOKEN` as optional for **UI** boot in Cloud — SetupGate requires it (dummy token is OK for screenshots).
 
 ## Git
 
