@@ -13,7 +13,7 @@ import {
   Typography,
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { GitHubRepository } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
@@ -60,6 +60,8 @@ export function CreateWorkspaceDialog({
     queryKey: ['github-repos', debouncedSearch],
     queryFn: () => api.searchRepositories(debouncedSearch),
     enabled: open && Boolean(status?.githubTokenConfigured),
+    staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   const createMutation = useMutation({
@@ -105,7 +107,7 @@ export function CreateWorkspaceDialog({
             <ControlTooltip title="Search or paste a GitHub repository">
               <Autocomplete
                 options={reposQuery.data ?? []}
-                loading={reposQuery.isLoading}
+                loading={reposQuery.isLoading && !reposQuery.data}
                 value={selectedRepo}
                 onChange={(_, value) => setSelectedRepo(value)}
                 inputValue={repoSearch}
@@ -113,7 +115,7 @@ export function CreateWorkspaceDialog({
                 getOptionLabel={(option) => option.fullName}
                 isOptionEqualToValue={(option, value) => option.fullName === value.fullName}
                 filterOptions={(options) => options}
-                noOptionsText={reposQuery.isLoading ? 'Searching…' : 'No repositories found'}
+                noOptionsText={reposQuery.isFetching && !reposQuery.data ? 'Searching…' : 'No repositories found'}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -126,7 +128,7 @@ export function CreateWorkspaceDialog({
                         ...params.slotProps.input,
                         endAdornment: (
                           <>
-                            {reposQuery.isLoading ? <CircularProgress size={18} /> : null}
+                            {reposQuery.isFetching ? <CircularProgress size={18} /> : null}
                             {params.slotProps.input.endAdornment}
                           </>
                         ),

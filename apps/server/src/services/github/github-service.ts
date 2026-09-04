@@ -55,6 +55,7 @@ import {
   setPullRequestState,
   updatePullRequestBranch,
 } from './pulls-write.js';
+import { clearPersistedRepoCache } from './repos-list-cache.js';
 import { isRepoArchived, searchRepositories } from './repos.js';
 import type { SearchedIssue, SearchedPullRequest } from './raw-types.js';
 
@@ -68,6 +69,7 @@ export class GitHubService {
   setToken(token: string): void {
     this.ctx.options.token = token;
     resetTokenCaches(this.ctx);
+    clearPersistedRepoCache(this.ctx);
   }
 
   getAuthenticatedLogin(): Promise<string> {

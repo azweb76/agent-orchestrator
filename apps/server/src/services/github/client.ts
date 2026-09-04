@@ -10,12 +10,16 @@ export interface GitHubApiOptions {
    * Tests pass 0 so they do not need fake timers.
    */
   mergeabilityRetryDelayMs?: number;
+  /** Directory for durable caches (e.g. accessible-repo list). Optional in tests. */
+  cacheDir?: string;
 }
 
 export interface GitHubClientContext {
   options: GitHubApiOptions;
   loginCache: string | null | undefined;
   repoCache: { repos: GitHubRepository[]; fetchedAt: number } | null;
+  /** In-flight `/user/repos` refresh so concurrent callers share one pagination pass. */
+  repoListRefresh: Promise<GitHubRepository[]> | null;
   prByBranchCache: Map<string, { pr: GitHubPullRequest | null; fetchedAt: number }>;
   /** Per-repo settings (merge methods, delete-on-merge); distinct from the user's repo list. */
   repoDetailCache: Map<string, { settings: RawRepoSettings; fetchedAt: number }>;
@@ -26,6 +30,7 @@ export function createGitHubClientContext(options: GitHubApiOptions = {}): GitHu
     options,
     loginCache: undefined,
     repoCache: null,
+    repoListRefresh: null,
     prByBranchCache: new Map(),
     repoDetailCache: new Map(),
   };
@@ -34,6 +39,7 @@ export function createGitHubClientContext(options: GitHubApiOptions = {}): GitHu
 export function resetTokenCaches(ctx: GitHubClientContext): void {
   ctx.loginCache = undefined;
   ctx.repoCache = null;
+  ctx.repoListRefresh = null;
   ctx.prByBranchCache.clear();
   ctx.repoDetailCache.clear();
 }
