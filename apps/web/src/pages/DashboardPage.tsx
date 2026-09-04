@@ -8,7 +8,6 @@ import { DashboardHeroSection } from '../components/dashboard/DashboardHeroSecti
 import { DashboardMetricsRow } from '../components/dashboard/DashboardMetricsRow';
 import { DashboardSidePanels } from '../components/dashboard/DashboardSidePanels';
 import { FlightBoard } from '../components/dashboard/FlightBoard';
-import { groupFlightsByLane } from '../components/dashboard/flightBoardModel';
 import { useDashboardData } from '../components/dashboard/useDashboardData';
 
 export function DashboardPage() {
@@ -17,7 +16,7 @@ export function DashboardPage() {
   const [pruneOpen, setPruneOpen] = useState(false);
 
   const data = useDashboardData(query);
-  const flightLanes = groupFlightsByLane(data.activeAgents);
+  const flightLanes = data.flightLanes;
 
   const onCommandSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -71,7 +70,7 @@ export function DashboardPage() {
       )}
 
       <FlightBoard
-        agents={data.filteredAgents}
+        agents={data.filteredFlightAgents}
         loading={data.sidebarLoading}
         onOpenAgent={(agentId) => navigate(`/agents/${agentId}`)}
       />

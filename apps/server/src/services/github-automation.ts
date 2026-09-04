@@ -1,4 +1,4 @@
-import type { PrStatusSnapshot, PullRequestChecksRollup } from '@agent-orchestrator/shared';
+import type { PullRequestChecksRollup } from '@agent-orchestrator/shared';
 import { FIX_CI_RETRY_CAP } from '@agent-orchestrator/shared';
 import { GitHubApiError } from './github/errors.js';
 import type { AppContext } from './app-context.js';
@@ -8,6 +8,9 @@ import { getAutomationSettings } from './automation-settings.js';
 import { hasActiveOrQueuedTemplate, startAutomationTemplate } from './automation-templates.js';
 import type { PollTarget } from './github-poll-targets.js';
 import { pollTargetKey } from './github-poll-targets.js';
+import { cachePrStatusFromDetail } from './pr-status-cache.js';
+
+export { cachePrStatusFromDetail, getCachedPrStatus, setCachedPrStatus } from './pr-status-cache.js';
 
 export type GithubPrChangeKind = 'checks' | 'reviews' | 'merged' | 'state';
 
@@ -46,25 +49,6 @@ function archivedStateKey(target: PollTarget): string {
 
 function stateDraftKey(target: PollTarget): string {
   return `state-draft:${pollTargetKey(target)}`;
-}
-
-function statusStateKey(target: PollTarget): string {
-  return `status:${pollTargetKey(target)}`;
-}
-
-export function getCachedPrStatus(
-  ctx: AppContext,
-  owner: string,
-  repo: string,
-  number: number,
-): PrStatusSnapshot | null {
-  const raw = ctx.repos.automationState.get(`status:${pollTargetKey({ owner, repo, number })}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as PrStatusSnapshot;
-  } catch {
-    return null;
-  }
 }
 
 function emitPrChanged(ctx: AppContext, event: GithubPrChangeEvent): void {
@@ -153,20 +137,15 @@ export async function pollTargetState(
         emitPrChanged(ctx, event);
       }
     }
-    ctx.repos.automationState.set(
-      statusStateKey(target),
-      JSON.stringify({
-        state: detail.state as 'open' | 'closed',
-        draft: detail.draft,
-        merged: detail.merged,
-        checksRollup: 'none',
-        updatedAt: new Date().toISOString(),
-        mergeable: detail.mergeable,
-        mergeableState: detail.mergeableState,
-        reviewCommentCount: 0,
-        checksFailing: 0,
-      }),
-    );
+    cachePrStatusFromDetail(ctx, target.owner, target.repo, {
+      number: target.number,
+      state: detail.state,
+      draft: detail.draft,
+      merged: detail.merged,
+      mergeable: detail.mergeable,
+      mergeableState: detail.mergeableState,
+      reviewCommentCount: 0,
+    });
     return events;
   }
 
@@ -212,19 +191,20 @@ export async function pollTargetState(
     ctx.github.listPullRequestReviewComments(target.owner, target.repo, target.number),
   ]);
 
-  ctx.repos.automationState.set(
-    statusStateKey(target),
-    JSON.stringify({
-      state: detail.state as 'open' | 'closed',
+  cachePrStatusFromDetail(
+    ctx,
+    target.owner,
+    target.repo,
+    {
+      number: target.number,
+      state: detail.state,
       draft: detail.draft,
       merged: detail.merged,
-      checksRollup: checks.rollup,
-      updatedAt: new Date().toISOString(),
       mergeable: detail.mergeable,
       mergeableState: detail.mergeableState,
       reviewCommentCount: comments.length,
-      checksFailing: checks.failing,
-    }),
+    },
+    { rollup: checks.rollup, failing: checks.failing },
   );
 
   const reviewIds = reviews.map((item) => String(item.id));

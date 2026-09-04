@@ -35,6 +35,14 @@ export function FlightBoard({ agents, loading, onOpenAgent }: FlightBoardProps) 
         <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Chip size="small" variant="outlined" label={`${total} flights`} />
           <Chip size="small" color="info" variant="outlined" label={`${airborne} airborne`} />
+          {lanes.landed.length > 0 && (
+            <Chip
+              size="small"
+              color="success"
+              variant="outlined"
+              label={`${lanes.landed.length} landed`}
+            />
+          )}
           {clearance > 0 && (
             <Chip
               size="small"

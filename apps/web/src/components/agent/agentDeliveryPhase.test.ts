@@ -91,4 +91,8 @@ describe('resolveAgentDeliveryPhase', () => {
       }),
     ).toBe('planning');
   });
+
+  it('treats a linked PR without snapshot as approach, not boarding', () => {
+    expect(resolveAgentDeliveryPhase({ hasLinkedPr: true })).toBe('awaiting_review');
+  });
 });

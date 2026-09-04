@@ -15,7 +15,7 @@ import { type AppContext, nowIso, notify } from './app-context.js';
 import { deleteWorktree } from './worktrees.js';
 import { buildSpendBudgetStatus } from './spend-cap.js';
 import { isAgentStalled } from './watchdog.js';
-import { getCachedPrStatus } from './github-automation.js';
+import { getCachedPrStatus } from './pr-status-cache.js';
 import { getDraftPrOfferSessionId } from './draft-pr-offer.js';
 import { listWorktreeFiles } from './chat-mentions.js';
 
@@ -89,6 +89,7 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
           agentStatus: agent.status,
           sessions,
           needsDraftPr: Boolean(getDraftPrOfferSessionId(ctx, agent.id)),
+          hasLinkedPr: worktree?.prNumber != null,
           prStatus,
         }),
       };
