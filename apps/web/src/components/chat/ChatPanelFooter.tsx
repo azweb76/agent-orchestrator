@@ -51,7 +51,10 @@ interface ChatPanelFooterProps {
   onRemoveQueued: (id: string) => void;
   onChatErrorClose: () => void;
   onRetryFailed: () => void;
-  onSelectTaskSuggestion?: (suggestion: TaskSuggestion) => void;
+  onSelectTaskSuggestion?: (
+    suggestion: TaskSuggestion,
+    options?: { openInNewChat?: boolean },
+  ) => void;
 }
 
 export function ChatPanelFooter({
@@ -130,7 +133,7 @@ export function ChatPanelFooter({
             session={session}
             isStreaming={sessionBusy}
             archived={archived}
-            onSelect={(suggestion) => onSelectTaskSuggestion?.(suggestion)}
+            onSelect={(suggestion, options) => onSelectTaskSuggestion?.(suggestion, options)}
           />
         ) : null}
 

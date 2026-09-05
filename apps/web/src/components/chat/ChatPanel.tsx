@@ -385,14 +385,18 @@ export const ChatPanel = memo(function ChatPanel({
             void streaming.runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true);
           }
         }}
-        onSelectTaskSuggestion={(suggestion) => {
-          const action = resolveTaskSuggestionAction(suggestion);
+        onSelectTaskSuggestion={(suggestion, options) => {
+          const action = resolveTaskSuggestionAction(suggestion, options);
           if (action.type === 'commit-and-push') {
             onCommitAndPush?.();
             return;
           }
           if (action.type === 'start-template') {
             void sessionActions.createSessionFromTemplate(action.template);
+            return;
+          }
+          if (action.type === 'new-prompt') {
+            void sessionActions.createSessionFromSuggestion(action);
             return;
           }
           void streaming.runChat(action.prompt, [], [], false);

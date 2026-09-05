@@ -11,7 +11,12 @@ import {
   type TaskSuggestionChangeStatus,
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { paletteShortcutLabel } from '../commandPalette/paletteCommands';
 import { ControlTooltip } from '../ui/ControlTooltip';
+import { isOpenInNewChatClick } from './taskSuggestionActions';
+
+const FOLLOWUP_MOD = paletteShortcutLabel().startsWith('⌘') ? '⌘' : 'Ctrl';
+const FOLLOWUP_CLICK_HINT = `Click to send in this chat · ${FOLLOWUP_MOD}-click for a new chat`;
 
 interface TaskSuggestionsBannerProps {
   agentId: string;
@@ -19,7 +24,7 @@ interface TaskSuggestionsBannerProps {
   session: Pick<ChatSession, 'id' | 'status'> | undefined;
   isStreaming: boolean;
   archived?: boolean;
-  onSelect: (suggestion: TaskSuggestion) => void;
+  onSelect: (suggestion: TaskSuggestion, options?: { openInNewChat?: boolean }) => void;
 }
 
 /**
@@ -192,16 +197,16 @@ export function TaskSuggestionsBanner({
           {suggestions.map((suggestion) => (
             <ControlTooltip
               key={suggestion.id}
-              title={suggestion.description?.trim() || suggestion.prompt}
+              title={`${suggestion.description?.trim() || suggestion.prompt} · ${FOLLOWUP_CLICK_HINT}`}
             >
               <Button
                 variant="outlined"
                 color="inherit"
                 size="small"
                 disabled={refreshing}
-                onClick={() => {
+                onClick={(event) => {
                   setDismissedSessionId(session.id);
-                  onSelect(suggestion);
+                  onSelect(suggestion, { openInNewChat: isOpenInNewChatClick(event) });
                 }}
               >
                 {suggestion.title}
