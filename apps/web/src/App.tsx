@@ -6,6 +6,7 @@ import { FlightControllerPage } from './pages/FlightControllerPage';
 import { PullRequestDetailPage } from './pages/PullRequestDetailPage';
 import { PullRequestsPage } from './pages/PullRequestsPage';
 import { TasksPage } from './pages/TasksPage';
+import { FollowUpsPage } from './pages/FollowUpsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { WorkspacesPage } from './pages/WorkspacesPage';
 import { WorkspaceDetailPage } from './pages/WorkspaceDetailPage';
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="workspaces/:workspaceId" element={<WorkspaceDetailPage />} />
         <Route path="agents/:agentId" element={<AgentPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="follow-ups" element={<FollowUpsPage />} />
         <Route path="profiles" element={<Navigate to="/tasks" replace />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

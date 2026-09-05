@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { AgentTaskRepository } from './repositories/agent-task.js';
+import { TaskFollowUpRepository } from './repositories/task-followup.js';
 import { AppSettingsRepository } from './repositories/app-settings.js';
 import { AutomationStateRepository } from './repositories/automation-state.js';
 import { AgentRepository } from './repositories/agent.js';
@@ -15,6 +16,7 @@ import { SessionSearchIndexRepository } from './repositories/session-search-inde
 
 export { DATABASE_FILENAME, initDatabase } from './migrate.js';
 export { AgentTaskRepository } from './repositories/agent-task.js';
+export { TaskFollowUpRepository } from './repositories/task-followup.js';
 export { AppSettingsRepository } from './repositories/app-settings.js';
 export { AutomationStateRepository } from './repositories/automation-state.js';
 export { AgentRepository } from './repositories/agent.js';
@@ -40,6 +42,7 @@ export type AppRepositories = {
   automationState: AutomationStateRepository;
   sessionSearch: SessionSearchIndexRepository;
   agentTasks: AgentTaskRepository;
+  taskFollowUps: TaskFollowUpRepository;
   memories: AgentMemoryRepository;
   assistantMessages: AssistantMessageRepository;
 };
@@ -57,6 +60,7 @@ export function createRepositories(db: Database.Database): AppRepositories {
     automationState: new AutomationStateRepository(db),
     sessionSearch: new SessionSearchIndexRepository(db),
     agentTasks: new AgentTaskRepository(db),
+    taskFollowUps: new TaskFollowUpRepository(db),
     memories: new AgentMemoryRepository(db),
     assistantMessages: new AssistantMessageRepository(db),
   };

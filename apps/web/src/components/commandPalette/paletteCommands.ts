@@ -73,6 +73,13 @@ export function buildPaletteCommands(
       action: { kind: 'navigate', to: '/tasks' },
     },
     {
+      id: 'action:go-follow-ups',
+      group: 'Actions',
+      label: 'Go to follow-ups',
+      keywords: 'suggestions chips catalog prompt description post-session',
+      action: { kind: 'navigate', to: '/follow-ups' },
+    },
+    {
       id: 'action:go-dashboard',
       group: 'Actions',
       label: 'Go to dashboard',

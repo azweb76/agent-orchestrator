@@ -35,7 +35,9 @@ export type TaskSuggestionKind = 'prompt' | 'commit-and-push' | 'start-template'
 export interface TaskSuggestion {
   id: string;
   title: string;
-  /** Ready-to-send chat text for `prompt` kinds; also used as tooltip copy. */
+  /** Short subtitle / tooltip; falls back to `prompt` in the UI when omitted. */
+  description?: string;
+  /** Ready-to-send chat text for `prompt` kinds. */
   prompt: string;
   /** Defaults to `prompt` (send into the current chat). */
   kind?: TaskSuggestionKind;
@@ -54,7 +56,7 @@ export interface AgentDetail extends Agent {
   sessions: ChatSession[];
   /** Set when a completed Build session has a diff and no open PR. */
   draftPrOffer?: DraftPrOffer | null;
-  /** Set after any completed session, offering LLM-generated follow-up prompts for the same chat. */
+  /** Set after any completed session, offering AI-selected follow-ups for the same chat. */
   taskSuggestions?: TaskSuggestionsOffer | null;
   /**
    * Set after a graded Build / Fix CI session with instruction/skill findings.

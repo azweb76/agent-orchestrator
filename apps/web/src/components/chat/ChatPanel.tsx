@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  CHAT_SESSION_TEMPLATES,
   mergeChatMessages,
   type ChatSessionTemplateId,
   type EffortLevel,
@@ -69,6 +68,8 @@ export const ChatPanel = memo(function ChatPanel({
       draftPrOffer: data.draftPrOffer ?? null,
       taskSuggestions: data.taskSuggestions ?? null,
       instructionDraftOffer: data.instructionDraftOffer ?? null,
+      worktree: data.worktree,
+      prStatus: data.prStatus ?? null,
     }),
   });
 
@@ -317,6 +318,8 @@ export const ChatPanel = memo(function ChatPanel({
                 draftPrOffer: agentDefaults.draftPrOffer,
                 taskSuggestions: agentDefaults.taskSuggestions,
                 instructionDraftOffer: agentDefaults.instructionDraftOffer,
+                worktree: agentDefaults.worktree,
+                prStatus: agentDefaults.prStatus,
               }
             : undefined
         }
@@ -382,11 +385,6 @@ export const ChatPanel = memo(function ChatPanel({
             void streaming.runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true);
           }
         }}
-        onCreateDraftPr={() => {
-          const template = CHAT_SESSION_TEMPLATES.find((item) => item.id === 'create-draft-pr');
-          if (template) void sessionActions.createSessionFromTemplate(template);
-        }}
-        creatingDraftPr={sessionActions.creatingSession}
         onSelectTaskSuggestion={(suggestion) => {
           const action = resolveTaskSuggestionAction(suggestion);
           if (action.type === 'commit-and-push') {

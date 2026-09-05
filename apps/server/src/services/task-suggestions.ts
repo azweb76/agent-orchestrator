@@ -1,78 +1,40 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
   buildStatusTaskSuggestionDrafts,
+  filterApplicableTaskFollowUps,
   mergeTaskSuggestionDrafts,
-  toTaskSuggestions,
+  resolveAgentDeliveryPhase,
   type ChatSession,
+  type TaskFollowUp,
   type TaskSuggestion,
   type TaskSuggestionChangeStatus,
-  type TaskSuggestionDraft,
   type TaskSuggestionsOffer,
 } from '@agent-orchestrator/shared';
 import { type AppContext, makeEvent, notify } from './app-context.js';
-import { extractJsonObject } from './extract-json-object.js';
 import { getCachedPrStatus } from './pr-status-cache.js';
+import {
+  followUpToSuggestion,
+  mapFollowUpIdsToSuggestions,
+  type TaskSuggestionsContext,
+} from './task-suggestions-select.js';
+import { ensureBuiltInTaskFollowUps, listEnabledTaskFollowUps } from './task-followups.js';
+
+export {
+  buildTaskSuggestionsPrompt,
+  followUpToSuggestion,
+  mapFollowUpIdsToSuggestions,
+  parseTaskFollowUpSelection,
+  parseTaskSuggestionDrafts,
+  parseTaskSuggestionsResponse,
+  type TaskFollowUpCatalogItem,
+  type TaskSuggestionsAgentSnapshot,
+  type TaskSuggestionsContext,
+} from './task-suggestions-select.js';
 
 const OFFER_KEY = (agentId: string) => `task-suggestions.offer:${agentId}`;
-const MAX_LLM_SUGGESTIONS = 4;
 const MAX_TOTAL_SUGGESTIONS = 6;
-
-export interface TaskSuggestionsContext {
-  sessionTitle: string;
-  lastAssistantMessage: string;
-}
-
-export function buildTaskSuggestionsPrompt(context: TaskSuggestionsContext): {
-  system: string;
-  user: string;
-} {
-  const system = [
-    'You read the final reply from a coding-agent chat session and propose concrete follow-up tasks.',
-    'Call the submit_task_suggestions tool with 1 to 4 suggestions.',
-    'If you cannot call a tool, respond with ONLY a JSON object {"suggestions": [...]} (no markdown fences or extra text).',
-    'Each suggestion is {"title":"...","prompt":"..."}.',
-    '"title" is a short label, 3-6 words, no trailing punctuation.',
-    '"prompt" is a ready-to-send follow-up message for the same chat that continues the work, written as if the user were asking for it directly.',
-    'Base suggestions only on what the final reply says was done, found, or left open. Do not invent unrelated work.',
-    'Prefer concrete, actionable next steps (e.g. add tests, fix a mentioned issue, extend to another file) over vague ideas.',
-    'Do not suggest committing, pushing, creating a pull request, fixing CI, addressing review, or resolving conflicts — the app adds those from git/PR status.',
-  ].join(' ');
-
-  const user = [
-    `Session: ${context.sessionTitle}`,
-    'Final assistant reply:',
-    context.lastAssistantMessage || '(empty)',
-  ].join('\n\n');
-
-  return { system, user };
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-/** Parse LLM JSON into drafts (no ids). Empty list when nothing valid. */
-export function parseTaskSuggestionDrafts(raw: unknown): TaskSuggestionDraft[] {
-  const parsed = extractJsonObject(raw, 'Task suggestions response');
-  const items = Array.isArray(parsed.suggestions) ? parsed.suggestions : [];
-
-  const drafts: TaskSuggestionDraft[] = [];
-  for (const item of items) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-    const row = item as Record<string, unknown>;
-    const title = asString(row.title);
-    const prompt = asString(row.prompt);
-    if (!title || !prompt) continue;
-    drafts.push({ title, prompt, kind: 'prompt' });
-    if (drafts.length >= MAX_LLM_SUGGESTIONS) break;
-  }
-  return drafts;
-}
-
-/** @deprecated Prefer parseTaskSuggestionDrafts + merge; kept for Anthropic tool parsing. */
-export function parseTaskSuggestionsResponse(raw: unknown): TaskSuggestion[] {
-  return toTaskSuggestions(parseTaskSuggestionDrafts(raw), () => uuidv4());
-}
+const MAX_ASSISTANT_MESSAGES = 5;
+const MAX_MESSAGE_CHARS = 2000;
 
 export function getTaskSuggestionsOffer(ctx: AppContext, agentId: string): TaskSuggestionsOffer | null {
   const raw = ctx.repos.automationState.get(OFFER_KEY(agentId));
@@ -171,9 +133,122 @@ export async function gatherTaskSuggestionChangeStatus(
   }
 }
 
+function clipMessage(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= MAX_MESSAGE_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_MESSAGE_CHARS)}…`;
+}
+
+export function recentAssistantMessagesFromSession(
+  ctx: AppContext,
+  sessionId: string,
+  limit = MAX_ASSISTANT_MESSAGES,
+): string[] {
+  const messages = ctx.repos.messages.listBySession(sessionId);
+  return messages
+    .filter((m) => m.role === 'assistant' && m.content.trim())
+    .slice(-limit)
+    .map((m) => clipMessage(m.content));
+}
+
+function fallbackSuggestions(
+  changeStatus: TaskSuggestionChangeStatus,
+  catalog: readonly TaskFollowUp[],
+): TaskSuggestion[] {
+  const statusDrafts = buildStatusTaskSuggestionDrafts(changeStatus);
+  const drafts = mergeTaskSuggestionDrafts(statusDrafts, [], MAX_TOTAL_SUGGESTIONS);
+  const byTitle = new Map(catalog.map((item) => [item.title.toLowerCase(), item]));
+  const mapped: TaskSuggestion[] = [];
+  for (const draft of drafts) {
+    const match = byTitle.get(draft.title.toLowerCase());
+    if (match) {
+      mapped.push(followUpToSuggestion(match));
+    } else {
+      mapped.push({
+        id: uuidv4(),
+        title: draft.title,
+        description: draft.description,
+        prompt: draft.prompt,
+        kind: draft.kind ?? 'prompt',
+        template: draft.template,
+      });
+    }
+  }
+  return mapped;
+}
+
+function buildSelectionContext(
+  ctx: AppContext,
+  session: ChatSession,
+  changeStatus: TaskSuggestionChangeStatus,
+  applicableCatalog: readonly TaskFollowUp[],
+): TaskSuggestionsContext | null {
+  const agent = ctx.repos.agents.getById(session.agentId);
+  if (!agent) return null;
+  const worktree = ctx.repos.worktrees.getById(agent.worktreeId);
+  if (!worktree) return null;
+  const workspace = ctx.repos.workspaces.getById(worktree.workspaceId);
+  if (!workspace) return null;
+
+  const sessions = ctx.repos.sessions.listByAgent(session.agentId);
+  const deliveryPhase = resolveAgentDeliveryPhase({
+    archived: Boolean(agent.archivedAt),
+    agentStatus: agent.status,
+    sessions,
+    hasLinkedPr: worktree.prNumber != null,
+    pr:
+      changeStatus.pr && worktree.prNumber != null
+        ? {
+            state: 'open',
+            merged: false,
+            draft: false,
+            reviewCommentCount: changeStatus.pr.reviewCommentCount ?? 0,
+            mergeableState: changeStatus.pr.mergeableState ?? 'unknown',
+            mergeable: changeStatus.pr.mergeable ?? null,
+          }
+        : null,
+    checks: changeStatus.pr
+      ? {
+          rollup: changeStatus.pr.checksRollup ?? 'none',
+          failing: changeStatus.pr.checksFailing ?? 0,
+        }
+      : null,
+  });
+
+  return {
+    agent: {
+      agentName: agent.name,
+      agentStatus: agent.status,
+      model: agent.model,
+      effort: agent.effort,
+      permissionMode: agent.permissionMode,
+      sessionTitle: session.title ?? 'Chat',
+      sessionTemplate: session.template,
+      sessionPermissionMode: session.permissionMode,
+      branch: worktree.branch,
+      baseBranch: worktree.baseBranch ?? workspace.defaultBranch,
+      prNumber: worktree.prNumber,
+      githubOwner: workspace.githubOwner,
+      githubRepo: workspace.githubRepo,
+      deliveryPhase,
+      changeStatus,
+    },
+    catalog: applicableCatalog.map((item) => ({
+      id: item.id,
+      name: item.name,
+      title: item.title,
+      description: item.description,
+      prompt: item.prompt,
+      kind: item.kind,
+      template: item.template,
+    })),
+    recentAssistantMessages: recentAssistantMessagesFromSession(ctx, session.id),
+  };
+}
+
 /**
- * After any session finishes cleanly, offer follow-ups: status chips (Commit and Push,
- * Create PR, …) plus LLM prompts from the final reply. Always persists an offer.
+ * After any session finishes cleanly, ask AI to pick follow-ups from the
+ * user-managed catalog using agent context + recent assistant messages.
  */
 export async function maybeSuggestFollowUpTasks(
   ctx: AppContext,
@@ -182,31 +257,30 @@ export async function maybeSuggestFollowUpTasks(
 ): Promise<void> {
   if (outcome.stopped || outcome.error) return;
 
+  ensureBuiltInTaskFollowUps(ctx);
   const changeStatus = await gatherTaskSuggestionChangeStatus(ctx, session.agentId);
-  const statusDrafts = buildStatusTaskSuggestionDrafts(changeStatus);
+  const catalog = listEnabledTaskFollowUps(ctx);
+  const applicableCatalog = filterApplicableTaskFollowUps(catalog, changeStatus);
 
-  const messages = ctx.repos.messages.listBySession(session.id);
-  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
-  let llmDrafts: TaskSuggestionDraft[] = [];
-  if (lastAssistant?.content.trim()) {
+  let suggestions: TaskSuggestion[] = [];
+  const selectionContext = buildSelectionContext(ctx, session, changeStatus, applicableCatalog);
+  if (
+    selectionContext &&
+    applicableCatalog.length > 0 &&
+    typeof ctx.anthropic.selectTaskFollowUps === 'function'
+  ) {
     try {
-      const suggestions = await ctx.anthropic.generateTaskSuggestions({
-        lastAssistantMessage: lastAssistant.content,
-        sessionTitle: session.title ?? 'Chat',
-      });
-      llmDrafts = suggestions.map((s) => ({
-        title: s.title,
-        prompt: s.prompt,
-        kind: s.kind ?? 'prompt',
-        template: s.template,
-      }));
+      const selectedIds = await ctx.anthropic.selectTaskFollowUps(selectionContext);
+      suggestions = mapFollowUpIdsToSuggestions(selectedIds, applicableCatalog, changeStatus);
     } catch (error) {
-      console.warn(`[task-suggestions] LLM suggestions failed for session ${session.id}:`, error);
+      console.warn(`[task-suggestions] LLM selection failed for session ${session.id}:`, error);
     }
   }
 
-  const drafts = mergeTaskSuggestionDrafts(statusDrafts, llmDrafts, MAX_TOTAL_SUGGESTIONS);
-  const suggestions = toTaskSuggestions(drafts, () => uuidv4());
+  if (suggestions.length === 0) {
+    suggestions = fallbackSuggestions(changeStatus, catalog);
+  }
+
   const offer: TaskSuggestionsOffer = { sessionId: session.id, suggestions };
   setTaskSuggestionsOffer(ctx, session.agentId, offer);
   ctx.repos.events.create(

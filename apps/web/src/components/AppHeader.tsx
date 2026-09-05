@@ -21,6 +21,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { useSseConnectionState } from '../api/events';
 import { useNotificationSettings, permissionStatusLabel } from '../notifications';
 import { paletteShortcutLabel } from './commandPalette/paletteCommands';
@@ -219,6 +220,20 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
             sx={{ mr: 0.5 }}
           >
             <TuneOutlinedIcon fontSize="small" />
+          </IconButton>
+        </ControlTooltip>
+
+        <ControlTooltip title="Follow-ups">
+          <IconButton
+            component={RouterLink}
+            to="/follow-ups"
+            size="small"
+            color={location.pathname === '/follow-ups' ? 'secondary' : 'inherit'}
+            aria-label="Follow-ups"
+            aria-current={location.pathname === '/follow-ups' ? 'page' : undefined}
+            sx={{ mr: 0.5 }}
+          >
+            <LightbulbOutlinedIcon fontSize="small" />
           </IconButton>
         </ControlTooltip>
 

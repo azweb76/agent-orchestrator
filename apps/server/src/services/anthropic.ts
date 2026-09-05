@@ -4,7 +4,6 @@ import {
   type InstructionDraft,
   type SessionGradeAnalysis,
   type SessionGradeScore,
-  type TaskSuggestion,
 } from '@agent-orchestrator/shared';
 import { createAnthropicClient, resolveAnthropicAuth } from './anthropic-credentials.js';
 import {
@@ -19,7 +18,7 @@ import {
 } from './session-grade.js';
 import {
   buildTaskSuggestionsPrompt,
-  parseTaskSuggestionsResponse,
+  parseTaskFollowUpSelection,
   type TaskSuggestionsContext,
 } from './task-suggestions.js';
 import {
@@ -76,25 +75,19 @@ const SESSION_GRADE_TOOL: Anthropic.Tool = {
 const TASK_SUGGESTIONS_TOOL: Anthropic.Tool = {
   name: 'submit_task_suggestions',
   description:
-    'Submit 1-4 concrete follow-up tasks for this finished session (exclude commit/push/PR/CI/review-handoff actions).',
+    'Submit an ordered list of follow-up catalog ids to show after this session (1-6 items).',
   input_schema: {
     type: 'object',
     properties: {
-      suggestions: {
+      followUpIds: {
         type: 'array',
         minItems: 1,
-        maxItems: 4,
-        items: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            prompt: { type: 'string' },
-          },
-          required: ['title', 'prompt'],
-        },
+        maxItems: 6,
+        items: { type: 'string' },
+        description: 'Ordered catalog ids from the provided follow-up list.',
       },
     },
-    required: ['suggestions'],
+    required: ['followUpIds'],
   },
 };
 
@@ -226,13 +219,16 @@ export class AnthropicService {
     return parseSessionGradeResponse(text, input.stats);
   }
 
-  async generateTaskSuggestions(input: TaskSuggestionsContext): Promise<TaskSuggestion[]> {
+  /** Pick ordered follow-up catalog ids for a finished session. */
+  async selectTaskFollowUps(input: TaskSuggestionsContext): Promise<string[]> {
+    if (input.catalog.length === 0) return [];
     const anthropic = await client();
     const { system, user } = buildTaskSuggestionsPrompt(input);
+    const catalogIds = new Set(input.catalog.map((item) => item.id));
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 1500,
+      max_tokens: 800,
       system,
       messages: [{ role: 'user', content: user }],
       tools: [TASK_SUGGESTIONS_TOOL],
@@ -241,14 +237,14 @@ export class AnthropicService {
 
     const toolBlock = response.content.find((block) => block.type === 'tool_use');
     if (toolBlock && toolBlock.type === 'tool_use') {
-      return parseTaskSuggestionsResponse(toolBlock.input);
+      return parseTaskFollowUpSelection(toolBlock.input, catalogIds);
     }
 
     const text = response.content
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('');
 
-    return parseTaskSuggestionsResponse(text);
+    return parseTaskFollowUpSelection(text, catalogIds);
   }
 
   async generateInstructionDraft(input: InstructionDraftPromptInput): Promise<InstructionDraft> {

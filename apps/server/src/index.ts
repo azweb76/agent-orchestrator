@@ -11,6 +11,7 @@ import { AnthropicService } from './services/anthropic.js';
 import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
+import { ensureBuiltInTaskFollowUps } from './services/task-followups.js';
 import { startGithubPollBus } from './services/github-poll-bus.js';
 import { startWatchdog } from './services/watchdog.js';
 import { optionalBearerAuth } from './auth.js';
@@ -45,6 +46,7 @@ const ctx: AppContext = {
   dataDir,
   notifier: new Notifier(),
 };
+ensureBuiltInTaskFollowUps(ctx);
 
 const app = express();
 app.use(cors());

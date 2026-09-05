@@ -19,6 +19,7 @@ import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined';
 import SettingsBrightnessOutlinedIcon from '@mui/icons-material/SettingsBrightnessOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AppSettings } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
@@ -199,6 +200,22 @@ export function SettingsPage() {
             startIcon={<TuneOutlinedIcon />}
           >
             Manage tasks
+          </Button>
+        </ControlTooltip>
+      </SettingsSection>
+
+      <SettingsSection
+        title="Follow-ups"
+        description="Manage the catalog of post-session follow-up chips. AI selects which enabled entries to show after a session finishes."
+      >
+        <ControlTooltip title="Open the follow-up catalog">
+          <Button
+            component={RouterLink}
+            to="/follow-ups"
+            variant="outlined"
+            startIcon={<LightbulbOutlinedIcon />}
+          >
+            Manage follow-ups
           </Button>
         </ControlTooltip>
       </SettingsSection>

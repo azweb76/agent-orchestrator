@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BUILTIN_TASK_FOLLOWUPS,
   buildStatusTaskSuggestionDrafts,
+  filterApplicableTaskFollowUps,
+  isTaskFollowUpApplicable,
   mergeTaskSuggestionDrafts,
   FALLBACK_TASK_SUGGESTION,
 } from '@agent-orchestrator/shared';
@@ -19,6 +22,7 @@ describe('status task suggestion drafts', () => {
     ]);
     expect(drafts[0]?.kind).toBe('commit-and-push');
     expect(drafts[1]?.template).toBe('create-draft-pr');
+    expect(drafts.every((d) => d.description)).toBe(true);
   });
 
   it('offers Create PR even with a clean tree when no PR is linked', () => {
@@ -94,5 +98,38 @@ describe('mergeTaskSuggestionDrafts', () => {
       'Review changes',
       'Add unit tests',
     ]);
+  });
+});
+
+describe('isTaskFollowUpApplicable', () => {
+  const byName = Object.fromEntries(BUILTIN_TASK_FOLLOWUPS.map((item) => [item.name, item]));
+
+  it('keeps prompt kinds and filters status kinds from live signals', () => {
+    const cleanNoPr = {
+      hasPendingChanges: false,
+      hasBranchDiff: false,
+      hasOpenPr: false,
+    };
+    expect(isTaskFollowUpApplicable(byName.continue!, cleanNoPr)).toBe(true);
+    expect(isTaskFollowUpApplicable(byName['commit-and-push']!, cleanNoPr)).toBe(false);
+    expect(isTaskFollowUpApplicable(byName['create-draft-pr']!, cleanNoPr)).toBe(true);
+
+    const dirty = {
+      hasPendingChanges: true,
+      hasBranchDiff: true,
+      hasOpenPr: false,
+    };
+    expect(isTaskFollowUpApplicable(byName['commit-and-push']!, dirty)).toBe(true);
+
+    const filtered = filterApplicableTaskFollowUps(
+      [byName['commit-and-push']!, byName.continue!, byName['create-draft-pr']!],
+      {
+        hasPendingChanges: false,
+        hasBranchDiff: false,
+        hasOpenPr: true,
+        pr: null,
+      },
+    );
+    expect(filtered.map((item) => item.name)).toEqual(['continue']);
   });
 });

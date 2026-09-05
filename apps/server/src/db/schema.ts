@@ -82,6 +82,20 @@ CREATE TABLE IF NOT EXISTS agent_tasks (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS task_followups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  prompt TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'prompt',
+  template TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  built_in INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY,
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
@@ -159,6 +173,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id);
 CREATE INDEX IF NOT EXISTS idx_events_agent ON events(agent_id);
 CREATE INDEX IF NOT EXISTS idx_session_search_agent ON session_search_index(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_tasks_name ON agent_tasks(name);
+CREATE INDEX IF NOT EXISTS idx_task_followups_name ON task_followups(name);
 CREATE INDEX IF NOT EXISTS idx_agent_memories_scope ON agent_memories(scope, status);
 CREATE INDEX IF NOT EXISTS idx_agent_memories_workspace ON agent_memories(workspace_id, status);
 CREATE INDEX IF NOT EXISTS idx_agent_memories_agent ON agent_memories(agent_id, status);

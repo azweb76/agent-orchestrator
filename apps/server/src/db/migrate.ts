@@ -132,6 +132,22 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'chat_sessions', 'allowed_tools', 'TEXT');
   migrateAgentTasks(db);
   db.exec(`
+    CREATE TABLE IF NOT EXISTS task_followups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      prompt TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'prompt',
+      template TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      built_in INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_followups_name ON task_followups(name);
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS agent_memories (
       id TEXT PRIMARY KEY,
       scope TEXT NOT NULL,

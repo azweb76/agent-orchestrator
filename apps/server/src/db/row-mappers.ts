@@ -14,6 +14,8 @@ import type {
   SessionGradeAnalysis,
   SessionGradeScore,
   AgentTask,
+  TaskFollowUp,
+  TaskSuggestionKind,
   Worktree,
   Workspace,
 } from '@agent-orchestrator/shared';
@@ -182,6 +184,33 @@ export function rowToAgentTask(row: unknown): AgentTask {
     effort: parseEffort(r.effort),
     permissionMode: (r.permission_mode as PermissionMode | undefined) ?? 'plan',
     listed: Number(r.listed) === 1,
+    builtIn: Number(r.built_in) === 1,
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  };
+}
+
+function parseTaskSuggestionKind(value: unknown): TaskSuggestionKind {
+  if (value === 'commit-and-push' || value === 'start-template' || value === 'prompt') {
+    return value;
+  }
+  return 'prompt';
+}
+
+export function rowToTaskFollowUp(row: unknown): TaskFollowUp {
+  const r = row as Record<string, unknown>;
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    title: String(r.title),
+    description: r.description == null ? '' : String(r.description),
+    prompt: String(r.prompt ?? ''),
+    kind: parseTaskSuggestionKind(r.kind),
+    template:
+      r.template == null || r.template === ''
+        ? null
+        : (String(r.template) as ChatSessionTemplateId),
+    enabled: Number(r.enabled) === 1,
     builtIn: Number(r.built_in) === 1,
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),

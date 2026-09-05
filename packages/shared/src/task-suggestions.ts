@@ -1,4 +1,5 @@
 import type { ChatSessionTemplateId } from './chat-session.js';
+import { BUILTIN_TASK_FOLLOWUPS } from './task-followup.js';
 import type { PrStatusSnapshot, PullRequestChecksRollup } from './types/github.js';
 import type { TaskSuggestion, TaskSuggestionKind } from './types/views.js';
 
@@ -16,28 +17,26 @@ export interface TaskSuggestionChangeStatus {
 
 export interface TaskSuggestionDraft {
   title: string;
+  description?: string;
   prompt: string;
   kind?: TaskSuggestionKind;
   template?: ChatSessionTemplateId;
 }
 
-const CREATE_PR_PROMPT = [
-  'Create a draft pull request for the current branch.',
-  'Summarize the changes, write a good title and description, commit remaining work if needed, push, and open a draft PR.',
-].join(' ');
-
-const COMMIT_PUSH_PROMPT =
-  'Commit all local changes with a clear conventional-commit message and push the branch.';
-
-const REVIEW_PROMPT =
-  'Review the current uncommitted and branch changes for bugs, edge cases, missing tests, and regressions.';
+function builtinDraft(name: string): TaskSuggestionDraft {
+  const seed = BUILTIN_TASK_FOLLOWUPS.find((item) => item.name === name);
+  if (!seed) throw new Error(`Missing built-in follow-up seed: ${name}`);
+  return {
+    title: seed.title,
+    description: seed.description,
+    prompt: seed.prompt,
+    kind: seed.kind,
+    template: seed.template,
+  };
+}
 
 /** Fallback when neither status nor the LLM yields suggestions. */
-export const FALLBACK_TASK_SUGGESTION: TaskSuggestionDraft = {
-  title: 'Continue',
-  prompt: 'Continue from where we left off. Propose the next concrete step and start on it.',
-  kind: 'prompt',
-};
+export const FALLBACK_TASK_SUGGESTION: TaskSuggestionDraft = builtinDraft('continue');
 
 function checksFailing(
   rollup: PullRequestChecksRollup | undefined,
@@ -64,57 +63,27 @@ export function buildStatusTaskSuggestionDrafts(
   const hasLocalWork = status.hasBranchDiff || status.hasPendingChanges;
 
   if (status.hasPendingChanges) {
-    drafts.push({
-      title: 'Commit and Push',
-      prompt: COMMIT_PUSH_PROMPT,
-      kind: 'commit-and-push',
-    });
+    drafts.push(builtinDraft('commit-and-push'));
   }
 
   if (status.hasOpenPr) {
     const pr = status.pr;
     if (pr && hasConflicts(pr)) {
-      drafts.push({
-        title: 'Resolve conflicts',
-        prompt:
-          'Merge or rebase onto the base branch, resolve every conflict carefully, and push the result.',
-        kind: 'start-template',
-        template: 'resolve-conflicts',
-      });
+      drafts.push(builtinDraft('resolve-conflicts'));
     }
     if (pr && checksFailing(pr.checksRollup, pr.checksFailing)) {
-      drafts.push({
-        title: 'Fix CI',
-        prompt: 'Fix the failing CI checks on the current branch.',
-        kind: 'start-template',
-        template: 'fix-ci',
-      });
+      drafts.push(builtinDraft('fix-ci'));
     }
     if (pr && (pr.reviewCommentCount ?? 0) > 0) {
-      drafts.push({
-        title: 'Address review',
-        prompt: 'Address the pull request review feedback on the current branch.',
-        kind: 'start-template',
-        template: 'address-review',
-      });
+      drafts.push(builtinDraft('address-review'));
     }
   } else {
     // Match the agent header: offer draft PR whenever none is linked yet.
-    drafts.push({
-      title: 'Create PR (draft)',
-      prompt: CREATE_PR_PROMPT,
-      kind: 'start-template',
-      template: 'create-draft-pr',
-    });
+    drafts.push(builtinDraft('create-draft-pr'));
   }
 
   if (hasLocalWork) {
-    drafts.push({
-      title: 'Review changes',
-      prompt: REVIEW_PROMPT,
-      kind: 'start-template',
-      template: 'review',
-    });
+    drafts.push(builtinDraft('review-changes'));
   }
 
   return drafts;
@@ -158,7 +127,13 @@ export function mergeTaskSuggestionDrafts(
     if (!title || !prompt) continue;
     if (titles.has(title.toLowerCase())) continue;
     if (statusDrafts.some((s) => looksLikeStatusDuplicate(s, title, prompt))) continue;
-    merged.push({ title, prompt, kind: draft.kind ?? 'prompt' });
+    merged.push({
+      title,
+      description: draft.description,
+      prompt,
+      kind: draft.kind ?? 'prompt',
+      template: draft.template,
+    });
     titles.add(title.toLowerCase());
   }
 
@@ -173,6 +148,7 @@ export function toTaskSuggestions(
   return drafts.map((draft) => ({
     id: idFactory(),
     title: draft.title,
+    description: draft.description,
     prompt: draft.prompt,
     kind: draft.kind ?? 'prompt',
     template: draft.template,

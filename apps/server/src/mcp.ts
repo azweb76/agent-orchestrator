@@ -13,6 +13,7 @@ import { AnthropicService } from './services/anthropic.js';
 import type { AppContext } from './services/app-context.js';
 import { executeAssistantTool } from './services/assistant-tools.js';
 import { applyPersistedSecrets } from './services/setup.js';
+import { ensureBuiltInTaskFollowUps } from './services/task-followups.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config();
@@ -26,7 +27,7 @@ function createMcpContext(): AppContext {
   const db = initDatabase(dataDir);
   const repos = createRepositories(db);
   const claudeBin = process.env.CLAUDE_BIN ?? 'claude';
-  return {
+  const ctx: AppContext = {
     repos,
     git: new GitService(),
     github: new GitHubService({ token: process.env.GITHUB_TOKEN }),
@@ -39,6 +40,8 @@ function createMcpContext(): AppContext {
     anthropic: new AnthropicService(),
     dataDir,
   };
+  ensureBuiltInTaskFollowUps(ctx);
+  return ctx;
 }
 
 function assertMcpAuth(): void {

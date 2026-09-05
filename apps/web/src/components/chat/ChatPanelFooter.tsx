@@ -6,7 +6,6 @@ import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatComposer, type PendingImage, type QueuedChatItem } from './ChatComposer';
 import { CompactContinueBanner } from './CompactContinueBanner';
-import { DraftPrOfferBanner } from './DraftPrOfferBanner';
 import { InstructionDraftOfferBanner } from './InstructionDraftOfferBanner';
 import { TaskSuggestionsBanner } from './TaskSuggestionsBanner';
 import { CHAT_COLUMN_MAX_WIDTH } from './ChatTranscriptList';
@@ -14,7 +13,10 @@ import type { PendingMention } from './mentionComposer';
 
 interface ChatPanelFooterProps {
   agentId: string;
-  agent?: Pick<AgentDetail, 'draftPrOffer' | 'taskSuggestions' | 'instructionDraftOffer'>;
+  agent?: Pick<
+    AgentDetail,
+    'draftPrOffer' | 'taskSuggestions' | 'instructionDraftOffer' | 'worktree' | 'prStatus'
+  >;
   archived: boolean;
   activeSessionId: string;
   session?: ChatSession;
@@ -49,8 +51,6 @@ interface ChatPanelFooterProps {
   onRemoveQueued: (id: string) => void;
   onChatErrorClose: () => void;
   onRetryFailed: () => void;
-  onCreateDraftPr?: () => void;
-  creatingDraftPr?: boolean;
   onSelectTaskSuggestion?: (suggestion: TaskSuggestion) => void;
 }
 
@@ -86,8 +86,6 @@ export function ChatPanelFooter({
   onRemoveQueued,
   onChatErrorClose,
   onRetryFailed,
-  onCreateDraftPr,
-  creatingDraftPr,
   onSelectTaskSuggestion,
 }: ChatPanelFooterProps) {
   const keyboardInset = useVisualViewportInset();
@@ -125,26 +123,13 @@ export function ChatPanelFooter({
           />
         ) : null}
 
-        {!archived &&
-        agent &&
-        session &&
-        !agent.taskSuggestions?.suggestions.some(
-          (s) => s.kind === 'start-template' && s.template === 'create-draft-pr',
-        ) ? (
-          <DraftPrOfferBanner
-            agent={agent}
-            session={session}
-            isStreaming={sessionBusy}
-            onCreateDraftPr={() => onCreateDraftPr?.()}
-            creating={creatingDraftPr}
-          />
-        ) : null}
-
         {!archived && agent && session ? (
           <TaskSuggestionsBanner
+            agentId={agentId}
             agent={agent}
             session={session}
             isStreaming={sessionBusy}
+            archived={archived}
             onSelect={(suggestion) => onSelectTaskSuggestion?.(suggestion)}
           />
         ) : null}
