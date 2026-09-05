@@ -22,6 +22,7 @@ import type {
   InstructionDraft,
   InstructionFile,
   Message,
+  TaskSuggestionsOffer,
   PermissionRequest,
   PruneArchivedAgentsResponse,
   QueuedChatMessage,
@@ -68,6 +69,10 @@ export const apiAgents = {
     request<ChatSession>(`/agents/${agentId}/sessions/${sessionId}/grade`, {
       method: 'PUT',
       body: JSON.stringify(body),
+    }),
+  refreshTaskSuggestions: (agentId: string, sessionId: string) =>
+    request<TaskSuggestionsOffer>(`/agents/${agentId}/sessions/${sessionId}/task-suggestions`, {
+      method: 'POST',
     }),
   listInstructionFiles: (agentId: string) =>
     request<InstructionFile[]>(`/agents/${agentId}/instruction-files`),

@@ -104,6 +104,22 @@ export function registerSessionRoutes(router: express.Router, ctx: AppContext): 
   );
 
   router.post(
+    '/agents/:agentId/sessions/:sessionId/task-suggestions',
+    asyncHandler(async (req, res) => {
+      const { refreshTaskSuggestionsForSession } = await import(
+        '../services/task-suggestions.js'
+      );
+      res.json(
+        await refreshTaskSuggestionsForSession(
+          ctx,
+          param(req.params.agentId),
+          param(req.params.sessionId),
+        ),
+      );
+    }),
+  );
+
+  router.post(
     '/agents/:agentId/sessions/:sessionId/instruction-drafts',
     asyncHandler(async (req, res) => {
       const body = z

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Alert, Button, Stack } from '@mui/material';
+import { Alert, Button, CircularProgress, Stack } from '@mui/material';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
-import { useQuery } from '@tanstack/react-query';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   filterApplicableTaskFollowUps,
   type AgentDetail,
@@ -24,6 +25,7 @@ interface TaskSuggestionsBannerProps {
 /**
  * AI-selected follow-ups from the user-managed catalog. Live diffs only drop
  * status chips that are no longer applicable (never re-add AI-omitted ones).
+ * Users can refresh or trigger selection for the current idle session.
  */
 export function TaskSuggestionsBanner({
   agentId,
@@ -33,7 +35,9 @@ export function TaskSuggestionsBanner({
   archived,
   onSelect,
 }: TaskSuggestionsBannerProps) {
+  const queryClient = useQueryClient();
   const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const pendingQuery = useQuery({
     queryKey: ['diff', agentId, 'pending'],
@@ -46,6 +50,18 @@ export function TaskSuggestionsBanner({
     queryFn: () => api.getDiff(agentId, 'pr'),
     enabled: Boolean(agentId) && !archived,
     staleTime: 10_000,
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: (sessionId: string) => api.refreshTaskSuggestions(agentId, sessionId),
+    onSuccess: async () => {
+      setRefreshError(null);
+      setDismissedSessionId(null);
+      await queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+    },
+    onError: (error: Error) => {
+      setRefreshError(error.message || 'Failed to refresh follow-ups');
+    },
   });
 
   const suggestions = useMemo(() => {
@@ -88,10 +104,53 @@ export function TaskSuggestionsBanner({
     session,
   ]);
 
-  if (!session || isStreaming) return null;
+  if (!session || isStreaming || archived) return null;
   if (session.status !== 'idle') return null;
-  if (dismissedSessionId === session.id) return null;
-  if (!suggestions.length) return null;
+
+  const dismissed = dismissedSessionId === session.id;
+  const refreshing = refreshMutation.isPending;
+  const hasOffer = Boolean(
+    agent.taskSuggestions && agent.taskSuggestions.sessionId === session.id,
+  );
+  const showChips = !dismissed && suggestions.length > 0;
+
+  const refresh = () => {
+    if (refreshing) return;
+    setRefreshError(null);
+    refreshMutation.mutate(session.id);
+  };
+
+  if (!showChips) {
+    return (
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
+      >
+        <ControlTooltip title="Ask AI which follow-ups fit this session">
+          <Button
+            size="small"
+            variant="outlined"
+            color="inherit"
+            startIcon={
+              refreshing ? (
+                <CircularProgress color="inherit" size={14} />
+              ) : (
+                <LightbulbOutlinedIcon fontSize="small" />
+              )
+            }
+            disabled={refreshing}
+            onClick={refresh}
+          >
+            {hasOffer || dismissed ? 'Refresh follow-ups' : 'Suggest follow-ups'}
+          </Button>
+        </ControlTooltip>
+        {refreshError ? (
+          <span style={{ fontSize: 13, opacity: 0.85 }}>{refreshError}</span>
+        ) : null}
+      </Stack>
+    );
+  }
 
   return (
     <Alert
@@ -99,15 +158,36 @@ export function TaskSuggestionsBanner({
       icon={<LightbulbOutlinedIcon />}
       sx={{ mb: 1 }}
       action={
-        <ControlTooltip title="Dismiss these suggestions for now">
-          <Button color="inherit" size="small" onClick={() => setDismissedSessionId(session.id)}>
-            Dismiss
-          </Button>
-        </ControlTooltip>
+        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+          <ControlTooltip title="Regenerate follow-up suggestions">
+            <Button
+              color="inherit"
+              size="small"
+              startIcon={
+                refreshing ? <CircularProgress color="inherit" size={14} /> : <RefreshIcon />
+              }
+              disabled={refreshing}
+              onClick={refresh}
+            >
+              Refresh
+            </Button>
+          </ControlTooltip>
+          <ControlTooltip title="Dismiss these suggestions for now">
+            <Button
+              color="inherit"
+              size="small"
+              disabled={refreshing}
+              onClick={() => setDismissedSessionId(session.id)}
+            >
+              Dismiss
+            </Button>
+          </ControlTooltip>
+        </Stack>
       }
     >
       <Stack spacing={1}>
         <span>Suggested follow-ups for this session:</span>
+        {refreshError ? <span style={{ opacity: 0.85 }}>{refreshError}</span> : null}
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
           {suggestions.map((suggestion) => (
             <ControlTooltip
@@ -118,6 +198,7 @@ export function TaskSuggestionsBanner({
                 variant="outlined"
                 color="inherit"
                 size="small"
+                disabled={refreshing}
                 onClick={() => {
                   setDismissedSessionId(session.id);
                   onSelect(suggestion);

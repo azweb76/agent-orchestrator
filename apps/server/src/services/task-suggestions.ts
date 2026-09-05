@@ -10,6 +10,7 @@ import {
   type TaskSuggestionChangeStatus,
   type TaskSuggestionsOffer,
 } from '@agent-orchestrator/shared';
+import { requireAgent, requireSession } from './agent-core.js';
 import { type AppContext, makeEvent, notify } from './app-context.js';
 import { getCachedPrStatus } from './pr-status-cache.js';
 import {
@@ -247,16 +248,13 @@ function buildSelectionContext(
 }
 
 /**
- * After any session finishes cleanly, ask AI to pick follow-ups from the
- * user-managed catalog using agent context + recent assistant messages.
+ * Ask AI to pick follow-ups from the user-managed catalog using agent context
+ * + recent assistant messages, then persist and notify.
  */
-export async function maybeSuggestFollowUpTasks(
+export async function suggestFollowUpTasks(
   ctx: AppContext,
   session: ChatSession,
-  outcome: { stopped?: boolean; error?: string | null },
-): Promise<void> {
-  if (outcome.stopped || outcome.error) return;
-
+): Promise<TaskSuggestionsOffer> {
   ensureBuiltInTaskFollowUps(ctx);
   const changeStatus = await gatherTaskSuggestionChangeStatus(ctx, session.agentId);
   const catalog = listEnabledTaskFollowUps(ctx);
@@ -291,4 +289,36 @@ export async function maybeSuggestFollowUpTasks(
     sessionId: session.id,
     data: { suggestionCount: suggestions.length },
   });
+  return offer;
+}
+
+/**
+ * After any session finishes cleanly, generate follow-up suggestions.
+ */
+export async function maybeSuggestFollowUpTasks(
+  ctx: AppContext,
+  session: ChatSession,
+  outcome: { stopped?: boolean; error?: string | null },
+): Promise<void> {
+  if (outcome.stopped || outcome.error) return;
+  await suggestFollowUpTasks(ctx, session);
+}
+
+/**
+ * Manually refresh / trigger follow-ups for an idle session.
+ */
+export async function refreshTaskSuggestionsForSession(
+  ctx: AppContext,
+  agentId: string,
+  sessionId: string,
+): Promise<TaskSuggestionsOffer> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) {
+    throw new Error('Cannot refresh follow-ups for an archived agent');
+  }
+  const session = requireSession(ctx, agentId, sessionId);
+  if (session.status !== 'idle') {
+    throw new Error('Follow-ups can only be refreshed when the session is idle');
+  }
+  return suggestFollowUpTasks(ctx, session);
 }
