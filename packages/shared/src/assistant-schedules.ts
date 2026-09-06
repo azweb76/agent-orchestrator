@@ -76,9 +76,9 @@ export const REVIEW_SWEEP_CRON = '*/30 8-18 * * 1-5';
 export const MORNING_BRIEFING_PROMPT = `You are running a scheduled morning fleet briefing.
 
 1. Call get_work_queue (limit 12) and list_agents.
-2. Call get_status.
+2. Call get_status and get_usage_summary.
 3. Summarize: blocked agents (pending permissions), failing CI, review requests, open issues, and overall fleet health.
-4. If spend/usage context appears in tool results, include today's spend briefly.
+4. Include today's spend briefly from get_usage_summary.
 5. End with the top 3 recommended next actions (do not execute writes unless schedule policy allows and user already confirmed via auto_write_templates).
 
 Keep the reply concise and scannable for a human reading the Assistant thread.`;
@@ -141,6 +141,7 @@ export const AUTO_WRITE_TEMPLATE_TOOLS = new Set([
   'send_agent_message',
   'respond_permission',
   'dismiss_work_item',
+  'create_agent_pull_request',
 ]);
 
 export function schedulePolicyAllowsWrite(

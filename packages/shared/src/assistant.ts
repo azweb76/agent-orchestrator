@@ -2,6 +2,7 @@
 
 import { ASSISTANT_CORE_TOOLS } from './assistant-core-tools.js';
 import { ASSISTANT_ACTION_TOOLS } from './assistant-action-tools.js';
+import { ASSISTANT_DEPTH_TOOLS } from './assistant-depth-tools.js';
 import { ASSISTANT_SCHEDULE_TOOLS } from './assistant-schedule-tools.js';
 
 export type AssistantMessageRole = 'user' | 'assistant' | 'tool';
@@ -62,6 +63,7 @@ export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
   ...ASSISTANT_CORE_TOOLS,
   ...ASSISTANT_ACTION_TOOLS,
   ...ASSISTANT_SCHEDULE_TOOLS,
+  ...ASSISTANT_DEPTH_TOOLS,
 ];
 
 export function assistantToolByName(name: string): AssistantToolDefinition | undefined {
@@ -72,15 +74,21 @@ export const ASSISTANT_SYSTEM_PROMPT = `You are the Agent Orchestrator Assistant
 
 Use tools to inspect state before acting. Prefer list/get and get_work_queue first.
 
-For write tools (create_agent_from_goal, create_agent_from_github_issue, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task, create_schedule, schedule_once, pause_schedule, delete_schedule):
+For write tools (create_agent_from_goal, create_agent_from_github_issue, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task, create_schedule, schedule_once, pause_schedule, delete_schedule, create_agent_pull_request, create_agent_memory, update_agent_memory, set_automation_settings, trigger_automation_poll):
 - Explain what you will do and get the user's agreement in chat.
 - Only then call the tool with confirm=true.
-- Never invent workspace, agent, schedule, or task ids — look them up with tools.
+- Never invent workspace, agent, schedule, memory, or task ids — look them up with tools.
 
 Work queue actions:
 - Blocked agents → list_pending_permissions / respond_permission (or send the user to the agent for AskUserQuestion / ExitPlanMode).
-- Failing CI / review requests → start_agent_session with fix-ci or address-review.
+- Failing CI / review requests → get_pull_request (optional includeChecks) then start_agent_session with fix-ci or address-review.
 - GitHub issues → create_agent_from_github_issue.
+- Open a draft PR for an agent → create_agent_pull_request.
+
+Depth tools:
+- Memories → list_agent_memories / create_agent_memory / update_agent_memory (preferences, lessons, facts).
+- Spend → get_usage_summary (today + total + top agents).
+- GitHub automation → get_automation_settings / set_automation_settings / trigger_automation_poll.
 
 Schedules:
 - One-time delayed tasks ("say hi in 5m", "remind me in 1h") → schedule_once with runIn (5m, 1h, 30s) or runAt (ISO) and prompt set to the request.

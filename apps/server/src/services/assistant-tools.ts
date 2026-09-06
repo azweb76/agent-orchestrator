@@ -34,6 +34,17 @@ import {
   handleScheduleOnce,
 } from './assistant-tools-schedules.js';
 import {
+  handleCreateAgentMemory,
+  handleCreateAgentPullRequest,
+  handleGetAutomationSettings,
+  handleGetPullRequest,
+  handleGetUsageSummary,
+  handleListAgentMemories,
+  handleSetAutomationSettings,
+  handleTriggerAutomationPoll,
+  handleUpdateAgentMemory,
+} from './assistant-tools-depth.js';
+import {
   createFromGoalSchema,
   handleGetWorkQueue,
   handleListInbox,
@@ -311,6 +322,24 @@ async function dispatchAssistantTool(
       return handleDeleteSchedule(ctx, input, requireConfirm);
     case 'list_schedule_runs':
       return handleListScheduleRuns(ctx, input);
+    case 'get_pull_request':
+      return handleGetPullRequest(ctx, input);
+    case 'create_agent_pull_request':
+      return handleCreateAgentPullRequest(ctx, input, requireConfirm);
+    case 'list_agent_memories':
+      return handleListAgentMemories(ctx, input);
+    case 'create_agent_memory':
+      return handleCreateAgentMemory(ctx, input, requireConfirm);
+    case 'update_agent_memory':
+      return handleUpdateAgentMemory(ctx, input, requireConfirm);
+    case 'get_usage_summary':
+      return handleGetUsageSummary(ctx, input);
+    case 'get_automation_settings':
+      return handleGetAutomationSettings(ctx);
+    case 'set_automation_settings':
+      return handleSetAutomationSettings(ctx, input, requireConfirm);
+    case 'trigger_automation_poll':
+      return handleTriggerAutomationPoll(ctx, input, requireConfirm);
     default:
       return { content: JSON.stringify({ error: `Unhandled tool: ${def.name}` }), isError: true };
   }
