@@ -210,6 +210,24 @@ export {
   type AssistantToolRisk,
 } from './assistant.js';
 
+export {
+  AUTO_WRITE_TEMPLATE_TOOLS,
+  ASSISTANT_SCHEDULE_PLAYBOOKS,
+  ASSISTANT_SCHEDULE_POLICIES,
+  MORNING_BRIEFING_CRON,
+  MORNING_BRIEFING_PROMPT,
+  resolveSchedulePrompt,
+  schedulePolicyAllowsWrite,
+  type AssistantRun,
+  type AssistantRunStatus,
+  type AssistantSchedule,
+  type AssistantSchedulePlaybook,
+  type AssistantSchedulePolicy,
+  type AssistantScheduleStatus,
+} from './assistant-schedules.js';
+
+export { cronMatches, nextCronOccurrence, parseCron, zonedParts } from './cron.js';
+
 export type {
   CreateAiReadinessAgentRequest,
   WorkspaceAiCheck,

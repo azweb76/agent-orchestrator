@@ -176,6 +176,36 @@ function migrateSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_assistant_messages_created ON assistant_messages(created_at);
   `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS assistant_schedules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      cron TEXT NOT NULL,
+      timezone TEXT NOT NULL DEFAULT 'UTC',
+      policy TEXT NOT NULL,
+      playbook TEXT NOT NULL,
+      prompt TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      next_run_at TEXT,
+      last_run_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS assistant_runs (
+      id TEXT PRIMARY KEY,
+      schedule_id TEXT NOT NULL REFERENCES assistant_schedules(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      policy TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      summary TEXT,
+      error TEXT,
+      tool_calls_json TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE INDEX IF NOT EXISTS idx_assistant_schedules_next ON assistant_schedules(status, next_run_at);
+    CREATE INDEX IF NOT EXISTS idx_assistant_runs_schedule ON assistant_runs(schedule_id, started_at);
+  `);
 }
 
 function backfillSessionSearchIndexTable(db: Database.Database): void {

@@ -2,6 +2,7 @@
 
 import { ASSISTANT_CORE_TOOLS } from './assistant-core-tools.js';
 import { ASSISTANT_ACTION_TOOLS } from './assistant-action-tools.js';
+import { ASSISTANT_SCHEDULE_TOOLS } from './assistant-schedule-tools.js';
 
 export type AssistantMessageRole = 'user' | 'assistant' | 'tool';
 
@@ -60,6 +61,7 @@ export interface AssistantToolDefinition {
 export const ASSISTANT_TOOLS: AssistantToolDefinition[] = [
   ...ASSISTANT_CORE_TOOLS,
   ...ASSISTANT_ACTION_TOOLS,
+  ...ASSISTANT_SCHEDULE_TOOLS,
 ];
 
 export function assistantToolByName(name: string): AssistantToolDefinition | undefined {
@@ -70,15 +72,20 @@ export const ASSISTANT_SYSTEM_PROMPT = `You are the Agent Orchestrator Assistant
 
 Use tools to inspect state before acting. Prefer list/get and get_work_queue first.
 
-For write tools (create_agent_from_goal, create_agent_from_github_issue, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task):
+For write tools (create_agent_from_goal, create_agent_from_github_issue, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task, create_schedule, pause_schedule, delete_schedule):
 - Explain what you will do and get the user's agreement in chat.
 - Only then call the tool with confirm=true.
-- Never invent workspace, agent, or task ids — look them up with tools.
+- Never invent workspace, agent, schedule, or task ids — look them up with tools.
 
 Work queue actions:
 - Blocked agents → list_pending_permissions / respond_permission (or send the user to the agent for AskUserQuestion / ExitPlanMode).
 - Failing CI / review requests → start_agent_session with fix-ci or address-review.
 - GitHub issues → create_agent_from_github_issue.
+
+Schedules:
+- Use create_schedule / list_schedules / pause_schedule / delete_schedule / list_schedule_runs for cron playbooks.
+- Prefer playbook morning_fleet_briefing for weekday morning summaries (default cron 0 9 * * 1-5).
+- Policy notify_only and propose_in_chat never auto-write; auto_write_templates may auto-confirm template actions on schedule runs.
 
 When create_* or start_agent_session succeeds, tell the user the agent id and that they can open it in the UI.
 

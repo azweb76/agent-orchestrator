@@ -13,6 +13,7 @@ import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
 import { ensureBuiltInTaskFollowUps } from './services/task-followups.js';
 import { startGithubPollBus } from './services/github-poll-bus.js';
+import { startAssistantScheduleRunner } from './services/assistant-schedule-runner.js';
 import { startWatchdog } from './services/watchdog.js';
 import { optionalBearerAuth } from './auth.js';
 import { applyPersistedSecrets } from './services/setup.js';
@@ -72,6 +73,7 @@ const server = app.listen(port, host, () => {
   console.log(`Data directory: ${dataDir}`);
   recoverRunningAgents(ctx);
   startGithubPollBus(ctx);
+  startAssistantScheduleRunner(ctx);
   startWatchdog(ctx);
 });
 
