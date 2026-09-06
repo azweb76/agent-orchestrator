@@ -47,6 +47,12 @@ export class WorkspaceRepository {
     return row ? rowToWorkspace(row) : null;
   }
 
+  updateDefaultBranch(id: string, defaultBranch: string): void {
+    this.db
+      .prepare('UPDATE workspaces SET default_branch = ? WHERE id = ?')
+      .run(defaultBranch, id);
+  }
+
   delete(id: string): void {
     this.db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
   }

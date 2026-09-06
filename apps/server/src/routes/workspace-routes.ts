@@ -18,6 +18,10 @@ import {
   listWorkspaceMentionFiles,
   listWorkspaces,
   listWorktrees,
+  getWorkspaceSyncStatus,
+  pullWorkspaceDefaultBranch,
+  analyzeWorkspaceAiReadiness,
+  createAiReadinessAgent,
 } from '../services/app.js';
 import { asyncHandler, param } from './helpers.js';
 
@@ -199,6 +203,61 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
     asyncHandler(async (req, res) => {
       await deleteWorktree(ctx, param(req.params.worktreeId));
       res.status(204).end();
+    }),
+  );
+
+
+  router.get(
+    '/workspaces/:workspaceId/sync-status',
+    asyncHandler(async (req, res) => {
+      res.json(await getWorkspaceSyncStatus(ctx, param(req.params.workspaceId)));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/pull',
+    asyncHandler(async (req, res) => {
+      res.json(await pullWorkspaceDefaultBranch(ctx, param(req.params.workspaceId)));
+    }),
+  );
+
+  router.get(
+    '/workspaces/:workspaceId/ai-readiness',
+    asyncHandler(async (req, res) => {
+      res.json(await analyzeWorkspaceAiReadiness(ctx, param(req.params.workspaceId)));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/ai-readiness/implement',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          checkIds: z
+            .array(
+              z.enum([
+                'claude_md_present',
+                'agents_md_present',
+                'claude_imports_agents',
+                'claude_md_concise',
+                'agents_md_concise',
+                'has_commands',
+                'has_verification',
+                'has_boundaries',
+                'has_skills',
+                'not_second_readme',
+              ]),
+            )
+            .optional(),
+          task: z.string().min(1).max(63).optional(),
+          model: z.string().min(1).max(64).optional(),
+          effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+          overwrite: z.boolean().optional(),
+          branch: z.string().optional(),
+          name: z.string().optional(),
+        })
+        .parse(req.body ?? {});
+      res.status(201).json(await createAiReadinessAgent(ctx, param(req.params.workspaceId), body));
     }),
   );
 

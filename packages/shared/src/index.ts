@@ -209,3 +209,14 @@ export {
   type AssistantToolResultMeta,
   type AssistantToolRisk,
 } from './assistant.js';
+
+export type {
+  CreateAiReadinessAgentRequest,
+  WorkspaceAiCheck,
+  WorkspaceAiCheckId,
+  WorkspaceAiCheckStatus,
+  WorkspaceAiFileInfo,
+  WorkspaceAiLlmAdvice,
+  WorkspaceAiReadiness,
+  WorkspaceSyncStatus,
+} from './workspace-ai-readiness.js';
