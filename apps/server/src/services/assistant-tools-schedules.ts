@@ -111,7 +111,7 @@ export function handleCreateSchedule(
   assertTimezone(timezone);
 
   let cron = '';
-  let nextRunAt: string | null = null;
+  let nextRunAt: string | null;
   if (kind === 'cron') {
     const expression = body.cron?.trim();
     if (!expression) throw new Error('kind=cron requires cron');
