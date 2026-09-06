@@ -2,7 +2,8 @@ import { z } from 'zod';
 import {
   ASSISTANT_TOOLS,
   assistantToolByName,
-  buildWorkQueue,
+  schedulePolicyAllowsWrite,
+  type AssistantSchedulePolicy,
   type AssistantToolDefinition,
   type AssistantToolRisk,
 } from '@agent-orchestrator/shared';
@@ -10,9 +11,6 @@ import type { AppContext } from './app-context.js';
 import { listWorkspaces, listSidebarTree } from './workspaces.js';
 import { getAgentDetail, archiveAgent, stopAgent } from './agents-lifecycle.js';
 import { getSystemStatus } from './system-github.js';
-import { getPullRequestInbox } from './pull-requests.js';
-import { getIssueInbox } from './github-issues.js';
-import { getJiraIssueInbox } from './jira-issues.js';
 import { createWorktreeFromGoal } from './worktrees.js';
 import {
   handleCreateAgentTask,
@@ -21,14 +19,24 @@ import {
   handleUpdateAgentTask,
 } from './assistant-tools-tasks.js';
 import {
-  collectFailingPrs,
   handleCreateAgentFromGithubIssue,
   handleListPendingPermissions,
   handleRespondPermission,
   handleSendAgentMessage,
   handleStartAgentSession,
-  serializeWorkItemAction,
 } from './assistant-tools-actions.js';
+import {
+  handleCreateSchedule,
+  handleDeleteSchedule,
+  handleListScheduleRuns,
+  handleListSchedules,
+  handlePauseSchedule,
+} from './assistant-tools-schedules.js';
+import {
+  createFromGoalSchema,
+  handleGetWorkQueue,
+  handleListInbox,
+} from './assistant-tools-inbox.js';
 
 const DISMISSED_KEY = 'assistant.dismissedWorkItems';
 
@@ -37,6 +45,10 @@ export type AssistantToolExecution = {
   isError?: boolean;
   navigateTo?: string;
   agentId?: string;
+};
+
+export type AssistantToolOptions = {
+  schedulePolicy?: AssistantSchedulePolicy;
 };
 
 function requireConfirm(confirm: boolean | undefined, toolName: string): void {
@@ -63,25 +75,6 @@ function writeDismissedIds(ctx: AppContext, ids: Set<string>): void {
   ctx.repos.automationState.set(DISMISSED_KEY, JSON.stringify([...ids]));
 }
 
-const createFromGoalSchema = z.object({
-  workspaceId: z.string().min(1),
-  goal: z.string().min(1),
-  task: z.string().min(1).max(63),
-  name: z.string().optional(),
-  baseBranch: z.string().optional(),
-  model: z.string().min(1).max(64).optional(),
-  effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
-  confirm: z.boolean(),
-});
-
-async function safeInbox<T>(label: string, run: () => Promise<T>): Promise<T | { error: string }> {
-  try {
-    return await run();
-  } catch (error) {
-    return { error: `${label}: ${error instanceof Error ? error.message : String(error)}` };
-  }
-}
-
 export function anthropicToolsFromCatalog(
   tools: AssistantToolDefinition[] = ASSISTANT_TOOLS,
 ): Array<{ name: string; description: string; input_schema: AssistantToolDefinition['inputSchema'] }> {
@@ -96,15 +89,29 @@ export async function executeAssistantTool(
   ctx: AppContext,
   name: string,
   input: Record<string, unknown>,
+  options: AssistantToolOptions = {},
 ): Promise<AssistantToolExecution> {
   const def = assistantToolByName(name);
   if (!def) {
     return { content: JSON.stringify({ error: `Unknown tool: ${name}` }), isError: true };
   }
 
+  const gatedInput = { ...input };
+  if (options.schedulePolicy) {
+    const gate = schedulePolicyAllowsWrite(options.schedulePolicy, def.name, def.risk);
+    if (!gate.allow) {
+      return {
+        content: JSON.stringify({ error: gate.reason ?? 'Blocked by schedule policy' }),
+        isError: true,
+      };
+    }
+    if (gate.autoConfirm && def.risk === 'write') {
+      gatedInput.confirm = true;
+    }
+  }
+
   try {
-    const result = await dispatchAssistantTool(ctx, def, input);
-    return result;
+    return await dispatchAssistantTool(ctx, def, gatedInput);
   } catch (error) {
     return {
       content: JSON.stringify({
@@ -219,97 +226,10 @@ async function dispatchAssistantTool(
       const status = await getSystemStatus(ctx);
       return { content: JSON.stringify(status) };
     }
-    case 'get_work_queue': {
-      const limit =
-        typeof input.limit === 'number' && Number.isFinite(input.limit)
-          ? Math.min(20, Math.max(1, Math.floor(input.limit)))
-          : 8;
-      const tree = await listSidebarTree(ctx);
-      const agents = tree.flatMap((ws) =>
-        ws.agents.map((agent) => ({
-          id: agent.id,
-          name: agent.name,
-          workspaceName: ws.name,
-          status: agent.status,
-          pendingPermissionCount: agent.pendingPermissionCount,
-        })),
-      );
-      const inbox = await safeInbox('pulls', () => getPullRequestInbox(ctx));
-      const issues = await safeInbox('issues', () => getIssueInbox(ctx));
-      const jira = await safeInbox('jira', () => getJiraIssueInbox(ctx));
-      const queue = buildWorkQueue({
-        agents,
-        inbox: 'error' in inbox ? null : inbox,
-        failingPrs: await collectFailingPrs(ctx, 'error' in inbox ? null : inbox),
-        githubIssues: 'error' in issues ? [] : issues.assigned,
-        jiraIssues: 'error' in jira ? [] : jira.assigned,
-        dismissedIds: readDismissedIds(ctx),
-        limit,
-      });
-      return {
-        content: JSON.stringify({
-          summary: queue.summary,
-          items: queue.items.map((item) => ({
-            id: item.id,
-            kind: item.kind,
-            title: item.title,
-            subtitle: item.subtitle,
-            actionLabel: item.actionLabel,
-            actionType: item.action.type,
-            action: serializeWorkItemAction(item.action),
-          })),
-          inboxErrors: {
-            pulls: 'error' in inbox ? inbox.error : null,
-            issues: 'error' in issues ? issues.error : null,
-            jira: 'error' in jira ? jira.error : null,
-          },
-        }),
-      };
-    }
-    case 'list_inbox': {
-      const pulls = await safeInbox('pulls', () => getPullRequestInbox(ctx));
-      const issues = await safeInbox('issues', () => getIssueInbox(ctx));
-      const jira = await safeInbox('jira', () => getJiraIssueInbox(ctx));
-      return {
-        content: JSON.stringify({
-          pulls:
-            'error' in pulls
-              ? pulls
-              : {
-                  authored: pulls.authored.slice(0, 10).map((pr) => ({
-                    number: pr.number,
-                    title: pr.title,
-                    repo: `${pr.owner}/${pr.repo}`,
-                    url: pr.htmlUrl,
-                  })),
-                  reviewRequested: pulls.reviewRequested.slice(0, 10).map((pr) => ({
-                    number: pr.number,
-                    title: pr.title,
-                    repo: `${pr.owner}/${pr.repo}`,
-                    url: pr.htmlUrl,
-                  })),
-                },
-          githubIssues:
-            'error' in issues
-              ? issues
-              : issues.assigned.slice(0, 15).map((issue) => ({
-                  number: issue.number,
-                  title: issue.title,
-                  repo: `${issue.owner}/${issue.repo}`,
-                  url: issue.htmlUrl,
-                  workspaceId: issue.workspaceId,
-                })),
-          jiraIssues:
-            'error' in jira
-              ? jira
-              : jira.assigned.slice(0, 15).map((issue) => ({
-                  key: issue.key,
-                  summary: issue.summary,
-                  url: issue.htmlUrl,
-                })),
-        }),
-      };
-    }
+    case 'get_work_queue':
+      return handleGetWorkQueue(ctx, input, readDismissedIds);
+    case 'list_inbox':
+      return handleListInbox(ctx);
     case 'create_agent_from_goal': {
       const body = createFromGoalSchema.parse(input);
       requireConfirm(body.confirm, def.name);
@@ -378,6 +298,16 @@ async function dispatchAssistantTool(
       return handleListPendingPermissions(ctx, input);
     case 'respond_permission':
       return handleRespondPermission(ctx, input, requireConfirm);
+    case 'list_schedules':
+      return handleListSchedules(ctx, input);
+    case 'create_schedule':
+      return handleCreateSchedule(ctx, input, requireConfirm);
+    case 'pause_schedule':
+      return handlePauseSchedule(ctx, input, requireConfirm);
+    case 'delete_schedule':
+      return handleDeleteSchedule(ctx, input, requireConfirm);
+    case 'list_schedule_runs':
+      return handleListScheduleRuns(ctx, input);
     default:
       return { content: JSON.stringify({ error: `Unhandled tool: ${def.name}` }), isError: true };
   }

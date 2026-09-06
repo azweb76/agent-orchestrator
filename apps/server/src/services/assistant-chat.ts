@@ -4,6 +4,7 @@ import {
   ASSISTANT_SYSTEM_PROMPT,
   type AssistantChatResponse,
   type AssistantMessage,
+  type AssistantSchedulePolicy,
 } from '@agent-orchestrator/shared';
 import { createAnthropicClient, resolveAnthropicAuth } from './anthropic-credentials.js';
 import { type AppContext, nowIso } from './app-context.js';
@@ -14,6 +15,11 @@ const MAX_TOKENS = 4096;
 const MAX_TOOL_ROUNDS = 8;
 
 type ApiMessage = Anthropic.MessageParam;
+
+export type AssistantChatOptions = {
+  schedulePolicy?: AssistantSchedulePolicy;
+  source?: 'chat' | 'schedule';
+};
 
 function textFromContent(content: Anthropic.ContentBlock[]): string {
   return content
@@ -93,6 +99,7 @@ export function clearAssistantMessages(ctx: AppContext): void {
 export async function runAssistantChat(
   ctx: AppContext,
   content: string,
+  options: AssistantChatOptions = {},
 ): Promise<AssistantChatResponse> {
   const trimmed = content.trim();
   if (!trimmed) throw new Error('Message is required');
@@ -145,6 +152,7 @@ export async function runAssistantChat(
         ctx,
         block.name,
         block.input as Record<string, unknown>,
+        { schedulePolicy: options.schedulePolicy },
       );
       const toolMsg = persist(ctx, {
         role: 'tool',
