@@ -349,4 +349,16 @@ export function toolRisk(name: string): AssistantToolRisk | undefined {
   return assistantToolByName(name)?.risk;
 }
 
+export async function getAssistantWorkQueue(
+  ctx: AppContext,
+  limit = 8,
+): Promise<Record<string, unknown>> {
+  const result = await handleGetWorkQueue(ctx, { limit }, readDismissedIds);
+  try {
+    return JSON.parse(result.content) as Record<string, unknown>;
+  } catch {
+    return { summary: '', items: [], error: 'Failed to parse work queue' };
+  }
+}
+
 export { readDismissedIds, DISMISSED_KEY };

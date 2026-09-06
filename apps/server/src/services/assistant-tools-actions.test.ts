@@ -148,3 +148,16 @@ test('list_pending_permissions returns empty list when none pending', async () =
   assert.equal(payload.count, 0);
   assert.deepEqual(payload.pending, []);
 });
+
+test('getAssistantWorkQueue returns parsed queue payload for HTTP', async () => {
+  const { getAssistantWorkQueue } = await import('./assistant-tools.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-assistant-wq-http-'));
+  const ctx = makeCtx(tmp);
+  ctx.github.listAuthoredOpenPullRequests = async () => [];
+  ctx.github.listReviewRequestedPullRequests = async () => [];
+  ctx.github.isRepoArchived = async () => false;
+
+  const payload = await getAssistantWorkQueue(ctx, 5);
+  assert.equal(typeof payload.summary, 'string');
+  assert.ok(Array.isArray(payload.items));
+});
