@@ -210,6 +210,8 @@ export {
   type AssistantToolRisk,
 } from './assistant.js';
 
+export { ASSISTANT_DEPTH_TOOLS } from './assistant-depth-tools.js';
+
 export {
   AUTO_WRITE_TEMPLATE_TOOLS,
   ASSISTANT_SCHEDULE_KINDS,
