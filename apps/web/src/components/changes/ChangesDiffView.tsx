@@ -41,7 +41,8 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
   const filtering = Boolean(filter.trim());
 
   useEffect(() => {
-    setExpanded(new Set(filtering ? allDirPaths(tree) : defaultExpandedDirs(tree)));
+    const dirs = filtering || visibleFiles.length <= 12 ? allDirPaths(tree) : defaultExpandedDirs(tree);
+    setExpanded(new Set(dirs));
     setSelectedPath((prev) => {
       if (prev && visibleFiles.some((file) => file.path === prev)) return prev;
       return visibleFiles[0]?.path ?? null;
@@ -160,9 +161,9 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
               placeholder="Filter files…"
-              aria-label="Filter changed files"
               slotProps={{
                 input: {
+                  'aria-label': 'Filter changed files',
                   startAdornment: (
                     <InputAdornment position="start">
                       <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
