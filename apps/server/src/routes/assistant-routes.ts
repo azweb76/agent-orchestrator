@@ -64,9 +64,12 @@ export function registerAssistantRoutes(router: express.Router, ctx: AppContext)
     }
     res.flushHeaders?.();
 
+    // Abort only when the *response* is closed by the client mid-stream.
+    // Do not listen to req 'close' — that fires after the POST body is consumed
+    // and would cancel the turn before tokens arrive.
     const abort = new AbortController();
-    req.on('close', () => {
-      abort.abort();
+    res.on('close', () => {
+      if (!res.writableEnded) abort.abort();
     });
 
     void runAssistantChat(ctx, parsed.data.content, {
@@ -80,18 +83,18 @@ export function registerAssistantRoutes(router: express.Router, ctx: AppContext)
       },
     })
       .then(() => {
-        res.end();
+        if (!res.writableEnded) res.end();
       })
       .catch((error: unknown) => {
-        if (!abort.signal.aborted) {
+        if (!res.writableEnded) {
           const message = error instanceof Error ? error.message : String(error);
           try {
             writeAssistantSse(res, { type: 'error', message });
           } catch {
             // client gone
           }
+          res.end();
         }
-        res.end();
       });
   });
 }
