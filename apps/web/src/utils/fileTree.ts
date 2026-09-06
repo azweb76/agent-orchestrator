@@ -70,3 +70,28 @@ export function defaultExpandedDirs(nodes: FileTreeNode[], maxDepth = 2): string
   walk(nodes, 0);
   return expanded;
 }
+
+/** Collect every directory path in the tree (for expand-all). */
+export function allDirPaths(nodes: FileTreeNode[]): string[] {
+  const paths: string[] = [];
+  const walk = (list: FileTreeNode[]) => {
+    for (const node of list) {
+      if (node.type !== 'dir') continue;
+      paths.push(node.path);
+      walk(node.children);
+    }
+  };
+  walk(nodes);
+  return paths;
+}
+
+/** Case-insensitive path filter for the Changes file tree. */
+export function filterDiffFiles(files: DiffFile[], query: string): DiffFile[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return files;
+  return files.filter(
+    (file) =>
+      file.path.toLowerCase().includes(needle) ||
+      (file.previousPath?.toLowerCase().includes(needle) ?? false),
+  );
+}

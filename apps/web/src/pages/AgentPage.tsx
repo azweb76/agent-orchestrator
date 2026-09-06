@@ -21,6 +21,11 @@ export function AgentPage() {
   return <AgentPageContent key={agentId} agentId={agentId} />;
 }
 
+function countDiffFiles(patch: string | undefined): number {
+  if (!patch?.trim()) return 0;
+  return (patch.match(/^diff --git /gm) ?? []).length;
+}
+
 function AgentPageContent({ agentId }: { agentId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -85,6 +90,14 @@ function AgentPageContent({ agentId }: { agentId: string }) {
       return false;
     },
   });
+
+  const pendingDiffQuery = useQuery({
+    queryKey: ['diff', agentId, 'pending'],
+    queryFn: () => api.getDiff(agentId, 'pending'),
+    enabled: Boolean(agentId) && !agentQuery.data?.archivedAt,
+    staleTime: 10_000,
+  });
+  const pendingFileCount = countDiffFiles(pendingDiffQuery.data?.patch);
 
   const openCommitDialog = (opts: { push: boolean; hasPendingChanges: boolean }) => {
     commitMutation.reset();
@@ -172,7 +185,10 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           }}
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
-          <Tab label="Changes" sx={{ minHeight: 40, py: 1 }} />
+          <Tab
+            label={pendingFileCount > 0 ? `Changes (${pendingFileCount})` : 'Changes'}
+            sx={{ minHeight: 40, py: 1 }}
+          />
           <Tab label="Memory" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
@@ -214,6 +230,9 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             diffScope={diffScope}
             onDiffScopeChange={setDiffScope}
             enabled={tab === 1}
+            archived={archived}
+            onCommit={() => openCommitDialog({ push: false, hasPendingChanges: true })}
+            onCommitAndPush={() => openCommitDialog({ push: true, hasPendingChanges: true })}
           />
         </Box>
 

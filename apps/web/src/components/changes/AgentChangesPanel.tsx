@@ -2,6 +2,7 @@ import { memo } from 'react';
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   IconButton,
   Stack,
@@ -9,7 +10,9 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import CommitOutlinedIcon from '@mui/icons-material/CommitOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
 import { useQuery } from '@tanstack/react-query';
 import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
@@ -23,6 +26,9 @@ export interface AgentChangesPanelProps {
   diffScope: AgentDiffScope;
   onDiffScopeChange: (scope: AgentDiffScope) => void;
   enabled?: boolean;
+  archived?: boolean;
+  onCommit?: () => void;
+  onCommitAndPush?: () => void;
 }
 
 /** Pending / PR diff viewer for an agent worktree. */
@@ -32,12 +38,19 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
   diffScope,
   onDiffScopeChange,
   enabled = true,
+  archived = false,
+  onCommit,
+  onCommitAndPush,
 }: AgentChangesPanelProps) {
   const diffQuery = useQuery({
     queryKey: ['diff', agentId, diffScope],
     queryFn: () => api.getDiff(agentId, diffScope),
     enabled: Boolean(agentId) && enabled,
   });
+
+  const hasPatch = Boolean(diffQuery.data?.patch);
+  const showCommitActions =
+    !archived && diffScope === 'pending' && hasPatch && (onCommit || onCommitAndPush);
 
   return (
     <Stack spacing={1.5} sx={{ height: '100%', minHeight: 0, p: { xs: 1.5, md: 1.25 } }}>
@@ -46,22 +59,54 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
         spacing={1}
         sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', flexShrink: 0 }}
       >
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            Local path
-          </Typography>
+        <ControlTooltip title={worktreePath}>
           <Typography
-            variant="body2"
+            variant="caption"
+            color="text.secondary"
+            noWrap
             sx={{
+              minWidth: 0,
+              maxWidth: { sm: 280, md: 360 },
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-              fontSize: 12,
-              wordBreak: 'break-all',
+              fontSize: 11.5,
             }}
           >
             {worktreePath}
           </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+        </ControlTooltip>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}
+        >
+          {showCommitActions ? (
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+              {onCommit ? (
+                <ControlTooltip title="Commit pending changes locally">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<CommitOutlinedIcon />}
+                    onClick={onCommit}
+                  >
+                    Commit
+                  </Button>
+                </ControlTooltip>
+              ) : null}
+              {onCommitAndPush ? (
+                <ControlTooltip title="Commit pending changes and push to origin">
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<UploadOutlinedIcon />}
+                    onClick={onCommitAndPush}
+                  >
+                    Commit &amp; push
+                  </Button>
+                </ControlTooltip>
+              ) : null}
+            </Stack>
+          ) : null}
           <ToggleButtonGroup
             size="small"
             exclusive
