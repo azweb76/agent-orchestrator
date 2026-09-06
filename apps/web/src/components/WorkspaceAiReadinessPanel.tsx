@@ -12,12 +12,15 @@ import {
   Typography,
 } from '@mui/material';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { WorkspaceAiCheck, WorkspaceAiCheckStatus } from '@agent-orchestrator/shared';
+import type { WorkspaceAiCheck, WorkspaceAiCheckStatus, WorkspaceAiReadiness } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ControlTooltip } from './ui/ControlTooltip';
+import { EmptyState } from './ui/EmptyState';
 
 function statusColor(
   status: WorkspaceAiCheckStatus,
@@ -55,45 +58,21 @@ function CheckRow({ check }: { check: WorkspaceAiCheck }) {
   );
 }
 
-export function WorkspaceAiReadinessPanel({ workspaceId }: { workspaceId: string }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const readinessQuery = useQuery({
-    queryKey: ['workspace-ai-readiness', workspaceId],
-    queryFn: () => api.getAiReadiness(workspaceId),
-    enabled: Boolean(workspaceId),
-  });
-
-  const implement = useMutation({
-    mutationFn: () => api.createAiReadinessAgent(workspaceId, { task: 'auto' }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      navigate(`/agents/${data.agent.id}`, {
-        state: { initialPrompt: data.kickoffPrompt },
-      });
-    },
-  });
-
-  if (readinessQuery.isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-        <CircularProgress size={28} />
-      </Box>
-    );
-  }
-
-  if (readinessQuery.error || !readinessQuery.data) {
-    return (
-      <Alert severity="error">
-        {(readinessQuery.error as Error)?.message ?? 'Failed to analyze AI readiness'}
-      </Alert>
-    );
-  }
-
-  const readiness = readinessQuery.data;
+function ReadinessResult({
+  readiness,
+  analyzing,
+  onRefresh,
+  implementPending,
+  implementError,
+  onImplement,
+}: {
+  readiness: WorkspaceAiReadiness;
+  analyzing: boolean;
+  onRefresh: () => void;
+  implementPending: boolean;
+  implementError: Error | null;
+  onImplement: () => void;
+}) {
   const scorePct =
     readiness.maxScore > 0 ? Math.round((readiness.score / readiness.maxScore) * 100) : 0;
   const needsWork = readiness.checks.some((c) => c.status === 'fail' || c.status === 'warn');
@@ -110,7 +89,7 @@ export function WorkspaceAiReadinessPanel({ workspaceId }: { workspaceId: string
           <Typography variant="body2" color="text.secondary">
             Analyzed {readiness.analyzedRef}
             {readiness.analyzedSha ? ` @ ${readiness.analyzedSha}` : ''} · score {readiness.score}/
-            {readiness.maxScore}
+            {readiness.maxScore} · cached {new Date(readiness.checkedAt).toLocaleString()}
           </Typography>
           <LinearProgress
             variant="determinate"
@@ -119,14 +98,14 @@ export function WorkspaceAiReadinessPanel({ workspaceId }: { workspaceId: string
           />
         </Box>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-          <ControlTooltip title="Re-run deterministic checks and LLM advice">
+          <ControlTooltip title="Re-run deterministic checks and LLM advice, then update the cache">
             <Button
               variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={() => readinessQuery.refetch()}
-              disabled={readinessQuery.isFetching}
+              startIcon={analyzing ? <CircularProgress size={16} /> : <RefreshIcon />}
+              onClick={onRefresh}
+              disabled={analyzing}
             >
-              Refresh
+              {analyzing ? 'Analyzing…' : 'Refresh'}
             </Button>
           </ControlTooltip>
           <ControlTooltip title="Create an agent on a new branch to implement the recommended instruction-file improvements">
@@ -134,19 +113,17 @@ export function WorkspaceAiReadinessPanel({ workspaceId }: { workspaceId: string
               <Button
                 variant="contained"
                 startIcon={<AutoFixHighIcon />}
-                disabled={!needsWork || implement.isPending}
-                onClick={() => implement.mutate()}
+                disabled={!needsWork || implementPending || analyzing}
+                onClick={onImplement}
               >
-                {implement.isPending ? 'Creating…' : 'Create agent to implement'}
+                {implementPending ? 'Creating…' : 'Create agent to implement'}
               </Button>
             </span>
           </ControlTooltip>
         </Stack>
       </Stack>
 
-      {implement.error ? (
-        <Alert severity="error">{(implement.error as Error).message}</Alert>
-      ) : null}
+      {implementError ? <Alert severity="error">{implementError.message}</Alert> : null}
 
       {readiness.llmError ? (
         <Alert severity="warning">
@@ -186,5 +163,92 @@ export function WorkspaceAiReadinessPanel({ workspaceId }: { workspaceId: string
         </Typography>
       ) : null}
     </Stack>
+  );
+}
+
+export function WorkspaceAiReadinessPanel({ workspaceId }: { workspaceId: string }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const cacheKey = ['workspace-ai-readiness', workspaceId] as const;
+
+  const cacheQuery = useQuery({
+    queryKey: cacheKey,
+    queryFn: () => api.getAiReadiness(workspaceId),
+    enabled: Boolean(workspaceId),
+  });
+
+  const analyze = useMutation({
+    mutationFn: () => api.analyzeAiReadiness(workspaceId),
+    onSuccess: (readiness) => {
+      queryClient.setQueryData(cacheKey, { readiness });
+    },
+  });
+
+  const implement = useMutation({
+    mutationFn: () => api.createAiReadinessAgent(workspaceId, { task: 'auto' }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['worktrees', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      queryClient.setQueryData(cacheKey, { readiness: data.readiness });
+      navigate(`/agents/${data.agent.id}`, {
+        state: { initialPrompt: data.kickoffPrompt },
+      });
+    },
+  });
+
+  if (cacheQuery.isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+        <CircularProgress size={28} />
+      </Box>
+    );
+  }
+
+  if (cacheQuery.error) {
+    return (
+      <Alert severity="error">
+        {(cacheQuery.error as Error)?.message ?? 'Failed to load AI readiness cache'}
+      </Alert>
+    );
+  }
+
+  const readiness = cacheQuery.data?.readiness ?? null;
+
+  if (!readiness) {
+    return (
+      <Stack spacing={2}>
+        {analyze.error ? (
+          <Alert severity="error">{(analyze.error as Error).message}</Alert>
+        ) : null}
+        <EmptyState
+          compact
+          icon={<AssessmentOutlinedIcon />}
+          title="AI Readiness not analyzed yet"
+          description="Run analysis on the default branch to check CLAUDE.md / AGENTS.md setup. Results are cached until you refresh."
+          action={
+            <Button
+              variant="contained"
+              startIcon={analyze.isPending ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon />}
+              disabled={analyze.isPending}
+              onClick={() => analyze.mutate()}
+            >
+              {analyze.isPending ? 'Analyzing…' : 'Run analysis'}
+            </Button>
+          }
+        />
+      </Stack>
+    );
+  }
+
+  return (
+    <ReadinessResult
+      readiness={readiness}
+      analyzing={analyze.isPending}
+      onRefresh={() => analyze.mutate()}
+      implementPending={implement.isPending}
+      implementError={(implement.error as Error | null) ?? null}
+      onImplement={() => implement.mutate()}
+    />
   );
 }
