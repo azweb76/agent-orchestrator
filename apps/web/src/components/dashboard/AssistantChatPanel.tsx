@@ -19,6 +19,7 @@ import type { AssistantMessage } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { MarkdownContent } from '../chat/MarkdownContent';
+import { AssistantStarterChips } from './AssistantStarterChips';
 
 function formatClock(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -251,7 +252,7 @@ export function AssistantChatPanel() {
         }}
       >
         {messages.length === 0 && !chat.isPending ? (
-          <Stack spacing={0.75} sx={{ py: 3, px: 1, alignItems: 'flex-start' }}>
+          <Stack spacing={1} sx={{ py: 3, px: 1, alignItems: 'flex-start' }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Avatar
                 sx={{
@@ -268,6 +269,13 @@ export function AssistantChatPanel() {
                 send a message.
               </Typography>
             </Stack>
+            <AssistantStarterChips
+              disabled={chat.isPending}
+              onPick={(prompt) => {
+                setDraft('');
+                chat.mutate(prompt);
+              }}
+            />
           </Stack>
         ) : (
           <Stack spacing={1.75}>

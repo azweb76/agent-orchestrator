@@ -20,6 +20,15 @@ import {
   handleListAgentTasks,
   handleUpdateAgentTask,
 } from './assistant-tools-tasks.js';
+import {
+  collectFailingPrs,
+  handleCreateAgentFromGithubIssue,
+  handleListPendingPermissions,
+  handleRespondPermission,
+  handleSendAgentMessage,
+  handleStartAgentSession,
+  serializeWorkItemAction,
+} from './assistant-tools-actions.js';
 
 const DISMISSED_KEY = 'assistant.dismissedWorkItems';
 
@@ -231,7 +240,7 @@ async function dispatchAssistantTool(
       const queue = buildWorkQueue({
         agents,
         inbox: 'error' in inbox ? null : inbox,
-        failingPrs: [],
+        failingPrs: await collectFailingPrs(ctx, 'error' in inbox ? null : inbox),
         githubIssues: 'error' in issues ? [] : issues.assigned,
         jiraIssues: 'error' in jira ? [] : jira.assigned,
         dismissedIds: readDismissedIds(ctx),
@@ -247,6 +256,7 @@ async function dispatchAssistantTool(
             subtitle: item.subtitle,
             actionLabel: item.actionLabel,
             actionType: item.action.type,
+            action: serializeWorkItemAction(item.action),
           })),
           inboxErrors: {
             pulls: 'error' in inbox ? inbox.error : null,
@@ -358,6 +368,16 @@ async function dispatchAssistantTool(
       writeDismissedIds(ctx, ids);
       return { content: JSON.stringify({ ok: true, workItemId, dismissedCount: ids.size }) };
     }
+    case 'start_agent_session':
+      return handleStartAgentSession(ctx, input, requireConfirm);
+    case 'create_agent_from_github_issue':
+      return handleCreateAgentFromGithubIssue(ctx, input, requireConfirm);
+    case 'send_agent_message':
+      return handleSendAgentMessage(ctx, input, requireConfirm);
+    case 'list_pending_permissions':
+      return handleListPendingPermissions(ctx, input);
+    case 'respond_permission':
+      return handleRespondPermission(ctx, input, requireConfirm);
     default:
       return { content: JSON.stringify({ error: `Unhandled tool: ${def.name}` }), isError: true };
   }
