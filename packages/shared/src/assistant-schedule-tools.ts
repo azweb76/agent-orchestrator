@@ -66,7 +66,8 @@ export const ASSISTANT_SCHEDULE_TOOLS: AssistantToolDefinition[] = [
         playbook: {
           type: 'string',
           enum: [...ASSISTANT_SCHEDULE_PLAYBOOKS],
-          description: 'Built-in morning_fleet_briefing or custom prompt',
+          description:
+            'Built-in morning_fleet_briefing / ci_sweep / review_sweep, or custom prompt',
         },
         prompt: {
           type: 'string',

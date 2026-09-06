@@ -54,8 +54,9 @@ export function AutomationSettingsSection() {
     <Stack spacing={2}>
       <Alert severity="info" icon={<SyncOutlinedIcon />}>
         GitHub automations are opt-in and default off. Enabling polling lets the server watch linked
-        PRs for CI, review, and merge events. Each action may start a Claude session and spend
-        tokens.
+        PRs for CI, review, and merge events. Auto Fix CI / Address review posts into the Assistant
+        thread (same audit trail as ci_sweep / review_sweep schedules). Each action may start a
+        Claude session and spend tokens.
       </Alert>
       <Box>
         <Button

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ASSISTANT_TOOLS, MORNING_BRIEFING_CRON } from '@agent-orchestrator/shared';
+import { ASSISTANT_TOOLS, CI_SWEEP_CRON, MORNING_BRIEFING_CRON, REVIEW_SWEEP_CRON } from '@agent-orchestrator/shared';
 import { createRepositories, initDatabase } from '../db/index.js';
 import type { AppContext } from './app-context.js';
 import { AnthropicService } from './anthropic.js';
@@ -12,7 +12,11 @@ import { GitHubService } from './github.js';
 import { JiraService } from './jira.js';
 import { executeAssistantTool } from './assistant-tools.js';
 import { runAssistantSchedulesOnce } from './assistant-schedule-runner.js';
-import { defaultMorningBriefingInput } from './assistant-tools-schedules.js';
+import {
+  defaultCiSweepInput,
+  defaultMorningBriefingInput,
+  defaultReviewSweepInput,
+} from './assistant-tools-schedules.js';
 
 function makeCtx(tmp: string): AppContext {
   const db = initDatabase(tmp);
@@ -189,6 +193,73 @@ test('cron helpers match weekday morning briefing', async () => {
     schedulePolicyAllowsWrite('auto_write_templates', 'start_agent_session', 'write').autoConfirm,
     true,
   );
+});
+
+test('create_schedule persists ci_sweep and review_sweep playbooks', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-sched-sweep-'));
+  const ctx = makeCtx(tmp);
+
+  const ci = await executeAssistantTool(ctx, 'create_schedule', defaultCiSweepInput('UTC'));
+  assert.equal(ci.isError, undefined);
+  const ciBody = JSON.parse(ci.content) as {
+    schedule: { playbook: string; cron: string; policy: string };
+  };
+  assert.equal(ciBody.schedule.playbook, 'ci_sweep');
+  assert.equal(ciBody.schedule.cron, CI_SWEEP_CRON);
+  assert.equal(ciBody.schedule.policy, 'auto_write_templates');
+
+  const review = await executeAssistantTool(ctx, 'create_schedule', defaultReviewSweepInput('UTC'));
+  assert.equal(review.isError, undefined);
+  const reviewBody = JSON.parse(review.content) as {
+    schedule: { playbook: string; cron: string };
+  };
+  assert.equal(reviewBody.schedule.playbook, 'review_sweep');
+  assert.equal(reviewBody.schedule.cron, REVIEW_SWEEP_CRON);
+
+  const { resolveSchedulePrompt } = await import('@agent-orchestrator/shared');
+  assert.match(
+    resolveSchedulePrompt({ kind: 'cron', playbook: 'ci_sweep', prompt: null }),
+    /CI sweep/i,
+  );
+  assert.match(
+    resolveSchedulePrompt({ kind: 'cron', playbook: 'review_sweep', prompt: null }),
+    /review sweep/i,
+  );
+});
+
+test('ci_sweep schedule runner uses CI sweep prompt', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-sched-ci-run-'));
+  const ctx = makeCtx(tmp);
+  const created = await executeAssistantTool(ctx, 'create_schedule', defaultCiSweepInput('UTC'));
+  const { schedule } = JSON.parse(created.content) as { schedule: { id: string } };
+  const row = ctx.repos.assistantSchedules.getById(schedule.id)!;
+  ctx.repos.assistantSchedules.update({
+    ...row,
+    nextRunAt: new Date(Date.now() - 60_000).toISOString(),
+  });
+
+  let sawPrompt = false;
+  const result = await runAssistantSchedulesOnce(ctx, {
+    runChat: async (chatCtx, content) => {
+      sawPrompt = /CI sweep/i.test(content) && /fix-ci/i.test(content);
+      const msg = {
+        id: 'ci-a1',
+        role: 'assistant' as const,
+        content: 'CI sweep stub: no failing PRs',
+        createdAt: new Date().toISOString(),
+      };
+      chatCtx.repos.assistantMessages.create({
+        id: 'ci-u1',
+        role: 'user',
+        content,
+        createdAt: new Date().toISOString(),
+      });
+      chatCtx.repos.assistantMessages.create(msg);
+      return { messages: [msg] };
+    },
+  });
+  assert.equal(result.ran, 1);
+  assert.equal(sawPrompt, true);
 });
 
 
