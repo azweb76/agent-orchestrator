@@ -268,6 +268,20 @@ export class AnthropicService {
       Boolean(input.existingContent && input.existingContent.trim()),
     );
   }
+
+  /** Lightweight JSON-oriented completion for workspace AI readiness advice. */
+  async completeJsonAdvice(input: { system: string; user: string }): Promise<string> {
+    const anthropic = await client();
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 2000,
+      system: input.system,
+      messages: [{ role: 'user', content: input.user }],
+    });
+    return response.content
+      .map((block) => (block.type === 'text' ? block.text : ''))
+      .join('');
+  }
 }
 
 export function sanitizeBranchName(input: string): string {

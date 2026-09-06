@@ -13,6 +13,9 @@ import type {
   WorkspaceWithCounts,
   WorktreeFileEntry,
   WorktreeWithAgent,
+  WorkspaceSyncStatus,
+  WorkspaceAiReadiness,
+  CreateAiReadinessAgentRequest,
 } from '@agent-orchestrator/shared';
 import { request } from './request';
 
@@ -62,6 +65,26 @@ export const apiWorkspaces = {
     request<void>(`/worktrees/${worktreeId}`, { method: 'DELETE' }),
   listBranches: (workspaceId: string) =>
     request<GitHubBranch[]>(`/workspaces/${workspaceId}/github/branches`),
+
+  getSyncStatus: (workspaceId: string) =>
+    request<WorkspaceSyncStatus>(`/workspaces/${workspaceId}/sync-status`),
+  pullDefaultBranch: (workspaceId: string) =>
+    request<WorkspaceSyncStatus>(`/workspaces/${workspaceId}/pull`, { method: 'POST' }),
+  getAiReadiness: (workspaceId: string) =>
+    request<WorkspaceAiReadiness>(`/workspaces/${workspaceId}/ai-readiness`),
+  createAiReadinessAgent: (workspaceId: string, body: CreateAiReadinessAgentRequest = {}) =>
+    request<{
+      worktree: WorktreeWithAgent;
+      agent: Agent;
+      branchName: string;
+      goal: string;
+      kickoffPrompt: string;
+      task: unknown;
+      readiness: WorkspaceAiReadiness;
+    }>(`/workspaces/${workspaceId}/ai-readiness/implement`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listPullRequests: (workspaceId: string, query = '') => {
     const suffix = query.trim() ? `?q=${encodeURIComponent(query.trim())}` : '';
     return request<WorkspacePullRequestList>(`/workspaces/${workspaceId}/github/pulls${suffix}`);

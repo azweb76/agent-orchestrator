@@ -23,6 +23,17 @@ export {
   listWorkspaceMentionFiles,
 } from './workspaces.js';
 
+
+export {
+  getWorkspaceSyncStatus,
+  pullWorkspaceDefaultBranch,
+} from './workspace-sync.js';
+
+export {
+  analyzeWorkspaceAiReadiness,
+  createAiReadinessAgent,
+} from './workspace-ai-readiness.js';
+
 export {
   overlayLivePullRequest,
   listWorktrees,

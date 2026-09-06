@@ -212,4 +212,100 @@ export class GitService {
     await execFileAsync('git', ['-C', worktreePath, 'add', '-A']);
     await execFileAsync('git', ['-C', worktreePath, 'commit', '-m', message]);
   }
+
+  /** Short SHA for a ref, or null if missing. */
+  async resolveSha(repoPath: string, ref: string): Promise<string | null> {
+    try {
+      const { stdout } = await execFileAsync('git', ['-C', repoPath, 'rev-parse', '--short=12', ref], {
+        maxBuffer: 1024 * 1024,
+      });
+      return stdout.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Commits ahead/behind of `remoteRef` relative to `localRef`. */
+  async getAheadBehind(
+    repoPath: string,
+    localRef: string,
+    remoteRef: string,
+  ): Promise<{ ahead: number; behind: number }> {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', repoPath, 'rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
+      { maxBuffer: 1024 * 1024 },
+    );
+    const [left, right] = stdout.trim().split(/\s+/);
+    return {
+      ahead: Number.parseInt(left ?? '0', 10) || 0,
+      behind: Number.parseInt(right ?? '0', 10) || 0,
+    };
+  }
+
+  /**
+   * Move local `branch` to match `targetRef` when not checked out.
+   * When checked out in a worktree, fast-forward that worktree with `git merge --ff-only`.
+   */
+  async updateBranchToRef(
+    mainRepoPath: string,
+    branch: string,
+    targetRef: string,
+  ): Promise<{ updated: boolean; method: 'branch' | 'ff-merge' | 'skipped'; worktreePath: string | null }> {
+    const worktreePath = await this.getWorktreePathForBranch(mainRepoPath, branch);
+    if (worktreePath) {
+      await execFileAsync('git', ['-C', worktreePath, 'merge', '--ff-only', targetRef], {
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { updated: true, method: 'ff-merge', worktreePath };
+    }
+
+    const exists = await this.localBranchExists(mainRepoPath, branch);
+    if (exists) {
+      await execFileAsync('git', ['-C', mainRepoPath, 'branch', '-f', branch, targetRef], {
+        maxBuffer: 1024 * 1024,
+      });
+    } else {
+      await execFileAsync('git', ['-C', mainRepoPath, 'branch', branch, targetRef], {
+        maxBuffer: 1024 * 1024,
+      });
+    }
+    return { updated: true, method: 'branch', worktreePath: null };
+  }
+
+  /** Read a blob at `ref:path`, or null when missing. */
+  async showFileAtRef(repoPath: string, ref: string, filePath: string): Promise<string | null> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoPath, 'show', `${ref}:${filePath}`],
+        { maxBuffer: 5 * 1024 * 1024 },
+      );
+      return stdout;
+    } catch {
+      return null;
+    }
+  }
+
+  /** List paths under a tree prefix at `ref` (non-recursive one level when depth=1). */
+  async listPathsAtRef(
+    repoPath: string,
+    ref: string,
+    prefix = '',
+  ): Promise<string[]> {
+    const treeish = prefix ? `${ref}:${prefix.replace(/\/$/, '')}` : ref;
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoPath, 'ls-tree', '-r', '--name-only', treeish],
+        { maxBuffer: 10 * 1024 * 1024 },
+      );
+      const paths = stdout.split('\n').map((p) => p.trim()).filter(Boolean);
+      if (!prefix) return paths;
+      const base = prefix.replace(/\/$/, '');
+      return paths.map((p) => (p.startsWith(base + '/') || p === base ? p : `${base}/${p}`));
+    } catch {
+      return [];
+    }
+  }
 }
