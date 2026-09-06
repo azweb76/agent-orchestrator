@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type {
   AssistantRun,
   AssistantSchedule,
+  AssistantScheduleKind,
   AssistantSchedulePolicy,
   AssistantScheduleStatus,
   AssistantRunStatus,
@@ -13,7 +14,8 @@ function rowToSchedule(row: Record<string, unknown>): AssistantSchedule {
     id: String(row.id),
     name: String(row.name),
     description: String(row.description ?? ''),
-    cron: String(row.cron),
+    kind: (row.kind as AssistantScheduleKind) || 'cron',
+    cron: String(row.cron ?? ''),
     timezone: String(row.timezone ?? 'UTC'),
     policy: row.policy as AssistantSchedulePolicy,
     playbook: row.playbook as AssistantSchedulePlaybook,
@@ -47,10 +49,10 @@ export class AssistantScheduleRepository {
     this.db
       .prepare(
         `INSERT INTO assistant_schedules (
-           id, name, description, cron, timezone, policy, playbook, prompt,
+           id, name, description, kind, cron, timezone, policy, playbook, prompt,
            status, next_run_at, last_run_at, created_at, updated_at
          ) VALUES (
-           @id, @name, @description, @cron, @timezone, @policy, @playbook, @prompt,
+           @id, @name, @description, @kind, @cron, @timezone, @policy, @playbook, @prompt,
            @status, @nextRunAt, @lastRunAt, @createdAt, @updatedAt
          )`,
       )
@@ -58,6 +60,7 @@ export class AssistantScheduleRepository {
         id: schedule.id,
         name: schedule.name,
         description: schedule.description,
+        kind: schedule.kind,
         cron: schedule.cron,
         timezone: schedule.timezone,
         policy: schedule.policy,
@@ -85,6 +88,7 @@ export class AssistantScheduleRepository {
         `UPDATE assistant_schedules SET
            name = @name,
            description = @description,
+           kind = @kind,
            cron = @cron,
            timezone = @timezone,
            policy = @policy,
@@ -100,6 +104,7 @@ export class AssistantScheduleRepository {
         id: schedule.id,
         name: schedule.name,
         description: schedule.description,
+        kind: schedule.kind,
         cron: schedule.cron,
         timezone: schedule.timezone,
         policy: schedule.policy,
@@ -117,19 +122,20 @@ export class AssistantScheduleRepository {
     this.db.prepare('DELETE FROM assistant_schedules WHERE id = ?').run(id);
   }
 
-  list(includePaused = true): AssistantSchedule[] {
-    const rows = (
-      includePaused
-        ? this.db.prepare(
-            `SELECT * FROM assistant_schedules
-             ORDER BY created_at ASC, rowid ASC`,
-          )
-        : this.db.prepare(
-            `SELECT * FROM assistant_schedules
-             WHERE status = 'active'
-             ORDER BY created_at ASC, rowid ASC`,
-          )
-    ).all() as Array<Record<string, unknown>>;
+  list(options: { includePaused?: boolean; includeCompleted?: boolean } = {}): AssistantSchedule[] {
+    const includePaused = options.includePaused !== false;
+    const includeCompleted = options.includeCompleted === true;
+    const statuses = ['active'];
+    if (includePaused) statuses.push('paused');
+    if (includeCompleted) statuses.push('completed');
+    const placeholders = statuses.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM assistant_schedules
+         WHERE status IN (${placeholders})
+         ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(...statuses) as Array<Record<string, unknown>>;
     return rows.map(rowToSchedule);
   }
 

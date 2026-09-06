@@ -181,7 +181,8 @@ function migrateSchema(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
-      cron TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'cron',
+      cron TEXT NOT NULL DEFAULT '',
       timezone TEXT NOT NULL DEFAULT 'UTC',
       policy TEXT NOT NULL,
       playbook TEXT NOT NULL,
@@ -206,6 +207,7 @@ function migrateSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_assistant_schedules_next ON assistant_schedules(status, next_run_at);
     CREATE INDEX IF NOT EXISTS idx_assistant_runs_schedule ON assistant_runs(schedule_id, started_at);
   `);
+  ensureColumn(db, 'assistant_schedules', 'kind', "TEXT NOT NULL DEFAULT 'cron'");
 }
 
 function backfillSessionSearchIndexTable(db: Database.Database): void {

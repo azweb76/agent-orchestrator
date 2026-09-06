@@ -31,6 +31,7 @@ import {
   handleListScheduleRuns,
   handleListSchedules,
   handlePauseSchedule,
+  handleScheduleOnce,
 } from './assistant-tools-schedules.js';
 import {
   createFromGoalSchema,
@@ -302,6 +303,8 @@ async function dispatchAssistantTool(
       return handleListSchedules(ctx, input);
     case 'create_schedule':
       return handleCreateSchedule(ctx, input, requireConfirm);
+    case 'schedule_once':
+      return handleScheduleOnce(ctx, input, requireConfirm);
     case 'pause_schedule':
       return handlePauseSchedule(ctx, input, requireConfirm);
     case 'delete_schedule':

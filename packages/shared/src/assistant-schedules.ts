@@ -1,11 +1,13 @@
-/** Assistant schedule + run types (cron playbooks with policy tiers). */
+/** Assistant schedule + run types (cron / one-shot playbooks with policy tiers). */
 
 export type AssistantSchedulePolicy =
   | 'notify_only'
   | 'propose_in_chat'
   | 'auto_write_templates';
 
-export type AssistantScheduleStatus = 'active' | 'paused';
+export type AssistantScheduleStatus = 'active' | 'paused' | 'completed';
+
+export type AssistantScheduleKind = 'cron' | 'once';
 
 export type AssistantSchedulePlaybook = 'prompt' | 'morning_fleet_briefing';
 
@@ -15,7 +17,9 @@ export interface AssistantSchedule {
   id: string;
   name: string;
   description: string;
-  /** 5-field cron: minute hour day-of-month month day-of-week */
+  /** cron | once — once runs a single time then completes */
+  kind: AssistantScheduleKind;
+  /** 5-field cron for kind=cron; empty string for kind=once */
   cron: string;
   /** IANA timezone (e.g. UTC, America/Phoenix) */
   timezone: string;
@@ -49,6 +53,8 @@ export const ASSISTANT_SCHEDULE_POLICIES: AssistantSchedulePolicy[] = [
   'auto_write_templates',
 ];
 
+export const ASSISTANT_SCHEDULE_KINDS: AssistantScheduleKind[] = ['cron', 'once'];
+
 export const ASSISTANT_SCHEDULE_PLAYBOOKS: AssistantSchedulePlaybook[] = [
   'prompt',
   'morning_fleet_briefing',
@@ -67,13 +73,24 @@ export const MORNING_BRIEFING_PROMPT = `You are running a scheduled morning flee
 
 Keep the reply concise and scannable for a human reading the Assistant thread.`;
 
-export function resolveSchedulePrompt(schedule: Pick<AssistantSchedule, 'playbook' | 'prompt'>): string {
+const ONCE_PROMPT_WRAPPER = `You are executing a one-time scheduled task in the Assistant thread.
+Do exactly what the user requested below. Prefer a direct reply with no tools unless the request requires fleet inspection or action.
+
+User request:
+`;
+
+export function resolveSchedulePrompt(
+  schedule: Pick<AssistantSchedule, 'playbook' | 'prompt' | 'kind'>,
+): string {
   if (schedule.playbook === 'morning_fleet_briefing') {
     return MORNING_BRIEFING_PROMPT;
   }
   const custom = schedule.prompt?.trim();
   if (!custom) {
     throw new Error('prompt playbook requires a non-empty prompt');
+  }
+  if (schedule.kind === 'once') {
+    return `${ONCE_PROMPT_WRAPPER}${custom}`;
   }
   return custom;
 }
