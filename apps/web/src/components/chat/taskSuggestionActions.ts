@@ -7,6 +7,7 @@ import {
 export type TaskSuggestionAction =
   | { type: 'commit-and-push' }
   | { type: 'start-template'; template: ChatSessionTemplate }
+  | { type: 'grade-session' }
   | { type: 'prompt'; prompt: string }
   | { type: 'new-prompt'; title: string; prompt: string };
 
@@ -19,7 +20,7 @@ export function isOpenInNewChatClick(event: {
 
 /**
  * Resolve a follow-up chip click.
- * - Normal click: send the prompt in the current chat (Commit and Push stays a dialog).
+ * - Normal click: send the prompt in the current chat (Commit and Push / Grade stay dialogs).
  * - Cmd/Ctrl+click: open a new chat (template kinds use their session template).
  */
 export function resolveTaskSuggestionAction(
@@ -27,6 +28,10 @@ export function resolveTaskSuggestionAction(
   options: { openInNewChat?: boolean } = {},
 ): TaskSuggestionAction {
   const openInNewChat = Boolean(options.openInNewChat);
+
+  if (suggestion.kind === 'grade-session') {
+    return { type: 'grade-session' };
+  }
 
   if (!openInNewChat) {
     if (suggestion.kind === 'commit-and-push') {

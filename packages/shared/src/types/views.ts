@@ -30,7 +30,12 @@ export interface DraftPrOffer {
 }
 
 /** How selecting a follow-up chip should behave in the chat UI. */
-export type TaskSuggestionKind = 'prompt' | 'commit-and-push' | 'start-template';
+export type TaskSuggestionKind =
+  | 'prompt'
+  | 'commit-and-push'
+  | 'start-template'
+  /** Opens the Grade session dialog (manual analysis). */
+  | 'grade-session';
 
 export interface TaskSuggestion {
   id: string;

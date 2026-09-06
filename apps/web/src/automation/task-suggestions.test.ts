@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_TASK_FOLLOWUPS,
+  EXCESSIVE_ASSISTANT_TURNS,
+  EXCESSIVE_USER_TURNS,
   buildStatusTaskSuggestionDrafts,
+  describeExcessiveSessionUsage,
   filterApplicableTaskFollowUps,
+  isSessionUsageExcessive,
   isTaskFollowUpApplicable,
+  measureSessionUsage,
   mergeTaskSuggestionDrafts,
   FALLBACK_TASK_SUGGESTION,
 } from '@agent-orchestrator/shared';
@@ -111,6 +116,7 @@ describe('isTaskFollowUpApplicable', () => {
       hasOpenPr: false,
     };
     expect(isTaskFollowUpApplicable(byName.continue!, cleanNoPr)).toBe(true);
+    expect(isTaskFollowUpApplicable(byName['grade-session']!, cleanNoPr)).toBe(true);
     expect(isTaskFollowUpApplicable(byName['commit-and-push']!, cleanNoPr)).toBe(false);
     expect(isTaskFollowUpApplicable(byName['create-draft-pr']!, cleanNoPr)).toBe(true);
 
@@ -131,5 +137,48 @@ describe('isTaskFollowUpApplicable', () => {
       },
     );
     expect(filtered.map((item) => item.name)).toEqual(['continue']);
+  });
+});
+
+describe('session usage efficiency heuristics', () => {
+  it('measures turns, tokens, and cost from messages', () => {
+    const usage = measureSessionUsage([
+      { role: 'user', content: 'a'.repeat(40) },
+      {
+        role: 'assistant',
+        content: 'b'.repeat(40),
+        metadata: {
+          costUsd: 0.12,
+          timeline: [{ type: 'text', text: 'c'.repeat(40) }],
+        },
+      },
+    ]);
+    expect(usage.userTurns).toBe(1);
+    expect(usage.assistantTurns).toBe(1);
+    expect(usage.estimatedTokens).toBe(30);
+    expect(usage.costUsd).toBe(0.12);
+  });
+
+  it('flags excessive turns and describes why', () => {
+    expect(
+      isSessionUsageExcessive({
+        userTurns: EXCESSIVE_USER_TURNS,
+        assistantTurns: EXCESSIVE_ASSISTANT_TURNS,
+        estimatedTokens: 10,
+        costUsd: null,
+      }),
+    ).toBe(true);
+    const detail = describeExcessiveSessionUsage({
+      userTurns: EXCESSIVE_USER_TURNS,
+      assistantTurns: 1,
+      estimatedTokens: 10,
+      costUsd: null,
+    });
+    expect(detail).toMatch(/turns/);
+  });
+
+  it('includes a built-in grade-session follow-up', () => {
+    const grade = BUILTIN_TASK_FOLLOWUPS.find((item) => item.name === 'grade-session');
+    expect(grade?.kind).toBe('grade-session');
   });
 });

@@ -16,6 +16,17 @@ describe('resolveTaskSuggestionAction', () => {
     ).toEqual({ type: 'commit-and-push' });
   });
 
+  it('opens the grade dialog for grade-session chips', () => {
+    expect(
+      resolveTaskSuggestionAction({
+        id: 'g1',
+        title: 'Grade session',
+        prompt: 'Open grade dialog',
+        kind: 'grade-session',
+      }),
+    ).toEqual({ type: 'grade-session' });
+  });
+
   it('sends start-template prompts in the current chat on normal click', () => {
     expect(
       resolveTaskSuggestionAction({

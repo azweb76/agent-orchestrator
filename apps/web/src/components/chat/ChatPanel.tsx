@@ -391,6 +391,10 @@ export const ChatPanel = memo(function ChatPanel({
             onCommitAndPush?.();
             return;
           }
+          if (action.type === 'grade-session') {
+            sessionActions.setGradeOpen(true);
+            return;
+          }
           if (action.type === 'start-template') {
             void sessionActions.createSessionFromTemplate(action.template);
             return;

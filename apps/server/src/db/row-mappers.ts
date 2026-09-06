@@ -191,7 +191,12 @@ export function rowToAgentTask(row: unknown): AgentTask {
 }
 
 function parseTaskSuggestionKind(value: unknown): TaskSuggestionKind {
-  if (value === 'commit-and-push' || value === 'start-template' || value === 'prompt') {
+  if (
+    value === 'commit-and-push' ||
+    value === 'start-template' ||
+    value === 'prompt' ||
+    value === 'grade-session'
+  ) {
     return value;
   }
   return 'prompt';

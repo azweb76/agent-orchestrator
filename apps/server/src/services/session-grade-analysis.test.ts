@@ -123,6 +123,9 @@ describe('session grade analysis', () => {
     assert.match(system, /instruction files/i);
     assert.match(system, /missing or weak skills/i);
     assert.match(system, /suggestion/i);
+    assert.match(system, /speed/i);
+    assert.match(system, /token efficiency/i);
+    assert.match(system, /fewer corrections/i);
     assert.match(user, /Be strict about tests/);
     assert.match(user, /CLAUDE.md/);
     assert.match(user, /\/retry-tests/);

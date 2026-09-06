@@ -243,3 +243,71 @@ test('refreshTaskSuggestionsForSession rejects non-idle sessions', async () => {
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });
+
+test('maybeSuggestFollowUpTasks prepends Grade session when usage is excessive', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-task-suggestions-grade-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    ensureBuiltInTaskFollowUps(ctx);
+    ctx.repos.settings.set('analyze_session_enabled', '1');
+    ctx.git = {
+      hasChanges: async () => false,
+      getDiff: async () => ({ stat: '', patch: '' }),
+    } as unknown as GitService;
+    ctx.anthropic = {
+      selectTaskFollowUps: async () => {
+        const continueItem = ctx.repos.taskFollowUps.listEnabled().find((item) => item.name === 'continue');
+        assert.ok(continueItem);
+        return [continueItem.id];
+      },
+    } as unknown as typeof ctx.anthropic;
+
+    const session = ctx.repos.sessions.create({
+      id: 'sess-grade',
+      agentId: agent.id,
+      title: 'Long chat',
+      template: 'chat',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:01.000Z',
+      updatedAt: '2026-01-01T00:00:02.000Z',
+    });
+
+    for (let i = 1; i <= 8; i++) {
+      ctx.repos.messages.create({
+        id: `u-${i}`,
+        agentId: agent.id,
+        sessionId: session.id,
+        role: 'user',
+        content: `User turn ${i}`,
+        attachments: [],
+        metadata: {},
+        createdAt: `2026-01-01T00:01:${String(i).padStart(2, '0')}.000Z`,
+      });
+      ctx.repos.messages.create({
+        id: `a-${i}`,
+        agentId: agent.id,
+        sessionId: session.id,
+        role: 'assistant',
+        content: `Assistant turn ${i}`,
+        attachments: [],
+        metadata: { costUsd: 0.1 },
+        createdAt: `2026-01-01T00:02:${String(i).padStart(2, '0')}.000Z`,
+      });
+    }
+
+    await maybeSuggestFollowUpTasks(ctx, session, {});
+    const offer = getTaskSuggestionsOffer(ctx, agent.id);
+    assert.ok(offer);
+    assert.equal(offer.suggestions[0]?.kind, 'grade-session');
+    assert.match(offer.suggestions[0]?.description ?? '', /turns|\$/);
+    assert.ok(offer.suggestions.some((item) => item.title === 'Continue'));
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
