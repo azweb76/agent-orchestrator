@@ -118,6 +118,42 @@ export class GitService {
     }
   }
 
+  /** Upstream tracking ref (`origin/branch`), or null when none is set. */
+  async getUpstreamRef(worktreePath: string): Promise<string | null> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', worktreePath, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+        { maxBuffer: 1024 * 1024 },
+      );
+      const ref = stdout.trim();
+      return ref || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Diff committed trees only (`fromRef...toRef`), excluding the working tree.
+   * Three-dot range matches “what these commits introduce” vs the merge base.
+   */
+  async getCommittedDiff(
+    worktreePath: string,
+    fromRef: string,
+    toRef = 'HEAD',
+  ): Promise<{ stat: string; patch: string }> {
+    const range = `${fromRef}...${toRef}`;
+    const [statResult, patchResult] = await Promise.all([
+      execFileAsync('git', ['-C', worktreePath, 'diff', '--stat', range], {
+        maxBuffer: 10 * 1024 * 1024,
+      }),
+      execFileAsync('git', ['-C', worktreePath, 'diff', range], {
+        maxBuffer: 20 * 1024 * 1024,
+      }),
+    ]);
+    return { stat: statResult.stdout.trim(), patch: patchResult.stdout };
+  }
+
   /**
    * Diff the worktree against `baseRef` (default HEAD = pending uncommitted changes).
    * When comparing to HEAD, untracked files are included so new agent-created files appear.

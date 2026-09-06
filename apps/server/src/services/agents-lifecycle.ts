@@ -247,6 +247,19 @@ export async function getAgentDiff(
   const detail = await getAgentDetail(ctx, agentId);
   const path = detail.worktree.path;
 
+  if (scope === 'unpushed') {
+    const upstream = await ctx.git.getUpstreamRef(path);
+    if (!upstream) {
+      return { stat: '', patch: '', path, scope };
+    }
+    try {
+      const diff = await ctx.git.getCommittedDiff(path, upstream);
+      return { ...diff, path, scope };
+    } catch {
+      return { stat: '', patch: '', path, scope };
+    }
+  }
+
   if (scope === 'pr') {
     const base = detail.worktree.baseBranch ?? detail.workspace.defaultBranch;
     try {

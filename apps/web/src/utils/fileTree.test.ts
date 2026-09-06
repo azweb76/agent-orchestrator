@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildFileTree, defaultExpandedDirs } from './fileTree';
+import { allDirPaths, buildFileTree, defaultExpandedDirs, filterDiffFiles } from './fileTree';
 import type { DiffFile } from './parseUnifiedDiff';
 
-function diffFile(path: string): DiffFile {
-  return { path, status: 'modified', patch: '', additions: 0, deletions: 0 };
+function diffFile(path: string, previousPath?: string): DiffFile {
+  return { path, previousPath, status: 'modified', patch: '', additions: 0, deletions: 0 };
 }
 
 describe('buildFileTree', () => {
@@ -40,5 +40,36 @@ describe('defaultExpandedDirs', () => {
   it('returns nothing for a flat file list', () => {
     const tree = buildFileTree([diffFile('a.ts'), diffFile('b.ts')]);
     expect(defaultExpandedDirs(tree)).toEqual([]);
+  });
+});
+
+describe('allDirPaths', () => {
+  it('lists every directory path', () => {
+    const tree = buildFileTree([diffFile('a/b/c.ts'), diffFile('x/y.ts')]);
+    expect(allDirPaths(tree)).toEqual(['a', 'a/b', 'x']);
+  });
+});
+
+describe('filterDiffFiles', () => {
+  const files = [
+    diffFile('apps/web/src/App.tsx'),
+    diffFile('apps/server/src/index.ts'),
+    diffFile('packages/shared/src/types.ts', 'packages/shared/src/old.ts'),
+  ];
+
+  it('returns all files when the query is blank', () => {
+    expect(filterDiffFiles(files, '  ')).toEqual(files);
+  });
+
+  it('matches path substrings case-insensitively', () => {
+    expect(filterDiffFiles(files, 'WEB').map((file) => file.path)).toEqual([
+      'apps/web/src/App.tsx',
+    ]);
+  });
+
+  it('matches rename previous paths', () => {
+    expect(filterDiffFiles(files, 'old.ts').map((file) => file.path)).toEqual([
+      'packages/shared/src/types.ts',
+    ]);
   });
 });
