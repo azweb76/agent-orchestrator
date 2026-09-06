@@ -6,7 +6,7 @@ import type { Agent, Worktree, Workspace } from './entities.js';
 import type { PrStatusSnapshot } from './github.js';
 
 /** Diff view scope for an agent's worktree. */
-export type AgentDiffScope = 'pending' | 'pr';
+export type AgentDiffScope = 'pending' | 'unpushed' | 'pr';
 
 export interface AgentDiff {
   stat: string;

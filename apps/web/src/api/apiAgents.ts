@@ -2,6 +2,7 @@ import type {
   Agent,
   AgentDetail,
   AgentDiff,
+  AgentDiffScope,
   AgentMemory,
   AllowPermissionRequest,
   AnswerAskUserQuestionRequest,
@@ -134,7 +135,7 @@ export const apiAgents = {
     request<{ removed: boolean }>(`/agents/${agentId}/sessions/${sessionId}/queue/${queuedId}`, {
       method: 'DELETE',
     }),
-  getDiff: (agentId: string, scope: 'pending' | 'pr' = 'pending') =>
+  getDiff: (agentId: string, scope: AgentDiffScope = 'pending') =>
     request<AgentDiff>(`/agents/${agentId}/diff?scope=${encodeURIComponent(scope)}`),
   listSlashCommands: (agentId: string) =>
     request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),

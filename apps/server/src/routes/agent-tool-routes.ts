@@ -34,9 +34,11 @@ export function registerAgentToolRoutes(router: express.Router, ctx: AppContext)
   router.get(
     '/agents/:agentId/diff',
     asyncHandler(async (req, res) => {
-      const scopeParse = z.enum(['pending', 'pr']).safeParse(req.query.scope ?? 'pending');
+      const scopeParse = z
+        .enum(['pending', 'unpushed', 'pr'])
+        .safeParse(req.query.scope ?? 'pending');
       if (!scopeParse.success) {
-        res.status(400).json({ error: 'Invalid scope; use pending or pr' });
+        res.status(400).json({ error: 'Invalid scope; use pending, unpushed, or pr' });
         return;
       }
       res.json(await getAgentDiff(ctx, param(req.params.agentId), scopeParse.data));
