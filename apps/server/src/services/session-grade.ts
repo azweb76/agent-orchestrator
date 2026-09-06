@@ -167,6 +167,9 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
 } {
   const system = [
     'You grade a coding-agent chat session for efficiency and instruction quality.',
+    'Optimize for three outcomes: (1) speed — fewer turns and less exploratory thrash to reach a correct result;',
+    '(2) token efficiency — avoid re-reads, redundant tool calls, and bloated context;',
+    '(3) fewer corrections — surface standing instructions or skills that would have prevented rework, wrong assumptions, or human fix-up loops.',
     'Look at excessive turns, wasted tokens, bloated context, misconfigured instruction files, and missing or weak skills.',
     'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
     '"score" (integer 1-5), "summary" (2-4 sentences), "findings" (array).',
@@ -175,6 +178,7 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     'category must be one of: excessive_turns, wasted_tokens, bloated_context, instruction_files, skills.',
     'severity must be ok, warning, or issue.',
     'For every finding with severity warning or issue, include "suggestion" (1-3 sentences: what to change and how) and "action" recommending the remediation target.',
+    'Prefer suggestions that permanently reduce future turns, tokens, or correction cycles (skills / CLAUDE.md / AGENTS.md), not one-off advice for this chat alone.',
     'action.kind must be one of: skill, claude_md, agents_md. Use skill when the fix is a reusable practice or checklist for the agent to follow; use claude_md or agents_md when the fix is project-specific standing instructions (match whichever instruction file this project actually uses).',
     'When action.kind is skill, also set action.scope to project or personal: use personal when the recommendation is a generic practice that would help in any repo (not tied to this project\'s specifics), otherwise use project.',
     'Omit "suggestion" and "action" for findings with severity ok.',

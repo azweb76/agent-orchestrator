@@ -125,6 +125,14 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     prompt: 'Continue from where we left off. Propose the next concrete step and start on it.',
     kind: 'prompt',
   },
+  {
+    name: 'grade-session',
+    title: 'Grade session',
+    description: 'Review this run for speed, token waste, and repeat corrections.',
+    prompt:
+      'Open the session grade dialog to analyze efficiency (turns, tokens, context) and instruction quality.',
+    kind: 'grade-session',
+  },
 ];
 
 export function isValidTaskFollowUpName(name: string): boolean {
@@ -147,6 +155,9 @@ export function isTaskFollowUpApplicable(
   status: TaskSuggestionChangeStatus,
 ): boolean {
   if (followUp.kind === 'prompt' || !followUp.kind) return true;
+
+  // Once offered, keep the chip visible; the server only injects it when usage is high.
+  if (followUp.kind === 'grade-session') return true;
 
   if (followUp.kind === 'commit-and-push') {
     return status.hasPendingChanges;

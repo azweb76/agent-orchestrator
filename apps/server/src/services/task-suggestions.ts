@@ -1,7 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
   buildStatusTaskSuggestionDrafts,
+  describeExcessiveSessionUsage,
   filterApplicableTaskFollowUps,
+  isSessionUsageExcessive,
+  measureSessionUsage,
   mergeTaskSuggestionDrafts,
   resolveAgentDeliveryPhase,
   type ChatSession,
@@ -12,6 +15,7 @@ import {
 } from '@agent-orchestrator/shared';
 import { requireAgent, requireSession } from './agent-core.js';
 import { type AppContext, makeEvent, notify } from './app-context.js';
+import { getAppSettings } from './app-settings.js';
 import { getCachedPrStatus } from './pr-status-cache.js';
 import {
   followUpToSuggestion,
@@ -178,6 +182,42 @@ function fallbackSuggestions(
   return mapped;
 }
 
+/**
+ * When turns/tokens look high and session analysis is enabled, prepend a
+ * manual Grade session chip. Auto-grade stays off unless the operator opts in.
+ */
+function ensureGradeSessionSuggestion(
+  ctx: AppContext,
+  session: ChatSession,
+  catalog: readonly TaskFollowUp[],
+  suggestions: TaskSuggestion[],
+): TaskSuggestion[] {
+  if (session.grade) return suggestions;
+  if (!getAppSettings(ctx.repos).analyzeSessionEnabled) return suggestions;
+
+  const messages = ctx.repos.messages.listBySession(session.id);
+  const usage = measureSessionUsage(messages);
+  if (!isSessionUsageExcessive(usage)) return suggestions;
+
+  const gradeFollowUp =
+    catalog.find((item) => item.kind === 'grade-session') ??
+    catalog.find((item) => item.name === 'grade-session');
+  if (!gradeFollowUp?.enabled) return suggestions;
+
+  if (suggestions.some((item) => item.kind === 'grade-session' || item.id === gradeFollowUp.id)) {
+    return suggestions;
+  }
+
+  const reason = describeExcessiveSessionUsage(usage);
+  const chip: TaskSuggestion = {
+    ...followUpToSuggestion(gradeFollowUp),
+    description: reason
+      ? `${gradeFollowUp.description} (${reason})`
+      : gradeFollowUp.description || undefined,
+  };
+  return [chip, ...suggestions].slice(0, MAX_TOTAL_SUGGESTIONS);
+}
+
 function buildSelectionContext(
   ctx: AppContext,
   session: ChatSession,
@@ -278,6 +318,8 @@ export async function suggestFollowUpTasks(
   if (suggestions.length === 0) {
     suggestions = fallbackSuggestions(changeStatus, catalog);
   }
+
+  suggestions = ensureGradeSessionSuggestion(ctx, session, catalog, suggestions);
 
   const offer: TaskSuggestionsOffer = { sessionId: session.id, suggestions };
   setTaskSuggestionsOffer(ctx, session.agentId, offer);

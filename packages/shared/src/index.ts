@@ -116,6 +116,18 @@ export {
   type TaskSuggestionDraft,
 } from './task-suggestions.js';
 
+export {
+  EXCESSIVE_ASSISTANT_TURNS,
+  EXCESSIVE_COST_USD,
+  EXCESSIVE_ESTIMATED_TOKENS,
+  EXCESSIVE_USER_TURNS,
+  describeExcessiveSessionUsage,
+  isSessionUsageExcessive,
+  measureSessionUsage,
+  type SessionUsageMessage,
+  type SessionUsageSignals,
+} from './session-efficiency.js';
+
 export type {
   ApplyInstructionFileRequest,
   ApplyInstructionFileResponse,

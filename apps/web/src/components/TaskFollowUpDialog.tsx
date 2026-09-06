@@ -186,6 +186,7 @@ export function TaskFollowUpDialog({
                 <MenuItem value="prompt">Prompt (send into chat)</MenuItem>
                 <MenuItem value="commit-and-push">Commit and push</MenuItem>
                 <MenuItem value="start-template">Start session template</MenuItem>
+                <MenuItem value="grade-session">Grade session (open dialog)</MenuItem>
               </Select>
             </FormControl>
           ) : null}

@@ -431,7 +431,7 @@ export function SettingsPage() {
 
       <SettingsSection
         title="Session analysis"
-        description='Lets you run "Analyze this session" in chat to grade session quality with Claude. Off by default.'
+        description='Manual "Grade this session" reviews speed, token waste, and repeat corrections. Off by default. Auto-grade stays optional and separate.'
       >
         <Stack spacing={1}>
           <FormControlLabel
@@ -457,7 +457,7 @@ export function SettingsPage() {
                 }
               />
             }
-            label="Auto-grade Build / Fix CI sessions after a clean finish"
+            label="Auto-grade Build / Fix CI sessions after a clean finish (not recommended)"
           />
         </Stack>
       </SettingsSection>
