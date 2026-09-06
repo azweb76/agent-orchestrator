@@ -204,6 +204,7 @@ export {
   type AssistantJsonSchema,
   type AssistantMessage,
   type AssistantMessageRole,
+  type AssistantStreamEvent,
   type AssistantToolCall,
   type AssistantToolDefinition,
   type AssistantToolResultMeta,

@@ -43,6 +43,16 @@ export interface AssistantChatResponse {
   messages: AssistantMessage[];
 }
 
+/** SSE payload shapes for POST /assistant/chat/stream (A7). */
+export type AssistantStreamEvent =
+  | { type: 'user_message'; message: AssistantMessage }
+  | { type: 'assistant_start'; messageId: string; createdAt: string }
+  | { type: 'token'; messageId: string; text: string }
+  | { type: 'assistant_message'; message: AssistantMessage }
+  | { type: 'tool_message'; message: AssistantMessage }
+  | { type: 'done'; messages: AssistantMessage[] }
+  | { type: 'error'; message: string };
+
 /** JSON Schema fragment compatible with Anthropic tools and MCP. */
 export type AssistantJsonSchema = {
   type: 'object';

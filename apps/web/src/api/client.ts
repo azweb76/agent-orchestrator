@@ -21,6 +21,7 @@ export {
   streamCompactSession,
   streamSessionFollow,
 } from './chatStream';
+export { streamAssistantChat } from './apiAssistant';
 
 export const api = {
   ...apiSetup,

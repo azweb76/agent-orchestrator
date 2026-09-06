@@ -5,6 +5,7 @@ import {
   type AssistantChatResponse,
   type AssistantMessage,
   type AssistantSchedulePolicy,
+  type AssistantStreamEvent,
 } from '@agent-orchestrator/shared';
 import { createAnthropicClient, resolveAnthropicAuth } from './anthropic-credentials.js';
 import { type AppContext, nowIso } from './app-context.js';
@@ -16,9 +17,25 @@ const MAX_TOOL_ROUNDS = 8;
 
 type ApiMessage = Anthropic.MessageParam;
 
+export type AssistantModelRoundResult = {
+  content: Anthropic.ContentBlock[];
+  stop_reason: string | null;
+};
+
+/** Injectable model round for tests — streams tokens then returns the final message. */
+export type AssistantModelRound = (args: {
+  messages: ApiMessage[];
+  tools: Anthropic.Tool[];
+  signal?: AbortSignal;
+  onToken: (delta: string) => void;
+}) => Promise<AssistantModelRoundResult>;
+
 export type AssistantChatOptions = {
   schedulePolicy?: AssistantSchedulePolicy;
   source?: 'chat' | 'schedule';
+  onEvent?: (event: AssistantStreamEvent) => void;
+  signal?: AbortSignal;
+  runModelRound?: AssistantModelRound;
 };
 
 function textFromContent(content: Anthropic.ContentBlock[]): string {
@@ -88,12 +105,42 @@ function persist(
   return message;
 }
 
+function emit(options: AssistantChatOptions, event: AssistantStreamEvent): void {
+  options.onEvent?.(event);
+}
+
 export function listAssistantMessages(ctx: AppContext): AssistantMessage[] {
   return ctx.repos.assistantMessages.list();
 }
 
 export function clearAssistantMessages(ctx: AppContext): void {
   ctx.repos.assistantMessages.clear();
+}
+
+async function defaultModelRound(
+  anthropic: Anthropic,
+  args: {
+    messages: ApiMessage[];
+    tools: Anthropic.Tool[];
+    signal?: AbortSignal;
+    onToken: (delta: string) => void;
+  },
+): Promise<AssistantModelRoundResult> {
+  const stream = anthropic.messages.stream(
+    {
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: ASSISTANT_SYSTEM_PROMPT,
+      messages: args.messages,
+      tools: args.tools,
+    },
+    { signal: args.signal },
+  );
+  stream.on('text', (delta) => {
+    args.onToken(delta);
+  });
+  const message = await stream.finalMessage();
+  return { content: message.content, stop_reason: message.stop_reason };
 }
 
 export async function runAssistantChat(
@@ -105,20 +152,40 @@ export async function runAssistantChat(
   if (!trimmed) throw new Error('Message is required');
 
   const created: AssistantMessage[] = [];
-  created.push(persist(ctx, { role: 'user', content: trimmed }));
+  const userMsg = persist(ctx, { role: 'user', content: trimmed });
+  created.push(userMsg);
+  emit(options, { type: 'user_message', message: userMsg });
 
   const history = ctx.repos.assistantMessages.list();
   const apiMessages = toApiMessages(history);
-  const tools = anthropicToolsFromCatalog();
-  const anthropic = await createAnthropicClient(await resolveAnthropicAuth());
+  const tools = anthropicToolsFromCatalog() as Anthropic.Tool[];
+
+  let cachedClient: Anthropic | null = null;
+  const resolveRound: AssistantModelRound =
+    options.runModelRound ??
+    (async (args) => {
+      if (!cachedClient) {
+        cachedClient = await createAnthropicClient(await resolveAnthropicAuth());
+      }
+      return defaultModelRound(cachedClient, args);
+    });
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: ASSISTANT_SYSTEM_PROMPT,
+    if (options.signal?.aborted) {
+      throw new Error('Assistant chat aborted');
+    }
+
+    const assistantId = uuidv4();
+    const createdAt = nowIso();
+    emit(options, { type: 'assistant_start', messageId: assistantId, createdAt });
+
+    const response = await resolveRound({
       messages: apiMessages,
-      tools: tools as Anthropic.Tool[],
+      tools,
+      signal: options.signal,
+      onToken: (delta) => {
+        emit(options, { type: 'token', messageId: assistantId, text: delta });
+      },
     });
 
     const toolUses = response.content.filter(
@@ -127,6 +194,8 @@ export async function runAssistantChat(
     const text = textFromContent(response.content);
 
     const assistantMsg = persist(ctx, {
+      id: assistantId,
+      createdAt,
       role: 'assistant',
       content: text,
       toolCalls: toolUses.map((block) => ({
@@ -136,6 +205,7 @@ export async function runAssistantChat(
       })),
     });
     created.push(assistantMsg);
+    emit(options, { type: 'assistant_message', message: assistantMsg });
 
     apiMessages.push({
       role: 'assistant',
@@ -166,6 +236,7 @@ export async function runAssistantChat(
         },
       });
       created.push(toolMsg);
+      emit(options, { type: 'tool_message', message: toolMsg });
       toolResults.push({
         type: 'tool_result',
         tool_use_id: block.id,
@@ -176,5 +247,6 @@ export async function runAssistantChat(
     apiMessages.push({ role: 'user', content: toolResults });
   }
 
+  emit(options, { type: 'done', messages: created });
   return { messages: created };
 }
