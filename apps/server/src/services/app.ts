@@ -30,6 +30,7 @@ export {
 } from './workspace-sync.js';
 
 export {
+  getCachedWorkspaceAiReadiness,
   analyzeWorkspaceAiReadiness,
   createAiReadinessAgent,
 } from './workspace-ai-readiness.js';
