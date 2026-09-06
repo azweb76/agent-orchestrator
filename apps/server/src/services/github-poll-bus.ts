@@ -8,7 +8,8 @@ import {
   getAutomationSettings,
 } from './automation-settings.js';
 import { collectPollTargets } from './github-poll-targets.js';
-import { handleAutomationEvents, isRateLimitError, pollTargetState } from './github-automation.js';
+import { isRateLimitError, pollTargetState } from './github-automation.js';
+import { handleAutomationEvents } from './github-automation-actions.js';
 
 export interface PollBusOptions {
   /** Override sleep between polls (ms); tests pass 0. */

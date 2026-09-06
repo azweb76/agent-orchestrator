@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import {
+  CI_SWEEP_CRON,
   MORNING_BRIEFING_CRON,
+  REVIEW_SWEEP_CRON,
   nextCronOccurrence,
   parseCron,
   resolveOnceRunAt,
@@ -14,7 +16,12 @@ import { nowIso } from './app-context.js';
 import type { AssistantToolExecution } from './assistant-tools.js';
 
 const policySchema = z.enum(['notify_only', 'propose_in_chat', 'auto_write_templates']);
-const playbookSchema = z.enum(['prompt', 'morning_fleet_briefing']);
+const playbookSchema = z.enum([
+  'prompt',
+  'morning_fleet_briefing',
+  'ci_sweep',
+  'review_sweep',
+]);
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
@@ -283,6 +290,32 @@ export function defaultMorningBriefingInput(timezone = 'UTC'): Record<string, un
     timezone,
     policy: 'propose_in_chat',
     playbook: 'morning_fleet_briefing',
+    confirm: true,
+  };
+}
+
+export function defaultCiSweepInput(timezone = 'UTC'): Record<string, unknown> {
+  return {
+    name: 'CI sweep',
+    description: 'Weekday daytime sweep: start Fix CI for failing authored PRs',
+    kind: 'cron',
+    cron: CI_SWEEP_CRON,
+    timezone,
+    policy: 'auto_write_templates',
+    playbook: 'ci_sweep',
+    confirm: true,
+  };
+}
+
+export function defaultReviewSweepInput(timezone = 'UTC'): Record<string, unknown> {
+  return {
+    name: 'Review sweep',
+    description: 'Weekday daytime sweep: start Address review for review-queue PRs',
+    kind: 'cron',
+    cron: REVIEW_SWEEP_CRON,
+    timezone,
+    policy: 'auto_write_templates',
+    playbook: 'review_sweep',
     confirm: true,
   };
 }

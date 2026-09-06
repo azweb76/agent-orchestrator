@@ -84,9 +84,13 @@ Work queue actions:
 
 Schedules:
 - One-time delayed tasks ("say hi in 5m", "remind me in 1h") → schedule_once with runIn (5m, 1h, 30s) or runAt (ISO) and prompt set to the request.
-- Recurring playbooks → create_schedule with kind=cron (prefer morning_fleet_briefing, default cron 0 9 * * 1-5).
+- Recurring playbooks → create_schedule with kind=cron:
+  - morning_fleet_briefing (default cron 0 9 * * 1-5)
+  - ci_sweep (default */30 8-18 * * 1-5) — start fix-ci for failing PRs when policy allows
+  - review_sweep (default */30 8-18 * * 1-5) — start address-review for review items when policy allows
 - Use list_schedules / pause_schedule / delete_schedule / list_schedule_runs to manage them.
 - Policy notify_only and propose_in_chat never auto-write; auto_write_templates may auto-confirm template actions on schedule runs.
+- GitHub poll auto Fix CI / Address review also posts into this Assistant thread (same audit trail as sweeps).
 
 When create_* or start_agent_session succeeds, tell the user the agent id and that they can open it in the UI.
 

@@ -10,10 +10,10 @@ import { Notifier } from './notifier.js';
 import { setAutomationSettings } from './automation-settings.js';
 import {
   getCachedPrStatus,
-  handleAutomationEvents,
   pollTargetState,
   type GithubPrChangeEvent,
 } from './github-automation.js';
+import { handleAutomationEvents } from './github-automation-actions.js';
 import type { PollTarget } from './github-poll-targets.js';
 import { seedAgent } from './chat-sessions.test-helpers.js';
 import type { GitHubService } from './github.js';
@@ -227,6 +227,8 @@ test('auto Fix CI enqueues a session and respects retry cap per commit SHA', asy
       .filter((item) => item.template === 'fix-ci');
     assert.equal(fixCiSessions.length, 1);
     assert.ok(appEvents.some((item) => item.type === 'automation_triggered' && item.data.action === 'fix_ci_started'));
+    const audit = ctx.repos.assistantMessages.list().filter((m) => m.role === 'assistant');
+    assert.ok(audit.some((m) => /GitHub poll · Fix CI/i.test(m.content) && /fix-ci/i.test(m.content)));
 
     await handleAutomationEvents(ctx, target(), [change]);
     assert.equal(
@@ -245,6 +247,11 @@ test('auto Fix CI enqueues a session and respects retry cap per commit SHA', asy
     await handleAutomationEvents(ctx, target(), [change]);
     assert.ok(
       appEvents.some((item) => item.type === 'automation_triggered' && item.data.action === 'fix_ci_cap_hit'),
+    );
+    assert.ok(
+      ctx.repos.assistantMessages
+        .list()
+        .some((m) => m.role === 'assistant' && /Retry cap hit/i.test(m.content)),
     );
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
@@ -317,6 +324,11 @@ test('address review dedupes historical comments on first poll', async () => {
       1,
     );
     assert.ok(events.some((item) => item.type === 'automation_triggered' && item.data.action === 'address_review_started'));
+    assert.ok(
+      ctx.repos.assistantMessages
+        .list()
+        .some((m) => m.role === 'assistant' && /GitHub poll · Address review/i.test(m.content)),
+    );
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
