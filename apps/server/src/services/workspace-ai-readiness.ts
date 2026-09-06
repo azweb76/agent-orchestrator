@@ -1,6 +1,7 @@
 import type {
   CreateAiReadinessAgentRequest,
   WorkspaceAiReadiness,
+  WorkspaceAiReadinessCache,
 } from '@agent-orchestrator/shared';
 import { type AppContext, nowIso } from './app-context.js';
 import { createWorktreeFromGoal } from './worktrees.js';
@@ -15,6 +16,35 @@ import {
   buildAiReadinessLlmPrompt,
   parseAiReadinessLlmResponse,
 } from './workspace-ai-readiness-llm.js';
+
+function cacheKey(workspaceId: string): string {
+  return `workspace-ai-readiness:${workspaceId}`;
+}
+
+function readCachedReadiness(
+  ctx: AppContext,
+  workspaceId: string,
+): WorkspaceAiReadiness | null {
+  const raw = ctx.repos.automationState.get(cacheKey(workspaceId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as WorkspaceAiReadiness;
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.checks)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedReadiness(
+  ctx: AppContext,
+  workspaceId: string,
+  readiness: WorkspaceAiReadiness,
+): void {
+  ctx.repos.automationState.set(cacheKey(workspaceId), JSON.stringify(readiness));
+}
 
 async function runLlmAdvice(
   ctx: AppContext,
@@ -38,7 +68,16 @@ async function runLlmAdvice(
   }
 }
 
-/** Analyze default-branch AI readiness (deterministic checks + optional LLM advice). */
+/** Return the cached AI readiness result, or null if the user has not run analysis yet. */
+export async function getCachedWorkspaceAiReadiness(
+  ctx: AppContext,
+  workspaceId: string,
+): Promise<WorkspaceAiReadinessCache> {
+  await getWorkspace(ctx, workspaceId);
+  return { readiness: readCachedReadiness(ctx, workspaceId) };
+}
+
+/** Analyze default-branch AI readiness and persist the result for later views. */
 export async function analyzeWorkspaceAiReadiness(
   ctx: AppContext,
   workspaceId: string,
@@ -69,7 +108,9 @@ export async function analyzeWorkspaceAiReadiness(
   };
 
   const { llm, llmError } = await runLlmAdvice(ctx, base, snapshot);
-  return { ...base, llm, llmError };
+  const readiness = { ...base, llm, llmError };
+  writeCachedReadiness(ctx, workspaceId, readiness);
+  return readiness;
 }
 
 /** Create a from-goal agent whose kickoff prompt implements AI readiness findings. */
@@ -78,7 +119,9 @@ export async function createAiReadinessAgent(
   workspaceId: string,
   body: CreateAiReadinessAgentRequest = {},
 ) {
-  const readiness = await analyzeWorkspaceAiReadiness(ctx, workspaceId);
+  const readiness =
+    readCachedReadiness(ctx, workspaceId) ??
+    (await analyzeWorkspaceAiReadiness(ctx, workspaceId));
   const goal = buildImplementGoal(readiness, body.checkIds);
   const workspace = await getWorkspace(ctx, workspaceId);
 

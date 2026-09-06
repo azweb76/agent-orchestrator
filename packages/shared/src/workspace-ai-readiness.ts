@@ -68,6 +68,11 @@ export interface WorkspaceAiReadiness {
   checkedAt: string;
 }
 
+/** Cached AI readiness payload; `readiness` is null until the user runs analysis. */
+export interface WorkspaceAiReadinessCache {
+  readiness: WorkspaceAiReadiness | null;
+}
+
 export interface CreateAiReadinessAgentRequest {
   /** Optional subset of check ids to focus the agent on. Defaults to non-pass checks. */
   checkIds?: WorkspaceAiCheckId[];

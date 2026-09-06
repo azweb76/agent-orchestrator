@@ -20,6 +20,7 @@ import {
   listWorktrees,
   getWorkspaceSyncStatus,
   pullWorkspaceDefaultBranch,
+  getCachedWorkspaceAiReadiness,
   analyzeWorkspaceAiReadiness,
   createAiReadinessAgent,
 } from '../services/app.js';
@@ -223,6 +224,13 @@ export function registerWorkspaceRoutes(router: express.Router, ctx: AppContext)
 
   router.get(
     '/workspaces/:workspaceId/ai-readiness',
+    asyncHandler(async (req, res) => {
+      res.json(await getCachedWorkspaceAiReadiness(ctx, param(req.params.workspaceId)));
+    }),
+  );
+
+  router.post(
+    '/workspaces/:workspaceId/ai-readiness/analyze',
     asyncHandler(async (req, res) => {
       res.json(await analyzeWorkspaceAiReadiness(ctx, param(req.params.workspaceId)));
     }),

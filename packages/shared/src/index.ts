@@ -218,5 +218,6 @@ export type {
   WorkspaceAiFileInfo,
   WorkspaceAiLlmAdvice,
   WorkspaceAiReadiness,
+  WorkspaceAiReadinessCache,
   WorkspaceSyncStatus,
 } from './workspace-ai-readiness.js';

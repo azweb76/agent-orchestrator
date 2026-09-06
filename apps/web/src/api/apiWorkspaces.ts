@@ -15,6 +15,7 @@ import type {
   WorktreeWithAgent,
   WorkspaceSyncStatus,
   WorkspaceAiReadiness,
+  WorkspaceAiReadinessCache,
   CreateAiReadinessAgentRequest,
 } from '@agent-orchestrator/shared';
 import { request } from './request';
@@ -71,7 +72,11 @@ export const apiWorkspaces = {
   pullDefaultBranch: (workspaceId: string) =>
     request<WorkspaceSyncStatus>(`/workspaces/${workspaceId}/pull`, { method: 'POST' }),
   getAiReadiness: (workspaceId: string) =>
-    request<WorkspaceAiReadiness>(`/workspaces/${workspaceId}/ai-readiness`),
+    request<WorkspaceAiReadinessCache>(`/workspaces/${workspaceId}/ai-readiness`),
+  analyzeAiReadiness: (workspaceId: string) =>
+    request<WorkspaceAiReadiness>(`/workspaces/${workspaceId}/ai-readiness/analyze`, {
+      method: 'POST',
+    }),
   createAiReadinessAgent: (workspaceId: string, body: CreateAiReadinessAgentRequest = {}) =>
     request<{
       worktree: WorktreeWithAgent;
