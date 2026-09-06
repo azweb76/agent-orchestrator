@@ -212,6 +212,7 @@ export {
 
 export {
   AUTO_WRITE_TEMPLATE_TOOLS,
+  ASSISTANT_SCHEDULE_KINDS,
   ASSISTANT_SCHEDULE_PLAYBOOKS,
   ASSISTANT_SCHEDULE_POLICIES,
   MORNING_BRIEFING_CRON,
@@ -221,10 +222,13 @@ export {
   type AssistantRun,
   type AssistantRunStatus,
   type AssistantSchedule,
+  type AssistantScheduleKind,
   type AssistantSchedulePlaybook,
   type AssistantSchedulePolicy,
   type AssistantScheduleStatus,
 } from './assistant-schedules.js';
+
+export { parseDurationToMs, resolveOnceRunAt } from './duration.js';
 
 export { cronMatches, nextCronOccurrence, parseCron, zonedParts } from './cron.js';
 

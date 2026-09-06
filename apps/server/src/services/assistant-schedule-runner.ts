@@ -50,7 +50,20 @@ export function startAssistantScheduleRunner(
 }
 
 function advanceSchedule(schedule: AssistantSchedule, after: Date): AssistantSchedule {
-  const next = nextCronOccurrence(schedule.cron, new Date(after.getTime() + 60_000), schedule.timezone);
+  if (schedule.kind === 'once') {
+    return {
+      ...schedule,
+      status: 'completed',
+      lastRunAt: after.toISOString(),
+      nextRunAt: null,
+      updatedAt: nowIso(),
+    };
+  }
+  const next = nextCronOccurrence(
+    schedule.cron,
+    new Date(after.getTime() + 60_000),
+    schedule.timezone,
+  );
   return {
     ...schedule,
     lastRunAt: after.toISOString(),
