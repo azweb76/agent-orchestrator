@@ -4,27 +4,80 @@ import {
   MORNING_BRIEFING_CRON,
   nextCronOccurrence,
   parseCron,
+  resolveOnceRunAt,
   resolveSchedulePrompt,
   type AssistantSchedule,
+  type AssistantScheduleKind,
 } from '@agent-orchestrator/shared';
 import type { AppContext } from './app-context.js';
 import { nowIso } from './app-context.js';
 import type { AssistantToolExecution } from './assistant-tools.js';
 
+const policySchema = z.enum(['notify_only', 'propose_in_chat', 'auto_write_templates']);
+const playbookSchema = z.enum(['prompt', 'morning_fleet_briefing']);
+
 const createSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
-  cron: z.string().min(1).max(120),
+  kind: z.enum(['cron', 'once']).optional(),
+  cron: z.string().max(120).optional(),
+  runIn: z.string().max(80).optional(),
+  runAt: z.string().max(80).optional(),
   timezone: z.string().min(1).max(80).optional(),
-  policy: z.enum(['notify_only', 'propose_in_chat', 'auto_write_templates']),
-  playbook: z.enum(['prompt', 'morning_fleet_briefing']),
+  policy: policySchema,
+  playbook: playbookSchema,
   prompt: z.string().max(8000).optional(),
   confirm: z.boolean(),
 });
 
-function computeNextRunAt(cron: string, timezone: string, after = new Date()): string | null {
+const onceSchema = z.object({
+  prompt: z.string().min(1).max(8000),
+  runIn: z.string().max(80).optional(),
+  runAt: z.string().max(80).optional(),
+  name: z.string().min(1).max(120).optional(),
+  policy: policySchema.optional(),
+  timezone: z.string().min(1).max(80).optional(),
+  confirm: z.boolean(),
+});
+
+function computeNextCronRunAt(cron: string, timezone: string, after = new Date()): string | null {
   const next = nextCronOccurrence(cron, after, timezone);
   return next ? next.toISOString() : null;
+}
+
+function assertTimezone(timezone: string): void {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+  } catch {
+    throw new Error(`Invalid timezone: ${timezone}`);
+  }
+}
+
+function serializeSchedule(schedule: AssistantSchedule) {
+  return {
+    id: schedule.id,
+    name: schedule.name,
+    description: schedule.description,
+    kind: schedule.kind,
+    cron: schedule.cron || null,
+    timezone: schedule.timezone,
+    policy: schedule.policy,
+    playbook: schedule.playbook,
+    prompt: schedule.prompt,
+    status: schedule.status,
+    nextRunAt: schedule.nextRunAt,
+    lastRunAt: schedule.lastRunAt,
+  };
+}
+
+function persistSchedule(ctx: AppContext, schedule: AssistantSchedule): AssistantToolExecution {
+  ctx.repos.assistantSchedules.create(schedule);
+  return {
+    content: JSON.stringify({
+      ok: true,
+      schedule: serializeSchedule(schedule),
+    }),
+  };
 }
 
 export function handleListSchedules(
@@ -32,22 +85,10 @@ export function handleListSchedules(
   input: Record<string, unknown>,
 ): AssistantToolExecution {
   const includePaused = input.includePaused !== false;
-  const schedules = ctx.repos.assistantSchedules.list(includePaused);
+  const includeCompleted = input.includeCompleted === true;
+  const schedules = ctx.repos.assistantSchedules.list({ includePaused, includeCompleted });
   return {
-    content: JSON.stringify(
-      schedules.map((schedule) => ({
-        id: schedule.id,
-        name: schedule.name,
-        description: schedule.description,
-        cron: schedule.cron,
-        timezone: schedule.timezone,
-        policy: schedule.policy,
-        playbook: schedule.playbook,
-        status: schedule.status,
-        nextRunAt: schedule.nextRunAt,
-        lastRunAt: schedule.lastRunAt,
-      })),
-    ),
+    content: JSON.stringify(schedules.map(serializeSchedule)),
   };
 }
 
@@ -58,59 +99,93 @@ export function handleCreateSchedule(
 ): AssistantToolExecution {
   const body = createSchema.parse(input);
   requireConfirm(body.confirm, 'create_schedule');
-  parseCron(body.cron);
 
+  const kind: AssistantScheduleKind = body.kind ?? 'cron';
   const playbook = body.playbook as AssistantSchedule['playbook'];
-  const prompt =
-    playbook === 'prompt'
-      ? (body.prompt?.trim() || null)
-      : null;
+  const prompt = playbook === 'prompt' ? body.prompt?.trim() || null : null;
   if (playbook === 'prompt' && !prompt) {
     throw new Error('playbook=prompt requires a non-empty prompt');
   }
-  // Validate built-in playbook resolves
-  resolveSchedulePrompt({ playbook, prompt });
 
   const timezone = body.timezone?.trim() || 'UTC';
-  // Validate timezone early
-  try {
-    Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
-  } catch {
-    throw new Error(`Invalid timezone: ${timezone}`);
+  assertTimezone(timezone);
+
+  let cron = '';
+  let nextRunAt: string | null = null;
+  if (kind === 'cron') {
+    const expression = body.cron?.trim();
+    if (!expression) throw new Error('kind=cron requires cron');
+    parseCron(expression);
+    cron = expression;
+    nextRunAt = computeNextCronRunAt(cron, timezone, new Date(Date.now() + 60_000));
+  } else {
+    nextRunAt = resolveOnceRunAt({
+      runIn: body.runIn,
+      runAt: body.runAt,
+    }).toISOString();
   }
+
+  resolveSchedulePrompt({ playbook, prompt, kind });
+
+  const createdAt = nowIso();
+  return persistSchedule(ctx, {
+    id: uuidv4(),
+    name: body.name.trim(),
+    description: (body.description ?? '').trim(),
+    kind,
+    cron,
+    timezone,
+    policy: body.policy,
+    playbook,
+    prompt,
+    status: 'active',
+    nextRunAt,
+    lastRunAt: null,
+    createdAt,
+    updatedAt: createdAt,
+  });
+}
+
+export function handleScheduleOnce(
+  ctx: AppContext,
+  input: Record<string, unknown>,
+  requireConfirm: (confirm: boolean | undefined, toolName: string) => void,
+): AssistantToolExecution {
+  const body = onceSchema.parse(input);
+  requireConfirm(body.confirm, 'schedule_once');
+
+  const prompt = body.prompt.trim();
+  const timezone = body.timezone?.trim() || 'UTC';
+  assertTimezone(timezone);
+  const nextRunAt = resolveOnceRunAt({
+    runIn: body.runIn,
+    runAt: body.runAt,
+  }).toISOString();
+
+  const name =
+    body.name?.trim() ||
+    (prompt.length > 60 ? `${prompt.slice(0, 57)}...` : prompt) ||
+    'One-time task';
 
   const createdAt = nowIso();
   const schedule: AssistantSchedule = {
     id: uuidv4(),
-    name: body.name.trim(),
-    description: (body.description ?? '').trim(),
-    cron: body.cron.trim(),
+    name,
+    description: 'One-time Assistant task',
+    kind: 'once',
+    cron: '',
     timezone,
-    policy: body.policy as AssistantSchedule['policy'],
-    playbook,
+    policy: body.policy ?? 'notify_only',
+    playbook: 'prompt',
     prompt,
     status: 'active',
-    nextRunAt: computeNextRunAt(body.cron.trim(), timezone, new Date(Date.now() + 60_000)),
+    nextRunAt,
     lastRunAt: null,
     createdAt,
     updatedAt: createdAt,
   };
-  ctx.repos.assistantSchedules.create(schedule);
-  return {
-    content: JSON.stringify({
-      ok: true,
-      schedule: {
-        id: schedule.id,
-        name: schedule.name,
-        cron: schedule.cron,
-        timezone: schedule.timezone,
-        policy: schedule.policy,
-        playbook: schedule.playbook,
-        nextRunAt: schedule.nextRunAt,
-        status: schedule.status,
-      },
-    }),
-  };
+  resolveSchedulePrompt(schedule);
+  return persistSchedule(ctx, schedule);
 }
 
 export function handlePauseSchedule(
@@ -123,13 +198,27 @@ export function handlePauseSchedule(
   const paused = input.paused !== false;
   const existing = ctx.repos.assistantSchedules.getById(scheduleId);
   if (!existing) throw new Error(`Schedule not found: ${scheduleId}`);
+  if (existing.status === 'completed') {
+    throw new Error('Completed one-shot schedules cannot be paused or resumed');
+  }
+
+  let nextRunAt = existing.nextRunAt;
+  if (paused) {
+    if (existing.kind === 'cron') nextRunAt = null;
+  } else if (existing.kind === 'cron') {
+    nextRunAt = computeNextCronRunAt(
+      existing.cron,
+      existing.timezone,
+      new Date(Date.now() + 60_000),
+    );
+  } else if (!nextRunAt) {
+    throw new Error('Cannot resume one-shot schedule without a stored nextRunAt');
+  }
 
   const updated: AssistantSchedule = {
     ...existing,
     status: paused ? 'paused' : 'active',
-    nextRunAt: paused
-      ? null
-      : computeNextRunAt(existing.cron, existing.timezone, new Date(Date.now() + 60_000)),
+    nextRunAt,
     updatedAt: nowIso(),
   };
   ctx.repos.assistantSchedules.update(updated);
@@ -189,6 +278,7 @@ export function defaultMorningBriefingInput(timezone = 'UTC'): Record<string, un
   return {
     name: 'Morning fleet briefing',
     description: 'Weekday morning work-queue + blocked agents summary into Assistant chat',
+    kind: 'cron',
     cron: MORNING_BRIEFING_CRON,
     timezone,
     policy: 'propose_in_chat',
@@ -197,4 +287,4 @@ export function defaultMorningBriefingInput(timezone = 'UTC'): Record<string, un
   };
 }
 
-export { computeNextRunAt };
+export { computeNextCronRunAt };

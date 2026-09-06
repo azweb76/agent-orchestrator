@@ -35,6 +35,8 @@ test('ASSISTANT_TOOLS includes schedule CRUD tools', () => {
     'create_schedule',
     'pause_schedule',
     'delete_schedule',
+    'schedule_once',
+    'schedule_once',
     'list_schedule_runs',
   ]) {
     assert.ok(names.includes(name), name);
@@ -179,9 +181,90 @@ test('cron helpers match weekday morning briefing', async () => {
   const fridayAfternoon = new Date('2026-09-04T15:00:00.000Z');
   const next = nextCronOccurrence(MORNING_BRIEFING_CRON, fridayAfternoon, 'UTC');
   assert.equal(next?.toISOString(), '2026-09-07T09:00:00.000Z');
-  assert.match(resolveSchedulePrompt({ playbook: 'morning_fleet_briefing', prompt: null }), /morning/i);
+  assert.match(
+    resolveSchedulePrompt({ kind: 'cron', playbook: 'morning_fleet_briefing', prompt: null }),
+    /morning/i,
+  );
   assert.equal(
     schedulePolicyAllowsWrite('auto_write_templates', 'start_agent_session', 'write').autoConfirm,
     true,
   );
+});
+
+
+test('schedule_once creates a one-shot runIn task and completes after runner', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-sched-once-'));
+  const ctx = makeCtx(tmp);
+
+  const denied = await executeAssistantTool(ctx, 'schedule_once', {
+    prompt: 'Say hi.',
+    runIn: '5m',
+    confirm: false,
+  });
+  assert.equal(denied.isError, true);
+
+  const created = await executeAssistantTool(ctx, 'schedule_once', {
+    prompt: 'Say hi.',
+    runIn: '5m',
+    confirm: true,
+  });
+  assert.equal(created.isError, undefined);
+  const body = JSON.parse(created.content) as {
+    ok: boolean;
+    schedule: { id: string; kind: string; nextRunAt: string; status: string; prompt: string | null };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(body.schedule.kind, 'once');
+  assert.equal(body.schedule.status, 'active');
+  assert.equal(body.schedule.prompt, 'Say hi.');
+  const next = Date.parse(body.schedule.nextRunAt);
+  assert.ok(Number.isFinite(next));
+  const deltaMs = next - Date.now();
+  assert.ok(deltaMs > 4 * 60_000 && deltaMs < 6 * 60_000, `expected ~5m, got ${deltaMs}ms`);
+
+  // Force due and run
+  const row = ctx.repos.assistantSchedules.getById(body.schedule.id)!;
+  ctx.repos.assistantSchedules.update({
+    ...row,
+    nextRunAt: new Date(Date.now() - 1_000).toISOString(),
+  });
+
+  const result = await runAssistantSchedulesOnce(ctx, {
+    runChat: async (chatCtx, content) => {
+      assert.match(content, /Say hi/);
+      const msg = {
+        id: 'once-a1',
+        role: 'assistant' as const,
+        content: 'Hi!',
+        createdAt: new Date().toISOString(),
+      };
+      chatCtx.repos.assistantMessages.create({
+        id: 'once-u1',
+        role: 'user',
+        content,
+        createdAt: new Date().toISOString(),
+      });
+      chatCtx.repos.assistantMessages.create(msg);
+      return { messages: [msg] };
+    },
+  });
+  assert.equal(result.ran, 1);
+
+  const completed = ctx.repos.assistantSchedules.getById(body.schedule.id)!;
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.nextRunAt, null);
+
+  const runs = ctx.repos.assistantRuns.list({ scheduleId: body.schedule.id });
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.status, 'succeeded');
+  assert.match(runs[0]?.summary ?? '', /Hi!/);
+});
+
+test('parseDurationToMs and resolveOnceRunAt support 5m', async () => {
+  const { parseDurationToMs, resolveOnceRunAt } = await import('@agent-orchestrator/shared');
+  assert.equal(parseDurationToMs('5m'), 5 * 60_000);
+  assert.equal(parseDurationToMs('1h30m'), 90 * 60_000);
+  const now = new Date('2026-09-06T12:00:00.000Z');
+  const at = resolveOnceRunAt({ runIn: '5m', now });
+  assert.equal(at.toISOString(), '2026-09-06T12:05:00.000Z');
 });
