@@ -4,8 +4,13 @@ import {
   formatAheadBehind,
   formatSidebarBranchCaption,
   formatSidebarGitCaption,
-  sidebarAgentStatusLines,
 } from './sidebarGitStatus';
+import {
+  formatSidebarStatusCaption,
+  resolveSidebarPrKind,
+  sidebarAgentStatusLines,
+  sidebarPhaseWorthShowing,
+} from './sidebarPrStatus';
 
 function makeAgent(overrides: Partial<SidebarAgent> = {}): SidebarAgent {
   return {
@@ -46,19 +51,83 @@ describe('formatSidebarBranchCaption / formatSidebarGitCaption', () => {
   });
 });
 
+describe('resolveSidebarPrKind', () => {
+  it('uses prStatus when present', () => {
+    expect(
+      resolveSidebarPrKind(
+        makeAgent({
+          worktree: { id: 'wt-1', name: 'x', branch: 'feat', prNumber: 9 },
+          prStatus: {
+            state: 'open',
+            draft: true,
+            merged: false,
+            checksRollup: 'none',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+          deliveryPhase: 'pr_draft',
+        }),
+      ),
+    ).toBe('draft');
+  });
+
+  it('falls back to deliveryPhase when cache is cold but PR is linked', () => {
+    expect(
+      resolveSidebarPrKind(
+        makeAgent({
+          worktree: { id: 'wt-1', name: 'x', branch: 'feat', prNumber: 9 },
+          prStatus: null,
+          deliveryPhase: 'pr_draft',
+        }),
+      ),
+    ).toBe('draft');
+  });
+
+  it('shows open glyph for needs_pr offers without a linked number', () => {
+    expect(resolveSidebarPrKind(makeAgent({ deliveryPhase: 'needs_pr' }))).toBe('open');
+  });
+
+  it('returns null for plain planning agents', () => {
+    expect(resolveSidebarPrKind(makeAgent())).toBe(null);
+  });
+});
+
+describe('formatSidebarStatusCaption', () => {
+  it('appends delivery phase for draft PRs', () => {
+    expect(
+      formatSidebarStatusCaption(
+        makeAgent({
+          deliveryPhase: 'pr_draft',
+          worktree: { id: 'wt-1', name: 'x', branch: 'feat/draft', prNumber: 3 },
+        }),
+      ),
+    ).toBe('feat/draft · Draft PR');
+  });
+
+  it('omits planning from the secondary caption', () => {
+    expect(formatSidebarStatusCaption(makeAgent())).toBe('fix/login');
+    expect(sidebarPhaseWorthShowing('planning')).toBe(false);
+    expect(sidebarPhaseWorthShowing('pr_draft')).toBe(true);
+  });
+});
+
 describe('sidebarAgentStatusLines', () => {
-  it('includes git caption, runtime, and delivery phase', () => {
+  it('labels draft PRs explicitly', () => {
     const lines = sidebarAgentStatusLines(
       makeAgent({
-        status: 'running',
-        deliveryPhase: 'building',
-        gitStatus: { dirty: true, aheadBy: 1, behindBy: 0 },
-        worktree: { id: 'wt-1', name: 'fix-login', branch: 'fix/login', prNumber: 12 },
+        status: 'idle',
+        deliveryPhase: 'pr_draft',
+        worktree: { id: 'wt-1', name: 'x', branch: 'feat/draft', prNumber: 12 },
+        prStatus: {
+          state: 'open',
+          draft: true,
+          merged: false,
+          checksRollup: 'none',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
       }),
     );
-    expect(lines[0]).toBe('fix/login · ↑1 · dirty');
-    expect(lines).toContain('running');
-    expect(lines).toContain('Building');
-    expect(lines).toContain('PR #12');
+    expect(lines).toContain('Draft PR');
+    expect(lines).toContain('Draft PR #12');
+    expect(lines).toContain('idle');
   });
 });

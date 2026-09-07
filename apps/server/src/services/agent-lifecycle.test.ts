@@ -7,12 +7,15 @@ import type { Agent, Workspace, Worktree } from '@agent-orchestrator/shared';
 import { createRepositories, initDatabase } from '../db/index.js';
 import {
   commitAgentChanges,
+  createAgentPullRequest,
   deleteAgent,
   deleteWorkspace,
+  listSidebarTree,
   unarchiveAgent,
   type AppContext,
 } from './app.js';
 import type { ClaudeService, GitService } from './git.js';
+import { getCachedPrStatus } from './pr-status-cache.js';
 
 describe('agent lifecycle: unarchive, delete, commit, workspace cleanup', () => {
   let dataDir: string;
@@ -95,10 +98,14 @@ describe('agent lifecycle: unarchive, delete, commit, workspace cleanup', () => 
         pushBranch: async (worktreePath: string, branch: string) => {
           pushes.push({ path: worktreePath, branch });
         },
+        getAheadBehind: async () => ({ ahead: 0, behind: 0 }),
       } as unknown as GitService,
       github: {} as AppContext['github'],
       jira: {} as AppContext['jira'],
-      claude: { stop: () => true } as unknown as ClaudeService,
+      claude: {
+        stop: () => true,
+        listPendingPermissions: () => [],
+      } as unknown as ClaudeService,
       anthropic: {} as AppContext['anthropic'],
       dataDir,
     };
@@ -179,6 +186,27 @@ describe('agent lifecycle: unarchive, delete, commit, workspace cleanup', () => 
     );
     assert.deepEqual(pushes, []);
     assert.deepEqual(commits, []);
+  });
+
+  it('createAgentPullRequest seeds a draft PR status for the sidebar', async () => {
+    seed();
+    ctx.github = {
+      createPullRequest: async () => ({ number: 42, htmlUrl: 'https://github.com/example/demo/pull/42' }),
+    } as unknown as AppContext['github'];
+
+    await createAgentPullRequest(ctx, 'ag-1', { title: 'Draft feature' });
+
+    assert.equal(ctx.repos.worktrees.getById('wt-1')?.prNumber, 42);
+    const snap = getCachedPrStatus(ctx, 'example', 'demo', 42);
+    assert.equal(snap?.draft, true);
+    assert.equal(snap?.state, 'open');
+    assert.equal(snap?.merged, false);
+
+    const tree = await listSidebarTree(ctx);
+    const agent = tree[0]?.agents[0];
+    assert.equal(agent?.worktree.prNumber, 42);
+    assert.equal(agent?.prStatus?.draft, true);
+    assert.equal(agent?.deliveryPhase, 'pr_draft');
   });
 
   it('deleteWorkspace removes clone files and worktree directories', async () => {

@@ -29,7 +29,7 @@ import { deleteWorktree, overlayLivePullRequest } from './worktrees.js';
 import { getDraftPrOfferSessionId } from './draft-pr-offer.js';
 import { getTaskSuggestionsOffer } from './task-suggestions.js';
 import { getInstructionDraftOffer } from './instruction-offers.js';
-import { getCachedPrStatus } from './github-automation.js';
+import { getCachedPrStatus, cachePrStatusFromDetail } from './github-automation.js';
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
   const agent = ctx.repos.agents.getById(agentId);
@@ -307,6 +307,7 @@ export async function createAgentPullRequest(
 
   await ctx.git.pushBranch(detail.worktree.path, branch);
 
+  const draft = body.draft ?? true;
   const pr = await ctx.github.createPullRequest(
     detail.workspace.githubOwner,
     detail.workspace.githubRepo,
@@ -316,7 +317,7 @@ export async function createAgentPullRequest(
       head: branch,
       base,
       // Default to a draft so the idea→plan→build flow ships reviewable PRs.
-      draft: body.draft ?? true,
+      draft,
     },
   );
 
@@ -326,9 +327,18 @@ export async function createAgentPullRequest(
     prTitle: body.title,
   });
 
+  // Seed sidebar / flight-controller phase immediately (automation poll may be off).
+  cachePrStatusFromDetail(ctx, detail.workspace.githubOwner, detail.workspace.githubRepo, {
+    number: pr.number,
+    state: 'open',
+    draft,
+    merged: false,
+  });
+
   ctx.repos.events.create(
-    makeEvent(agentId, 'pr_created', { number: pr.number, htmlUrl: pr.htmlUrl }),
+    makeEvent(agentId, 'pr_created', { number: pr.number, htmlUrl: pr.htmlUrl, draft }),
   );
+  notify(ctx, 'agent_changed', { agentId });
 
   return pr;
 }
