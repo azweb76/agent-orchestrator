@@ -16,7 +16,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InboxPullRequest, PullRequestChecks } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
-import { ConfirmDialog } from '../ConfirmDialog';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { buildFleetBulkCounts } from './fleetBulkActions';
 import { useFleetBulkRunner } from './useFleetBulkRunner';
@@ -161,7 +160,7 @@ export function CommandPalette({
   const runAction = (action: PaletteCommandAction) => {
     if (action.kind === 'bulk') {
       bulkRunner.requestAction(action.bulk);
-      if (action.bulk !== 'archive-merged-all') onClose();
+      onClose();
       return;
     }
     onClose();
@@ -306,19 +305,6 @@ export function CommandPalette({
           </List>
         )}
       </Dialog>
-
-      <ConfirmDialog
-        open={bulkRunner.pendingConfirm === 'archive-merged-all'}
-        title="Archive merged agents?"
-        description={`This archives ${bulkCounts.archiveMerged} agent${
-          bulkCounts.archiveMerged === 1 ? '' : 's'
-        } whose pull requests have merged. Worktrees are kept unless you delete them later.`}
-        confirmLabel="Archive merged"
-        confirmColor="warning"
-        loading={bulkRunner.loading}
-        onCancel={bulkRunner.cancelPending}
-        onConfirm={bulkRunner.confirmPending}
-      />
     </>
   );
 }

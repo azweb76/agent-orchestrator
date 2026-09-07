@@ -185,10 +185,10 @@ export function buildFleetBulkCommands(counts: FleetBulkCounts): PaletteCommand[
       action: { kind: 'bulk', bulk },
     });
   };
-  push('fix-ci-all', counts.fixCi, 'bulk fleet ci checks failing fix');
-  push('address-review-all', counts.addressReview, 'bulk fleet review requested address');
-  push('archive-merged-all', counts.archiveMerged, 'bulk fleet archive merged cleanup');
-  push('open-needs-input-all', counts.needsInput, 'bulk fleet needs input permission blocked');
+  push('fix-ci-all', counts.fixCi, 'bulk fleet ci checks failing fix assistant');
+  push('address-review-all', counts.addressReview, 'bulk fleet review requested address assistant');
+  push('archive-merged-all', counts.archiveMerged, 'bulk fleet archive merged cleanup assistant');
+  push('open-needs-input-all', counts.needsInput, 'bulk fleet needs input permission blocked unblock assistant');
   return commands;
 }
 

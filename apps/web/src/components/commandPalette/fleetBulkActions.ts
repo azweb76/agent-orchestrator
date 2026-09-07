@@ -81,8 +81,9 @@ export function buildFleetBulkCounts(input: {
   };
 }
 
-export function fleetBulkActionNeedsConfirm(action: FleetBulkActionId): boolean {
-  return action === 'archive-merged-all';
+/** Bulk fleet actions are Assistant-mediated; confirm happens in chat tools. */
+export function fleetBulkActionNeedsConfirm(_action: FleetBulkActionId): boolean {
+  return false;
 }
 
 export function fleetBulkActionLabel(action: FleetBulkActionId, count: number): string {
@@ -94,6 +95,21 @@ export function fleetBulkActionLabel(action: FleetBulkActionId, count: number): 
     case 'archive-merged-all':
       return `Archive ${count} merged agent${count === 1 ? '' : 's'}`;
     case 'open-needs-input-all':
-      return `Open ${count} needs-input agent${count === 1 ? '' : 's'}`;
+      return `Unblock ${count} agent${count === 1 ? '' : 's'}`;
+  }
+}
+
+export function fleetBulkActionKind(
+  action: FleetBulkActionId,
+): 'fix-ci' | 'address-review' | 'archive-merged' | 'needs-input' {
+  switch (action) {
+    case 'fix-ci-all':
+      return 'fix-ci';
+    case 'address-review-all':
+      return 'address-review';
+    case 'archive-merged-all':
+      return 'archive-merged';
+    case 'open-needs-input-all':
+      return 'needs-input';
   }
 }

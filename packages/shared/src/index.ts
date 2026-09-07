@@ -259,6 +259,15 @@ export {
   type AssistantScheduleStarter,
 } from './assistant-schedule-starters.js';
 
+export {
+  buildBlockedAgentPrompt,
+  buildFleetTriagePrompt,
+  type FleetTriageAgentRef,
+  type FleetTriageKind,
+  type FleetTriagePrRef,
+  type FleetTriageStarter,
+} from './assistant-fleet-starters.js';
+
 export { parseDurationToMs, resolveOnceRunAt } from './duration.js';
 
 export { cronMatches, nextCronOccurrence, parseCron, zonedParts } from './cron.js';

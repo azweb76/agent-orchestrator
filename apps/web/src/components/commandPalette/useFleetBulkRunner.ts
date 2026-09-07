@@ -1,6 +1,5 @@
-import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { buildFleetTriagePrompt } from '@agent-orchestrator/shared';
 import type {
   InboxPullRequest,
   MergedFleetAgent,
@@ -8,10 +7,9 @@ import type {
   PullRequestInbox,
   SidebarWorkspace,
 } from '@agent-orchestrator/shared';
-import { api } from '../../api/client';
+import { useSendAssistantPrompt } from '../dashboard/useSendAssistantPrompt';
 import {
-  fleetBulkActionLabel,
-  fleetBulkActionNeedsConfirm,
+  fleetBulkActionKind,
   selectAddressReviewBulkTargets,
   selectArchiveMergedBulkTargets,
   selectFixCiBulkTargets,
@@ -26,95 +24,70 @@ export function useFleetBulkRunner(input: {
   checksForPr: (pr: InboxPullRequest) => PullRequestChecks | undefined;
   onAfterRun?: () => void;
 }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [pendingConfirm, setPendingConfirm] = useState<FleetBulkActionId | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const assistant = useSendAssistantPrompt();
 
-  const runMutation = useMutation({
-    mutationFn: async (action: FleetBulkActionId) => {
-      setError(null);
-      if (action === 'fix-ci-all') {
-        const targets = selectFixCiBulkTargets(input.inbox, input.checksForPr);
-        for (const target of targets) {
-          await api.createAgentFromPr({
-            owner: target.pr.owner,
-            repo: target.pr.repo,
-            prNumber: target.pr.number,
-            template: 'fix-ci',
-          });
-        }
-        return;
-      }
-      if (action === 'address-review-all') {
-        for (const pr of selectAddressReviewBulkTargets(input.inbox)) {
-          await api.createAgentFromPr({
+  const buildPrompt = useCallback(
+    (action: FleetBulkActionId) => {
+      const kind = fleetBulkActionKind(action);
+      if (kind === 'fix-ci') {
+        return buildFleetTriagePrompt({
+          kind,
+          fixCi: selectFixCiBulkTargets(input.inbox, input.checksForPr).map(({ pr }) => ({
             owner: pr.owner,
             repo: pr.repo,
-            prNumber: pr.number,
-            template: 'address-review',
-          });
-        }
-        return;
+            number: pr.number,
+            agentId: pr.agentId,
+          })),
+        });
       }
-      if (action === 'open-needs-input-all') {
-        const first = selectNeedsInputBulkTargets(input.sidebar)[0];
-        if (first) {
-          navigate(`/agents/${first.agentId}`, { state: { focusAttention: 'needs-input' } });
-        }
-        return;
+      if (kind === 'address-review') {
+        return buildFleetTriagePrompt({
+          kind,
+          addressReview: selectAddressReviewBulkTargets(input.inbox).map((pr) => ({
+            owner: pr.owner,
+            repo: pr.repo,
+            number: pr.number,
+            agentId: pr.agentId,
+          })),
+        });
       }
-      for (const agent of selectArchiveMergedBulkTargets(input.mergedAgents)) {
-        await api.archiveAgent(agent.agentId, { deleteWorktree: false });
+      if (kind === 'needs-input') {
+        return buildFleetTriagePrompt({
+          kind,
+          needsInput: selectNeedsInputBulkTargets(input.sidebar),
+        });
       }
+      return buildFleetTriagePrompt({
+        kind: 'archive-merged',
+        archiveMerged: selectArchiveMergedBulkTargets(input.mergedAgents).map((agent) => ({
+          agentId: agent.agentId,
+          name: agent.agentName,
+        })),
+      });
     },
-    onSuccess: (_result, action) => {
-      if (action === 'archive-merged-all') {
-        queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-        queryClient.invalidateQueries({ queryKey: ['status'] });
-        queryClient.invalidateQueries({ queryKey: ['fleet-merged-agents'] });
-      } else if (action !== 'open-needs-input-all') {
-        queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-        queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-        queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
-      }
-      setPendingConfirm(null);
-      input.onAfterRun?.();
-    },
-    onError: (err) => {
-      setError((err as Error).message);
-    },
-  });
+    [input.checksForPr, input.inbox, input.mergedAgents, input.sidebar],
+  );
 
   const requestAction = useCallback(
     (action: FleetBulkActionId) => {
-      if (fleetBulkActionNeedsConfirm(action)) {
-        setPendingConfirm(action);
-        return;
-      }
-      runMutation.mutate(action);
+      const starter = buildPrompt(action);
+      if (!starter) return;
+      void (async () => {
+        await assistant.sendPrompt(starter.prompt);
+        input.onAfterRun?.();
+      })();
     },
-    [runMutation],
+    [assistant, buildPrompt, input],
   );
-
-  const confirmPending = useCallback(() => {
-    if (!pendingConfirm) return;
-    runMutation.mutate(pendingConfirm);
-  }, [pendingConfirm, runMutation]);
-
-  const cancelPending = useCallback(() => {
-    setPendingConfirm(null);
-    runMutation.reset();
-  }, [runMutation]);
 
   return {
     requestAction,
-    pendingConfirm,
-    confirmPending,
-    cancelPending,
-    confirmLabel: pendingConfirm ? fleetBulkActionLabel(pendingConfirm, selectArchiveMergedBulkTargets(input.mergedAgents).length) : '',
-    loading: runMutation.isPending,
-    error,
-    clearError: () => setError(null),
+    pendingConfirm: null as FleetBulkActionId | null,
+    confirmPending: () => undefined,
+    cancelPending: () => undefined,
+    confirmLabel: '',
+    loading: assistant.sending,
+    error: assistant.error,
+    clearError: assistant.clearError,
   };
 }
