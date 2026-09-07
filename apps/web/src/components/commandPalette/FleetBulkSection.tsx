@@ -1,11 +1,18 @@
 import { useEffect, useMemo } from 'react';
+import { Alert, Box, Stack, Typography } from '@mui/material';
+import BoltOutlinedIcon from '@mui/icons-material/BoltOutlined';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { InboxPullRequest, PullRequestChecks, PullRequestInbox, SidebarWorkspace } from '@agent-orchestrator/shared';
+import type {
+  InboxPullRequest,
+  PullRequestChecks,
+  PullRequestInbox,
+  SidebarWorkspace,
+} from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { SectionLabel } from '../dashboard/SectionLabel';
 import { buildFleetBulkCounts } from './fleetBulkActions';
 import { FleetBulkBar } from './FleetBulkBar';
 import { useFleetBulkRunner } from './useFleetBulkRunner';
-import { ConfirmDialog } from '../ConfirmDialog';
 
 function checksFromCache(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -64,21 +71,36 @@ export function FleetBulkSection({ inbox, sidebar, githubConfigured }: FleetBulk
     checksForPr: (pr) => checksFromCache(queryClient, pr),
   });
 
+  const hasActions =
+    counts.fixCi + counts.addressReview + counts.archiveMerged + counts.needsInput > 0;
+  if (!hasActions && !bulkRunner.error) return null;
+
   return (
-    <>
-      <FleetBulkBar counts={counts} loading={bulkRunner.loading} onAction={bulkRunner.requestAction} />
-      <ConfirmDialog
-        open={bulkRunner.pendingConfirm === 'archive-merged-all'}
-        title="Archive merged agents?"
-        description={`This archives ${counts.archiveMerged} agent${
-          counts.archiveMerged === 1 ? '' : 's'
-        } whose pull requests have merged. Worktrees are kept unless you delete them later.`}
-        confirmLabel="Archive merged"
-        confirmColor="warning"
-        loading={bulkRunner.loading}
-        onCancel={bulkRunner.cancelPending}
-        onConfirm={bulkRunner.confirmPending}
-      />
-    </>
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 2,
+        bgcolor: 'ao.surface.panel',
+        px: { xs: 1.75, md: 2.25 },
+        py: 1.75,
+      }}
+    >
+      <Stack spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <BoltOutlinedIcon sx={{ fontSize: 18, color: 'secondary.main' }} />
+          <SectionLabel>Fleet triage</SectionLabel>
+          <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+            Ask Assistant — nothing writes until you confirm in chat.
+          </Typography>
+        </Stack>
+        <FleetBulkBar counts={counts} loading={bulkRunner.loading} onAction={bulkRunner.requestAction} />
+        {bulkRunner.error ? (
+          <Alert severity="error" onClose={bulkRunner.clearError}>
+            {bulkRunner.error}
+          </Alert>
+        ) : null}
+      </Stack>
+    </Box>
   );
 }

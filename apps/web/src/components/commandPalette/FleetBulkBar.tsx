@@ -38,10 +38,12 @@ export function FleetBulkBar({ counts, loading, onAction }: FleetBulkBarProps) {
         key={action}
         title={
           action === 'archive-merged-all'
-            ? 'Archive agents whose pull requests have merged'
-            : undefined
+            ? 'Ask Assistant to archive agents whose PRs have merged'
+            : action === 'open-needs-input-all'
+              ? 'Ask Assistant to list and clear pending permissions'
+              : 'Ask Assistant to start the matching session template'
         }
-        disabled={action !== 'archive-merged-all'}
+        disabled={false}
       >
         <Button
           size="small"
@@ -59,7 +61,7 @@ export function FleetBulkBar({ counts, loading, onAction }: FleetBulkBarProps) {
   if (buttons.length === 0) return null;
 
   return (
-    <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
       {buttons}
     </Stack>
   );
