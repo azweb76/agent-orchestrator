@@ -14,6 +14,7 @@ import type { AppContext } from './services/app-context.js';
 import { executeAssistantTool } from './services/assistant-tools.js';
 import { applyPersistedSecrets } from './services/setup.js';
 import { ensureBuiltInTaskFollowUps } from './services/task-followups.js';
+import { ensureBuiltInAgentTasks } from './services/agent-tasks.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
 dotenv.config();
@@ -41,6 +42,7 @@ function createMcpContext(): AppContext {
     dataDir,
   };
   ensureBuiltInTaskFollowUps(ctx);
+  ensureBuiltInAgentTasks(ctx);
   return ctx;
 }
 

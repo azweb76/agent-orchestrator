@@ -263,7 +263,8 @@ describe('slash-command-context', () => {
     assert.equal(result.displayMessage, '/code-review');
     assert.ok(result.sessionSwitch);
     assert.equal(result.sessionSwitch?.template, 'review');
-    assert.match(result.prompt, /Review the current uncommitted/);
+    assert.match(result.prompt, /code-review skill/);
+    assert.match(result.prompt, /review the current uncommitted/i);
     assert.match(result.mentionContext ?? '', /### @diff/);
 
     const again = await resolveSlashCommandContext(

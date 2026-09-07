@@ -5,12 +5,14 @@ import type {
   UpdateAgentTaskRequest,
 } from '@agent-orchestrator/shared';
 import {
+  BUILTIN_AGENT_TASK_SEEDS,
   isValidAgentTaskName,
   sanitizeAgentTaskAllowedTools,
 } from '@agent-orchestrator/shared';
 import { type AppContext, nowIso } from './app-context.js';
 
 export function listAgentTasks(ctx: AppContext): AgentTask[] {
+  ensureBuiltInAgentTasks(ctx);
   return ctx.repos.agentTasks.list();
 }
 
@@ -21,6 +23,7 @@ export function getAgentTask(ctx: AppContext, id: string): AgentTask {
 }
 
 export function requireAgentTaskByName(ctx: AppContext, name: string): AgentTask {
+  ensureBuiltInAgentTasks(ctx);
   const task = ctx.repos.agentTasks.getByName(name.trim());
   if (!task) throw new Error(`Task "${name}" not found`);
   return task;
@@ -117,4 +120,29 @@ export function deleteAgentTask(ctx: AppContext, id: string): void {
     throw new Error(`Built-in task "${task.name}" cannot be deleted`);
   }
   ctx.repos.agentTasks.delete(id);
+}
+
+/** Insert any missing built-in AgentTasks (idempotent). Does not overwrite user edits. */
+export function ensureBuiltInAgentTasks(ctx: AppContext): void {
+  const now = nowIso();
+  for (const seed of BUILTIN_AGENT_TASK_SEEDS) {
+    if (ctx.repos.agentTasks.getByName(seed.name)) continue;
+    ctx.repos.agentTasks.create({
+      id: uuidv4(),
+      name: seed.name,
+      title: seed.title,
+      description: seed.description?.trim() ?? '',
+      purpose: seed.purpose?.trim() ?? '',
+      promptTemplate: normalizeOptionalText(seed.promptTemplate),
+      systemPrompt: normalizeOptionalText(seed.systemPrompt),
+      allowedTools: sanitizeAgentTaskAllowedTools(seed.allowedTools),
+      model: seed.model?.trim() || 'sonnet',
+      effort: seed.effort ?? 'high',
+      permissionMode: seed.permissionMode ?? 'plan',
+      listed: seed.listed ?? true,
+      builtIn: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 }

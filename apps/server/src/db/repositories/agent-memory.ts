@@ -60,7 +60,9 @@ export class AgentMemoryRepository {
     this.db
       .prepare(
         `UPDATE agent_memories SET
-           kind = @kind, key = @key, content = @content, status = @status, updated_at = @updatedAt
+           kind = @kind, key = @key, content = @content,
+           source = @source, source_session_id = @sourceSessionId,
+           status = @status, updated_at = @updatedAt
          WHERE id = @id`,
       )
       .run({
@@ -68,6 +70,8 @@ export class AgentMemoryRepository {
         kind: memory.kind,
         key: memory.key,
         content: memory.content,
+        source: memory.source,
+        sourceSessionId: memory.sourceSessionId,
         status: memory.status,
         updatedAt: memory.updatedAt,
       });

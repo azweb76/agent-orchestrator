@@ -5,14 +5,15 @@ import type {
   GenerateInstructionDraftRequest,
   GradeChatSessionRequest,
   InstructionDraftOffer,
-  InstructionFileKind,
-  InstructionFileScope,
   SessionContextUsage,
-  SessionGradeFinding,
 } from '@agent-orchestrator/shared';
 import {
   buildSessionContextUsage,
   instructionGradeFindings,
+  isPhaseSkillSlug,
+  parseSkillVersion,
+  phaseSkillRelativePath,
+  setSkillFrontmatterVersion,
   shouldOfferInstructionDraft,
 } from '@agent-orchestrator/shared';
 import { buildSessionTranscript } from './session-transcript.js';
@@ -33,29 +34,15 @@ import {
   clearInstructionDraftOffer,
   publishInstructionDraftOffer,
 } from './instruction-offers.js';
+import { seedInstructionOfferFromFindings } from './instruction-offer-seed.js';
+import { recordSkillGradeMetrics } from './skill-metrics.js';
+import { recordGradeMemoriesFromFindings } from './grade-memories.js';
 
 function instructionRoots(ctx: AppContext, agentId: string): InstructionFileRoots {
   const agent = requireAgent(ctx, agentId);
   const worktree = ctx.repos.worktrees.getById(agent.worktreeId);
   if (!worktree) throw new Error('Worktree not found');
   return { worktreePath: worktree.path };
-}
-
-function seedFromFindings(findings: SessionGradeFinding[]): {
-  kind: InstructionFileKind;
-  scope?: InstructionFileScope;
-  extraNotes: string;
-  findingTitles: string[];
-} {
-  const findingTitles = findings.map((item) => item.title).filter(Boolean);
-  const withAction = findings.find((item) => item.recommendedAction?.kind);
-  const kind = withAction?.recommendedAction?.kind ?? 'skill';
-  const scope = withAction?.recommendedAction?.scope;
-  const extraNotes = findings
-    .map((item) => `${item.title}: ${item.detail}`.trim())
-    .filter(Boolean)
-    .join('\n');
-  return { kind, scope, extraNotes, findingTitles };
 }
 
 async function offerInstructionDraftAfterGrade(
@@ -66,12 +53,49 @@ async function offerInstructionDraftAfterGrade(
   if (!shouldOfferInstructionDraft(session)) return;
 
   const findings = instructionGradeFindings(session.grade);
-  const seed = seedFromFindings(findings);
+  const seed = seedInstructionOfferFromFindings(session, findings);
   const request: GenerateInstructionDraftRequest = {
     kind: seed.kind,
     scope: seed.scope,
     extraNotes: seed.extraNotes || undefined,
+    name: seed.name,
+    relativePath: seed.relativePath,
   };
+
+  let metricsComparison: InstructionDraftOffer['metricsComparison'] = null;
+  const agent = requireAgent(ctx, agentId);
+  const worktree = ctx.repos.worktrees.getById(agent.worktreeId);
+  const phaseSlug = seed.preferredSkillSlug;
+  if (worktree && phaseSlug && isPhaseSkillSlug(phaseSlug) && session.grade?.analysis?.stats) {
+    let version = 1;
+    try {
+      const existing = await readInstructionFileContent(
+        { worktreePath: worktree.path },
+        {
+          kind: 'skill',
+          scope: 'project',
+          relativePath: phaseSkillRelativePath(phaseSlug),
+        },
+      );
+      if (existing) version = parseSkillVersion(existing);
+    } catch {
+      // missing skill — keep version 1
+    }
+    const stats = session.grade.analysis.stats;
+    metricsComparison = recordSkillGradeMetrics(ctx, worktree.workspaceId, {
+      skillSlug: phaseSlug,
+      version,
+      stats: {
+        userTurns: stats.userTurns,
+        assistantTurns: stats.assistantTurns,
+        estimatedTokens: stats.estimatedTokens,
+        costUsd: stats.costUsd,
+        toolCalls: stats.toolCalls,
+      },
+      gradedAt: session.grade.gradedAt,
+      sessionId: session.id,
+    });
+  }
 
   let draft: InstructionDraftOffer['draft'] = null;
   try {
@@ -91,6 +115,8 @@ async function offerInstructionDraftAfterGrade(
     kind: seed.kind,
     scope: seed.scope,
     extraNotes: seed.extraNotes || undefined,
+    preferredSkillSlug: seed.preferredSkillSlug,
+    metricsComparison,
   });
 }
 
@@ -151,6 +177,7 @@ export async function gradeAgentSession(
     sessionFilePath,
     usageTokens,
     costUsd: fileCostUsd,
+    sessionTemplate: session.template,
   });
   if (!context.transcript) {
     context.transcript = storedTranscript;
@@ -178,6 +205,17 @@ export async function gradeAgentSession(
       score: result.score,
     }),
   );
+
+  try {
+    recordGradeMemoriesFromFindings(
+      ctx,
+      agentId,
+      graded,
+      graded.grade?.analysis?.findings ?? [],
+    );
+  } catch (error) {
+    console.warn(`[grade-memories] failed for session ${graded.id}:`, error);
+  }
 
   try {
     await offerInstructionDraftAfterGrade(ctx, agentId, graded);
@@ -242,7 +280,26 @@ export async function applyAgentInstructionFile(
   body: ApplyInstructionFileRequest,
 ) {
   requireAgent(ctx, agentId);
-  const result = await applyInstructionFile(instructionRoots(ctx, agentId), body);
+  let content = body.content;
+  if (body.kind === 'skill') {
+    const roots = instructionRoots(ctx, agentId);
+    let existingVersion = 0;
+    if (body.relativePath) {
+      const existing = await readInstructionFileContent(roots, {
+        kind: 'skill',
+        scope: body.scope ?? 'project',
+        relativePath: body.relativePath,
+      });
+      if (existing) existingVersion = parseSkillVersion(existing);
+    }
+    if (parseSkillVersion(content) <= existingVersion) {
+      content = setSkillFrontmatterVersion(content, existingVersion + 1);
+    }
+  }
+  const result = await applyInstructionFile(instructionRoots(ctx, agentId), {
+    ...body,
+    content,
+  });
   clearInstructionDraftOffer(ctx, agentId);
   ctx.repos.events.create(
     makeEvent(agentId, 'instruction_file_applied', {
@@ -282,8 +339,6 @@ export async function getAgentSessionContext(
 
   let best = await readClaudeSessionContext(candidates[0]!);
   let bestPath: string | null = candidates[0]!;
-  // Prefer a source that actually reports prompt occupancy. After stop, the Claude
-  // JSONL can exist but still lack usage while the orchestrator run log has it.
   if (!best.history.some((turn) => turn.contextTokens > 0)) {
     for (const candidate of candidates.slice(1)) {
       const parsed = await readClaudeSessionContext(candidate);

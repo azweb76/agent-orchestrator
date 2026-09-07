@@ -27,6 +27,7 @@ test('listed templates include Create draft PR, Review, Address review, Fix CI, 
     assert.ok(!template.prompt?.includes('AskUserQuestion'));
   }
   assert.ok(buildImplementPlanPrompt('# Plan').includes('Approved plan'));
+  assert.ok(buildImplementPlanPrompt('# Plan').includes('implement-plan'));
 });
 
 test('createAgentSession starts a parallel session without touching the original', async () => {
@@ -43,7 +44,8 @@ test('createAgentSession starts a parallel session without touching the original
     const created = await createAgentSession(ctx, agent.id, { template: 'review' });
     assert.equal(created.session.template, 'review');
     assert.equal(created.session.permissionMode, 'plan');
-    assert.ok(created.kickoffPrompt?.includes('Review'));
+    assert.ok(created.kickoffPrompt?.includes('code-review'));
+    assert.ok(created.kickoffPrompt?.toLowerCase().includes('review'));
     assert.equal(created.session.status, 'idle');
 
     const sessions = ctx.repos.sessions.listByAgent(agent.id);

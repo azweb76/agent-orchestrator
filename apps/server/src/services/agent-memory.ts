@@ -95,7 +95,7 @@ export function createAgentMemory(
     kind: body.kind ?? 'fact',
     key,
     content,
-    source: 'user',
+    source: body.source ?? 'user',
     sourceSessionId: body.sourceSessionId?.trim() || null,
     status: 'active',
     createdAt: timestamp,

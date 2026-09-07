@@ -30,6 +30,8 @@ export interface SessionGradeContext {
   model: string;
   permissionMode: string;
   sessionFilePath?: string | null;
+  /** Chat session template id when known (routes skill recommendations). */
+  sessionTemplate?: string;
 }
 
 export function estimateTokensFromChars(chars: number): number {
@@ -133,6 +135,7 @@ export function buildSessionGradeContext(input: {
   sessionFilePath?: string | null;
   usageTokens?: number | null;
   costUsd?: number | null;
+  sessionTemplate?: string;
 }): SessionGradeContext {
   const skillCommands = input.skills.filter((item) => item.kind === 'skill');
   const stats = buildSessionGradeStats(input.messages, input.instructionFiles, skillCommands.length);
@@ -158,6 +161,7 @@ export function buildSessionGradeContext(input: {
     model: input.model,
     permissionMode: input.permissionMode,
     sessionFilePath: input.sessionFilePath?.trim() || undefined,
+    sessionTemplate: input.sessionTemplate,
   };
 }
 
@@ -171,6 +175,8 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     '(2) token efficiency — avoid re-reads, redundant tool calls, and bloated context;',
     '(3) fewer corrections — surface standing instructions or skills that would have prevented rework, wrong assumptions, or human fix-up loops.',
     'Look at excessive turns, wasted tokens, bloated context, misconfigured instruction files, and missing or weak skills.',
+    'Judge whether the agent used Explore/Task subagents and phase skills (plan-work, implement-plan, code-review, fix-ci, address-review) when appropriate.',
+    'When recommending a skill fix for a phase session, prefer updating the matching phase skill over inventing a new skill slug.',
     'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
     '"score" (integer 1-5), "summary" (2-4 sentences), "findings" (array).',
     'If you cannot call a tool, respond with ONLY that JSON object (no markdown fences or extra text).',
@@ -199,6 +205,7 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     `Session: ${context.sessionTitle}`,
     `Model: ${context.model}`,
     `Permission mode: ${context.permissionMode}`,
+    context.sessionTemplate ? `Session template: ${context.sessionTemplate}` : '',
     context.sessionFilePath
       ? `Session file (source of this analysis): ${context.sessionFilePath}`
       : '',

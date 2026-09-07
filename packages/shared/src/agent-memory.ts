@@ -31,6 +31,8 @@ export interface CreateAgentMemoryRequest {
   kind?: AgentMemoryKind;
   key: string;
   content: string;
+  /** Defaults to `user`. Grade/system writers set explicitly. */
+  source?: AgentMemory['source'];
   sourceSessionId?: string | null;
 }
 

@@ -12,6 +12,7 @@ import { Notifier } from './services/notifier.js';
 import { createRouter, errorHandler } from './routes/index.js';
 import { recoverRunningAgents, type AppContext } from './services/app.js';
 import { ensureBuiltInTaskFollowUps } from './services/task-followups.js';
+import { ensureBuiltInAgentTasks } from './services/agent-tasks.js';
 import { startGithubPollBus } from './services/github-poll-bus.js';
 import { startAssistantScheduleRunner } from './services/assistant-schedule-runner.js';
 import { startWatchdog } from './services/watchdog.js';
@@ -48,6 +49,7 @@ const ctx: AppContext = {
   notifier: new Notifier(),
 };
 ensureBuiltInTaskFollowUps(ctx);
+ensureBuiltInAgentTasks(ctx);
 
 const app = express();
 app.use(cors());

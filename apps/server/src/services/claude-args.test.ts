@@ -127,9 +127,11 @@ test('allowedToolsForPermissionMode never auto-approves interactive tools', () =
     assert.ok(!tools.includes('AskUserQuestion'), mode);
     assert.ok(!tools.includes('ExitPlanMode'), mode);
   }
-  assert.equal(allowedToolsForPermissionMode('plan'), 'Read,Glob,Grep');
+  assert.equal(allowedToolsForPermissionMode('plan'), 'Read,Glob,Grep,Skill,Agent');
+  assert.match(allowedToolsForPermissionMode('acceptEdits'), /Skill/);
   assert.match(allowedToolsForPermissionMode('acceptEdits'), /Edit/);
   assert.match(allowedToolsForPermissionMode('auto'), /Bash/);
+  assert.match(allowedToolsForPermissionMode('auto'), /Agent/);
 });
 
 test('shouldAutoAllowToolPermission keeps interactive tools on the UI', () => {

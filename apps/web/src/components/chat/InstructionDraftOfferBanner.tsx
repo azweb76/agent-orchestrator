@@ -21,10 +21,11 @@ interface InstructionDraftOfferBannerProps {
 }
 
 /**
- * After a Build / Fix CI run is graded with instruction-file or skill
- * findings, offers to review and apply an instruction draft. Prefer the
- * server-persisted offer (with optional pre-generated draft); fall back to
- * deriving an offer from the graded session. Nothing is written until apply.
+ * After a Build / Fix CI / Review / Address review run is graded with
+ * instruction-file or skill findings, offers to review and apply an
+ * instruction draft. Prefer the server-persisted offer (with optional
+ * pre-generated draft); fall back to deriving an offer from the graded
+ * session. Nothing is written until apply.
  */
 export function InstructionDraftOfferBanner({
   agentId,
