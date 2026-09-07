@@ -9,7 +9,7 @@ import {
   listAssistantMessages,
   runAssistantChat,
 } from '../services/assistant-chat.js';
-import { getAssistantWorkQueue } from '../services/assistant-tools.js';
+import { getAssistantSchedules, getAssistantWorkQueue } from '../services/assistant-tools.js';
 
 function writeAssistantSse(res: express.Response, event: AssistantStreamEvent): void {
   res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
@@ -29,6 +29,15 @@ export function registerAssistantRoutes(router: express.Router, ctx: AppContext)
       const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : 8;
       const limit = Number.isFinite(limitRaw) ? limitRaw : 8;
       res.json(await getAssistantWorkQueue(ctx, limit));
+    }),
+  );
+
+  router.get(
+    '/assistant/schedules',
+    asyncHandler(async (req, res) => {
+      const includePaused = req.query.includePaused !== 'false';
+      const includeCompleted = req.query.includeCompleted === 'true';
+      res.json(getAssistantSchedules(ctx, { includePaused, includeCompleted }));
     }),
   );
 

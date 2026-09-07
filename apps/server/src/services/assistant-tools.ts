@@ -349,6 +349,22 @@ export function toolRisk(name: string): AssistantToolRisk | undefined {
   return assistantToolByName(name)?.risk;
 }
 
+export function getAssistantSchedules(
+  ctx: AppContext,
+  options: { includePaused?: boolean; includeCompleted?: boolean } = {},
+): { schedules: unknown[] } {
+  const result = handleListSchedules(ctx, {
+    includePaused: options.includePaused !== false,
+    includeCompleted: options.includeCompleted === true,
+  });
+  try {
+    const schedules = JSON.parse(result.content) as unknown[];
+    return { schedules: Array.isArray(schedules) ? schedules : [] };
+  } catch {
+    return { schedules: [] };
+  }
+}
+
 export async function getAssistantWorkQueue(
   ctx: AppContext,
   limit = 8,

@@ -76,6 +76,15 @@ export const apiAssistant = {
       items: Array<Record<string, unknown>>;
       inboxErrors?: Record<string, string | null>;
     }>(`/assistant/work-queue?limit=${encodeURIComponent(String(limit))}`),
+  getAssistantSchedules: (opts?: { includePaused?: boolean; includeCompleted?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.includePaused === false) params.set('includePaused', 'false');
+    if (opts?.includeCompleted === true) params.set('includeCompleted', 'true');
+    const qs = params.toString();
+    return request<{ schedules: Array<Record<string, unknown>> }>(
+      `/assistant/schedules${qs ? `?${qs}` : ''}`,
+    );
+  },
   getAssistantMessages: () => request<{ messages: AssistantMessage[] }>('/assistant/messages'),
   clearAssistantMessages: () => request<void>('/assistant/messages', { method: 'DELETE' }),
   assistantChat: (content: string) =>
