@@ -9,6 +9,7 @@ import {
   listAssistantMessages,
   runAssistantChat,
 } from '../services/assistant-chat.js';
+import { getAssistantSchedules } from '../services/assistant-tools.js';
 
 function writeAssistantSse(res: express.Response, event: AssistantStreamEvent): void {
   res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
@@ -19,6 +20,15 @@ export function registerAssistantRoutes(router: express.Router, ctx: AppContext)
     '/assistant/tools',
     asyncHandler(async (_req, res) => {
       res.json({ tools: ASSISTANT_TOOLS });
+    }),
+  );
+
+  router.get(
+    '/assistant/schedules',
+    asyncHandler(async (req, res) => {
+      const includePaused = req.query.includePaused !== 'false';
+      const includeCompleted = req.query.includeCompleted === 'true';
+      res.json(getAssistantSchedules(ctx, { includePaused, includeCompleted }));
     }),
   );
 

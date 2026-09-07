@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Stack } from '@mui/material';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { AssistantScheduleSection } from '../components/dashboard/AssistantScheduleSection';
 import { DashboardAgentsPanel } from '../components/dashboard/DashboardAgentsPanel';
 import { DashboardBlockedAgentsPanel } from '../components/dashboard/DashboardBlockedAgentsPanel';
 import { DashboardHeroSection } from '../components/dashboard/DashboardHeroSection';
@@ -39,6 +40,8 @@ export function DashboardPage() {
         usage={data.usageQuery.data}
         status={data.status}
       />
+
+      <AssistantScheduleSection />
 
       {(data.sidebarError as Error | undefined) && (
         <Alert severity="error">{(data.sidebarError as Error).message}</Alert>

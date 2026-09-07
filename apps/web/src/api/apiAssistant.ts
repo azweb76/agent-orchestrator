@@ -70,6 +70,15 @@ export async function streamAssistantChat(
 
 export const apiAssistant = {
   getAssistantTools: () => request<{ tools: AssistantToolDefinition[] }>('/assistant/tools'),
+  getAssistantSchedules: (opts?: { includePaused?: boolean; includeCompleted?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.includePaused === false) params.set('includePaused', 'false');
+    if (opts?.includeCompleted === true) params.set('includeCompleted', 'true');
+    const qs = params.toString();
+    return request<{ schedules: Array<Record<string, unknown>> }>(
+      `/assistant/schedules${qs ? `?${qs}` : ''}`,
+    );
+  },
   getAssistantMessages: () => request<{ messages: AssistantMessage[] }>('/assistant/messages'),
   clearAssistantMessages: () => request<void>('/assistant/messages', { method: 'DELETE' }),
   assistantChat: (content: string) =>

@@ -339,3 +339,19 @@ test('parseDurationToMs and resolveOnceRunAt support 5m', async () => {
   const at = resolveOnceRunAt({ runIn: '5m', now });
   assert.equal(at.toISOString(), '2026-09-06T12:05:00.000Z');
 });
+
+test('getAssistantSchedules returns parsed list for HTTP', async () => {
+  const { getAssistantSchedules } = await import('./assistant-tools.js');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-sched-http-'));
+  const ctx = makeCtx(tmp);
+  const empty = getAssistantSchedules(ctx);
+  assert.deepEqual(empty.schedules, []);
+
+  await executeAssistantTool(ctx, 'create_schedule', {
+    ...defaultMorningBriefingInput('UTC'),
+    confirm: true,
+  });
+  const listed = getAssistantSchedules(ctx, { includePaused: true });
+  assert.equal(listed.schedules.length, 1);
+  assert.equal((listed.schedules[0] as { playbook: string }).playbook, 'morning_fleet_briefing');
+});
