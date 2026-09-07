@@ -69,6 +69,8 @@ test('action tools are registered in ASSISTANT_TOOLS', () => {
   for (const name of [
     'start_agent_session',
     'create_agent_from_github_issue',
+    'create_agent_from_jira_issue',
+    'create_agent_from_pull_request',
     'send_agent_message',
     'list_pending_permissions',
     'respond_permission',
@@ -86,6 +88,11 @@ test('mutating action tools require confirm=true', async () => {
     [
       'create_agent_from_github_issue',
       { owner: 'example', repo: 'demo', issueNumber: 7, confirm: false },
+    ],
+    ['create_agent_from_jira_issue', { issueKey: 'PROJ-1', confirm: false }],
+    [
+      'create_agent_from_pull_request',
+      { owner: 'example', repo: 'demo', number: 3, confirm: false },
     ],
     ['send_agent_message', { agentId: 'ag-1', message: 'hello', confirm: false }],
     [

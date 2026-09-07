@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -18,22 +18,26 @@ import MergeTypeIcon from '@mui/icons-material/MergeType';
 import RateReviewOutlinedIcon from '@mui/icons-material/RateReviewOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { pullRequestMatchesQuery, type InboxPullRequest } from '@agent-orchestrator/shared';
+import { useQuery } from '@tanstack/react-query';
+import {
+  buildPrCreateAgentPrompt,
+  pullRequestMatchesQuery,
+  type InboxPullRequest,
+} from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
 import { PageHeader } from '../components/ui/PageHeader';
 import { PullRequestStatusChip } from '../components/pr/PullRequestStatusChip';
+import { useSendAssistantPrompt } from '../components/dashboard/useSendAssistantPrompt';
 import { formatRelativeTime } from '../utils/format';
 import { pullRequestPath } from '../utils/paths';
 
 type InboxTab = 'authored' | 'review';
 
 export function PullRequestsPage() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const assistant = useSendAssistantPrompt();
   const [tab, setTab] = useState<InboxTab>('authored');
   const [creatingKey, setCreatingKey] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -49,26 +53,22 @@ export function PullRequestsPage() {
     enabled: Boolean(status?.githubTokenConfigured),
   });
 
-  const createMutation = useMutation({
-    mutationFn: (pr: InboxPullRequest) =>
-      api.createAgentFromPr({
-        owner: pr.owner,
-        repo: pr.repo,
-        prNumber: pr.number,
-      }),
-    onMutate: (pr) => {
-      setCreatingKey(`${pr.owner}/${pr.repo}#${pr.number}`);
-    },
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['pulls-inbox'] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      navigate(`/agents/${result.agent.id}`);
-    },
-    onSettled: () => {
+  const askCreate = async (pr: InboxPullRequest) => {
+    const key = `${pr.owner}/${pr.repo}#${pr.number}`;
+    setCreatingKey(key);
+    try {
+      await assistant.sendPrompt(
+        buildPrCreateAgentPrompt({
+          owner: pr.owner,
+          repo: pr.repo,
+          number: pr.number,
+          agentId: pr.agentId,
+        }).prompt,
+      );
+    } finally {
       setCreatingKey(null);
-    },
-  });
+    }
+  };
 
   const authoredCount = inboxQuery.data?.authored.length ?? 0;
   const reviewCount = inboxQuery.data?.reviewRequested.length ?? 0;
@@ -82,7 +82,7 @@ export function PullRequestsPage() {
       <PageHeader
         eyebrow="Inbox"
         title="Pull requests"
-        description="Open PRs you authored and review requests. Create a workspace worktree and Claude agent from any PR."
+        description="Open PRs you authored and review requests. Ask the Assistant to create a worktree and Claude agent from any PR."
       />
 
       {!status?.githubTokenConfigured ? (
@@ -91,9 +91,7 @@ export function PullRequestsPage() {
         </Alert>
       ) : null}
 
-      {createMutation.error && (
-        <Alert severity="error">{(createMutation.error as Error).message}</Alert>
-      )}
+      {assistant.error ? <Alert severity="error">{assistant.error}</Alert> : null}
 
       <Tabs
         value={tab}
@@ -175,7 +173,7 @@ export function PullRequestsPage() {
         <ListPanel>
           {items.map((pr) => {
             const key = `${pr.owner}/${pr.repo}#${pr.number}`;
-            const isCreating = creatingKey === key && createMutation.isPending;
+            const isCreating = creatingKey === key && assistant.sending;
 
             return (
               <ListRow
@@ -212,10 +210,10 @@ export function PullRequestsPage() {
                       <ControlTooltip
                         title={
                           pr.workspaceId
-                            ? 'Create a worktree and Claude agent for this pull request'
-                            : 'Clone the repository and start a Claude agent for this pull request'
+                            ? 'Ask Assistant to create a worktree and Claude agent for this pull request'
+                            : 'Ask Assistant to clone the repository and start a Claude agent for this pull request'
                         }
-                        disabled={createMutation.isPending}
+                        disabled={assistant.sending}
                       >
                         <Button
                           variant="contained"
@@ -227,10 +225,11 @@ export function PullRequestsPage() {
                               <SmartToyOutlinedIcon />
                             )
                           }
-                          disabled={createMutation.isPending}
-                          onClick={() => createMutation.mutate(pr)}
+                          disabled={assistant.sending}
+                          onClick={() => void askCreate(pr)}
+                          sx={{ textTransform: 'none' }}
                         >
-                          {pr.workspaceId ? 'Create agent' : 'Start agent'}
+                          Ask Assistant
                         </Button>
                       </ControlTooltip>
                     )}

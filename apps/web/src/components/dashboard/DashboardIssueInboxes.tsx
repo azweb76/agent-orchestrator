@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { InboxIssue, InboxJiraIssue, WorkspaceWithCounts } from '@agent-orchestrator/shared';
-import { api } from '../../api/client';
+import {
+  buildGithubIssueStartPrompt,
+  buildJiraIssueStartPrompt,
+} from '@agent-orchestrator/shared';
 import { HudPanel } from './HudPanel';
 import { SectionLabel } from './SectionLabel';
 import { JiraWorkspacePickerDialog } from './JiraWorkspacePickerDialog';
+import { useSendAssistantPrompt } from './useSendAssistantPrompt';
 
 export function DashboardGithubIssuesPanel({
   githubConfigured,
@@ -17,28 +19,18 @@ export function DashboardGithubIssuesPanel({
   issuesLoading: boolean;
   recentIssues: InboxIssue[];
 }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const assistant = useSendAssistantPrompt();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
 
-  const startMutation = useMutation({
-    mutationFn: async (issue: InboxIssue) => {
-      const result = await api.createAgentFromIssue({
-        owner: issue.owner,
-        repo: issue.repo,
-        issueNumber: issue.number,
-      });
-      return result.agent.id;
-    },
-    onMutate: (issue) => setPendingKey(`${issue.owner}/${issue.repo}#${issue.number}`),
-    onSettled: () => setPendingKey(null),
-    onSuccess: (agentId) => {
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: ['issues-inbox'] });
-      navigate(`/agents/${agentId}`);
-    },
-  });
+  const askStart = async (issue: InboxIssue) => {
+    const key = `${issue.owner}/${issue.repo}#${issue.number}`;
+    setPendingKey(key);
+    try {
+      await assistant.sendPrompt(buildGithubIssueStartPrompt(issue).prompt);
+    } finally {
+      setPendingKey(null);
+    }
+  };
 
   return (
     <HudPanel>
@@ -46,6 +38,9 @@ export function DashboardGithubIssuesPanel({
         <Box>
           <SectionLabel>Inbox</SectionLabel>
           <Typography variant="h6">Assigned issues</Typography>
+          <Typography variant="caption" color="text.secondary">
+            Ask Assistant — nothing writes until you confirm in chat.
+          </Typography>
         </Box>
       </Stack>
 
@@ -91,20 +86,21 @@ export function DashboardGithubIssuesPanel({
                   size="small"
                   variant="outlined"
                   color="secondary"
-                  disabled={startMutation.isPending}
-                  onClick={() => startMutation.mutate(issue)}
+                  disabled={assistant.sending}
+                  onClick={() => void askStart(issue)}
                   startIcon={
                     pendingKey === key ? <CircularProgress size={14} color="inherit" /> : undefined
                   }
+                  sx={{ textTransform: 'none' }}
                 >
-                  Start
+                  Ask Assistant
                 </Button>
               </Box>
             );
           })}
-          {startMutation.error ? (
+          {assistant.error ? (
             <Typography color="error" variant="caption" sx={{ pt: 1 }}>
-              {(startMutation.error as Error).message}
+              {assistant.error}
             </Typography>
           ) : null}
         </Stack>
@@ -124,33 +120,28 @@ export function DashboardJiraIssuesPanel({
   recentJiraIssues: InboxJiraIssue[];
   workspaces?: WorkspaceWithCounts[];
 }) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const assistant = useSendAssistantPrompt();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [pickIssue, setPickIssue] = useState<InboxJiraIssue | null>(null);
 
-  const startMutation = useMutation({
-    mutationFn: async (input: { issue: InboxJiraIssue; workspaceId?: string }) => {
-      const result = await api.createAgentFromJiraIssue({
-        workspaceId: input.workspaceId ?? input.issue.suggestedWorkspaceId ?? undefined,
-        issueKey: input.issue.key,
-      });
-      return result.agent.id;
-    },
-    onMutate: (input) => setPendingKey(input.issue.key),
-    onSettled: () => setPendingKey(null),
-    onSuccess: (agentId) => {
+  const askStart = async (issue: InboxJiraIssue, workspaceId?: string) => {
+    setPendingKey(issue.key);
+    try {
+      await assistant.sendPrompt(
+        buildJiraIssueStartPrompt({
+          key: issue.key,
+          workspaceId: workspaceId ?? issue.suggestedWorkspaceId,
+        }).prompt,
+      );
       setPickIssue(null);
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: ['jira-issues-inbox'] });
-      navigate(`/agents/${agentId}`);
-    },
-  });
+    } finally {
+      setPendingKey(null);
+    }
+  };
 
   const onStart = (issue: InboxJiraIssue) => {
     if (issue.suggestedWorkspaceId) {
-      startMutation.mutate({ issue, workspaceId: issue.suggestedWorkspaceId });
+      void askStart(issue, issue.suggestedWorkspaceId);
       return;
     }
     setPickIssue(issue);
@@ -162,6 +153,9 @@ export function DashboardJiraIssuesPanel({
         <Box>
           <SectionLabel>Inbox</SectionLabel>
           <Typography variant="h6">Assigned Jira</Typography>
+          <Typography variant="caption" color="text.secondary">
+            Ask Assistant — nothing writes until you confirm in chat.
+          </Typography>
         </Box>
       </Stack>
 
@@ -218,21 +212,22 @@ export function DashboardJiraIssuesPanel({
                 size="small"
                 variant="outlined"
                 color="secondary"
-                disabled={startMutation.isPending}
+                disabled={assistant.sending}
                 onClick={() => onStart(issue)}
                 startIcon={
                   pendingKey === issue.key ? (
                     <CircularProgress size={14} color="inherit" />
                   ) : undefined
                 }
+                sx={{ textTransform: 'none' }}
               >
-                {issue.suggestedWorkspaceId ? 'Start' : 'Choose…'}
+                {issue.suggestedWorkspaceId ? 'Ask Assistant' : 'Choose…'}
               </Button>
             </Box>
           ))}
-          {startMutation.error ? (
+          {assistant.error ? (
             <Typography color="error" variant="caption" sx={{ pt: 1 }}>
-              {(startMutation.error as Error).message}
+              {assistant.error}
             </Typography>
           ) : null}
         </Stack>
@@ -242,11 +237,11 @@ export function DashboardJiraIssuesPanel({
         open={Boolean(pickIssue)}
         issue={pickIssue}
         workspaces={workspaces}
-        loading={startMutation.isPending}
+        loading={assistant.sending}
         onCancel={() => setPickIssue(null)}
         onConfirm={(workspaceId) => {
           if (!pickIssue) return;
-          startMutation.mutate({ issue: pickIssue, workspaceId });
+          void askStart(pickIssue, workspaceId);
         }}
       />
     </HudPanel>

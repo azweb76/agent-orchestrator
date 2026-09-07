@@ -26,6 +26,10 @@ import {
   handleStartAgentSession,
 } from './assistant-tools-actions.js';
 import {
+  handleCreateAgentFromJiraIssue,
+  handleCreateAgentFromPullRequest,
+} from './assistant-tools-inbox-writes.js';
+import {
   handleCreateSchedule,
   handleDeleteSchedule,
   handleListScheduleRuns,
@@ -304,6 +308,10 @@ async function dispatchAssistantTool(
       return handleStartAgentSession(ctx, input, requireConfirm);
     case 'create_agent_from_github_issue':
       return handleCreateAgentFromGithubIssue(ctx, input, requireConfirm);
+    case 'create_agent_from_jira_issue':
+      return handleCreateAgentFromJiraIssue(ctx, input, requireConfirm);
+    case 'create_agent_from_pull_request':
+      return handleCreateAgentFromPullRequest(ctx, input, requireConfirm);
     case 'send_agent_message':
       return handleSendAgentMessage(ctx, input, requireConfirm);
     case 'list_pending_permissions':

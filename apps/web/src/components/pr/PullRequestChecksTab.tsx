@@ -59,9 +59,9 @@ export function PullRequestChecksTab({
           <Alert
             severity="error"
             action={
-              <ControlTooltip title="Start a Claude agent to fix failing CI checks" disabled={fixing}>
+              <ControlTooltip title="Ask Assistant to start a Claude agent to fix failing CI checks" disabled={fixing}>
                 <Button color="inherit" size="small" disabled={fixing} onClick={onFixCi}>
-                  {fixing ? 'Starting…' : 'Fix CI'}
+                  {fixing ? 'Asking…' : 'Fix CI'}
                 </Button>
               </ControlTooltip>
             }
