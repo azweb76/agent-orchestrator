@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SidebarAgent } from '@agent-orchestrator/shared';
 import {
   formatAheadBehind,
+  formatSidebarBranchCaption,
   formatSidebarGitCaption,
   sidebarAgentStatusLines,
 } from './sidebarGitStatus';
@@ -32,17 +33,16 @@ describe('formatAheadBehind', () => {
   });
 });
 
-describe('formatSidebarGitCaption', () => {
+describe('formatSidebarBranchCaption / formatSidebarGitCaption', () => {
   it('shows branch alone when clean', () => {
+    expect(formatSidebarBranchCaption(makeAgent())).toBe('fix/login');
     expect(formatSidebarGitCaption(makeAgent())).toBe('fix/login');
   });
 
-  it('includes dirty and ahead/behind', () => {
-    expect(
-      formatSidebarGitCaption(
-        makeAgent({ gitStatus: { dirty: true, aheadBy: 2, behindBy: 1 } }),
-      ),
-    ).toBe('fix/login · dirty · ↑2 ↓1');
+  it('keeps dirty out of the branch row but in the full caption', () => {
+    const agent = makeAgent({ gitStatus: { dirty: true, aheadBy: 2, behindBy: 1 } });
+    expect(formatSidebarBranchCaption(agent)).toBe('fix/login · ↑2 ↓1');
+    expect(formatSidebarGitCaption(agent)).toBe('fix/login · ↑2 ↓1 · dirty');
   });
 });
 
@@ -56,7 +56,7 @@ describe('sidebarAgentStatusLines', () => {
         worktree: { id: 'wt-1', name: 'fix-login', branch: 'fix/login', prNumber: 12 },
       }),
     );
-    expect(lines[0]).toBe('fix/login · dirty · ↑1');
+    expect(lines[0]).toBe('fix/login · ↑1 · dirty');
     expect(lines).toContain('running');
     expect(lines).toContain('Building');
     expect(lines).toContain('PR #12');

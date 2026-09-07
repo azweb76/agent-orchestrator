@@ -12,14 +12,20 @@ export function formatAheadBehind(status: Pick<SidebarGitStatus, 'aheadBy' | 'be
   return parts.join(' ');
 }
 
-/** One-line git caption: branch · dirty · ↑n ↓n */
-export function formatSidebarGitCaption(agent: SidebarAgent): string {
+/**
+ * Secondary-row caption: branch + ahead/behind.
+ * Dirty is shown via the M mark so the narrow sidebar does not truncate "dirty".
+ */
+export function formatSidebarBranchCaption(agent: SidebarAgent): string {
   const branch = agent.worktree.branch || agent.worktree.name || 'no branch';
-  const parts = [branch];
-  if (agent.gitStatus.dirty) parts.push('dirty');
   const aheadBehind = formatAheadBehind(agent.gitStatus);
-  if (aheadBehind) parts.push(aheadBehind);
-  return parts.join(' · ');
+  return aheadBehind ? `${branch} · ${aheadBehind}` : branch;
+}
+
+/** Full git caption including dirty (tooltips / aria). */
+export function formatSidebarGitCaption(agent: SidebarAgent): string {
+  const base = formatSidebarBranchCaption(agent);
+  return agent.gitStatus.dirty ? `${base} · dirty` : base;
 }
 
 /** Tooltip lines covering runtime, delivery, and git. */

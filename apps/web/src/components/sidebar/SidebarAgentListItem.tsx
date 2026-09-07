@@ -15,7 +15,7 @@ import { AgentStatusDot, AgentStatusIcon, PrStatusDot } from './agentStatusVisua
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
 import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
-import { formatSidebarGitCaption, sidebarAgentStatusLines } from './sidebarGitStatus';
+import { formatSidebarBranchCaption, sidebarAgentStatusLines } from './sidebarGitStatus';
 
 /** Tiny "M" mark for a dirty worktree (modified), VS Code–style. */
 export function DirtyWorktreeMark({ size = 12 }: { size?: number }) {
@@ -54,7 +54,7 @@ export const SidebarAgentListItem = memo(function SidebarAgentListItem({
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   const stalled = Boolean(agent.stalled);
   const dirty = Boolean(agent.gitStatus?.dirty);
-  const gitCaption = formatSidebarGitCaption(agent);
+  const branchCaption = formatSidebarBranchCaption(agent);
   const prKind =
     agent.worktree.prNumber != null && agent.prStatus
       ? resolvePullRequestStatus(agent.prStatus)
@@ -133,7 +133,7 @@ export const SidebarAgentListItem = memo(function SidebarAgentListItem({
               noWrap
               sx={{ display: 'block', fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 }}
             >
-              {gitCaption}
+              {branchCaption}
             </Typography>
           }
         />
