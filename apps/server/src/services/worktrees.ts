@@ -22,6 +22,7 @@ import { type AppContext, nowIso, notify } from './app-context.js';
 import { createAgentForWorktree } from './agent-core.js';
 import { requireAgentTaskByName } from './agent-tasks.js';
 import { addNewBranchWorktree } from './worktree-new-branch.js';
+import { cachePrStatusFromDetail } from './pr-status-cache.js';
 
 export { deleteWorktree } from './worktree-delete.js';
 
@@ -43,6 +44,14 @@ export async function overlayLivePullRequest(
       workspace.githubRepo,
       worktree.branch,
     );
+    if (pr) {
+      cachePrStatusFromDetail(ctx, workspace.githubOwner, workspace.githubRepo, {
+        number: pr.number,
+        state: pr.state === 'open' ? 'open' : 'closed',
+        draft: pr.draft,
+        merged: false,
+      });
+    }
     return mergeLivePullRequest(worktree, pr);
   } catch {
     return worktree;
@@ -171,6 +180,13 @@ export async function createWorktreeFromPr(
     prTitle: pr.title,
     baseBranch: pr.baseRef,
     createdAt: nowIso(),
+  });
+
+  cachePrStatusFromDetail(ctx, workspace.githubOwner, workspace.githubRepo, {
+    number: pr.number,
+    state: pr.state === 'open' ? 'open' : 'closed',
+    draft: pr.draft,
+    merged: false,
   });
 
   const agent = await createAgentForWorktree(ctx, worktree.id, `PR #${pr.number} agent`);

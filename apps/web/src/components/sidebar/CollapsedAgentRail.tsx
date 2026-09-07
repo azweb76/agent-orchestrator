@@ -7,8 +7,12 @@ import { AgentStatusDot, AgentStatusIcon, PrStatusDot } from './agentStatusVisua
 import { DirtyWorktreeMark } from './SidebarAgentListItem';
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
-import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
-import { formatSidebarGitCaption, sidebarAgentStatusLines } from './sidebarGitStatus';
+import { formatSidebarGitCaption } from './sidebarGitStatus';
+import {
+  formatSidebarStatusCaption,
+  resolveSidebarPrKind,
+  sidebarAgentStatusLines,
+} from './sidebarPrStatus';
 
 const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
   agent,
@@ -24,12 +28,11 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   const stalled = Boolean(agent.stalled);
   const dirty = Boolean(agent.gitStatus?.dirty);
-  const prKind =
-    agent.worktree.prNumber != null && agent.prStatus
-      ? resolvePullRequestStatus(agent.prStatus)
-      : agent.worktree.prNumber != null
-        ? 'open'
-        : null;
+  const prKind = resolveSidebarPrKind(agent);
+  const draftish =
+    agent.deliveryPhase === 'pr_draft' ||
+    agent.deliveryPhase === 'needs_pr' ||
+    Boolean(agent.prStatus?.draft);
 
   return (
     <Box sx={{ position: 'relative' }}>
@@ -50,7 +53,11 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
                 sx={{
                   display: 'block',
                   color:
-                    line === 'Needs your input' || line === 'Stalled' || line.includes('dirty')
+                    line === 'Needs your input' ||
+                    line === 'Stalled' ||
+                    line.includes('dirty') ||
+                    line === 'Draft PR' ||
+                    line === 'Needs PR'
                       ? 'warning.main'
                       : undefined,
                 }}
@@ -65,7 +72,7 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
           component={RouterLink}
           to={`/agents/${agent.id}`}
           size="small"
-          aria-label={`${agent.name} (${formatSidebarGitCaption(agent)})`}
+          aria-label={`${agent.name} (${formatSidebarStatusCaption(agent)}; ${formatSidebarGitCaption(agent)})`}
           sx={(theme) => ({
             width: 40,
             height: 40,
@@ -74,7 +81,7 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
             borderColor:
               selected || workspaceActive
                 ? 'secondary.main'
-                : dirty
+                : dirty || draftish
                   ? 'warning.main'
                   : agent.status === 'running'
                     ? 'info.main'
