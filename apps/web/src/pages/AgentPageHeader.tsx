@@ -16,6 +16,7 @@ import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import type { AgentDetail } from '@agent-orchestrator/shared';
 import { AgentDeliveryPhaseChip } from '../components/agent/AgentDeliveryPhaseChip';
 import { AgentPrStatusStrip } from '../components/agent/AgentPrStatusStrip';
+import type { AgentPrKickoffTemplate } from '../components/agent/agentPrStatusSummary';
 import { AgentShipActions } from '../components/agent/AgentShipActions';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
 import { PageBreadcrumbs } from '../components/ui/PageBreadcrumbs';
@@ -33,6 +34,7 @@ interface AgentPageHeaderProps {
   onStop: () => void;
   onCommit: (opts: { push: boolean; hasPendingChanges: boolean }) => void;
   onCreateDraftPr: () => void;
+  onStartPrKickoff?: (template: AgentPrKickoffTemplate) => void;
 }
 
 /** Runtime status is redundant with delivery phase when idle — only surface active states. */
@@ -56,6 +58,7 @@ export function AgentPageHeader({
   onStop,
   onCommit,
   onCreateDraftPr,
+  onStartPrKickoff,
 }: AgentPageHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const busy = archivePending || unarchivePending || stopPending;
@@ -135,7 +138,9 @@ export function AgentPageHeader({
         </Stack>
       </Stack>
 
-      {hasPr ? <AgentPrStatusStrip agent={agent} /> : null}
+      {hasPr ? (
+        <AgentPrStatusStrip agent={agent} archived={archived} onStartKickoff={onStartPrKickoff} />
+      ) : null}
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
         {live ? (

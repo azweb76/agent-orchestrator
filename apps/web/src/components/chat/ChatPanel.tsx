@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -24,6 +24,9 @@ import { useChatPermissions } from './useChatPermissions';
 import { useChatSessionActions } from './useChatSessionActions';
 import { useChatStreaming } from './useChatStreaming';
 import { resolveTaskSuggestionAction } from './taskSuggestionActions';
+import { useChatTemplateKickoff, type ChatTemplateKickoffRequest } from './useChatTemplateKickoff';
+import { useChatAttentionFocus } from './useChatAttentionFocus';
+import { useChatPanelSessionEffects } from './useChatPanelSessionEffects';
 import type { SessionInsightsTab } from './sessionAnalysis';
 
 interface ChatPanelProps {
@@ -38,6 +41,8 @@ interface ChatPanelProps {
   focusSessionId?: string;
   /** Opens the commit dialog (Commit and Push follow-up chip). */
   onCommitAndPush?: () => void;
+  /** Agent PR strip / header kickoff (new session each nonce). */
+  templateKickoff?: ChatTemplateKickoffRequest | null;
 }
 
 export const ChatPanel = memo(function ChatPanel({
@@ -51,6 +56,7 @@ export const ChatPanel = memo(function ChatPanel({
   focusAttention,
   focusSessionId,
   onCommitAndPush,
+  templateKickoff = null,
 }: ChatPanelProps) {
   const sseState = useSseConnectionState();
   const queryClient = useQueryClient();
@@ -179,66 +185,35 @@ export const ChatPanel = memo(function ChatPanel({
     runChatRef: streaming.runChatRef,
   });
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  useChatPanelSessionEffects({
+    mountedRef,
+    activeSessionId,
+    setChatError,
+    setLastFailed,
+    awaitingPermissionFocus: permissions.awaitingPermissionFocus,
+    permissionCount: permissions.permissionRequests.length,
+    permissionsFetched: permissions.pendingPermissionsQuery.isFetched,
+    setAwaitingPermissionFocus: permissions.setAwaitingPermissionFocus,
+  });
 
-  useEffect(() => {
-    setChatError(null);
-    setLastFailed(null);
-  }, [activeSessionId]);
+  useChatAttentionFocus({
+    focusAttention,
+    focusSessionId,
+    sessionIdRef,
+    selectSession: sessionActions.selectSession,
+    setAwaitingPermissionFocus: permissions.setAwaitingPermissionFocus,
+    setFocusPermissions,
+    scrollToBottom: () => scroll.transcriptRef.current?.scrollToBottom(),
+    stickToBottomRef: scroll.stickToBottomRef,
+    setShowJumpToLatest: scroll.setShowJumpToLatest,
+  });
 
-  useEffect(() => {
-    if (!permissions.awaitingPermissionFocus) return;
-    if (permissions.permissionRequests.length > 0 || permissions.pendingPermissionsQuery.isFetched) {
-      permissions.setAwaitingPermissionFocus(false);
-    }
-  }, [
-    permissions.awaitingPermissionFocus,
-    permissions.permissionRequests.length,
-    permissions.pendingPermissionsQuery.isFetched,
-    permissions.setAwaitingPermissionFocus,
-  ]);
-
-  useEffect(() => {
-    if (!focusAttention) return;
-    let cancelled = false;
-
-    const revealAttention = () => {
-      requestAnimationFrame(() => {
-        scroll.transcriptRef.current?.scrollToBottom();
-        scroll.stickToBottomRef.current = false;
-        scroll.setShowJumpToLatest(true);
-      });
-    };
-
-    const run = async () => {
-      if (focusSessionId && focusSessionId !== sessionIdRef.current) {
-        await sessionActions.selectSession(focusSessionId);
-        if (cancelled) return;
-      }
-      if (focusAttention === 'needs-input') {
-        permissions.setAwaitingPermissionFocus(true);
-        setFocusPermissions(true);
-        window.setTimeout(() => setFocusPermissions(false), 4000);
-      }
-      revealAttention();
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [focusAttention, focusSessionId]);
-
-  useEffect(() => {
-    if (!initialTemplate || archived || autoStartedRef.current) return;
-    autoStartedRef.current = true;
-    sessionActions.createFromTemplateId(initialTemplate);
-  }, [archived, initialTemplate]);
+  useChatTemplateKickoff({
+    archived,
+    initialTemplate,
+    requested: templateKickoff,
+    createFromTemplateId: sessionActions.createFromTemplateId,
+  });
 
   const priorUserByIndex = useMemo(() => {
     const map = new Map<number, Message | undefined>();

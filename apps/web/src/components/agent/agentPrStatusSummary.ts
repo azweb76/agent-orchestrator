@@ -1,4 +1,6 @@
 import type {
+  ChatSession,
+  ChatSessionTemplateId,
   PullRequestChecks,
   PullRequestChecksRollup,
   PullRequestDetail,
@@ -28,14 +30,36 @@ export interface AgentPrStatusSummary {
   reviewLabel: string | null;
   conflicted: boolean;
   open: boolean;
+  /** Contextual session starts for the strip (hidden while that template is already busy). */
+  kickoffs: AgentPrKickoffTemplate[];
+}
+
+export type AgentPrKickoffTemplate = Extract<
+  ChatSessionTemplateId,
+  'fix-ci' | 'address-review' | 'resolve-conflicts'
+>;
+
+function templateBusy(
+  sessions: readonly Pick<ChatSession, 'template' | 'status'>[] | undefined,
+  template: AgentPrKickoffTemplate,
+): boolean {
+  return Boolean(
+    sessions?.some(
+      (session) =>
+        session.template === template &&
+        (session.status === 'running' || session.status === 'queued'),
+    ),
+  );
 }
 
 /** Compact labels for the agent-page PR status strip. */
 export function buildAgentPrStatusSummary(input: {
   pr: PullRequestDetail;
   checks?: PullRequestChecks | null;
+  archived?: boolean;
+  sessions?: readonly Pick<ChatSession, 'template' | 'status'>[];
 }): AgentPrStatusSummary {
-  const { pr, checks = null } = input;
+  const { pr, checks = null, archived = false, sessions } = input;
   const open = pr.state === 'open' && !pr.merged;
   const readiness = evaluateMergeReadiness(pr);
   const conflicted = isPullRequestConflicted(pr);
@@ -83,6 +107,18 @@ export function buildAgentPrStatusSummary(input: {
         : `${reviewCount} review comments`
       : null;
 
+  const canAct = open && !archived;
+  const kickoffs: AgentPrKickoffTemplate[] = [];
+  if (canAct && conflicted && !templateBusy(sessions, 'resolve-conflicts')) {
+    kickoffs.push('resolve-conflicts');
+  }
+  if (canAct && (checks?.failing ?? 0) > 0 && !templateBusy(sessions, 'fix-ci')) {
+    kickoffs.push('fix-ci');
+  }
+  if (canAct && reviewCount > 0 && !templateBusy(sessions, 'address-review')) {
+    kickoffs.push('address-review');
+  }
+
   return {
     prStatus,
     stateLabel: PULL_REQUEST_STATUS_LABELS[prStatus],
@@ -93,5 +129,6 @@ export function buildAgentPrStatusSummary(input: {
     reviewLabel,
     conflicted,
     open,
+    kickoffs,
   };
 }
