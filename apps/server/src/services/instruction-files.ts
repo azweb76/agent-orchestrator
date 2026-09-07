@@ -1,12 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type {
-  ApplyInstructionFileRequest,
-  ApplyInstructionFileResponse,
-  InstructionFile,
-  InstructionFileKind,
-  InstructionFileScope,
+import {
+  resolveInstructionScope,
+  type ApplyInstructionFileRequest,
+  type ApplyInstructionFileResponse,
+  type InstructionFile,
+  type InstructionFileKind,
+  type InstructionFileScope,
 } from '@agent-orchestrator/shared';
 
 const SKILL_SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -59,9 +60,16 @@ function assertInside(root: string, target: string): string {
 
 export function resolveInstructionWritePath(
   roots: InstructionFileRoots,
-  body: ApplyInstructionFileRequest,
+  body: {
+    kind: InstructionFileKind;
+    scope?: InstructionFileScope;
+    name?: string;
+    relativePath?: string;
+    content?: string;
+  },
 ): { absolutePath: string; relativePath: string; scope: InstructionFileScope } {
-  const scope: InstructionFileScope = body.kind === 'skill' ? (body.scope ?? 'project') : 'project';
+  const scope: InstructionFileScope =
+    body.kind === 'skill' ? resolveInstructionScope('skill', body.scope) : 'project';
   let relativePath = (body.relativePath ?? '').replaceAll('\\', '/').replace(/^\/+/, '');
 
   if (relativePath) {

@@ -15,7 +15,7 @@ export interface AppSettings {
   watchdogStreamIdleMinutes: number;
   /** Correct DB status when pid is dead but session still marked running. */
   watchdogStaleRunEnabled: boolean;
-  /** When true, the "Analyze this session" chat action is available. */
+  /** When true, session analysis is available from the context-usage insights dialog. */
   analyzeSessionEnabled: boolean;
   /**
    * When true (and session analysis is enabled), Build / Fix CI sessions are

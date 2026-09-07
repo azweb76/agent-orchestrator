@@ -51,8 +51,12 @@ export interface SessionGradeFinding {
   /** Suggested remediation target, present for warning/issue findings. */
   recommendedAction?: {
     kind: InstructionFileKind;
-    /** Only meaningful when kind === 'skill'. */
+    /** Only meaningful when kind === 'skill'. Defaults to personal for new skills. */
     scope?: InstructionFileScope;
+    /** Suggested skill slug when kind is skill. */
+    name?: string;
+    /** Create a new skill vs update an existing one. */
+    operation?: 'create' | 'update';
   };
 }
 

@@ -14,10 +14,10 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
   - Queue follow-ups or force-send (interrupts the current run); stop generation; clear history (`/clear`); rewind to any user message (`/rewind` or the history button on a bubble).
   - Slash commands with real gathered context: `/diff` attaches the current diff, `/test` runs the project's tests and attaches the output, `/pr` pulls the PR and its checks, `/review` opens a Review session — plus autocomplete for project, personal, and bundled skills.
   - `@` mentions in the composer attach context: `@diff` for the current worktree patch, `@path/to/file` for any file in the worktree.
-  - A context-usage chip shows tokens and percent toward the auto-compact threshold; when context runs hot, a **Compact & continue** banner starts a fresh session seeded with a summary while keeping the old transcript.
+  - A **session insights** chip shows context tokens and percent toward auto-compact. Open it for usage history plus (when enabled) AI analysis that grades the session and suggests personal or project skills. When context runs hot, a **Compact & continue** banner starts a fresh session seeded with a summary while keeping the old transcript.
   - Model, effort, and permission-mode controls; manual/plan modes prompt in the UI for tool permissions. `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved.
   - Image attachments (paste or upload), markdown replies, compact tool-use progress bar.
-  - Analyze and grade a session with AI (turns, tokens, context, instruction files, skills). After a graded Build or Fix CI session, the app may offer an instruction-file draft (a skill, `CLAUDE.md`, or `AGENTS.md`) — review and apply it, or dismiss; nothing is written until you apply.
+  - After analysis, you can draft a skill (personal/user library by default, project only when the lesson is repo-specific), `CLAUDE.md`, or `AGENTS.md`. After a graded Build or Fix CI session, the app may also offer an instruction-file draft — review and apply it, or dismiss; nothing is written until you apply.
   - New chats are auto-named from the first prompt via the Anthropic API; rename from the session bar.
 - **Changes** — file-tree diff of the agent's worktree, scoped to pending changes or all PR changes; **Commit & push** from the UI; create or view the pull request on GitHub.
 - **Notifications** — optional browser notifications (bell in the app bar) when a run finishes or an agent needs your input.

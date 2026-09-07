@@ -176,17 +176,20 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     '(3) fewer corrections — surface standing instructions or skills that would have prevented rework, wrong assumptions, or human fix-up loops.',
     'Look at excessive turns, wasted tokens, bloated context, misconfigured instruction files, and missing or weak skills.',
     'Judge whether the agent used Explore/Task subagents and phase skills (plan-work, implement-plan, code-review, fix-ci, address-review) when appropriate.',
+    'The skills finding must say how future sessions get better: update an existing listed skill, or propose a new skill with a kebab-case slug in action.name.',
     'When recommending a skill fix for a phase session, prefer updating the matching phase skill over inventing a new skill slug.',
+    'New skills belong in the user/personal scope unless the practice is truly specific to this repository (its APIs, layout, conventions, or tooling). Generic agent habits, checklists, and workflows are personal.',
+    'Set action.operation to update when changing an existing skill, or create for a new skill. Set action.scope to personal or project accordingly.',
     'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
     '"score" (integer 1-5), "summary" (2-4 sentences), "findings" (array).',
     'If you cannot call a tool, respond with ONLY that JSON object (no markdown fences or extra text).',
-    'Each finding is {"category":"...","severity":"...","title":"...","detail":"...","suggestion":"...","action":{"kind":"...","scope":"..."}}.',
+    'Each finding is {"category":"...","severity":"...","title":"...","detail":"...","suggestion":"...","action":{"kind":"...","scope":"...","name":"...","operation":"..."}}.',
     'category must be one of: excessive_turns, wasted_tokens, bloated_context, instruction_files, skills.',
     'severity must be ok, warning, or issue.',
     'For every finding with severity warning or issue, include "suggestion" (1-3 sentences: what to change and how) and "action" recommending the remediation target.',
     'Prefer suggestions that permanently reduce future turns, tokens, or correction cycles (skills / CLAUDE.md / AGENTS.md), not one-off advice for this chat alone.',
     'action.kind must be one of: skill, claude_md, agents_md. Use skill when the fix is a reusable practice or checklist for the agent to follow; use claude_md or agents_md when the fix is project-specific standing instructions (match whichever instruction file this project actually uses).',
-    'When action.kind is skill, also set action.scope to project or personal: use personal when the recommendation is a generic practice that would help in any repo (not tied to this project\'s specifics), otherwise use project.',
+    'When action.kind is skill, set action.scope: default personal (user-wide). Use project only when the lesson cannot transfer to other repos.',
     'Omit "suggestion" and "action" for findings with severity ok.',
     'Include exactly one finding for each of those five categories. Use ok when that area looks healthy.',
     'Ground every finding in the supplied stats, session-file transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
@@ -255,6 +258,7 @@ function parseCategory(value: unknown): SessionGradeFindingCategory | null {
 
 const INSTRUCTION_FILE_KINDS = ['skill', 'claude_md', 'agents_md'] as const;
 const INSTRUCTION_FILE_SCOPES = ['project', 'personal'] as const;
+const SKILL_OPERATIONS = ['create', 'update'] as const;
 
 function parseRecommendedAction(
   value: unknown,
@@ -267,20 +271,30 @@ function parseRecommendedAction(
     : null;
   const kind = row ? asString(row.kind) : '';
   const scope = row ? asString(row.scope) : '';
+  const name = row ? asString(row.name) : '';
+  const operation = row ? asString(row.operation) : '';
 
   if (INSTRUCTION_FILE_KINDS.includes(kind as (typeof INSTRUCTION_FILE_KINDS)[number])) {
+    const parsedKind = kind as (typeof INSTRUCTION_FILE_KINDS)[number];
     const validScope = INSTRUCTION_FILE_SCOPES.includes(
       scope as (typeof INSTRUCTION_FILE_SCOPES)[number],
     )
       ? (scope as (typeof INSTRUCTION_FILE_SCOPES)[number])
       : undefined;
+    const parsedOperation = SKILL_OPERATIONS.includes(
+      operation as (typeof SKILL_OPERATIONS)[number],
+    )
+      ? (operation as (typeof SKILL_OPERATIONS)[number])
+      : undefined;
     return {
-      kind: kind as (typeof INSTRUCTION_FILE_KINDS)[number],
-      scope: validScope,
+      kind: parsedKind,
+      ...(validScope ? { scope: validScope } : {}),
+      ...(parsedKind === 'skill' && name ? { name } : {}),
+      ...(parsedKind === 'skill' && parsedOperation ? { operation: parsedOperation } : {}),
     };
   }
 
-  return { kind: 'skill', scope: 'project' };
+  return { kind: 'skill' };
 }
 
 function scoreFromFindings(findings: SessionGradeFinding[]): SessionGradeScore {

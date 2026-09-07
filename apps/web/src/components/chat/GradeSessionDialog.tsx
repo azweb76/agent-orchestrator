@@ -5,11 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
-  LinearProgress,
   Rating,
   Stack,
   TextField,
@@ -24,38 +20,20 @@ import {
   type SessionGradeFinding,
   type SessionGradeFindingSeverity,
 } from '@agent-orchestrator/shared';
-import { ResponsiveDialog } from '../ui/ResponsiveDialog';
 import { ControlTooltip } from '../ui/ControlTooltip';
+import { buildFindingImplementPrompt, findingImproveLabel } from './sessionAnalysis';
 
-interface GradeSessionDialogProps {
-  open: boolean;
+export { buildFindingImplementPrompt };
+
+interface SessionAnalysisPanelProps {
   sessionTitle: string;
-  /** Absolute path of the session file being graded, when known. */
   sessionFilePath?: string | null;
   current?: SessionGrade | null;
   loading?: boolean;
   error?: string | null;
-  onClose: () => void;
   onAnalyze: (notes: string) => void;
-  /** Create a new chat session to implement a single finding's suggestion. */
   onImplementFinding?: (finding: SessionGradeFinding) => void;
-}
-
-/** Kickoff prompt for a new chat that implements one graded finding. */
-export function buildFindingImplementPrompt(finding: SessionGradeFinding): string {
-  const category = SESSION_GRADE_FINDING_LABELS[finding.category];
-  const suggestion = finding.suggestion?.trim() || finding.detail.trim();
-  return [
-    '## Problem',
-    `${category} — ${finding.title}`,
-    finding.detail.trim(),
-    '',
-    '## Suggestion',
-    suggestion,
-    '',
-    'Implement this improvement in the worktree. Prefer writing or updating the',
-    'appropriate skill / CLAUDE.md / AGENTS.md if the suggestion calls for it.',
-  ].join('\n');
+  onImproveFinding?: (finding: SessionGradeFinding) => void;
 }
 
 function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warning' | 'error' {
@@ -67,11 +45,15 @@ function severityColor(severity: SessionGradeFindingSeverity): 'success' | 'warn
 function FindingCard({
   finding,
   onImplement,
+  onImprove,
 }: {
   finding: SessionGradeFinding;
   onImplement?: (finding: SessionGradeFinding) => void;
+  onImprove?: (finding: SessionGradeFinding) => void;
 }) {
   const suggestion = finding.suggestion?.trim() || (finding.severity !== 'ok' ? finding.detail.trim() : '');
+  const action = finding.recommendedAction;
+  const improveLabel = findingImproveLabel(finding);
 
   return (
     <Stack
@@ -109,13 +91,28 @@ function FindingCard({
           <Typography variant="body2">{suggestion}</Typography>
         </Box>
       ) : null}
-      {finding.severity !== 'ok' && onImplement ? (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 0.25 }}>
-          <ControlTooltip title="Start a new chat to implement this suggestion">
-            <Button size="small" variant="outlined" onClick={() => onImplement(finding)}>
-              Start chat
-            </Button>
-          </ControlTooltip>
+      {action?.kind === 'skill' ? (
+        <Typography variant="caption" color="text.secondary">
+          {action.operation === 'update' ? 'Update' : 'New'} {action.scope === 'project' ? 'project' : 'personal'} skill
+          {action.name ? ` · ${action.name}` : ''}
+        </Typography>
+      ) : null}
+      {finding.severity !== 'ok' && (onImplement || onImprove) ? (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.75, pt: 0.25, flexWrap: 'wrap' }}>
+          {onImprove ? (
+            <ControlTooltip title="Open a reviewed skill or instruction draft. New skills default to personal scope.">
+              <Button size="small" variant="contained" onClick={() => onImprove(finding)}>
+                {improveLabel}
+              </Button>
+            </ControlTooltip>
+          ) : null}
+          {onImplement ? (
+            <ControlTooltip title="Start a new chat to implement this suggestion">
+              <Button size="small" variant="outlined" onClick={() => onImplement(finding)}>
+                Start chat
+              </Button>
+            </ControlTooltip>
+          ) : null}
         </Box>
       ) : null}
     </Stack>
@@ -171,120 +168,110 @@ function SessionFilePath({ filePath }: { filePath: string }) {
   );
 }
 
-export function GradeSessionDialog({
-  open,
+export function SessionAnalysisPanel({
   sessionTitle,
   sessionFilePath,
   current,
   loading,
   error,
-  onClose,
   onAnalyze,
   onImplementFinding,
-}: GradeSessionDialogProps) {
+  onImproveFinding,
+}: SessionAnalysisPanelProps) {
   const [notes, setNotes] = useState('');
   const analysis = current?.analysis;
   const filePath = analysis?.sessionFilePath || sessionFilePath || null;
 
   useEffect(() => {
-    if (!open) setNotes('');
-  }, [open]);
+    setNotes('');
+  }, [current?.gradedAt]);
 
   return (
-    <ResponsiveDialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Grade this session</DialogTitle>
-      {loading ? <LinearProgress sx={{ mt: -1 }} /> : null}
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
+    <Stack spacing={2}>
+      <Typography variant="body2" color="text.secondary">
+        AI analyzes <strong>{sessionTitle}</strong>
+        {filePath ? ' from the session file' : ''} for speed, token waste, bloated context, and
+        skills that would improve future sessions. New skills default to your personal library
+        unless they are specific to this project.
+      </Typography>
+      {filePath ? <SessionFilePath filePath={filePath} /> : null}
+
+      {loading && !analysis ? (
+        <Stack spacing={1.25} sx={{ alignItems: 'center', py: 3 }}>
+          <CircularProgress size={28} />
           <Typography variant="body2" color="text.secondary">
-            AI analyzes <strong>{sessionTitle}</strong>
-            {filePath ? ' from the session file' : ''} for excessive turns, wasted tokens, bloated
-            context, instruction-file problems, and missing or weak skills.
+            {filePath
+              ? 'Reading the session file, instruction files, and skills…'
+              : 'Reading the transcript, instruction files, and skills…'}
           </Typography>
-          {filePath ? <SessionFilePath filePath={filePath} /> : null}
-
-          {loading && !analysis ? (
-            <Stack spacing={1.25} sx={{ alignItems: 'center', py: 3 }}>
-              <CircularProgress size={28} />
-              <Typography variant="body2" color="text.secondary">
-                {filePath
-                  ? 'Reading the session file, instruction files, and skills…'
-                  : 'Reading the transcript, instruction files, and skills…'}
-              </Typography>
-            </Stack>
-          ) : null}
-
-          {current ? (
-            <Stack spacing={1.25}>
-              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                <Rating name="session-grade" value={current.score} readOnly size="large" />
-                <Typography variant="body2" color="text.secondary">
-                  {current.score}/5 · {SESSION_GRADE_LABELS[current.score]}
-                </Typography>
-              </Stack>
-              {analysis?.stats ? (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
-                  <Chip
-                    size="small"
-                    label={`${analysis.stats.userTurns} user / ${analysis.stats.assistantTurns} assistant turns`}
-                  />
-                  <Chip size="small" label={`~${formatTokens(analysis.stats.estimatedTokens)} tokens`} />
-                  {analysis.stats.costUsd != null ? (
-                    <Chip size="small" label={`$${analysis.stats.costUsd.toFixed(2)}`} />
-                  ) : null}
-                  <Chip size="small" label={plural(analysis.stats.toolCalls, 'tool')} />
-                  <Chip
-                    size="small"
-                    label={plural(analysis.stats.instructionFileCount, 'instruction file')}
-                  />
-                  <Chip size="small" label={plural(analysis.stats.skillCount, 'skill')} />
-                </Box>
-              ) : null}
-              <Typography variant="body2">{analysis?.summary || current.comment}</Typography>
-              {analysis ? (
-                <Stack spacing={1}>
-                  {SESSION_GRADE_FINDING_CATEGORIES.map((category) => {
-                    const finding = analysis.findings.find((item) => item.category === category);
-                    return finding ? (
-                      <FindingCard
-                        key={category}
-                        finding={finding}
-                        onImplement={onImplementFinding}
-                      />
-                    ) : null;
-                  })}
-                </Stack>
-              ) : null}
-            </Stack>
-          ) : null}
-
-          <ControlTooltip title="Optional notes to guide the next analysis">
-            <TextField
-              label="Notes for the next analysis"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              disabled={loading}
-              placeholder="Optional: what to emphasize, e.g. token waste or missing skills"
-            />
-          </ControlTooltip>
-          {error ? <Alert severity="error">{error}</Alert> : null}
         </Stack>
-      </DialogContent>
-      <DialogActions>
-        <ControlTooltip title="Close without saving">
-          <Button onClick={onClose} disabled={loading}>
-            Close
-          </Button>
-        </ControlTooltip>
+      ) : null}
+
+      {current ? (
+        <Stack spacing={1.25}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Rating name="session-grade" value={current.score} readOnly size="large" />
+            <Typography variant="body2" color="text.secondary">
+              {current.score}/5 · {SESSION_GRADE_LABELS[current.score]}
+            </Typography>
+          </Stack>
+          {analysis?.stats ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              <Chip
+                size="small"
+                label={`${analysis.stats.userTurns} user / ${analysis.stats.assistantTurns} assistant turns`}
+              />
+              <Chip size="small" label={`~${formatTokens(analysis.stats.estimatedTokens)} tokens`} />
+              {analysis.stats.costUsd != null ? (
+                <Chip size="small" label={`$${analysis.stats.costUsd.toFixed(2)}`} />
+              ) : null}
+              <Chip size="small" label={plural(analysis.stats.toolCalls, 'tool')} />
+              <Chip
+                size="small"
+                label={plural(analysis.stats.instructionFileCount, 'instruction file')}
+              />
+              <Chip size="small" label={plural(analysis.stats.skillCount, 'skill')} />
+            </Box>
+          ) : null}
+          <Typography variant="body2">{analysis?.summary || current.comment}</Typography>
+          {analysis ? (
+            <Stack spacing={1}>
+              {SESSION_GRADE_FINDING_CATEGORIES.map((category) => {
+                const finding = analysis.findings.find((item) => item.category === category);
+                return finding ? (
+                  <FindingCard
+                    key={category}
+                    finding={finding}
+                    onImplement={onImplementFinding}
+                    onImprove={onImproveFinding}
+                  />
+                ) : null;
+              })}
+            </Stack>
+          ) : null}
+        </Stack>
+      ) : null}
+
+      <ControlTooltip title="Optional notes to guide the next analysis">
+        <TextField
+          label="Notes for the next analysis"
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          disabled={loading}
+          placeholder="Optional: what to emphasize, e.g. token waste or missing skills"
+        />
+      </ControlTooltip>
+      {error ? <Alert severity="error">{error}</Alert> : null}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <ControlTooltip title={current ? 'Re-run AI analysis on this session' : 'Run AI analysis on this session'}>
           <Button variant="contained" disabled={loading} onClick={() => onAnalyze(notes)}>
             {loading ? 'Analyzing…' : current ? 'Analyze again' : 'Analyze session'}
           </Button>
         </ControlTooltip>
-      </DialogActions>
-    </ResponsiveDialog>
+      </Box>
+    </Stack>
   );
 }

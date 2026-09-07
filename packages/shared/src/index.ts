@@ -131,15 +131,17 @@ export {
   type SessionUsageSignals,
 } from './session-efficiency.js';
 
-export type {
-  ApplyInstructionFileRequest,
-  ApplyInstructionFileResponse,
-  GenerateInstructionDraftRequest,
-  InstructionDraft,
-  InstructionDraftOffer,
-  InstructionFile,
-  InstructionFileKind,
-  InstructionFileScope,
+export {
+  resolveInstructionScope,
+  DEFAULT_NEW_SKILL_SCOPE,
+  type ApplyInstructionFileRequest,
+  type ApplyInstructionFileResponse,
+  type GenerateInstructionDraftRequest,
+  type InstructionDraft,
+  type InstructionDraftOffer,
+  type InstructionFile,
+  type InstructionFileKind,
+  type InstructionFileScope,
 } from './instruction-files.js';
 
 export {

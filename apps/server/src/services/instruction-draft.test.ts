@@ -11,9 +11,10 @@ test('parseInstructionDraftResponse reads fenced JSON and fills skill path', () 
   "rationale": "The session kept skipping tests."
 }
 \`\`\``;
-  const draft = parseInstructionDraftResponse(raw, { kind: 'skill', scope: 'project' }, false);
+  const draft = parseInstructionDraftResponse(raw, { kind: 'skill' }, false);
   assert.equal(draft.kind, 'skill');
   assert.equal(draft.action, 'create');
+  assert.equal(draft.scope, 'personal');
   assert.equal(draft.name, 'api-testing');
   assert.equal(draft.relativePath, '.claude/skills/api-testing/SKILL.md');
   assert.match(draft.content, /API testing/);

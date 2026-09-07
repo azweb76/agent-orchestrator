@@ -7,18 +7,21 @@ import type {
   SessionGradeFinding,
 } from '@agent-orchestrator/shared';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { GradeSessionDialog } from './GradeSessionDialog';
 import { ImproveInstructionsDialog } from './ImproveInstructionsDialog';
+import { SessionInsightsDialog } from './SessionInsightsDialog';
+import type { SessionInsightsTab } from './sessionAnalysis';
 
 interface ChatPanelDialogsProps {
   agentId: string;
   activeSessionId: string;
   session?: ChatSession;
   sessions: ChatSession[];
+  isStreaming?: boolean;
   clearOpen: boolean;
   rewindTarget: import('@agent-orchestrator/shared').Message | null;
   deleteTarget: ChatSession | null;
   gradeOpen: boolean;
+  insightsTab: SessionInsightsTab;
   improveOpen: boolean;
   improveSeed?: {
     kind: InstructionFileKind;
@@ -40,9 +43,11 @@ interface ChatPanelDialogsProps {
   onRewindClose: () => void;
   onDeleteClose: () => void;
   onGradeClose: () => void;
+  onInsightsTabChange: (tab: SessionInsightsTab) => void;
   onImproveClose: () => void;
   onImproveApplied: () => void;
   onImplementFinding?: (finding: SessionGradeFinding) => void;
+  onImproveFinding?: (finding: SessionGradeFinding) => void;
 }
 
 export function ChatPanelDialogs({
@@ -50,10 +55,12 @@ export function ChatPanelDialogs({
   activeSessionId,
   session,
   sessions,
+  isStreaming,
   clearOpen,
   rewindTarget,
   deleteTarget,
   gradeOpen,
+  insightsTab,
   improveOpen,
   improveSeed,
   clearMutation,
@@ -64,9 +71,11 @@ export function ChatPanelDialogs({
   onRewindClose,
   onDeleteClose,
   onGradeClose,
+  onInsightsTabChange,
   onImproveClose,
   onImproveApplied,
   onImplementFinding,
+  onImproveFinding,
 }: ChatPanelDialogsProps) {
   return (
     <>
@@ -113,17 +122,25 @@ export function ChatPanelDialogs({
         }}
       />
 
-      <GradeSessionDialog
-        open={gradeOpen}
-        sessionTitle={session?.title ?? 'this session'}
-        sessionFilePath={session?.grade?.analysis?.sessionFilePath ?? session?.runLogPath}
-        current={session?.grade}
-        loading={gradeMutation.isPending}
-        error={gradeMutation.error ? (gradeMutation.error as Error).message : null}
-        onClose={onGradeClose}
-        onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
-        onImplementFinding={onImplementFinding}
-      />
+      {activeSessionId ? (
+        <SessionInsightsDialog
+          open={gradeOpen}
+          tab={insightsTab}
+          onTabChange={onInsightsTabChange}
+          agentId={agentId}
+          sessionId={activeSessionId}
+          isStreaming={isStreaming}
+          sessionTitle={session?.title ?? 'this session'}
+          sessionFilePath={session?.grade?.analysis?.sessionFilePath ?? session?.runLogPath}
+          current={session?.grade}
+          analyzing={gradeMutation.isPending}
+          analyzeError={gradeMutation.error ? (gradeMutation.error as Error).message : null}
+          onClose={onGradeClose}
+          onAnalyze={(notes) => gradeMutation.mutate({ notes: notes.trim() || undefined })}
+          onImplementFinding={onImplementFinding}
+          onImproveFinding={onImproveFinding}
+        />
+      ) : null}
 
       {activeSessionId ? (
         <ImproveInstructionsDialog

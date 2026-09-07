@@ -81,6 +81,61 @@ test('seedInstructionOfferFromFindings routes build grades to implement-plan', (
   assert.equal(seed.name, 'implement-plan');
 });
 
+test('seedInstructionOfferFromFindings routes unscoped build skill findings to implement-plan', () => {
+  const seed = seedInstructionOfferFromFindings(
+    { template: 'build' },
+    [
+      {
+        category: 'skills',
+        severity: 'issue',
+        title: 'No skill',
+        detail: 'Missing tactics',
+        recommendedAction: { kind: 'skill' },
+      },
+    ],
+  );
+  assert.equal(seed.scope, 'project');
+  assert.equal(seed.preferredSkillSlug, 'implement-plan');
+});
+
+test('seedInstructionOfferFromFindings keeps an explicit personal skill off the phase path', () => {
+  const seed = seedInstructionOfferFromFindings(
+    { template: 'build' },
+    [
+      {
+        category: 'skills',
+        severity: 'issue',
+        title: 'Generic retry habit',
+        detail: 'Always rerun tests after edits',
+        recommendedAction: {
+          kind: 'skill',
+          scope: 'personal',
+          name: 'rerun-tests',
+          operation: 'create',
+        },
+      },
+    ],
+  );
+  assert.equal(seed.scope, 'personal');
+  assert.equal(seed.name, 'rerun-tests');
+  assert.equal(seed.preferredSkillSlug, 'rerun-tests');
+  assert.equal(seed.relativePath, undefined);
+});
+
+test('seedInstructionOfferFromFindings defaults chat skills to personal', () => {
+  const seed = seedInstructionOfferFromFindings({ template: 'create-draft-pr' }, [
+    {
+      category: 'skills',
+      severity: 'warning',
+      title: 'Missing habit',
+      detail: 'No checklist',
+    },
+  ]);
+  assert.equal(seed.kind, 'skill');
+  assert.equal(seed.scope, 'personal');
+  assert.equal(seed.preferredSkillSlug, undefined);
+});
+
 test('skill frontmatter version helpers', () => {
   const base = '---\nname: demo\ndescription: x\nversion: 3\n---\n\n# Demo\n';
   assert.equal(parseSkillVersion(base), 3);

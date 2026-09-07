@@ -4,7 +4,11 @@ import type {
   InstructionFileScope,
   SessionGradeFinding,
 } from '@agent-orchestrator/shared';
-import { phaseSkillForTemplate, phaseSkillRelativePath } from '@agent-orchestrator/shared';
+import {
+  phaseSkillForTemplate,
+  phaseSkillRelativePath,
+  resolveInstructionScope,
+} from '@agent-orchestrator/shared';
 
 export interface InstructionOfferSeed {
   kind: InstructionFileKind;
@@ -24,18 +28,18 @@ export function seedInstructionOfferFromFindings(
   const findingTitles = findings.map((item) => item.title).filter(Boolean);
   const withAction = findings.find((item) => item.recommendedAction?.kind);
   const kind = withAction?.recommendedAction?.kind ?? 'skill';
-  const scope =
-    withAction?.recommendedAction?.scope ?? (kind === 'skill' ? 'project' : undefined);
+  const explicitScope = withAction?.recommendedAction?.scope;
   const extraNotes = findings
     .map((item) => `${item.title}: ${item.detail}`.trim())
     .filter(Boolean)
     .join('\n');
 
   const phaseSlug = phaseSkillForTemplate(session.template);
-  if (kind === 'skill' && phaseSlug) {
+  const usePhaseSkill = kind === 'skill' && Boolean(phaseSlug) && explicitScope !== 'personal';
+  if (usePhaseSkill && phaseSlug) {
     return {
       kind: 'skill',
-      scope: scope === 'personal' ? 'personal' : 'project',
+      scope: 'project',
       extraNotes,
       findingTitles,
       preferredSkillSlug: phaseSlug,
@@ -44,5 +48,14 @@ export function seedInstructionOfferFromFindings(
     };
   }
 
-  return { kind, scope, extraNotes, findingTitles };
+  const scope = kind === 'skill' ? resolveInstructionScope('skill', explicitScope) : explicitScope;
+  const skillName = withAction?.recommendedAction?.name;
+  return {
+    kind,
+    scope,
+    extraNotes,
+    findingTitles,
+    name: kind === 'skill' ? skillName : undefined,
+    preferredSkillSlug: kind === 'skill' ? skillName : undefined,
+  };
 }
