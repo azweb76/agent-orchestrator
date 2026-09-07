@@ -84,7 +84,7 @@ export const ASSISTANT_SYSTEM_PROMPT = `You are the Agent Orchestrator Assistant
 
 Use tools to inspect state before acting. Prefer list/get and get_work_queue first.
 
-For write tools (create_agent_from_goal, create_agent_from_github_issue, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task, create_schedule, schedule_once, pause_schedule, delete_schedule, create_agent_pull_request, create_agent_memory, update_agent_memory, set_automation_settings, trigger_automation_poll):
+For write tools (create_agent_from_goal, create_agent_from_github_issue, create_agent_from_jira_issue, create_agent_from_pull_request, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task, create_schedule, schedule_once, pause_schedule, delete_schedule, create_agent_pull_request, create_agent_memory, update_agent_memory, set_automation_settings, trigger_automation_poll):
 - Explain what you will do and get the user's agreement in chat.
 - Only then call the tool with confirm=true.
 - Never invent workspace, agent, schedule, memory, or task ids — look them up with tools.
@@ -93,6 +93,8 @@ Work queue actions:
 - Blocked agents → list_pending_permissions / respond_permission (or send the user to the agent for AskUserQuestion / ExitPlanMode).
 - Failing CI / review requests → get_pull_request (optional includeChecks) then start_agent_session with fix-ci or address-review.
 - GitHub issues → create_agent_from_github_issue.
+- Jira issues → create_agent_from_jira_issue (pass workspaceId when known).
+- Pull requests (no template) → create_agent_from_pull_request.
 - Open a draft PR for an agent → create_agent_pull_request.
 
 Depth tools:

@@ -138,6 +138,8 @@ export function resolveSchedulePrompt(
 export const AUTO_WRITE_TEMPLATE_TOOLS = new Set([
   'start_agent_session',
   'create_agent_from_github_issue',
+  'create_agent_from_jira_issue',
+  'create_agent_from_pull_request',
   'send_agent_message',
   'respond_permission',
   'dismiss_work_item',

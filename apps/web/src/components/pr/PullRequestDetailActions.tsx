@@ -40,7 +40,7 @@ export function PullRequestDetailActions({
           title={
             pr.archived
               ? 'This repository is archived and read-only.'
-              : 'Start a Claude agent to resolve merge conflicts'
+              : 'Ask Assistant to start a resolve-conflicts session'
           }
           disabled={busy}
         >
@@ -60,7 +60,7 @@ export function PullRequestDetailActions({
           title={
             pr.archived
               ? 'This repository is archived and read-only.'
-              : 'Start a Claude agent to fix failing CI checks'
+              : 'Ask Assistant to start a fix-ci session'
           }
           disabled={busy}
         >
@@ -80,7 +80,7 @@ export function PullRequestDetailActions({
           title={
             pr.archived
               ? 'This repository is archived and read-only.'
-              : 'Start a Claude agent to address review feedback'
+              : 'Ask Assistant to start an address-review session'
           }
           disabled={busy}
         >
@@ -111,8 +111,8 @@ export function PullRequestDetailActions({
             pr.archived
               ? 'This repository is archived and read-only.'
               : pr.workspaceId
-                ? 'Create a worktree and Claude agent for this pull request'
-                : 'Clone the repository and start a Claude agent for this pull request'
+                ? 'Ask Assistant to create a worktree and Claude agent for this pull request'
+                : 'Ask Assistant to clone the repository and start a Claude agent for this pull request'
           }
           disabled={createPending || pr.archived}
         >
@@ -121,8 +121,9 @@ export function PullRequestDetailActions({
             startIcon={<SmartToyOutlinedIcon />}
             disabled={createPending || pr.archived}
             onClick={onCreateAgent}
+            sx={{ textTransform: 'none' }}
           >
-            {createPending ? 'Starting…' : pr.workspaceId ? 'Create agent' : 'Start agent'}
+            {createPending ? 'Asking…' : 'Ask Assistant'}
           </Button>
         </ControlTooltip>
       )}

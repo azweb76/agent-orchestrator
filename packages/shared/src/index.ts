@@ -268,6 +268,17 @@ export {
   type FleetTriageStarter,
 } from './assistant-fleet-starters.js';
 
+export {
+  buildGithubIssueStartPrompt,
+  buildJiraIssueStartPrompt,
+  buildPrCreateAgentPrompt,
+  buildPrTemplatePrompt,
+  type InboxAssistantStarter,
+  type InboxGithubIssueRef,
+  type InboxJiraIssueRef,
+  type InboxPrRef,
+} from './assistant-inbox-starters.js';
+
 export { parseDurationToMs, resolveOnceRunAt } from './duration.js';
 
 export { cronMatches, nextCronOccurrence, parseCron, zonedParts } from './cron.js';

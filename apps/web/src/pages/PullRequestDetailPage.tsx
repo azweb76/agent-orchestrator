@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -13,9 +13,14 @@ import {
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { evaluateMergeReadiness } from '@agent-orchestrator/shared';
+import {
+  buildPrCreateAgentPrompt,
+  buildPrTemplatePrompt,
+  evaluateMergeReadiness,
+} from '@agent-orchestrator/shared';
 import type { ChatSessionTemplateId } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
+import { useSendAssistantPrompt } from '../components/dashboard/useSendAssistantPrompt';
 import { MergeActions } from '../components/pr/MergeActions';
 import { MergeReadinessPanel } from '../components/pr/MergeReadinessPanel';
 import { PullRequestChecksTab } from '../components/pr/PullRequestChecksTab';
@@ -60,9 +65,10 @@ function PullRequestDetailContent({
   repo: string;
   prNumber: number;
 }) {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const assistant = useSendAssistantPrompt();
   const [tab, setTab] = useState<PrTab>('overview');
+  const [templatePending, setTemplatePending] = useState(false);
 
   const prKey = ['pr', owner, repo, prNumber];
 
@@ -112,35 +118,42 @@ function PullRequestDetailContent({
     staleTime: 30_000,
   });
 
-  const createAgent = useMutation({
-    mutationFn: () => api.createAgentFromPr({ owner, repo, prNumber }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: prKey });
-      navigate(`/agents/${result.agent.id}`);
-    },
-  });
-
-  const startTemplate = useMutation({
-    mutationFn: async (template: ChatSessionTemplateId) => {
-      const result = await api.createAgentFromPr({
+  const createAgent = async () => {
+    await assistant.sendPrompt(
+      buildPrCreateAgentPrompt({
         owner,
         repo,
-        prNumber,
-        template: template as 'fix-ci' | 'address-review' | 'resolve-conflicts',
-      });
-      return { agentId: result.agent.id, template, sessionId: result.sessionId };
-    },
-    onSuccess: ({ agentId, template, sessionId }) => {
-      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      queryClient.invalidateQueries({ queryKey: prKey });
-      navigate(`/agents/${agentId}`, {
-        state: sessionId ? { sessionId } : { sessionTemplate: template },
-      });
-    },
-  });
+        number: prNumber,
+        agentId: prQuery.data?.agentId,
+      }).prompt,
+    );
+  };
+
+  const startTemplate = async (template: ChatSessionTemplateId) => {
+    if (
+      template !== 'fix-ci' &&
+      template !== 'address-review' &&
+      template !== 'resolve-conflicts'
+    ) {
+      return;
+    }
+    setTemplatePending(true);
+    try {
+      await assistant.sendPrompt(
+        buildPrTemplatePrompt(
+          {
+            owner,
+            repo,
+            number: prNumber,
+            agentId: prQuery.data?.agentId,
+          },
+          template,
+        ).prompt,
+      );
+    } finally {
+      setTemplatePending(false);
+    }
+  };
 
   const submitReview = useMutation({
     mutationFn: (input: { event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT'; body: string }) =>
@@ -213,10 +226,10 @@ function PullRequestDetailContent({
             <PullRequestDetailActions
               pr={pr}
               failingChecks={checksQuery.data?.failing ?? 0}
-              createPending={createAgent.isPending}
-              templatePending={startTemplate.isPending}
-              onCreateAgent={() => createAgent.mutate()}
-              onStartTemplate={(template) => startTemplate.mutate(template)}
+              createPending={assistant.sending && !templatePending}
+              templatePending={templatePending}
+              onCreateAgent={() => void createAgent()}
+              onStartTemplate={(template) => void startTemplate(template)}
             />
             <ControlTooltip title="Open this pull request on GitHub">
               <Button
@@ -233,12 +246,7 @@ function PullRequestDetailContent({
         }
       />
 
-      {createAgent.error ? (
-        <Alert severity="error">{(createAgent.error as Error).message}</Alert>
-      ) : null}
-      {startTemplate.error ? (
-        <Alert severity="error">{(startTemplate.error as Error).message}</Alert>
-      ) : null}
+      {assistant.error ? <Alert severity="error">{assistant.error}</Alert> : null}
 
       {/*
         `behind` is only reported when the base branch requires strict status checks,
@@ -275,10 +283,10 @@ function PullRequestDetailContent({
               error={checksQuery.error}
               onFixCi={
                 pr.state === 'open' && !pr.merged && !pr.archived
-                  ? () => startTemplate.mutate('fix-ci')
+                  ? () => void startTemplate('fix-ci')
                   : undefined
               }
-              fixing={startTemplate.isPending}
+              fixing={templatePending}
             />
           )}
           {tab === 'files' && (

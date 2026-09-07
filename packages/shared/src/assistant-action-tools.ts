@@ -50,6 +50,50 @@ export const ASSISTANT_ACTION_TOOLS: AssistantToolDefinition[] = [
     },
   },
   {
+    name: 'create_agent_from_jira_issue',
+    description:
+      'Create a worktree + agent from a Jira issue key (optional workspaceId). Requires confirm=true.',
+    risk: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        issueKey: { type: 'string', description: 'Jira issue key, e.g. PROJ-123' },
+        workspaceId: {
+          type: 'string',
+          description: 'Target workspace id when the project is not auto-matched',
+        },
+        name: { type: 'string', description: 'Optional agent/worktree name slug' },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to execute; ask the user first if unset/false',
+        },
+      },
+      required: ['issueKey', 'confirm'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_agent_from_pull_request',
+    description:
+      'Create (or reuse) a worktree + agent from a GitHub pull request without starting a template session. Requires confirm=true.',
+    risk: 'write',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        number: { type: 'integer', minimum: 1, description: 'Pull request number' },
+        name: { type: 'string', description: 'Optional agent/worktree name slug' },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be true to execute; ask the user first if unset/false',
+        },
+      },
+      required: ['owner', 'repo', 'number', 'confirm'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'send_agent_message',
     description:
       'Send a follow-up message to an agent session (queues if busy, otherwise starts a turn). Requires confirm=true.',

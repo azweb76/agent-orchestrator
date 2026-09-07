@@ -87,10 +87,14 @@ function starterFromQueueItem(item: AssistantStarterQueueItem): AssistantStarter
     case 'jira_issue': {
       const key = typeof item.action.key === 'string' ? item.action.key : null;
       if (!key) return null;
+      const workspaceId =
+        typeof item.action.workspaceId === 'string' ? item.action.workspaceId : null;
       return {
         id: item.id,
         label: `Start ${key}`,
-        prompt: `Help me start an agent for Jira issue ${key}.`,
+        prompt: workspaceId
+          ? `Create an agent from Jira issue ${key} using create_agent_from_jira_issue with workspaceId=${workspaceId} and confirm=true. Confirm with me before writing.`
+          : `Create an agent from Jira issue ${key} using create_agent_from_jira_issue with confirm=true. Ask me for a workspace if needed. Confirm with me before writing.`,
       };
     }
     case 'agent_idle':
