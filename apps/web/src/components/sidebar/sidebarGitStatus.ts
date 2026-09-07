@@ -1,8 +1,4 @@
-import {
-  AGENT_DELIVERY_PHASE_LABELS,
-  type SidebarAgent,
-  type SidebarGitStatus,
-} from '@agent-orchestrator/shared';
+import type { SidebarAgent, SidebarGitStatus } from '@agent-orchestrator/shared';
 
 /** Compact ahead/behind fragment for sidebar captions (e.g. "↑2 ↓1"). */
 export function formatAheadBehind(status: Pick<SidebarGitStatus, 'aheadBy' | 'behindBy'>): string {
@@ -13,7 +9,7 @@ export function formatAheadBehind(status: Pick<SidebarGitStatus, 'aheadBy' | 'be
 }
 
 /**
- * Secondary-row caption: branch + ahead/behind.
+ * Secondary-row branch fragment: branch + ahead/behind.
  * Dirty is shown via the M mark so the narrow sidebar does not truncate "dirty".
  */
 export function formatSidebarBranchCaption(agent: SidebarAgent): string {
@@ -26,18 +22,4 @@ export function formatSidebarBranchCaption(agent: SidebarAgent): string {
 export function formatSidebarGitCaption(agent: SidebarAgent): string {
   const base = formatSidebarBranchCaption(agent);
   return agent.gitStatus.dirty ? `${base} · dirty` : base;
-}
-
-/** Tooltip lines covering runtime, delivery, and git. */
-export function sidebarAgentStatusLines(agent: SidebarAgent): string[] {
-  const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
-  const stalled = Boolean(agent.stalled);
-  const runtime = needsInput ? 'Needs your input' : stalled ? 'Stalled' : agent.status;
-  const lines = [formatSidebarGitCaption(agent), runtime];
-  const phase = AGENT_DELIVERY_PHASE_LABELS[agent.deliveryPhase];
-  if (phase) lines.push(phase);
-  if (agent.worktree.prNumber != null) {
-    lines.push(`PR #${agent.worktree.prNumber}`);
-  }
-  return lines;
 }

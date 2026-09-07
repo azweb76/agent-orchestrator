@@ -14,8 +14,11 @@ import { ControlTooltip } from '../ui/ControlTooltip';
 import { AgentStatusDot, AgentStatusIcon, PrStatusDot } from './agentStatusVisuals';
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
-import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
-import { formatSidebarBranchCaption, sidebarAgentStatusLines } from './sidebarGitStatus';
+import {
+  formatSidebarStatusCaption,
+  resolveSidebarPrKind,
+  sidebarAgentStatusLines,
+} from './sidebarPrStatus';
 
 /** Tiny "M" mark for a dirty worktree (modified), VS Code–style. */
 export function DirtyWorktreeMark({ size = 12 }: { size?: number }) {
@@ -54,13 +57,8 @@ export const SidebarAgentListItem = memo(function SidebarAgentListItem({
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   const stalled = Boolean(agent.stalled);
   const dirty = Boolean(agent.gitStatus?.dirty);
-  const branchCaption = formatSidebarBranchCaption(agent);
-  const prKind =
-    agent.worktree.prNumber != null && agent.prStatus
-      ? resolvePullRequestStatus(agent.prStatus)
-      : agent.worktree.prNumber != null
-        ? 'open'
-        : null;
+  const statusCaption = formatSidebarStatusCaption(agent);
+  const prKind = resolveSidebarPrKind(agent);
 
   return (
     <ControlTooltip
@@ -73,11 +71,17 @@ export const SidebarAgentListItem = memo(function SidebarAgentListItem({
               variant="caption"
               sx={{
                 display: 'block',
-                textTransform: line === agent.status || line.startsWith('Needs') || line === 'Stalled'
-                  ? 'capitalize'
-                  : undefined,
+                textTransform:
+                  line === agent.status || line.startsWith('Needs') || line === 'Stalled'
+                    ? 'capitalize'
+                    : undefined,
                 color:
-                  line === 'Needs your input' || line === 'Stalled' || line.includes('dirty')
+                  line === 'Needs your input' ||
+                  line === 'Stalled' ||
+                  line.includes('dirty') ||
+                  line === 'Draft PR' ||
+                  line === 'Needs PR' ||
+                  line === 'CI failing'
                     ? 'warning.main'
                     : undefined,
               }}
@@ -129,11 +133,19 @@ export const SidebarAgentListItem = memo(function SidebarAgentListItem({
           secondary={
             <Typography
               variant="caption"
-              color={dirty ? 'warning.main' : 'text.secondary'}
+              color={
+                dirty ||
+                agent.deliveryPhase === 'pr_draft' ||
+                agent.deliveryPhase === 'needs_pr' ||
+                agent.deliveryPhase === 'checks_failing' ||
+                agent.deliveryPhase === 'has_conflicts'
+                  ? 'warning.main'
+                  : 'text.secondary'
+              }
               noWrap
               sx={{ display: 'block', fontFamily: 'IBM Plex Mono, monospace', fontSize: 11 }}
             >
-              {branchCaption}
+              {statusCaption}
             </Typography>
           }
         />
