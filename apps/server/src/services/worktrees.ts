@@ -16,7 +16,7 @@ import type {
   WorktreeWithAgent,
 } from '@agent-orchestrator/shared';
 import { slugify } from './git.js';
-import { resolveExplicitBranchName } from './branch-name.js';
+import { ensureUniqueBranchName, resolveExplicitBranchName } from './branch-name.js';
 import { mergeLivePullRequest } from './pr-overlay.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { createAgentForWorktree } from './agent-core.js';
@@ -201,7 +201,8 @@ async function suggestBranchNameForWorkspace(
 ): Promise<string> {
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
-  return ctx.anthropic.suggestBranchName(idea);
+  const suggested = await ctx.anthropic.suggestBranchName(idea);
+  return ensureUniqueBranchName(ctx, workspace, suggested);
 }
 
 /**
@@ -352,7 +353,11 @@ export async function createWorktreeFromIssue(
 
   const branchName =
     resolveExplicitBranchName(body.branch) ??
-    (await ctx.anthropic.suggestBranchName(`${issue.title}\n\n${issue.body}`.trim()));
+    (await ensureUniqueBranchName(
+      ctx,
+      workspace,
+      await ctx.anthropic.suggestBranchName(`${issue.title}\n\n${issue.body}`.trim()),
+    ));
   const { worktree, agent } = await createWorktreeFromBranch(ctx, workspaceId, {
     branch: branchName,
     createNew: true,

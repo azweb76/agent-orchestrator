@@ -8,7 +8,7 @@ import { createRepositories, initDatabase } from '../db/index.js';
 import type { AppContext } from './app-context.js';
 import { BranchExistsError } from './git-errors.js';
 import { ClaudeService, GitService } from './git.js';
-import { createWorktreeFromBranch } from './worktrees.js';
+import { createWorktreeFromBranch, createWorktreeFromIssue } from './worktrees.js';
 import { execGit } from './git.test-helpers.js';
 
 async function setupRepoFixture(): Promise<{
@@ -128,6 +128,36 @@ test('createWorktreeFromBranch overwrite resets the branch and replaces the work
   assert.equal(await execGit(second.worktree.path, ['rev-parse', 'HEAD']), mainTip);
   assert.equal(await execGit(second.worktree.path, ['branch', '--show-current']), 'feat/reuse');
   await assert.rejects(() => fs.access(path.join(second.worktree.path, 'stale.txt')));
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('createWorktreeFromIssue auto-uniquifies an AI-suggested branch that already exists', async () => {
+  const { tmp, main } = await setupRepoFixture();
+  const ctx = makeCtx(tmp, main);
+  await execGit(main, ['branch', 'ai-suggested-slug']);
+
+  ctx.github = {
+    getIssueDetail: async () => ({
+      number: 42,
+      title: 'Fix the thing',
+      body: 'Details about the thing.',
+      state: 'open',
+      htmlUrl: 'https://github.com/example/demo/issues/42',
+      authorLogin: 'octocat',
+      updatedAt: new Date().toISOString(),
+      comments: [],
+    }),
+  } as unknown as AppContext['github'];
+  ctx.anthropic = {
+    suggestBranchName: async () => 'ai-suggested-slug',
+  } as unknown as AppContext['anthropic'];
+
+  const result = await createWorktreeFromIssue(ctx, 'ws-1', { issueNumber: 42 });
+
+  assert.equal(result.branchName, 'ai-suggested-slug-2');
+  assert.equal(result.worktree.branch, 'ai-suggested-slug-2');
+  assert.equal(await execGit(result.worktree.path, ['branch', '--show-current']), 'ai-suggested-slug-2');
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
