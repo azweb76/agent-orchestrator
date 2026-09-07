@@ -11,7 +11,7 @@ import {
   type Agent,
 } from '@agent-orchestrator/shared';
 import { type AppContext, nowIso } from './app-context.js';
-import { resolveExplicitBranchName } from './branch-name.js';
+import { ensureUniqueBranchName, resolveExplicitBranchName } from './branch-name.js';
 import { createWorktreeFromBranch } from './worktrees.js';
 
 const JIRA_WORKSPACE_MAP_KEY = 'jira_workspace_map';
@@ -110,8 +110,12 @@ export async function createWorktreeFromJiraIssue(
 
   const branchName =
     resolveExplicitBranchName(body.branch) ??
-    (await ctx.anthropic.suggestBranchName(
-      `${issue.key} ${issue.summary}\n\n${issue.description}`.trim(),
+    (await ensureUniqueBranchName(
+      ctx,
+      workspace,
+      await ctx.anthropic.suggestBranchName(
+        `${issue.key} ${issue.summary}\n\n${issue.description}`.trim(),
+      ),
     ));
   const { worktree, agent } = await createWorktreeFromBranch(ctx, workspaceId, {
     branch: branchName,
