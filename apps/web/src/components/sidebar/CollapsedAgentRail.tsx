@@ -3,9 +3,12 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Badge, Box, IconButton, LinearProgress, Stack, Typography } from '@mui/material';
 import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
+import { AgentStatusDot, AgentStatusIcon, PrStatusDot } from './agentStatusVisuals';
+import { DirtyWorktreeMark } from './SidebarAgentListItem';
 import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
 import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
+import { resolvePullRequestStatus } from '../pr/pullRequestStatus';
+import { formatSidebarGitCaption, sidebarAgentStatusLines } from './sidebarGitStatus';
 
 const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
   agent,
@@ -20,6 +23,14 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
 }) {
   const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
   const stalled = Boolean(agent.stalled);
+  const dirty = Boolean(agent.gitStatus?.dirty);
+  const prKind =
+    agent.worktree.prNumber != null && agent.prStatus
+      ? resolvePullRequestStatus(agent.prStatus)
+      : agent.worktree.prNumber != null
+        ? 'open'
+        : null;
+
   return (
     <Box sx={{ position: 'relative' }}>
       <ControlTooltip
@@ -30,18 +41,23 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
               {agent.name}
             </Typography>
             <Typography variant="caption" sx={{ display: 'block' }}>
-              {workspace.name} · {agent.status}
+              {workspace.name}
             </Typography>
-            {needsInput && (
-              <Typography variant="caption" color="warning.main">
-                Needs your input
+            {sidebarAgentStatusLines(agent).map((line) => (
+              <Typography
+                key={line}
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  color:
+                    line === 'Needs your input' || line === 'Stalled' || line.includes('dirty')
+                      ? 'warning.main'
+                      : undefined,
+                }}
+              >
+                {line}
               </Typography>
-            )}
-            {stalled && (
-              <Typography variant="caption" color="warning.main">
-                Stalled
-              </Typography>
-            )}
+            ))}
           </Box>
         }
       >
@@ -49,7 +65,7 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
           component={RouterLink}
           to={`/agents/${agent.id}`}
           size="small"
-          aria-label={`${agent.name} (${agent.status})`}
+          aria-label={`${agent.name} (${formatSidebarGitCaption(agent)})`}
           sx={(theme) => ({
             width: 40,
             height: 40,
@@ -58,9 +74,11 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
             borderColor:
               selected || workspaceActive
                 ? 'secondary.main'
-                : agent.status === 'running'
-                  ? 'info.main'
-                  : 'divider',
+                : dirty
+                  ? 'warning.main'
+                  : agent.status === 'running'
+                    ? 'info.main'
+                    : 'divider',
             bgcolor: selected
               ? theme.palette.ao.surface.selected
               : agent.status === 'running'
@@ -77,12 +95,16 @@ const CollapsedAgentRailItem = memo(function CollapsedAgentRailItem({
           <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput && !stalled}>
             <AgentStatusIcon status={agent.status} selected={selected} />
           </Badge>
-          <Box sx={{ position: 'absolute', right: 4, bottom: 4 }}>
-            {agent.worktree.prNumber != null ? (
-              <PullRequestStatusIcon status="open" sx={{ fontSize: 10 }} />
-            ) : (
+          <Box sx={{ position: 'absolute', right: 3, bottom: 3, display: 'flex', gap: 0.25 }}>
+            {dirty ? <DirtyWorktreeMark size={10} /> : null}
+            {prKind != null ? (
+              <>
+                <PullRequestStatusIcon status={prKind} sx={{ fontSize: 10 }} />
+                {agent.prStatus ? <PrStatusDot status={agent.prStatus} size={5} /> : null}
+              </>
+            ) : !dirty ? (
               <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
-            )}
+            ) : null}
           </Box>
           {agent.status === 'running' && (
             <LinearProgress

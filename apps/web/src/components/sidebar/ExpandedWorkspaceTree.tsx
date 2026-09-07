@@ -1,7 +1,5 @@
-import { memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
-  Badge,
   Box,
   Button,
   Collapse,
@@ -17,11 +15,10 @@ import AddIcon from '@mui/icons-material/Add';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
-import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared';
+import type { SidebarWorkspace } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
-import { AgentStatusDot, AgentStatusIcon } from './agentStatusVisuals';
-import { SidebarAgentArchiveMenu } from './SidebarAgentArchiveMenu';
-import { PullRequestStatusIcon } from '../pr/PullRequestStatusIcon';
+import { AgentStatusDot } from './agentStatusVisuals';
+import { SidebarAgentListItem } from './SidebarAgentListItem';
 
 export function ExpandedWorkspaceTree({
   tree,
@@ -86,12 +83,13 @@ export function ExpandedWorkspaceTree({
         const open = forceExpandAll || expandedWorkspaces.has(workspace.id);
         const workspaceSelected = selectedWorkspaceId === workspace.id && !selectedAgentId;
         const hasRunning = workspace.agents.some((agent) => agent.status === 'running');
+        const dirtyCount = workspace.agents.filter((agent) => agent.gitStatus?.dirty).length;
 
         return (
           <Box key={workspace.id}>
             <ControlTooltip
               sidebar
-              title={`${workspace.githubOwner}/${workspace.githubRepo} · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}`}
+              title={`${workspace.githubOwner}/${workspace.githubRepo} · ${workspace.agents.length} agent${workspace.agents.length === 1 ? '' : 's'}${dirtyCount > 0 ? ` · ${dirtyCount} dirty` : ''}`}
             >
               <ListItemButton
                 component={RouterLink}
@@ -113,6 +111,11 @@ export function ExpandedWorkspaceTree({
                         {workspace.name}
                       </Typography>
                       {hasRunning && <AgentStatusDot status="running" size={6} />}
+                      {dirtyCount > 0 ? (
+                        <Typography variant="caption" color="warning.main" sx={{ fontWeight: 600 }}>
+                          {dirtyCount}M
+                        </Typography>
+                      ) : null}
                     </Stack>
                   }
                 />
@@ -158,7 +161,7 @@ export function ExpandedWorkspaceTree({
                   </Box>
                 ) : (
                   workspace.agents.map((agent) => (
-                    <AgentListItem
+                    <SidebarAgentListItem
                       key={agent.id}
                       agent={agent}
                       selected={selectedAgentId === agent.id}
@@ -173,96 +176,3 @@ export function ExpandedWorkspaceTree({
     </List>
   );
 }
-
-function prStatusWord(status: SidebarAgent['prStatus']): string {
-  if (!status) return '';
-  if (status.merged) return 'Merged';
-  if (status.state === 'closed') return 'Closed';
-  if (status.checksRollup === 'failure') return 'Checks failing';
-  if (status.checksRollup === 'pending') return 'Checks pending';
-  if (status.draft) return 'Draft';
-  return 'Open';
-}
-
-const AgentListItem = memo(function AgentListItem({
-  agent,
-  selected,
-}: {
-  agent: SidebarAgent;
-  selected: boolean;
-}) {
-  const needsInput = (agent.pendingPermissionCount ?? 0) > 0;
-  const stalled = Boolean(agent.stalled);
-  const statusHint = needsInput ? 'Needs your input' : stalled ? 'Stalled' : agent.status;
-  return (
-    <ControlTooltip
-      sidebar
-      title={
-        <Box>
-          <Typography variant="caption" sx={{ display: 'block' }}>
-            {agent.worktree.branch}
-            {agent.worktree.prNumber
-              ? ` · PR #${agent.worktree.prNumber}${agent.prStatus ? ` · ${prStatusWord(agent.prStatus)}` : ''}`
-              : ''}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{ display: 'block', textTransform: 'capitalize' }}
-            color={needsInput || stalled ? 'warning.main' : undefined}
-          >
-            {statusHint}
-          </Typography>
-        </Box>
-      }
-    >
-      <ListItemButton
-        component={RouterLink}
-        to={`/agents/${agent.id}`}
-        selected={selected}
-        sx={{ pl: 4.5, pr: 1.5, py: 0.4, alignItems: 'center' }}
-      >
-        <ListItemIcon sx={{ minWidth: 26 }}>
-          <Badge color="warning" variant="dot" overlap="circular" invisible={!needsInput && !stalled}>
-            <AgentStatusIcon status={agent.status} selected={selected} />
-          </Badge>
-        </ListItemIcon>
-        <ListItemText
-          sx={{ my: 0 }}
-          primary={
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
-              <Typography
-                variant="body2"
-                noWrap
-                sx={{
-                  fontWeight: selected ? 700 : 500,
-                  color: needsInput ? 'warning.main' : undefined,
-                  flex: 1,
-                  minWidth: 0,
-                }}
-              >
-                {agent.name}
-              </Typography>
-              {agent.worktree.prNumber != null ? (
-                <PullRequestStatusIcon
-                  status={
-                    agent.prStatus?.merged
-                      ? 'merged'
-                      : agent.prStatus?.state === 'closed'
-                        ? 'closed'
-                        : agent.prStatus?.draft
-                          ? 'draft'
-                          : 'open'
-                  }
-                  sx={{ fontSize: 14, flexShrink: 0 }}
-                />
-              ) : (
-                <AgentStatusDot status={agent.status} size={7} stalled={stalled} />
-              )}
-            </Stack>
-          }
-        />
-        <SidebarAgentArchiveMenu agent={agent} />
-      </ListItemButton>
-    </ControlTooltip>
-  );
-});

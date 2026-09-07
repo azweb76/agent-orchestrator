@@ -17,6 +17,9 @@ function makeAgent(overrides: Partial<SidebarAgent> = {}): SidebarAgent {
     createdAt: '2026-01-01T00:00:00.000Z',
     worktree: { id: 'wt-1', name: 'fix-login', branch: 'fix/login', prNumber: null },
     pendingPermissionCount: 0,
+    prStatus: null,
+    deliveryPhase: 'planning',
+    gitStatus: { dirty: false, aheadBy: 0, behindBy: 0 },
     ...overrides,
   } as SidebarAgent;
 }
@@ -57,6 +60,16 @@ describe('agentMatchesStatusFilter', () => {
     expect(agentMatchesStatusFilter(makeAgent({ status: 'stopped' }), 'idle')).toBe(true);
     expect(agentMatchesStatusFilter(makeAgent({ status: 'running' }), 'idle')).toBe(false);
     expect(agentMatchesStatusFilter(makeAgent({ pendingPermissionCount: 1 }), 'idle')).toBe(false);
+  });
+
+  it('matches dirty when the worktree has uncommitted changes', () => {
+    expect(
+      agentMatchesStatusFilter(
+        makeAgent({ gitStatus: { dirty: true, aheadBy: 0, behindBy: 0 } }),
+        'dirty',
+      ),
+    ).toBe(true);
+    expect(agentMatchesStatusFilter(makeAgent(), 'dirty')).toBe(false);
   });
 });
 

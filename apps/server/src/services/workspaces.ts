@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   CreateWorkspaceRequest,
+  SidebarGitStatus,
   SidebarWorkspace,
   UsageSummary,
   AgentUsage,
@@ -18,6 +19,31 @@ import { isAgentStalled } from './watchdog.js';
 import { getCachedPrStatus } from './pr-status-cache.js';
 import { getDraftPrOfferSessionId } from './draft-pr-offer.js';
 import { listWorktreeFiles } from './chat-mentions.js';
+
+const CLEAN_GIT_STATUS: SidebarGitStatus = { dirty: false, aheadBy: 0, behindBy: 0 };
+
+/** Probe local dirty + upstream ahead/behind; never throws (sidebar must stay fast). */
+async function probeSidebarGitStatus(
+  ctx: AppContext,
+  worktreePath: string | undefined,
+): Promise<SidebarGitStatus> {
+  if (!worktreePath) return CLEAN_GIT_STATUS;
+  try {
+    const dirty = await ctx.git.hasChanges(worktreePath);
+    try {
+      const { ahead, behind } = await ctx.git.getAheadBehind(
+        worktreePath,
+        'HEAD',
+        '@{upstream}',
+      );
+      return { dirty, aheadBy: ahead, behindBy: behind };
+    } catch {
+      return { dirty, aheadBy: 0, behindBy: 0 };
+    }
+  } catch {
+    return CLEAN_GIT_STATUS;
+  }
+}
 
 export async function listWorkspaces(ctx: AppContext): Promise<WorkspaceWithCounts[]> {
   const workspaces = ctx.repos.workspaces.list();
@@ -64,38 +90,44 @@ export async function listSidebarTree(ctx: AppContext): Promise<SidebarWorkspace
     sessionsByAgent.set(session.agentId, list);
   }
 
-  return workspaces.map((workspace) => {
-    const worktrees = ctx.repos.worktrees.listByWorkspace(workspace.id);
-    const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]));
-    const agents = ctx.repos.agents.listByWorkspace(workspace.id).map((agent) => {
-      const worktree = worktreeById.get(agent.worktreeId);
-      const prStatus = worktree?.prNumber
-        ? getCachedPrStatus(ctx, workspace.githubOwner, workspace.githubRepo, worktree.prNumber)
-        : null;
-      const sessions = sessionsByAgent.get(agent.id) ?? [];
-      return {
-        ...agent,
-        worktree: {
-          id: worktree?.id ?? agent.worktreeId,
-          name: worktree?.name ?? 'Unknown',
-          branch: worktree?.branch ?? '',
-          prNumber: worktree?.prNumber ?? null,
-        },
-        pendingPermissionCount: pendingByAgent.get(agent.id) ?? 0,
-        stalled: isAgentStalled(agent.id),
-        prStatus,
-        deliveryPhase: resolveAgentDeliveryPhaseFromPrStatus({
-          archived: Boolean(agent.archivedAt) || agent.status === 'archived',
-          agentStatus: agent.status,
-          sessions,
-          needsDraftPr: Boolean(getDraftPrOfferSessionId(ctx, agent.id)),
-          hasLinkedPr: worktree?.prNumber != null,
-          prStatus,
+  return Promise.all(
+    workspaces.map(async (workspace) => {
+      const worktrees = ctx.repos.worktrees.listByWorkspace(workspace.id);
+      const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]));
+      const agents = await Promise.all(
+        ctx.repos.agents.listByWorkspace(workspace.id).map(async (agent) => {
+          const worktree = worktreeById.get(agent.worktreeId);
+          const prStatus = worktree?.prNumber
+            ? getCachedPrStatus(ctx, workspace.githubOwner, workspace.githubRepo, worktree.prNumber)
+            : null;
+          const sessions = sessionsByAgent.get(agent.id) ?? [];
+          const gitStatus = await probeSidebarGitStatus(ctx, worktree?.path);
+          return {
+            ...agent,
+            worktree: {
+              id: worktree?.id ?? agent.worktreeId,
+              name: worktree?.name ?? 'Unknown',
+              branch: worktree?.branch ?? '',
+              prNumber: worktree?.prNumber ?? null,
+            },
+            pendingPermissionCount: pendingByAgent.get(agent.id) ?? 0,
+            stalled: isAgentStalled(agent.id),
+            prStatus,
+            deliveryPhase: resolveAgentDeliveryPhaseFromPrStatus({
+              archived: Boolean(agent.archivedAt) || agent.status === 'archived',
+              agentStatus: agent.status,
+              sessions,
+              needsDraftPr: Boolean(getDraftPrOfferSessionId(ctx, agent.id)),
+              hasLinkedPr: worktree?.prNumber != null,
+              prStatus,
+            }),
+            gitStatus,
+          };
         }),
-      };
-    });
-    return { ...workspace, agents };
-  });
+      );
+      return { ...workspace, agents };
+    }),
+  );
 }
 
 /** Fleet-wide cost rollup from persisted assistant turns, grouped per agent and session. */
