@@ -5,8 +5,10 @@ import {
   BUNDLED_SKILL_COMMANDS,
   CONTEXT_SLASH_COMMANDS,
   LOCAL_SLASH_COMMANDS,
+  PHASE_SKILL_COMMANDS,
   type SlashCommand,
 } from '@agent-orchestrator/shared';
+import { ensureBuiltInPhaseSkills } from './phase-skills.js';
 
 function normalizeCommandName(raw: string): string {
   const trimmed = raw.trim().replace(/^\//, '');
@@ -106,9 +108,11 @@ async function listCommandFiles(root: string, source: SlashCommand['source']): P
 
 /**
  * Discover slash commands/skills available for a Claude worktree cwd.
- * Precedence (later wins on name collision): bundled → prompt shortcuts → personal → project → local.
+ * Precedence (later wins on name collision): bundled → phase pack → prompt shortcuts → personal → project → local.
  */
 export async function discoverSlashCommands(worktreePath: string): Promise<SlashCommand[]> {
+  await ensureBuiltInPhaseSkills(worktreePath);
+
   const home = os.homedir();
   const [projectSkills, projectCommands, personalSkills, personalCommands] = await Promise.all([
     listSkillDirs(path.join(worktreePath, '.claude', 'skills'), 'project'),
@@ -123,6 +127,7 @@ export async function discoverSlashCommands(worktreePath: string): Promise<Slash
   };
 
   for (const item of BUNDLED_SKILL_COMMANDS) upsert(item);
+  for (const item of PHASE_SKILL_COMMANDS) upsert(item);
   for (const item of CONTEXT_SLASH_COMMANDS) upsert(item);
   for (const item of personalCommands) upsert(item);
   for (const item of personalSkills) upsert(item);

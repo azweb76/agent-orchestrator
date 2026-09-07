@@ -363,6 +363,8 @@ export const ChatPanel = memo(function ChatPanel({
               scope: offer.scope ?? offer.draft?.scope,
               extraNotes: offer.extraNotes ?? '',
               draft: offer.draft ?? null,
+              preferredSkillSlug: offer.preferredSkillSlug,
+              metricsComparison: offer.metricsComparison ?? null,
             });
           } else {
             sessionActions.setImproveSeed(null);

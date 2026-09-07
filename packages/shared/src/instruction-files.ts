@@ -1,3 +1,5 @@
+import type { SkillMetricsComparison } from './phase-skills.js';
+
 /** Kind of agent instruction artifact that can be created or improved. */
 export type InstructionFileKind = 'skill' | 'claude_md' | 'agents_md';
 
@@ -65,4 +67,8 @@ export interface InstructionDraftOffer {
   kind?: InstructionFileKind;
   scope?: InstructionFileScope;
   extraNotes?: string;
+  /** Preferred phase skill slug when routing a skill improvement. */
+  preferredSkillSlug?: string;
+  /** Pre/post efficiency comparison for the targeted skill, when available. */
+  metricsComparison?: SkillMetricsComparison | null;
 }

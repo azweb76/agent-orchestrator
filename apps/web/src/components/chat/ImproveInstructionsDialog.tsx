@@ -21,6 +21,7 @@ import type {
   InstructionDraft,
   InstructionFileKind,
   InstructionFileScope,
+  SkillMetricsComparison,
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
@@ -40,6 +41,10 @@ interface ImproveInstructionsDialogProps {
   initialExtraNotes?: string;
   /** Pre-generated draft from a persisted instruction offer. */
   initialDraft?: InstructionDraft | null;
+  /** Preferred skill slug from the grade offer (phase skill routing). */
+  initialSkillName?: string;
+  /** Efficiency comparison for the targeted skill, when available. */
+  metricsComparison?: SkillMetricsComparison | null;
 }
 
 type TargetMode = 'new_skill' | 'claude_md' | 'agents_md' | 'existing';
@@ -49,6 +54,12 @@ const KIND_TO_MODE: Record<InstructionFileKind, TargetMode> = {
   claude_md: 'claude_md',
   agents_md: 'agents_md',
 };
+
+function formatDelta(value: number | null): string {
+  if (value == null) return 'n/a';
+  if (value > 0) return `+${value}`;
+  return String(value);
+}
 
 export function ImproveInstructionsDialog({
   open,
@@ -60,11 +71,20 @@ export function ImproveInstructionsDialog({
   initialScope,
   initialExtraNotes,
   initialDraft,
+  initialSkillName,
+  metricsComparison,
 }: ImproveInstructionsDialogProps) {
-  const [mode, setMode] = useState<TargetMode>(() => (initialKind ? KIND_TO_MODE[initialKind] : 'new_skill'));
+  const [mode, setMode] = useState<TargetMode>(() => {
+    if (initialDraft?.relativePath) return 'existing';
+    return initialKind ? KIND_TO_MODE[initialKind] : 'new_skill';
+  });
   const [scope, setScope] = useState<InstructionFileScope>(initialScope ?? 'project');
-  const [skillName, setSkillName] = useState('');
-  const [existingKey, setExistingKey] = useState('');
+  const [skillName, setSkillName] = useState(initialDraft?.name ?? initialSkillName ?? '');
+  const [existingKey, setExistingKey] = useState(() =>
+    initialDraft?.relativePath
+      ? `${initialDraft.scope}:${initialDraft.relativePath}`
+      : '',
+  );
   const [extraNotes, setExtraNotes] = useState(initialExtraNotes ?? '');
   const [draft, setDraft] = useState<InstructionDraft | null>(initialDraft ?? null);
   const [content, setContent] = useState(initialDraft?.content ?? '');
@@ -84,21 +104,33 @@ export function ImproveInstructionsDialog({
 
   useEffect(() => {
     if (!open) return;
-    setMode(initialKind ? KIND_TO_MODE[initialKind] : 'new_skill');
+    setMode(initialDraft?.relativePath ? 'existing' : initialKind ? KIND_TO_MODE[initialKind] : 'new_skill');
     setScope(initialScope ?? 'project');
-    setSkillName(initialDraft?.name ?? '');
-    setExistingKey('');
+    setSkillName(initialDraft?.name ?? initialSkillName ?? '');
+    setExistingKey(
+      initialDraft?.relativePath ? `${initialDraft.scope}:${initialDraft.relativePath}` : '',
+    );
     setExtraNotes(initialExtraNotes ?? '');
     setDraft(initialDraft ?? null);
     setContent(initialDraft?.content ?? '');
     setAppliedPath(null);
-  }, [open, agentId, sessionId, initialKind, initialScope, initialExtraNotes, initialDraft]);
+  }, [
+    open,
+    agentId,
+    sessionId,
+    initialKind,
+    initialScope,
+    initialExtraNotes,
+    initialDraft,
+    initialSkillName,
+  ]);
 
   useEffect(() => {
     if (existingKey || existingOptions.length === 0) return;
+    if (initialDraft?.relativePath) return;
     const first = existingOptions[0]!;
     setExistingKey(`${first.scope}:${first.relativePath}`);
-  }, [existingKey, existingOptions]);
+  }, [existingKey, existingOptions, initialDraft?.relativePath]);
 
   const selectedExisting = existingOptions.find(
     (item) => `${item.scope}:${item.relativePath}` === existingKey,
@@ -171,6 +203,20 @@ export function ImproveInstructionsDialog({
             Use this session’s transcript and AI grade to draft a reusable skill or update CLAUDE.md /
             AGENTS.md. Review the markdown before writing it to disk.
           </Typography>
+
+          {metricsComparison ? (
+            <Alert severity="info">
+              Skill <strong>{metricsComparison.current.skillSlug}</strong> v
+              {metricsComparison.current.version}:{' '}
+              {metricsComparison.previous
+                ? `Δ turns ${formatDelta(metricsComparison.deltas.assistantTurns)}, Δ tokens ${formatDelta(metricsComparison.deltas.estimatedTokens)}${
+                    metricsComparison.deltas.costUsd != null
+                      ? `, Δ cost $${metricsComparison.deltas.costUsd}`
+                      : ''
+                  } vs prior graded run`
+                : `${metricsComparison.current.stats.assistantTurns} assistant turns · ~${metricsComparison.current.stats.estimatedTokens} tokens (baseline)`}
+            </Alert>
+          ) : null}
 
           <ControlTooltip title="Choose what kind of instruction file to create or update">
             <ToggleButtonGroup

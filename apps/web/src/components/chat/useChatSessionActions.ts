@@ -75,6 +75,8 @@ export function useChatSessionActions({
     scope?: InstructionFileScope;
     extraNotes: string;
     draft?: InstructionDraft | null;
+    preferredSkillSlug?: string;
+    metricsComparison?: import('@agent-orchestrator/shared').SkillMetricsComparison | null;
   } | null>(null);
 
   const updateMutation = useMutation({

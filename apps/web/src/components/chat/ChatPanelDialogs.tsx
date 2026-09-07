@@ -25,6 +25,8 @@ interface ChatPanelDialogsProps {
     scope?: InstructionFileScope;
     extraNotes: string;
     draft?: InstructionDraft | null;
+    preferredSkillSlug?: string;
+    metricsComparison?: import('@agent-orchestrator/shared').SkillMetricsComparison | null;
   } | null;
   clearMutation: UseMutationResult<{ cleared: number }, Error, void>;
   rewindMutation: UseMutationResult<
@@ -134,6 +136,8 @@ export function ChatPanelDialogs({
           initialScope={improveSeed?.scope}
           initialExtraNotes={improveSeed?.extraNotes}
           initialDraft={improveSeed?.draft}
+          initialSkillName={improveSeed?.preferredSkillSlug}
+          metricsComparison={improveSeed?.metricsComparison}
         />
       ) : null}
     </>

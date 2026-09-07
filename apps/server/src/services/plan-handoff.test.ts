@@ -16,6 +16,7 @@ test('buildImplementPlanPrompt includes plan, Q&A, and file paths when provided'
     filePaths: ['apps/server/src/services/app.ts', 'packages/shared/src/chat-session.ts'],
   });
 
+  assert.match(prompt, /implement-plan/);
   assert.match(prompt, /## Approved plan/);
   assert.match(prompt, /Update apps\/server\/src\/services\/app\.ts/);
   assert.match(prompt, /## Planning Q&A/);
@@ -27,6 +28,7 @@ test('buildImplementPlanPrompt includes plan, Q&A, and file paths when provided'
 
 test('buildImplementPlanPrompt omits empty Q&A and file sections', () => {
   const prompt = buildImplementPlanPrompt('Just the plan');
+  assert.match(prompt, /implement-plan/);
   assert.match(prompt, /## Approved plan/);
   assert.equal(prompt.includes('## Planning Q&A'), false);
   assert.equal(prompt.includes('## Files mentioned'), false);

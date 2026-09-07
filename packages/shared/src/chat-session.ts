@@ -162,7 +162,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     description: 'Review the current diff for bugs, edge cases, and missing tests.',
     permissionMode: 'plan',
     prompt: [
-      'Review the current uncommitted and branch changes for bugs, edge cases, missing tests, and regressions.',
+      'Use the code-review skill (`/code-review` or the Skill tool) to review the current uncommitted and branch changes for bugs, edge cases, missing tests, and regressions.',
       'Start by inspecting the diff. Ask clarifying questions if the intent is unclear.',
       'Do not make changes unless I ask you to.',
     ].join(' '),
@@ -174,7 +174,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     description: 'Address PR review feedback seeded from GitHub comments.',
     permissionMode: 'auto',
     prompt: [
-      'Address the pull request review feedback on the current branch.',
+      'Use the address-review skill (`/address-review` or the Skill tool) to address the pull request review feedback on the current branch.',
       'Fix the requested changes, add tests when they were asked for, and reply in the PR when a comment needs a written response rather than a code change.',
       'Do not merge. Leave a short summary of what you changed.',
     ].join(' '),
@@ -186,7 +186,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     description: 'Fix failing CI checks with GitHub check-run context.',
     permissionMode: 'auto',
     prompt: [
-      'Fix the failing CI checks on the current branch.',
+      'Use the fix-ci skill (`/fix-ci` or the Skill tool) to fix the failing CI checks on the current branch.',
       'Reproduce the failures locally when possible, fix the root cause, and leave tests covering the failure.',
       'Do not merge. Summarize which checks failed and what you changed.',
     ].join(' '),
@@ -240,6 +240,8 @@ export function isGitMutatingSessionTemplate(
 export const INSTRUCTION_OFFER_SESSION_TEMPLATES: readonly ChatSessionTemplateId[] = [
   'build',
   'fix-ci',
+  'review',
+  'address-review',
 ];
 
 const INSTRUCTION_OFFER_SESSION_TEMPLATE_SET = new Set<ChatSessionTemplateId>(
@@ -320,6 +322,7 @@ import type { PlanBuildHandoffContext } from './plan-handoff.js';
 
 export function buildImplementPlanPrompt(plan: string, handoff?: PlanBuildHandoffContext): string {
   const sections: string[] = [
+    'Use the implement-plan skill (`/implement-plan` or the Skill tool) to execute the approved plan.',
     'The user approved the following plan. Implement it now in auto mode.',
     'Do not ask clarifying questions unless blocked. Prefer making progress with sensible defaults.',
     '',

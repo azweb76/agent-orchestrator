@@ -153,6 +153,26 @@ export {
 } from './agent-memory.js';
 
 export {
+  BUILTIN_AGENT_TASK_SEEDS,
+  PHASE_SKILLS,
+  PHASE_SKILL_COMMANDS,
+  PHASE_SKILL_SLUGS,
+  bumpSkillFrontmatterVersion,
+  compareSkillSnapshots,
+  isPhaseSkillSlug,
+  parseSkillVersion,
+  phaseSkillForTemplate,
+  phaseSkillRelativePath,
+  setSkillFrontmatterVersion,
+  skillInvocationLead,
+  type PhaseSkillDefinition,
+  type PhaseSkillSlug,
+  type SkillEfficiencySnapshot,
+  type SkillEfficiencyStats,
+  type SkillMetricsComparison,
+} from './phase-skills.js';
+
+export {
   evaluateMergeReadiness,
   isPullRequestConflicted,
   parsePullRequestNumber,

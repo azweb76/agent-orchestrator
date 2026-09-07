@@ -101,6 +101,9 @@ export function shouldAutoAllowToolPermission(
 /** Safe read-only tools that may run without a UI prompt. */
 export const SAFE_AUTO_ALLOWED_TOOLS = 'Read,Glob,Grep';
 
+/** Skills + subagents available in plan/manual modes without auto-approving edits. */
+export const PLAN_AGENT_TOOLS = 'Skill,Agent';
+
 /**
  * Build `--allowedTools` for a permission mode.
  * Never includes AskUserQuestion / ExitPlanMode — those must hit the stdio
@@ -113,15 +116,15 @@ export function allowedToolsForPermissionMode(
   const mode = permissionMode ?? 'plan';
   switch (mode) {
     case 'acceptEdits':
-      return `${SAFE_AUTO_ALLOWED_TOOLS},Edit,Write`;
+      return `${SAFE_AUTO_ALLOWED_TOOLS},${PLAN_AGENT_TOOLS},Edit,Write`;
     case 'auto':
     case 'dontAsk':
     case 'bypassPermissions':
-      return `${SAFE_AUTO_ALLOWED_TOOLS},Edit,Write,Bash`;
+      return `${SAFE_AUTO_ALLOWED_TOOLS},${PLAN_AGENT_TOOLS},Edit,Write,Bash`;
     case 'default':
     case 'plan':
     default:
-      return SAFE_AUTO_ALLOWED_TOOLS;
+      return `${SAFE_AUTO_ALLOWED_TOOLS},${PLAN_AGENT_TOOLS}`;
   }
 }
 
