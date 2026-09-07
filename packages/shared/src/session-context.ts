@@ -19,6 +19,18 @@ export interface SessionContextTurn {
   tools: string[];
 }
 
+/** A subagent's own turn history, forked off the parent timeline at the spawning turn. */
+export interface SessionContextBranch {
+  /** `parent_tool_use_id` of the Task/Agent call that spawned it. */
+  id: string;
+  /** `turn` of the parent-history entry that spawned it. */
+  parentTurn: number;
+  subagentType: string | null;
+  description: string | null;
+  /** Branch-local turn numbering and token accounting — never folded into the parent. */
+  history: SessionContextTurn[];
+}
+
 /** Live context window occupancy plus per-turn history for a chat session. */
 export interface SessionContextUsage {
   model: string | null;
@@ -36,6 +48,8 @@ export interface SessionContextUsage {
   billed: TokenUsageBreakdown;
   costUsd: number | null;
   history: SessionContextTurn[];
+  /** Subagent branches forked off the parent timeline. Excluded from `billed`/`percent`. */
+  branches: SessionContextBranch[];
   sessionFilePath: string | null;
 }
 
@@ -147,6 +161,7 @@ export function buildSessionContextUsage(input: {
   billed?: TokenUsageBreakdown;
   costUsd?: number | null;
   sessionFilePath?: string | null;
+  branches?: SessionContextBranch[];
 }): SessionContextUsage {
   const history = input.history ?? [];
   const current = latestContextTurn(history);
@@ -171,6 +186,7 @@ export function buildSessionContextUsage(input: {
     billed,
     costUsd: input.costUsd ?? null,
     history,
+    branches: input.branches ?? [],
     sessionFilePath: input.sessionFilePath?.trim() || null,
   };
 }

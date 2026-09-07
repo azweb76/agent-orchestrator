@@ -333,6 +333,7 @@ export async function getAgentSessionContext(
     return buildSessionContextUsage({
       fallbackModel: session.model,
       history: [],
+      branches: [],
       sessionFilePath: null,
     });
   }
@@ -356,6 +357,7 @@ export async function getAgentSessionContext(
     history: best.history,
     billed: best.billed,
     costUsd: best.costUsd,
+    branches: best.branches,
     sessionFilePath: bestPath,
   });
 }

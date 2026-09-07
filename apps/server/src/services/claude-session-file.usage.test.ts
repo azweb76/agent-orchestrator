@@ -138,6 +138,69 @@ describe('buildSessionContextUsage', () => {
   });
 });
 
+describe('buildSessionContextUsage branches', () => {
+  const historyInput = [
+    {
+      turn: 1,
+      createdAt: null,
+      model: 'sonnet',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheCreationInputTokens: 0,
+        cacheReadInputTokens: 1200,
+      },
+      contextTokens: 1300,
+      compacted: false,
+      tools: [],
+    },
+  ];
+
+  it('defaults to an empty array when omitted', () => {
+    const usage = buildSessionContextUsage({ fallbackModel: 'sonnet', history: historyInput });
+    assert.deepEqual(usage.branches, []);
+  });
+
+  it('passes branches through unchanged without affecting billed/percent/currentContextTokens', () => {
+    const branches = [
+      {
+        id: 'nested-1',
+        parentTurn: 1,
+        subagentType: 'Explore',
+        description: 'Explore auth',
+        history: [
+          {
+            turn: 1,
+            createdAt: null,
+            model: null,
+            usage: {
+              inputTokens: 500_000,
+              outputTokens: 1000,
+              cacheCreationInputTokens: 0,
+              cacheReadInputTokens: 0,
+            },
+            contextTokens: 500_000,
+            compacted: false,
+            tools: [],
+          },
+        ],
+      },
+    ];
+
+    const withoutBranches = buildSessionContextUsage({ fallbackModel: 'sonnet', history: historyInput });
+    const withBranches = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: historyInput,
+      branches,
+    });
+
+    assert.deepEqual(withBranches.branches, branches);
+    assert.equal(withBranches.billed.inputTokens, withoutBranches.billed.inputTokens);
+    assert.equal(withBranches.percent, withoutBranches.percent);
+    assert.equal(withBranches.currentContextTokens, withoutBranches.currentContextTokens);
+  });
+});
+
 describe('compactThresholdTokensForWindow', () => {
   it('reserves 20k for the compact summary and a 13k buffer', () => {
     assert.equal(compactThresholdTokensForWindow(200_000), 167_000);
