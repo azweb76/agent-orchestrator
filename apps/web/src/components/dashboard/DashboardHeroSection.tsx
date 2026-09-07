@@ -5,23 +5,15 @@ import FlightOutlinedIcon from '@mui/icons-material/FlightOutlined';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { CommandCenterHero } from './CommandCenterHero';
 import { AssistantBriefing } from './AssistantBriefing';
-import { FleetBulkSection } from '../commandPalette/FleetBulkSection';
-import type { PullRequestInbox, SidebarWorkspace } from '@agent-orchestrator/shared';
 
 interface DashboardHeroSectionProps {
   githubLogin?: string | null;
-  githubConfigured: boolean;
-  sidebar?: SidebarWorkspace[];
-  inbox?: PullRequestInbox;
   archivedCount: number;
   onPruneClick: () => void;
 }
 
 export function DashboardHeroSection({
   githubLogin,
-  githubConfigured,
-  sidebar,
-  inbox,
   archivedCount,
   onPruneClick,
 }: DashboardHeroSectionProps) {
@@ -44,12 +36,6 @@ export function DashboardHeroSection({
       <CommandCenterHero githubLogin={githubLogin} />
 
       <AssistantBriefing />
-
-      <FleetBulkSection
-        inbox={inbox}
-        sidebar={sidebar ?? []}
-        githubConfigured={githubConfigured}
-      />
 
       <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }}>
         <ControlTooltip title="Open the flight controller airspace map">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Stack } from '@mui/material';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { FleetBulkSection } from '../components/commandPalette/FleetBulkSection';
 import { DashboardAgentsPanel } from '../components/dashboard/DashboardAgentsPanel';
 import { DashboardBlockedAgentsPanel } from '../components/dashboard/DashboardBlockedAgentsPanel';
 import { DashboardHeroSection } from '../components/dashboard/DashboardHeroSection';
@@ -21,9 +22,6 @@ export function DashboardPage() {
     <Stack spacing={2.5}>
       <DashboardHeroSection
         githubLogin={data.status?.githubLogin}
-        githubConfigured={Boolean(data.status?.githubTokenConfigured)}
-        sidebar={data.sidebar}
-        inbox={data.inboxQuery.data}
         archivedCount={data.archivedCount}
         onPruneClick={openPrune}
       />
@@ -38,6 +36,12 @@ export function DashboardPage() {
         githubConfigured={Boolean(data.status?.githubTokenConfigured)}
         usage={data.usageQuery.data}
         status={data.status}
+      />
+
+      <FleetBulkSection
+        inbox={data.inboxQuery.data}
+        sidebar={data.sidebar ?? []}
+        githubConfigured={Boolean(data.status?.githubTokenConfigured)}
       />
 
       {(data.sidebarError as Error | undefined) && (

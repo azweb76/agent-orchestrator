@@ -14,7 +14,7 @@ export function CommandCenterHero({ githubLogin }: CommandCenterHeroProps) {
   const greeting = greetingForHour(new Date().getHours());
 
   return (
-    <Box sx={{ minWidth: 0, mb: 2 }}>
+    <Box sx={{ minWidth: 0, mb: 1.5 }}>
       <Typography
         variant="caption"
         sx={{
@@ -26,7 +26,7 @@ export function CommandCenterHero({ githubLogin }: CommandCenterHeroProps) {
           mb: 1,
         }}
       >
-        Command center
+        Assistant · Command
       </Typography>
       <Typography
         variant="h3"
@@ -38,6 +38,10 @@ export function CommandCenterHero({ githubLogin }: CommandCenterHeroProps) {
       >
         {greeting}
         {githubLogin ? `, ${githubLogin}` : ''}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, maxWidth: 520 }}>
+        Ask the Assistant to triage the fleet, fix CI, or unblock agents. Surrounding panels are
+        context — actions start here.
       </Typography>
     </Box>
   );

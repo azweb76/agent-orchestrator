@@ -110,6 +110,7 @@ export function AssistantChatPanel() {
         abort.signal,
       );
       void queryClient.invalidateQueries({ queryKey: ['assistant', 'messages'] });
+      void queryClient.invalidateQueries({ queryKey: ['assistant', 'work-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['sidebar'] });
       void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
     } catch (error) {
@@ -126,12 +127,12 @@ export function AssistantChatPanel() {
   const busy = streaming || clear.isPending;
 
   return (
-    <Stack spacing={1.25} sx={{ mt: 0.5, maxWidth: 720 }}>
+    <Stack spacing={1.25} sx={{ mt: 0.5, width: '100%', maxWidth: 880 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <AutoAwesomeOutlinedIcon sx={{ color: 'secondary.main', fontSize: 20 }} />
           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-            Assistant
+            Fleet Assistant
           </Typography>
         </Stack>
         <ControlTooltip title="Clear conversation">
@@ -150,8 +151,8 @@ export function AssistantChatPanel() {
 
       <Box
         sx={{
-          minHeight: 160,
-          maxHeight: 360,
+          minHeight: 200,
+          maxHeight: { xs: 420, md: 480 },
           overflow: 'auto',
           border: '1px solid',
           borderColor: 'divider',
@@ -162,7 +163,7 @@ export function AssistantChatPanel() {
         }}
       >
         {messages.length === 0 && !streaming ? (
-          <Stack spacing={1} sx={{ py: 3, px: 1, alignItems: 'flex-start' }}>
+          <Stack spacing={1.25} sx={{ py: 3, px: 1, alignItems: 'flex-start' }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Avatar
                 sx={{
@@ -175,8 +176,8 @@ export function AssistantChatPanel() {
                 <AutoAwesomeOutlinedIcon sx={{ fontSize: 16 }} />
               </Avatar>
               <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
-                Ask me to start agents, check PRs, or summarize your fleet. Nothing runs until you
-                send a message.
+                Starters come from your live work queue. Click one to send — nothing else runs until
+                you confirm write tools.
               </Typography>
             </Stack>
             <AssistantStarterChips
