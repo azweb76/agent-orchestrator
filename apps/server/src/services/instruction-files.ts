@@ -60,7 +60,13 @@ function assertInside(root: string, target: string): string {
 
 export function resolveInstructionWritePath(
   roots: InstructionFileRoots,
-  body: ApplyInstructionFileRequest,
+  body: {
+    kind: InstructionFileKind;
+    scope?: InstructionFileScope;
+    name?: string;
+    relativePath?: string;
+    content?: string;
+  },
 ): { absolutePath: string; relativePath: string; scope: InstructionFileScope } {
   const scope: InstructionFileScope =
     body.kind === 'skill' ? resolveInstructionScope('skill', body.scope) : 'project';
