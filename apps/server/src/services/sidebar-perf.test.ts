@@ -31,7 +31,10 @@ describe('listSidebarTree pending permission batching', () => {
 
     ctx = {
       repos,
-      git: {} as AppContext['git'],
+      git: {
+        hasChanges: async () => false,
+        getAheadBehind: async () => ({ ahead: 0, behind: 0 }),
+      } as unknown as AppContext['git'],
       github: {} as AppContext['github'],
       jira: {} as AppContext['jira'],
       claude: {
@@ -111,6 +114,123 @@ describe('listSidebarTree pending permission batching', () => {
     assert.equal(tree[0]?.agents.length, 3);
     assert.equal(listByAgentCalls, 0);
     assert.equal(tree[0]?.agents[0]?.deliveryPhase, 'planning');
+    assert.deepEqual(tree[0]?.agents[0]?.gitStatus, {
+      dirty: false,
+      aheadBy: 0,
+      behindBy: 0,
+    });
+  });
+
+  it('reports dirty and ahead/behind from git probes', async () => {
+    const workspace = {
+      id: 'ws-1',
+      name: 'demo',
+      repoUrl: 'https://github.com/example/demo',
+      repoPath: path.join(dataDir, 'demo'),
+      defaultBranch: 'main',
+      githubOwner: 'example',
+      githubRepo: 'demo',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    ctx.repos.workspaces.create(workspace);
+    ctx.repos.worktrees.create({
+      id: 'wt-1',
+      workspaceId: workspace.id,
+      name: 'feat',
+      path: path.join(dataDir, 'wt-1'),
+      branch: 'feat/x',
+      prNumber: null,
+      prTitle: null,
+      baseBranch: 'main',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    ctx.repos.agents.create({
+      id: 'ag-1',
+      worktreeId: 'wt-1',
+      name: 'Agent',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      activeSessionId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      archivedAt: null,
+    });
+
+    const gitDirty = ctx.git as unknown as {
+      hasChanges: () => Promise<boolean>;
+      getAheadBehind: () => Promise<{ ahead: number; behind: number }>;
+    };
+    gitDirty.hasChanges = async () => true;
+    gitDirty.getAheadBehind = async () => ({ ahead: 2, behind: 1 });
+
+    const tree = await listSidebarTree(ctx);
+    assert.deepEqual(tree[0]?.agents[0]?.gitStatus, {
+      dirty: true,
+      aheadBy: 2,
+      behindBy: 1,
+    });
+  });
+
+  it('treats missing upstream as clean ahead/behind without failing the tree', async () => {
+    const workspace = {
+      id: 'ws-1',
+      name: 'demo',
+      repoUrl: 'https://github.com/example/demo',
+      repoPath: path.join(dataDir, 'demo'),
+      defaultBranch: 'main',
+      githubOwner: 'example',
+      githubRepo: 'demo',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    ctx.repos.workspaces.create(workspace);
+    ctx.repos.worktrees.create({
+      id: 'wt-1',
+      workspaceId: workspace.id,
+      name: 'feat',
+      path: path.join(dataDir, 'wt-1'),
+      branch: 'feat/x',
+      prNumber: null,
+      prTitle: null,
+      baseBranch: 'main',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    ctx.repos.agents.create({
+      id: 'ag-1',
+      worktreeId: 'wt-1',
+      name: 'Agent',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      activeSessionId: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      archivedAt: null,
+    });
+
+    const gitNoUpstream = ctx.git as unknown as {
+      hasChanges: () => Promise<boolean>;
+      getAheadBehind: () => Promise<{ ahead: number; behind: number }>;
+    };
+    gitNoUpstream.hasChanges = async () => true;
+    gitNoUpstream.getAheadBehind = async () => {
+      throw new Error('no upstream');
+    };
+
+    const tree = await listSidebarTree(ctx);
+    assert.deepEqual(tree[0]?.agents[0]?.gitStatus, {
+      dirty: true,
+      aheadBy: 0,
+      behindBy: 0,
+    });
   });
 });
 

@@ -3,15 +3,17 @@ import type { SidebarAgent, SidebarWorkspace } from '@agent-orchestrator/shared'
 /**
  * Sidebar status filters map onto how the tree already renders agents:
  * "needs-input" is the pending-permission badge, "running" covers active and
- * queued runs, and "idle" is everything at rest (idle or stopped) that is not
- * waiting on the user. Archived agents never reach the sidebar tree — the
- * server excludes them — so there is no archived filter.
+ * queued runs, "dirty" is a dirty worktree, and "idle" is everything at rest
+ * (idle or stopped) that is not waiting on the user. Archived agents never
+ * reach the sidebar tree — the server excludes them — so there is no archived
+ * filter.
  */
-export type SidebarStatusFilter = 'running' | 'needs-input' | 'idle';
+export type SidebarStatusFilter = 'running' | 'needs-input' | 'dirty' | 'idle';
 
 export const SIDEBAR_STATUS_FILTERS: Array<{ id: SidebarStatusFilter; label: string }> = [
   { id: 'running', label: 'Running' },
   { id: 'needs-input', label: 'Needs input' },
+  { id: 'dirty', label: 'Dirty' },
   { id: 'idle', label: 'Idle' },
 ];
 
@@ -26,6 +28,8 @@ export function agentMatchesStatusFilter(
       return needsInput;
     case 'running':
       return running;
+    case 'dirty':
+      return Boolean(agent.gitStatus?.dirty);
     case 'idle':
       return !running && !needsInput;
   }

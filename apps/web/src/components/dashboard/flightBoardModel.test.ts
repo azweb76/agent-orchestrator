@@ -28,6 +28,7 @@ function makeAgent(overrides: Partial<DashboardAgent> = {}): DashboardAgent {
     pendingPermissionCount: 0,
     prStatus: null,
     deliveryPhase: 'planning',
+    gitStatus: { dirty: false, aheadBy: 0, behindBy: 0 },
     workspaceName: 'demo',
     workspaceId: 'ws-1',
     ...overrides,

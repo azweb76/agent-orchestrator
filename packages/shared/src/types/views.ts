@@ -71,6 +71,16 @@ export interface AgentDetail extends Agent {
   prStatus: PrStatusSnapshot | null;
 }
 
+/** Local git signals for an agent worktree (sidebar / fleet). */
+export interface SidebarGitStatus {
+  /** Working tree has uncommitted or untracked changes. */
+  dirty: boolean;
+  /** Commits on HEAD not in the upstream branch (0 when unknown / no upstream). */
+  aheadBy: number;
+  /** Commits on the upstream not in HEAD (0 when unknown / no upstream). */
+  behindBy: number;
+}
+
 /** Agent summary for sidebar navigation (includes worktree context). */
 export interface SidebarAgent extends Agent {
   worktree: Pick<Worktree, 'id' | 'name' | 'branch' | 'prNumber'>;
@@ -84,6 +94,8 @@ export interface SidebarAgent extends Agent {
    * Computed server-side from sessions + cached PR snapshot.
    */
   deliveryPhase: AgentDeliveryPhase;
+  /** Local worktree git status (dirty / ahead / behind). */
+  gitStatus: SidebarGitStatus;
 }
 
 /** Workspace with nested agents for the app sidebar tree. */
