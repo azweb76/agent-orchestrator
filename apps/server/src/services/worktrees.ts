@@ -168,6 +168,10 @@ export async function createWorktreeFromPr(
   const resolvedPath = existingGitPath ?? worktreePath;
   if (!existingGitPath) {
     await ctx.git.addWorktree(workspace.repoPath, worktreePath, localBranch);
+  } else {
+    // Discard any leftover uncommitted/untracked files from whatever previously
+    // used this worktree slot, so the new agent's diff reflects only its own work.
+    await ctx.git.resetWorktreeHard(existingGitPath, localBranch);
   }
 
   const worktree = ctx.repos.worktrees.create({

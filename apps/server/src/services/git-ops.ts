@@ -115,7 +115,18 @@ export class GitService {
       await execFileAsync('git', ['-C', mainRepoPath, 'worktree', 'remove', '--force', worktreePath]);
     } catch {
       await fs.rm(worktreePath, { recursive: true, force: true });
+      await execFileAsync('git', ['-C', mainRepoPath, 'worktree', 'prune']);
     }
+  }
+
+  /** Discard uncommitted/untracked changes in a worktree, resetting it to `ref`. */
+  async resetWorktreeHard(worktreePath: string, ref: string): Promise<void> {
+    await execFileAsync('git', ['-C', worktreePath, 'reset', '--hard', ref], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    await execFileAsync('git', ['-C', worktreePath, 'clean', '-fd'], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
   }
 
   /** Upstream tracking ref (`origin/branch`), or null when none is set. */

@@ -62,6 +62,46 @@ test('fetchPullRequest creates local branch when not checked out', async () => {
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('resetWorktreeHard discards uncommitted and untracked changes', async () => {
+  const { tmp, main, prCommit } = await setupPrFetchFixture();
+  const git = new GitService();
+  const worktreePath = path.join(tmp, 'pr-33-reset');
+
+  await git.fetchPullRequest(main, 33, 'pr-33');
+  await git.addWorktree(main, worktreePath, 'pr-33');
+
+  await fs.writeFile(path.join(worktreePath, 'feature.txt'), 'leftover edit\n');
+  await fs.writeFile(path.join(worktreePath, 'untracked.txt'), 'leftover file\n');
+
+  await git.resetWorktreeHard(worktreePath, 'pr-33');
+
+  assert.equal(await execGit(worktreePath, ['status', '--porcelain']), '');
+  assert.equal(await execGit(worktreePath, ['rev-parse', 'HEAD']), prCommit);
+  await assert.rejects(() => fs.access(path.join(worktreePath, 'untracked.txt')));
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('removeWorktree prunes stale admin entries when the fallback path is used', async () => {
+  const { tmp, main } = await setupPrFetchFixture();
+  const git = new GitService();
+  const worktreePath = path.join(tmp, 'pr-33-broken');
+
+  await git.fetchPullRequest(main, 33, 'pr-33');
+  await git.addWorktree(main, worktreePath, 'pr-33');
+  // Removing the worktree's `.git` file makes `worktree remove --force` refuse
+  // ("validation failed"), exercising the fs.rm fallback.
+  await fs.rm(path.join(worktreePath, '.git'));
+
+  await git.removeWorktree(main, worktreePath);
+
+  await assert.rejects(() => fs.access(worktreePath));
+  const list = await execGit(main, ['worktree', 'list', '--porcelain']);
+  assert.doesNotMatch(list, new RegExp(worktreePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test('fetchPullRequest keeps the PR tip across a second fetch when prune is enabled', async () => {
   const { tmp, main, prCommit } = await setupPrFetchFixture();
   const git = new GitService();
