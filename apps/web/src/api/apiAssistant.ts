@@ -70,6 +70,12 @@ export async function streamAssistantChat(
 
 export const apiAssistant = {
   getAssistantTools: () => request<{ tools: AssistantToolDefinition[] }>('/assistant/tools'),
+  getAssistantWorkQueue: (limit = 8) =>
+    request<{
+      summary: string;
+      items: Array<Record<string, unknown>>;
+      inboxErrors?: Record<string, string | null>;
+    }>(`/assistant/work-queue?limit=${encodeURIComponent(String(limit))}`),
   getAssistantSchedules: (opts?: { includePaused?: boolean; includeCompleted?: boolean }) => {
     const params = new URLSearchParams();
     if (opts?.includePaused === false) params.set('includePaused', 'false');

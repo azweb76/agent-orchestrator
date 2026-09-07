@@ -1,6 +1,6 @@
 import { AssistantChatPanel } from './AssistantChatPanel';
 
-/** Dashboard assistant surface — fleet chat without the work-queue briefing. */
+/** Primary Command surface — Assistant chat with live work-queue starter chips. */
 export function AssistantBriefing() {
   return <AssistantChatPanel />;
 }

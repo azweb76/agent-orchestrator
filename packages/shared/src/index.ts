@@ -208,6 +208,12 @@ export {
 } from './work-queue.js';
 
 export {
+  buildAssistantStarters,
+  type AssistantStarter,
+  type AssistantStarterQueueItem,
+} from './assistant-starters.js';
+
+export {
   ASSISTANT_SYSTEM_PROMPT,
   ASSISTANT_TOOLS,
   assistantToolByName,
