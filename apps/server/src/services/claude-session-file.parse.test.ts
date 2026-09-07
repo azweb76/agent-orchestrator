@@ -83,6 +83,12 @@ describe('parseClaudeSessionContext', () => {
             content: [
               { type: 'text', text: 'Reading files' },
               { type: 'tool_use', id: '1', name: 'Read', input: { file_path: 'src/a.ts' } },
+              {
+                type: 'tool_use',
+                id: 'nested-1',
+                name: 'Task',
+                input: { subagent_type: 'Explore', description: 'Explore auth' },
+              },
             ],
             usage: {
               input_tokens: 1200,
@@ -123,12 +129,80 @@ describe('parseClaudeSessionContext', () => {
     assert.equal(parsed.history.length, 2);
     assert.equal(parsed.history[0]?.contextTokens, 29200);
     assert.equal(parsed.history[0]?.compacted, false);
-    assert.deepEqual(parsed.history[0]?.tools, ['Read']);
+    assert.deepEqual(parsed.history[0]?.tools, ['Read', 'Task']);
     assert.equal(parsed.history[1]?.contextTokens, 9400);
     assert.equal(parsed.history[1]?.compacted, true);
     assert.equal(parsed.billed.inputTokens, 1600);
     assert.equal(parsed.billed.cacheReadInputTokens, 29000);
     assert.equal(parsed.billed.outputTokens, 140);
+
+    assert.equal(parsed.branches.length, 1);
+    assert.equal(parsed.branches[0]?.id, 'nested-1');
+    assert.equal(parsed.branches[0]?.subagentType, 'Explore');
+    assert.equal(parsed.branches[0]?.description, 'Explore auth');
+    assert.equal(parsed.branches[0]?.parentTurn, 1);
+    assert.equal(parsed.branches[0]?.history.length, 1);
+    assert.equal(parsed.branches[0]?.history[0]?.contextTokens, 500);
+  });
+
+  it('drops nested events with no parent_tool_use_id (session_id fallback) and creates no branch', () => {
+    const parsed = parseClaudeSessionContext(
+      [
+        JSON.stringify({ type: 'system', subtype: 'init', session_id: 'parent-session' }),
+        JSON.stringify({
+          type: 'assistant',
+          session_id: 'parent-session',
+          message: {
+            model: 'claude-sonnet-4-20250514',
+            content: [{ type: 'text', text: 'Working' }],
+            usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 900 },
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          session_id: 'nested-session',
+          message: {
+            content: [{ type: 'text', text: 'subagent' }],
+            usage: { input_tokens: 500, output_tokens: 40 },
+          },
+        }),
+        '',
+      ].join('\n'),
+    );
+
+    assert.equal(parsed.history.length, 1);
+    assert.equal(parsed.branches.length, 0);
+  });
+
+  it('captures an orphan parent_tool_use_id with no matching Task block as a synthetic branch', () => {
+    const parsed = parseClaudeSessionContext(
+      [
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            model: 'claude-sonnet-4-20250514',
+            content: [{ type: 'text', text: 'Working' }],
+            usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 900 },
+          },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          parent_tool_use_id: 'orphan-1',
+          message: {
+            content: [{ type: 'text', text: 'subagent' }],
+            usage: { input_tokens: 500, output_tokens: 40 },
+          },
+        }),
+        '',
+      ].join('\n'),
+    );
+
+    assert.equal(parsed.history.length, 1);
+    assert.equal(parsed.branches.length, 1);
+    assert.equal(parsed.branches[0]?.id, 'orphan-1');
+    assert.equal(parsed.branches[0]?.subagentType, null);
+    assert.equal(parsed.branches[0]?.parentTurn, -1);
+    assert.equal(parsed.branches[0]?.history[0]?.contextTokens, 500);
   });
 
   it('uses result usage when assistant messages have none', () => {

@@ -91,7 +91,11 @@ export function ContextUsageBody({ data }: { data: SessionContextUsage }) {
             No context history yet.
           </Typography>
         ) : (
-          <ContextHistoryChart history={data.history} maxTokens={data.compactThresholdTokens} />
+          <ContextHistoryChart
+            history={data.history}
+            maxTokens={data.compactThresholdTokens}
+            branches={data.branches}
+          />
         )}
       </Stack>
     </Stack>

@@ -1,5 +1,6 @@
 import {
   contextTokensFromUsage,
+  isSubagentToolName,
   totalTokensFromUsage,
   type Message,
   type StreamPart,
@@ -123,6 +124,31 @@ export function toolNamesFromContent(content: unknown): string[] {
     if (name) names.push(name);
   }
   return names;
+}
+
+/** Task/Agent tool_use blocks that spawn a subagent, with their branch metadata. */
+export function taskToolUseBlocks(
+  content: unknown,
+): { id: string; subagentType: string | null; description: string | null }[] {
+  const blocks: { id: string; subagentType: string | null; description: string | null }[] = [];
+  for (const block of contentBlocks(content)) {
+    if (block.type !== 'tool_use') continue;
+    const name = String(block.name ?? '').trim();
+    if (!isSubagentToolName(name)) continue;
+    const id = typeof block.id === 'string' ? block.id : '';
+    if (!id) continue;
+    const input = asRecord(block.input);
+    const subagentType =
+      typeof input?.subagent_type === 'string' && input.subagent_type.trim()
+        ? input.subagent_type.trim()
+        : null;
+    const description =
+      typeof input?.description === 'string' && input.description.trim()
+        ? input.description.trim()
+        : null;
+    blocks.push({ id, subagentType, description });
+  }
+  return blocks;
 }
 
 export function fingerprint(content: unknown): string {

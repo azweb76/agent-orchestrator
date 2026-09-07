@@ -1,4 +1,4 @@
-import type { SessionContextTurn } from '@agent-orchestrator/shared';
+import type { SessionContextBranch, SessionContextTurn } from '@agent-orchestrator/shared';
 import { formatTokenCount } from '../../utils/format';
 
 export const CHART_HEIGHT = 168;
@@ -50,6 +50,28 @@ export function shouldLabelTurn(turn: number, total: number): boolean {
 export function toolsLabel(tools: string[]): string {
   if (tools.length === 0) return '';
   return tools.length > 3 ? `${tools.slice(0, 3).join(', ')} +${tools.length - 3}` : tools.join(', ');
+}
+
+/** Groups branches by the parent turn that spawned them, for O(1) per-column lookup. */
+export function branchesByParentTurn(
+  branches: SessionContextBranch[],
+): Map<number, SessionContextBranch[]> {
+  const map = new Map<number, SessionContextBranch[]>();
+  for (const branch of branches) {
+    const existing = map.get(branch.parentTurn);
+    if (existing) existing.push(branch);
+    else map.set(branch.parentTurn, [branch]);
+  }
+  return map;
+}
+
+/** Peak context occupancy for a branch — latest turn that still reports usage. */
+export function branchPeakContextTokens(branch: SessionContextBranch): number {
+  for (let i = branch.history.length - 1; i >= 0; i--) {
+    const turn = branch.history[i];
+    if (turn && turn.contextTokens > 0) return turn.contextTokens;
+  }
+  return 0;
 }
 
 export { formatTokenCount };

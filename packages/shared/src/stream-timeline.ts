@@ -24,6 +24,7 @@ export {
   claudeResultErrorMessage,
   isNestedSubagentEvent,
   isSubagentItem,
+  isSubagentToolName,
   isTopLevelClaudeResult,
   parentStreamTextDelta,
   parentToolUseId,

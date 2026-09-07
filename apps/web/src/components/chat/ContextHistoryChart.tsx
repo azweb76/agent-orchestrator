@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Box, ButtonBase, Chip, Stack, Typography, useTheme } from '@mui/material';
-import type { SessionContextTurn } from '@agent-orchestrator/shared';
+import type { SessionContextBranch, SessionContextTurn } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { percentFillColor } from './contextUsageColors';
 import { ContextUsageLegendItem } from './ContextUsageLegend';
+import { subagentTypeLabel } from './toolPresentation';
 import {
   barSlotWidth,
+  branchesByParentTurn,
+  branchPeakContextTokens,
   CHART_HEIGHT,
   formatPercent,
   formatTokenCount,
@@ -16,12 +19,17 @@ import {
   Y_TICKS,
 } from './contextUsageChart';
 
+function branchLabel(branch: SessionContextBranch): string {
+  return subagentTypeLabel(branch.subagentType ?? undefined) ?? 'Subagent';
+}
+
 function HistoryBar({
   turn,
   yMax,
   maxTokens,
   selected,
   width,
+  branches,
   onSelect,
 }: {
   turn: SessionContextTurn;
@@ -29,6 +37,7 @@ function HistoryBar({
   maxTokens: number;
   selected: boolean;
   width: number;
+  branches: SessionContextBranch[];
   onSelect: () => void;
 }) {
   const theme = useTheme();
@@ -79,12 +88,30 @@ function HistoryBar({
           '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 0 },
         }}
       >
-        <Box sx={{ height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Box sx={{ height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.4, flexShrink: 0 }}>
           {turn.compacted ? (
             <Box
               sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'warning.main' }}
               aria-hidden
             />
+          ) : null}
+          {branches.length > 0 ? (
+            <ControlTooltip
+              title={`Spawned: ${branches.map(branchLabel).join(', ')}`}
+              placement="top"
+              enterDelay={400}
+            >
+              <Box
+                aria-hidden
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '1px',
+                  bgcolor: 'secondary.main',
+                  transform: 'rotate(45deg)',
+                }}
+              />
+            </ControlTooltip>
           ) : null}
         </Box>
         <Box
@@ -124,14 +151,18 @@ function HistoryBar({
 export function ContextHistoryChart({
   history,
   maxTokens,
+  branches = [],
 }: {
   history: SessionContextTurn[];
   maxTokens: number;
+  branches?: SessionContextBranch[];
 }) {
   const { cacheRead, cacheWrite, freshInput } = useTheme().palette.ao.chart;
   const yMax = useMemo(() => historyAxisMax(history, maxTokens), [history, maxTokens]);
+  const branchMap = useMemo(() => branchesByParentTurn(branches), [branches]);
   const latestTurn = history[history.length - 1]?.turn ?? 1;
   const [pinnedTurn, setPinnedTurn] = useState<number | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const selectedTurn =
     pinnedTurn != null &&
     pinnedTurn !== latestTurn &&
@@ -144,6 +175,7 @@ export function ContextHistoryChart({
   const occupancy = share(selected.contextTokens, maxTokens);
   const scaledToMax = yMax === maxTokens;
   const hasCompact = history.some((turn) => turn.compacted);
+  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId) ?? null;
 
   return (
     <Stack spacing={1}>
@@ -212,6 +244,7 @@ export function ContextHistoryChart({
                   maxTokens={maxTokens}
                   selected={turn.turn === selected.turn}
                   width={slotWidth}
+                  branches={branchMap.get(turn.turn) ?? []}
                   onSelect={() => setPinnedTurn(turn.turn)}
                 />
               ))}
@@ -237,6 +270,58 @@ export function ContextHistoryChart({
               </Typography>
             ))}
           </Stack>
+          {branches.length > 0 ? (
+            <Stack direction="row" sx={{ minWidth: history.length * slotWidth, mt: 0.5 }}>
+              {history.map((turn) => {
+                const turnBranches = branchMap.get(turn.turn) ?? [];
+                const first = turnBranches[0];
+                return (
+                  <Box
+                    key={turn.turn}
+                    sx={{ width: slotWidth, minWidth: slotWidth, display: 'flex', justifyContent: 'center' }}
+                  >
+                    {first ? (
+                      <ButtonBase
+                        disableRipple
+                        onClick={() => setSelectedBranchId(first.id)}
+                        aria-label={`Branch: ${branchLabel(first)}`}
+                        aria-pressed={selectedBranchId === first.id}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.25,
+                          maxWidth: '100%',
+                          px: 0.4,
+                          borderRadius: 0.5,
+                          fontSize: 9,
+                          color: 'secondary.main',
+                          bgcolor: selectedBranchId === first.id ? 'ao.accent.primaryTintStrong' : 'transparent',
+                          '&:hover': { bgcolor: 'ao.surface.hover' },
+                        }}
+                      >
+                        <Box sx={{ width: 6, height: 1, bgcolor: 'secondary.main', flexShrink: 0 }} aria-hidden />
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: 9,
+                            lineHeight: 1.2,
+                            color: 'inherit',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            maxWidth: slotWidth,
+                          }}
+                        >
+                          {branchLabel(first)}
+                          {turnBranches.length > 1 ? ` +${turnBranches.length - 1}` : ''}
+                        </Typography>
+                      </ButtonBase>
+                    ) : null}
+                  </Box>
+                );
+              })}
+            </Stack>
+          ) : null}
         </Box>
       </Box>
 
@@ -297,6 +382,41 @@ export function ContextHistoryChart({
             </Typography>
           ) : null}
         </Stack>
+      ) : null}
+
+      {selectedBranch ? (
+        <Box
+          sx={{
+            borderLeft: 3,
+            borderColor: 'secondary.main',
+            pl: 1.25,
+            py: 1,
+            borderRadius: 1,
+            bgcolor: 'ao.surface.hover',
+          }}
+        >
+          <Stack spacing={0.75}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <Typography variant="caption" color="text.secondary">
+                ↳ {branchLabel(selectedBranch)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedBranch.history.length} {selectedBranch.history.length === 1 ? 'call' : 'calls'} · peak{' '}
+                {formatTokenCount(branchPeakContextTokens(selectedBranch))}
+              </Typography>
+            </Stack>
+            {selectedBranch.description ? (
+              <Typography variant="body2">{selectedBranch.description}</Typography>
+            ) : null}
+            {selectedBranch.history.length > 0 ? (
+              <ContextHistoryChart history={selectedBranch.history} maxTokens={maxTokens} />
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No context history captured for this subagent.
+              </Typography>
+            )}
+          </Stack>
+        </Box>
       ) : null}
     </Stack>
   );
