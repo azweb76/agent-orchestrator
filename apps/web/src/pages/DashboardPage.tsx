@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Alert, Stack } from '@mui/material';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { FleetBulkSection } from '../components/commandPalette/FleetBulkSection';
 import { AssistantScheduleSection } from '../components/dashboard/AssistantScheduleSection';
 import { DashboardAgentsPanel } from '../components/dashboard/DashboardAgentsPanel';
 import { DashboardBlockedAgentsPanel } from '../components/dashboard/DashboardBlockedAgentsPanel';
@@ -37,12 +36,6 @@ export function DashboardPage() {
         githubConfigured={Boolean(data.status?.githubTokenConfigured)}
         usage={data.usageQuery.data}
         status={data.status}
-      />
-
-      <FleetBulkSection
-        inbox={data.inboxQuery.data}
-        sidebar={data.sidebar ?? []}
-        githubConfigured={Boolean(data.status?.githubTokenConfigured)}
       />
 
       <AssistantScheduleSection />

@@ -41,7 +41,7 @@ export function CommandCenterHero({ githubLogin }: CommandCenterHeroProps) {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, maxWidth: 520 }}>
         Ask the Assistant to triage the fleet, fix CI, or unblock agents. Surrounding panels are
-        context — actions start here.
+        context — fleet bulk actions live in the command palette.
       </Typography>
     </Box>
   );
