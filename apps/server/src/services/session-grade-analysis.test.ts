@@ -126,6 +126,7 @@ describe('session grade analysis', () => {
     assert.match(system, /speed/i);
     assert.match(system, /token efficiency/i);
     assert.match(system, /fewer corrections/i);
+    assert.match(system, /personal/i);
     assert.match(user, /Be strict about tests/);
     assert.match(user, /CLAUDE.md/);
     assert.match(user, /\/retry-tests/);
@@ -293,11 +294,11 @@ describe('session grade analysis', () => {
     );
     assert.deepEqual(
       parsed.findings.find((item) => item.category === 'instruction_files')?.recommendedAction,
-      { kind: 'claude_md', scope: undefined },
+      { kind: 'claude_md' },
     );
   });
 
-  it('falls back to a project skill action when the action is missing or invalid', () => {
+  it('falls back to a skill action without scope when the action is missing or invalid', () => {
     const parsed = parseSessionGradeResponse(
       JSON.stringify({
         score: 2,
@@ -325,11 +326,11 @@ describe('session grade analysis', () => {
     );
     assert.deepEqual(
       parsed.findings.find((item) => item.category === 'excessive_turns')?.recommendedAction,
-      { kind: 'skill', scope: 'project' },
+      { kind: 'skill' },
     );
     assert.deepEqual(
       parsed.findings.find((item) => item.category === 'wasted_tokens')?.recommendedAction,
-      { kind: 'skill', scope: 'project' },
+      { kind: 'skill' },
     );
   });
 

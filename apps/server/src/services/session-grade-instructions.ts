@@ -13,6 +13,7 @@ import {
   isPhaseSkillSlug,
   parseSkillVersion,
   phaseSkillRelativePath,
+  resolveInstructionScope,
   setSkillFrontmatterVersion,
   shouldOfferInstructionDraft,
 } from '@agent-orchestrator/shared';
@@ -250,7 +251,7 @@ export async function generateAgentInstructionDraft(
   if (body.relativePath) {
     existingContent = await readInstructionFileContent(roots, {
       kind: body.kind,
-      scope: body.scope ?? 'project',
+      scope: resolveInstructionScope(body.kind, body.scope),
       relativePath: body.relativePath,
     });
   }
@@ -287,7 +288,7 @@ export async function applyAgentInstructionFile(
     if (body.relativePath) {
       const existing = await readInstructionFileContent(roots, {
         kind: 'skill',
-        scope: body.scope ?? 'project',
+        scope: resolveInstructionScope('skill', body.scope),
         relativePath: body.relativePath,
       });
       if (existing) existingVersion = parseSkillVersion(existing);

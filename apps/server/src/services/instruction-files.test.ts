@@ -74,6 +74,15 @@ description: Personal notes skill
     assert.ok(personal.absolutePath.startsWith(path.resolve(home)));
   });
 
+  it('defaults omitted skill scope to personal', () => {
+    const personal = resolveInstructionWritePath(
+      { worktreePath: tmp, homeDir: home },
+      { kind: 'skill', name: 'portable-habit', content: 'x' },
+    );
+    assert.equal(personal.scope, 'personal');
+    assert.ok(personal.absolutePath.startsWith(path.resolve(home)));
+  });
+
   it('rejects path traversal even if a relativePath is supplied', () => {
     assert.throws(
       () =>

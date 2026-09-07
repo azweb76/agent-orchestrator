@@ -78,7 +78,7 @@ export function ImproveInstructionsDialog({
     if (initialDraft?.relativePath) return 'existing';
     return initialKind ? KIND_TO_MODE[initialKind] : 'new_skill';
   });
-  const [scope, setScope] = useState<InstructionFileScope>(initialScope ?? 'project');
+  const [scope, setScope] = useState<InstructionFileScope>(initialScope ?? 'personal');
   const [skillName, setSkillName] = useState(initialDraft?.name ?? initialSkillName ?? '');
   const [existingKey, setExistingKey] = useState(() =>
     initialDraft?.relativePath
@@ -105,7 +105,7 @@ export function ImproveInstructionsDialog({
   useEffect(() => {
     if (!open) return;
     setMode(initialDraft?.relativePath ? 'existing' : initialKind ? KIND_TO_MODE[initialKind] : 'new_skill');
-    setScope(initialScope ?? 'project');
+    setScope(initialScope ?? 'personal');
     setSkillName(initialDraft?.name ?? initialSkillName ?? '');
     setExistingKey(
       initialDraft?.relativePath ? `${initialDraft.scope}:${initialDraft.relativePath}` : '',
@@ -253,7 +253,7 @@ export function ImproveInstructionsDialog({
                   fullWidth
                 />
               </ControlTooltip>
-              <ControlTooltip title="Project skills live in the repo; personal skills apply across repos">
+              <ControlTooltip title="Personal skills live in your user library and apply across repos. Use project only when the lesson is specific to this repository.">
                 <FormControl sx={{ minWidth: { sm: 160 } }}>
                   <InputLabel id="skill-scope-label">Scope</InputLabel>
                   <Select
@@ -262,8 +262,8 @@ export function ImproveInstructionsDialog({
                     value={scope}
                     onChange={(event) => setScope(event.target.value as InstructionFileScope)}
                   >
+                    <MenuItem value="personal">Personal (user)</MenuItem>
                     <MenuItem value="project">Project</MenuItem>
-                    <MenuItem value="personal">Personal</MenuItem>
                   </Select>
                 </FormControl>
               </ControlTooltip>

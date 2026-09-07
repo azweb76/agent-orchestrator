@@ -1,9 +1,10 @@
-import type {
-  GenerateInstructionDraftRequest,
-  InstructionDraft,
-  InstructionFileKind,
-  SessionGradeAnalysis,
-  SessionGradeScore,
+import {
+  resolveInstructionScope,
+  type GenerateInstructionDraftRequest,
+  type InstructionDraft,
+  type InstructionFileKind,
+  type SessionGradeAnalysis,
+  type SessionGradeScore,
 } from '@agent-orchestrator/shared';
 import { sanitizeSkillSlug } from './instruction-files.js';
 import { extractJsonObject } from './extract-json-object.js';
@@ -50,6 +51,7 @@ export function buildInstructionDraftPrompt(input: InstructionDraftPromptInput):
     'For skills, content MUST start with YAML frontmatter: ---\\nname: slug\\ndescription: ...\\nversion: N\\n---',
     'When updating an existing skill, bump version by 1 and keep still-useful guidance; tighten tactics for fewer turns, fewer tokens, and better subagent use.',
     'Write concrete, actionable instructions grounded in the transcript. Do not invent repo-specific APIs that were not discussed.',
+    'If this is a new skill and the request scope is personal, keep guidance portable across repositories; do not bind it to this repo\'s file paths unless the user asked for a project skill.',
     'If the grade is low, capture mistakes, missing checks, and corrections. If high, capture what worked so it can be reused.',
     'Keep the file focused; typically 40-120 lines.',
   ].join(' ');
@@ -79,7 +81,7 @@ export function parseInstructionDraftResponse(
   existing: boolean,
 ): InstructionDraft {
   const parsed = extractJsonObject(raw, 'Instruction draft response');
-  const scope = request.kind === 'skill' ? (request.scope ?? 'project') : 'project';
+  const scope = resolveInstructionScope(request.kind, request.scope);
   const action = existing || Boolean(request.relativePath) ? 'update' : 'create';
 
   let name = asString(parsed.name) || request.name?.trim() || '';

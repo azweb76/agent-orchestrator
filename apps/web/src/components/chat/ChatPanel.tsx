@@ -24,6 +24,7 @@ import { useChatPermissions } from './useChatPermissions';
 import { useChatSessionActions } from './useChatSessionActions';
 import { useChatStreaming } from './useChatStreaming';
 import { resolveTaskSuggestionAction } from './taskSuggestionActions';
+import type { SessionInsightsTab } from './sessionAnalysis';
 
 interface ChatPanelProps {
   agentId: string;
@@ -349,12 +350,8 @@ export const ChatPanel = memo(function ChatPanel({
         onStop={() => void streaming.stopStreaming()}
         onClear={sessionActions.requestClear}
         onRewind={() => sessionActions.requestRewindLast(displayMessages)}
-        onGradeOpen={() => {
-          sessionActions.gradeMutation.reset();
-          sessionActions.setGradeOpen(true);
-          if (!session?.grade?.analysis) {
-            sessionActions.gradeMutation.mutate({});
-          }
+        onGradeOpen={(tab?: SessionInsightsTab) => {
+          sessionActions.openInsights(tab ?? 'context', session?.grade);
         }}
         onImproveOpen={(offer) => {
           if (offer) {
@@ -394,7 +391,7 @@ export const ChatPanel = memo(function ChatPanel({
             return;
           }
           if (action.type === 'grade-session') {
-            sessionActions.setGradeOpen(true);
+            sessionActions.openInsights('analysis', session?.grade);
             return;
           }
           if (action.type === 'start-template') {
@@ -414,10 +411,12 @@ export const ChatPanel = memo(function ChatPanel({
         activeSessionId={activeSessionId}
         session={session}
         sessions={sessions}
+        isStreaming={sessionBusy}
         clearOpen={sessionActions.clearOpen}
         rewindTarget={sessionActions.rewindTarget}
         deleteTarget={sessionActions.deleteTarget}
         gradeOpen={sessionActions.gradeOpen}
+        insightsTab={sessionActions.insightsTab}
         improveOpen={sessionActions.improveOpen}
         clearMutation={sessionActions.clearMutation}
         rewindMutation={sessionActions.rewindMutation}
@@ -434,6 +433,7 @@ export const ChatPanel = memo(function ChatPanel({
           sessionActions.setGradeOpen(false);
           sessionActions.gradeMutation.reset();
         }}
+        onInsightsTabChange={sessionActions.setInsightsTab}
         improveSeed={sessionActions.improveSeed}
         onImproveClose={() => {
           sessionActions.setImproveOpen(false);
@@ -446,6 +446,7 @@ export const ChatPanel = memo(function ChatPanel({
         onImplementFinding={(finding) => {
           void sessionActions.createSessionFromFinding(finding);
         }}
+        onImproveFinding={sessionActions.openImproveFromFinding}
       />
     </Box>
   );

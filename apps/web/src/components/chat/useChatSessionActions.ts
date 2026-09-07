@@ -16,7 +16,8 @@ import {
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { setMessagesCache, upsertAgentSession } from './chatQueryCache';
-import { buildFindingImplementPrompt } from './GradeSessionDialog';
+import { buildFindingImplementPrompt, seedImproveFromFinding } from './sessionAnalysis';
+import type { SessionInsightsTab } from './sessionAnalysis';
 
 interface UseChatSessionActionsOptions {
   agentId: string;
@@ -69,6 +70,7 @@ export function useChatSessionActions({
   const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [gradeOpen, setGradeOpen] = useState(false);
+  const [insightsTab, setInsightsTab] = useState<SessionInsightsTab>('context');
   const [improveOpen, setImproveOpen] = useState(false);
   const [improveSeed, setImproveSeed] = useState<{
     kind: InstructionFileKind;
@@ -276,6 +278,20 @@ export function useChatSessionActions({
     }
   };
 
+  const openInsights = (tab: SessionInsightsTab, grade?: ChatSession['grade']) => {
+    setInsightsTab(tab);
+    gradeMutation.reset();
+    setGradeOpen(true);
+    if (tab === 'analysis' && !grade?.analysis) {
+      gradeMutation.mutate({});
+    }
+  };
+
+  const openImproveFromFinding = (finding: SessionGradeFinding) => {
+    setImproveSeed(seedImproveFromFinding(finding));
+    setImproveOpen(true);
+  };
+
   const requestClear = () => setClearOpen(true);
 
   const requestRewind = (message: Message) => {
@@ -307,6 +323,8 @@ export function useChatSessionActions({
     setDeleteTarget,
     gradeOpen,
     setGradeOpen,
+    insightsTab,
+    setInsightsTab,
     improveOpen,
     setImproveOpen,
     improveSeed,
@@ -322,6 +340,8 @@ export function useChatSessionActions({
     createSessionFromTask,
     createSessionFromSuggestion,
     createSessionFromFinding,
+    openInsights,
+    openImproveFromFinding,
     createFromTemplateId,
     requestClear,
     requestRewind,

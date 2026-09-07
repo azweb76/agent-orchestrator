@@ -37,5 +37,5 @@ export interface ChatComposerProps {
   onDraftChange: (value: string) => void;
   grade?: SessionGrade | null;
   canGrade?: boolean;
-  onGrade?: () => void;
+  onGrade?: (tab?: import('./sessionAnalysis').SessionInsightsTab) => void;
 }

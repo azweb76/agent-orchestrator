@@ -6,6 +6,20 @@ export type InstructionFileKind = 'skill' | 'claude_md' | 'agents_md';
 /** Skills may be project-local or personal; CLAUDE.md / AGENTS.md are always project. */
 export type InstructionFileScope = 'project' | 'personal';
 
+/**
+ * New skills default to the user (personal) library so they apply across
+ * repos. Use project only when the lesson is tied to this repository.
+ */
+export const DEFAULT_NEW_SKILL_SCOPE: InstructionFileScope = 'personal';
+
+export function resolveInstructionScope(
+  kind: InstructionFileKind,
+  scope?: InstructionFileScope | null,
+): InstructionFileScope {
+  if (kind !== 'skill') return 'project';
+  return scope === 'project' || scope === 'personal' ? scope : DEFAULT_NEW_SKILL_SCOPE;
+}
+
 export interface InstructionFile {
   kind: InstructionFileKind;
   scope: InstructionFileScope;

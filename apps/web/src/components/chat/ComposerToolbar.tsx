@@ -12,19 +12,17 @@ import StopIcon from '@mui/icons-material/Stop';
 import BoltIcon from '@mui/icons-material/Bolt';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
-import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
-import InsightsIcon from '@mui/icons-material/Insights';
 import {
   CLAUDE_EFFORT_LEVELS,
   CLAUDE_MODELS,
   PERMISSION_MODES,
-  SESSION_GRADE_LABELS,
   type EffortLevel,
   type PermissionMode,
   type SessionGrade,
 } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { ContextUsageButton } from './ContextUsageDialog';
+import type { SessionInsightsTab } from './sessionAnalysis';
 
 const selectSx = {
   fontSize: 13,
@@ -49,7 +47,7 @@ interface ComposerToolbarProps {
   onPermissionModeChange: (mode: PermissionMode) => void;
   onStop: () => void;
   onClear: () => void;
-  onGrade?: () => void;
+  onGrade?: (tab?: SessionInsightsTab) => void;
   onAddFiles: (files: FileList | File[]) => void;
   onSubmit: (force: boolean) => void;
 }
@@ -165,31 +163,17 @@ export function ComposerToolbar({
       </ControlTooltip>
 
       {sessionId ? (
-        <ContextUsageButton agentId={agentId} sessionId={sessionId} isStreaming={isStreaming} />
+        <ContextUsageButton
+          agentId={agentId}
+          sessionId={sessionId}
+          isStreaming={isStreaming}
+          grade={grade}
+          canAnalyze={canGrade}
+          onOpen={(tab) => onGrade?.(tab)}
+        />
       ) : null}
 
       <Box sx={{ flex: 1 }} />
-
-      {onGrade ? (
-        <ControlTooltip
-          title={
-            grade
-              ? `Graded ${grade.score}/5 · ${SESSION_GRADE_LABELS[grade.score]}`
-              : 'Analyze this session'
-          }
-          disabled={!canGrade}
-        >
-          <IconButton
-            size="small"
-            color={grade ? 'secondary' : 'inherit'}
-            disabled={!canGrade}
-            onClick={onGrade}
-            aria-label="Analyze this session"
-          >
-            {grade ? <InsightsIcon fontSize="small" /> : <InsightsOutlinedIcon fontSize="small" />}
-          </IconButton>
-        </ControlTooltip>
-      ) : null}
 
       <ControlTooltip
         title="Clear chat history and reset session (/clear)"

@@ -431,7 +431,7 @@ export function SettingsPage() {
 
       <SettingsSection
         title="Session analysis"
-        description='Manual "Grade this session" reviews speed, token waste, and repeat corrections. Off by default. Auto-grade stays optional and separate.'
+        description="The context-usage control opens session insights: token charts plus optional AI analysis for speed, waste, and skill improvements. Off by default. Auto-grade stays optional and separate. New skills default to your personal library unless they are specific to this project."
       >
         <Stack spacing={1}>
           <FormControlLabel

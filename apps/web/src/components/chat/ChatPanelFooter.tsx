@@ -45,7 +45,7 @@ interface ChatPanelFooterProps {
   onStop: () => void;
   onClear: () => void;
   onRewind: () => void;
-  onGradeOpen: () => void;
+  onGradeOpen: (tab?: import('./sessionAnalysis').SessionInsightsTab) => void;
   onImproveOpen: (offer?: InstructionDraftOffer | null) => void;
   onCompact: () => void;
   onRemoveQueued: (id: string) => void;
@@ -205,7 +205,7 @@ export function ChatPanelFooter({
           onRewind={onRewind}
           grade={session?.grade}
           canGrade={Boolean(settings?.analyzeSessionEnabled) && (displayMessageCount > 0 || Boolean(session?.grade))}
-          onGrade={settings?.analyzeSessionEnabled ? onGradeOpen : undefined}
+          onGrade={onGradeOpen}
           onRemoveQueued={onRemoveQueued}
         />
       </Box>
