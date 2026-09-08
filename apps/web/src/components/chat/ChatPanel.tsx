@@ -39,8 +39,6 @@ interface ChatPanelProps {
   initialTemplate?: ChatSessionTemplateId;
   focusAttention?: AgentAttentionFocus;
   focusSessionId?: string;
-  /** Opens the commit dialog (Commit and Push follow-up chip). */
-  onCommitAndPush?: () => void;
   /** Agent PR strip / header kickoff (new session each nonce). */
   templateKickoff?: ChatTemplateKickoffRequest | null;
 }
@@ -55,7 +53,6 @@ export const ChatPanel = memo(function ChatPanel({
   initialTemplate,
   focusAttention,
   focusSessionId,
-  onCommitAndPush,
   templateKickoff = null,
 }: ChatPanelProps) {
   const sseState = useSseConnectionState();
@@ -361,18 +358,6 @@ export const ChatPanel = memo(function ChatPanel({
         }}
         onSelectTaskSuggestion={(suggestion, options) => {
           const action = resolveTaskSuggestionAction(suggestion, options);
-          if (action.type === 'commit-and-push') {
-            onCommitAndPush?.();
-            return;
-          }
-          if (action.type === 'grade-session') {
-            sessionActions.openInsights('analysis', session?.grade);
-            return;
-          }
-          if (action.type === 'start-template') {
-            void sessionActions.createSessionFromTemplate(action.template);
-            return;
-          }
           if (action.type === 'new-prompt') {
             void sessionActions.createSessionFromSuggestion(action);
             return;

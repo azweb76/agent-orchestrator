@@ -1,13 +1,6 @@
-import {
-  CHAT_SESSION_TEMPLATES,
-  type ChatSessionTemplate,
-  type TaskSuggestion,
-} from '@agent-orchestrator/shared';
+import type { TaskSuggestion } from '@agent-orchestrator/shared';
 
 export type TaskSuggestionAction =
-  | { type: 'commit-and-push' }
-  | { type: 'start-template'; template: ChatSessionTemplate }
-  | { type: 'grade-session' }
   | { type: 'prompt'; prompt: string }
   | { type: 'new-prompt'; title: string; prompt: string };
 
@@ -20,38 +13,19 @@ export function isOpenInNewChatClick(event: {
 
 /**
  * Resolve a follow-up chip click.
- * - Normal click: send the prompt in the current chat (Commit and Push / Grade stay dialogs).
- * - Cmd/Ctrl+click: open a new chat (template kinds use their session template).
+ * - Normal click: send the catalog prompt in the current chat.
+ * - Cmd/Ctrl+click: open a new chat and send the same prompt.
  */
 export function resolveTaskSuggestionAction(
   suggestion: TaskSuggestion,
   options: { openInNewChat?: boolean } = {},
 ): TaskSuggestionAction {
-  const openInNewChat = Boolean(options.openInNewChat);
-
-  if (suggestion.kind === 'grade-session') {
-    return { type: 'grade-session' };
+  if (options.openInNewChat) {
+    return {
+      type: 'new-prompt',
+      title: suggestion.title,
+      prompt: suggestion.prompt,
+    };
   }
-
-  if (!openInNewChat) {
-    if (suggestion.kind === 'commit-and-push') {
-      return { type: 'commit-and-push' };
-    }
-    return { type: 'prompt', prompt: suggestion.prompt };
-  }
-
-  if (suggestion.kind === 'start-template' && suggestion.template) {
-    const template = CHAT_SESSION_TEMPLATES.find((item) => item.id === suggestion.template);
-    if (template) return { type: 'start-template', template };
-  }
-
-  if (suggestion.kind === 'commit-and-push') {
-    return { type: 'commit-and-push' };
-  }
-
-  return {
-    type: 'new-prompt',
-    title: suggestion.title,
-    prompt: suggestion.prompt,
-  };
+  return { type: 'prompt', prompt: suggestion.prompt };
 }

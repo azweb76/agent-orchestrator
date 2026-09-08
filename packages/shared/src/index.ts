@@ -125,10 +125,7 @@ export {
 } from './draft-pr.js';
 
 export {
-  buildStatusTaskSuggestionDrafts,
-  mergeTaskSuggestionDrafts,
   toTaskSuggestions,
-  FALLBACK_TASK_SUGGESTION,
   type TaskSuggestionChangeStatus,
   type TaskSuggestionDraft,
 } from './task-suggestions.js';
