@@ -85,4 +85,15 @@ export interface InstructionDraftOffer {
   preferredSkillSlug?: string;
   /** Pre/post efficiency comparison for the targeted skill, when available. */
   metricsComparison?: SkillMetricsComparison | null;
+  /**
+   * When similar instruction/skill findings appeared across enough graded
+   * sessions, the offer targets one personal skill instead of a one-off draft.
+   */
+  cluster?: {
+    key: string;
+    theme: string;
+    skillSlug: string;
+    count: number;
+    sessionIds: string[];
+  } | null;
 }

@@ -159,6 +159,18 @@ export {
 } from './instruction-files.js';
 
 export {
+  findSkillGapCluster,
+  isInstructionGapFinding,
+  skillGapClusterKey,
+  slugifySkillGap,
+  SKILL_GAP_CLUSTER_LOOKBACK,
+  SKILL_GAP_CLUSTER_THRESHOLD,
+  SKILL_GAP_THEMES,
+  type SkillGapCluster,
+  type SkillGapSessionInput,
+} from './skill-gap-cluster.js';
+
+export {
   formatMemoriesForSystemPrompt,
   mergeSystemPromptWithMemories,
   rankAgentMemories,

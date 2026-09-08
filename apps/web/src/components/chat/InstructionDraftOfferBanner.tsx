@@ -10,6 +10,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
+import { instructionDraftOfferBannerBody } from './sessionAnalysis';
 
 interface InstructionDraftOfferBannerProps {
   agentId: string;
@@ -92,9 +93,7 @@ export function InstructionDraftOfferBanner({
         </Stack>
       }
     >
-      The {templateTitle} session grade flagged {labels || 'instruction gaps'}. Review and apply
-      an instruction draft to fold the lessons into this repo
-      {serverOffer?.draft ? ' (draft ready)' : ''}?
+      {instructionDraftOfferBannerBody(templateTitle, labels, serverOffer)}
     </Alert>
   );
 }
