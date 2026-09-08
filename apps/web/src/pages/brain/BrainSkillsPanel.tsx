@@ -8,6 +8,7 @@ import {
   Stack,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
@@ -22,10 +23,12 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 import { PersonalSkillDialog } from './PersonalSkillDialog';
+import { InstallSkillsFromRepoDialog } from './InstallSkillsFromRepoDialog';
 
 export function BrainSkillsPanel() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [installOpen, setInstallOpen] = useState(false);
   const [editing, setEditing] = useState<PersonalSkill | null>(null);
 
   const { data: skills, isLoading, error } = useQuery({
@@ -59,7 +62,12 @@ export function BrainSkillsPanel() {
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <ControlTooltip title="Copy SKILL.md folders from a GitHub or workspace repo">
+          <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={() => setInstallOpen(true)}>
+            Install from repo
+          </Button>
+        </ControlTooltip>
         <ControlTooltip title="Create a personal skill">
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             New skill
@@ -82,9 +90,14 @@ export function BrainSkillsPanel() {
           title="No personal skills"
           description="Skills in your user library (~/.claude/skills) apply across every workspace. New session lessons default here unless they are repo-specific."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-              New skill
-            </Button>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+              <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={() => setInstallOpen(true)}>
+                Install from repo
+              </Button>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+                New skill
+              </Button>
+            </Stack>
           }
         />
       ) : (
@@ -146,6 +159,13 @@ export function BrainSkillsPanel() {
           saveMutation.reset();
         }}
         onSave={(body) => saveMutation.mutate(body)}
+      />
+      <InstallSkillsFromRepoDialog
+        open={installOpen}
+        onClose={() => setInstallOpen(false)}
+        onInstalled={() => {
+          void queryClient.invalidateQueries({ queryKey: ['personal-skills'] });
+        }}
       />
     </Stack>
   );

@@ -57,6 +57,11 @@ import {
 } from './pulls-write.js';
 import { clearPersistedRepoCache } from './repos-list-cache.js';
 import { isRepoArchived, searchRepositories } from './repos.js';
+import {
+  getRepoDefaultBranch,
+  listRepoFilePaths,
+  readRepoFileText,
+} from './contents.js';
 import type { SearchedIssue, SearchedPullRequest } from './raw-types.js';
 
 export class GitHubService {
@@ -146,6 +151,18 @@ export class GitHubService {
 
   searchRepositories(query: string): Promise<GitHubRepository[]> {
     return searchRepositories(this.ctx, query);
+  }
+
+  getRepoDefaultBranch(owner: string, repo: string): Promise<string> {
+    return getRepoDefaultBranch(this.ctx, owner, repo);
+  }
+
+  listRepoFilePaths(owner: string, repo: string, ref: string): Promise<string[]> {
+    return listRepoFilePaths(this.ctx, owner, repo, ref);
+  }
+
+  readRepoFileText(owner: string, repo: string, filePath: string, ref: string): Promise<string> {
+    return readRepoFileText(this.ctx, owner, repo, filePath, ref);
   }
 
   isRepoArchived(owner: string, repo: string): Promise<boolean> {

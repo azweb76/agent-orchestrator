@@ -154,7 +154,12 @@ export {
   type InstructionFile,
   type InstructionFileKind,
   type InstructionFileScope,
+  type InstallRepoSkillsRequest,
+  type InstallRepoSkillsResult,
   type PersonalSkill,
+  type PreviewRepoSkillsRequest,
+  type PreviewRepoSkillsResponse,
+  type RepoSkillCandidate,
   type UpdatePersonalSkillRequest,
 } from './instruction-files.js';
 

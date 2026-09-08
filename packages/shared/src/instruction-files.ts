@@ -90,6 +90,42 @@ export interface UpdatePersonalSkillRequest {
   content?: string;
 }
 
+/** Skill found in a GitHub or workspace repo, before copying into the user library. */
+export interface RepoSkillCandidate {
+  slug: string;
+  name: string;
+  description: string;
+  dirPath: string;
+  alreadyInstalled: boolean;
+}
+
+export interface PreviewRepoSkillsRequest {
+  /** GitHub URL or `owner/repo`. Ignored when workspaceId is set. */
+  repo?: string;
+  ref?: string;
+  workspaceId?: string;
+}
+
+export interface PreviewRepoSkillsResponse {
+  owner: string;
+  repo: string;
+  ref: string;
+  skills: RepoSkillCandidate[];
+}
+
+export interface InstallRepoSkillsRequest {
+  repo?: string;
+  ref?: string;
+  workspaceId?: string;
+  slugs: string[];
+  overwrite?: boolean;
+}
+
+export interface InstallRepoSkillsResult {
+  installed: PersonalSkill[];
+  skipped: Array<{ slug: string; reason: string }>;
+}
+
 /**
  * Pending human-gated instruction improvement offer (persisted in automation_state).
  * Writing still requires an explicit apply in the Improve-instructions dialog.
