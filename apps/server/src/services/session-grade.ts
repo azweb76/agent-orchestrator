@@ -381,14 +381,14 @@ export function parseSessionGradeResponse(
   const summary = asString(parsed.summary);
   if (!summary) throw new Error('Session grade was missing a summary');
 
-  const findings = grounding
+  const grounded = grounding
     ? groundSessionGradeFindings(normalized, grounding)
     : normalized;
 
   return {
-    score: parseScore(parsed.score) ?? scoreFromFindings(findings),
+    score: parseScore(parsed.score) ?? scoreFromFindings(grounded),
     summary,
-    findings,
+    findings: grounded,
     stats,
   };
 }
