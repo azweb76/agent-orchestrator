@@ -7,6 +7,7 @@ import { BrainFollowUpsPanel } from './brain/BrainFollowUpsPanel';
 import { BrainSkillsPanel } from './brain/BrainSkillsPanel';
 import { BrainSyncBar } from './brain/BrainSyncBar';
 import { BrainTasksPanel } from './brain/BrainTasksPanel';
+import { BrainWorkspace } from './brain/BrainWorkspace';
 import { parseBrainTab, type BrainTab } from './brain/brainTabs';
 
 const TAB_COPY: Record<BrainTab, string> = {
@@ -33,7 +34,7 @@ export function BrainPage() {
       <PageHeader
         eyebrow="Library"
         title="Brain"
-        description="User-level skills and Claude Code subagents, plus kickoff tasks and follow-up chips."
+        description="User-level skills and Claude Code subagents, plus kickoff tasks and follow-up chips. Create and improve with the copilot — edit the draft on the page, then save."
       />
 
       <BrainSyncBar />
@@ -55,10 +56,51 @@ export function BrainPage() {
         {TAB_COPY[tab]}
       </Typography>
 
-      {tab === 'skills' ? <BrainSkillsPanel /> : null}
-      {tab === 'agents' ? <BrainAgentsPanel /> : null}
-      {tab === 'tasks' ? <BrainTasksPanel /> : null}
-      {tab === 'follow-ups' ? <BrainFollowUpsPanel /> : null}
+      <BrainWorkspace
+        tab={tab}
+        onTabKind={(kind) => {
+          const next: BrainTab =
+            kind === 'follow-up' ? 'follow-ups' : kind === 'agent' ? 'agents' : kind === 'task' ? 'tasks' : 'skills';
+          setSearchParams(next === 'skills' ? {} : { tab: next }, { replace: true });
+        }}
+      >
+        {(api) => (
+          <>
+            {tab === 'skills' ? (
+              <BrainSkillsPanel
+                selectedKey={api.selectedKey}
+                onNew={api.onNew}
+                onSelect={api.onSelectSkill}
+                onImprove={api.onImproveSkill}
+              />
+            ) : null}
+            {tab === 'agents' ? (
+              <BrainAgentsPanel
+                selectedKey={api.selectedKey}
+                onNew={api.onNew}
+                onSelect={api.onSelectAgent}
+                onImprove={api.onImproveAgent}
+              />
+            ) : null}
+            {tab === 'tasks' ? (
+              <BrainTasksPanel
+                selectedKey={api.selectedKey}
+                onNew={api.onNew}
+                onSelect={api.onSelectTask}
+                onImprove={api.onImproveTask}
+              />
+            ) : null}
+            {tab === 'follow-ups' ? (
+              <BrainFollowUpsPanel
+                selectedKey={api.selectedKey}
+                onNew={api.onNew}
+                onSelect={api.onSelectFollowUp}
+                onImprove={api.onImproveFollowUp}
+              />
+            ) : null}
+          </>
+        )}
+      </BrainWorkspace>
     </Stack>
   );
 }

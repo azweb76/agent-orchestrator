@@ -53,6 +53,7 @@ import {
   handleGetWorkQueue,
   handleListInbox,
 } from './assistant-tools-inbox.js';
+import { handleBrainAssistantTool } from './assistant-tools-brain.js';
 
 const DISMISSED_KEY = 'assistant.dismissedWorkItems';
 
@@ -61,6 +62,7 @@ export type AssistantToolExecution = {
   isError?: boolean;
   navigateTo?: string;
   agentId?: string;
+  awaitingUser?: boolean;
 };
 
 export type AssistantToolOptions = {
@@ -348,8 +350,11 @@ async function dispatchAssistantTool(
       return handleSetAutomationSettings(ctx, input, requireConfirm);
     case 'trigger_automation_poll':
       return handleTriggerAutomationPoll(ctx, input, requireConfirm);
-    default:
+    default: {
+      const brain = await handleBrainAssistantTool(ctx, def.name, input, requireConfirm);
+      if (brain) return brain;
       return { content: JSON.stringify({ error: `Unhandled tool: ${def.name}` }), isError: true };
+    }
   }
 }
 

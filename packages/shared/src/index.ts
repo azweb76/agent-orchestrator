@@ -295,6 +295,28 @@ export {
 } from './assistant.js';
 
 export { ASSISTANT_DEPTH_TOOLS } from './assistant-depth-tools.js';
+export { ASSISTANT_BRAIN_TOOLS } from './assistant-brain-tools.js';
+
+export {
+  BRAIN_DRAFT_KINDS,
+  BRAIN_GARDEN_PROMPT,
+  brainCreatePrompt,
+  brainImprovePrompt,
+  emptyBrainDraft,
+  formatAskUserAnswers,
+  isBrainDraftKind,
+  latestAskUserQuestionsFromMessages,
+  latestBrainDraftFromMessages,
+  mergeBrainDraft,
+  parseAskUserToolQuestions,
+  parseBrainDraft,
+  stripMarkdownFrontmatter,
+  type BrainDraft,
+  type BrainDraftKind,
+  type BrainFollowUpDraft,
+  type BrainMarkdownDraft,
+  type BrainTaskDraft,
+} from './brain.js';
 
 export {
   AUTO_WRITE_TEMPLATE_TOOLS,

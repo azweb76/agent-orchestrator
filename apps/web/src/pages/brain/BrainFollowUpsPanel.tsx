@@ -10,65 +10,48 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CreateTaskFollowUpRequest,
-  TaskFollowUp,
-  UpdateTaskFollowUpRequest,
-} from '@agent-orchestrator/shared';
+import type { TaskFollowUp } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
-import { TaskFollowUpDialog } from '../../components/TaskFollowUpDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 
-export function BrainFollowUpsPanel() {
+export function BrainFollowUpsPanel({
+  selectedKey,
+  onNew,
+  onSelect,
+  onImprove,
+}: {
+  selectedKey: string | null;
+  onNew: () => void;
+  onSelect: (followUp: TaskFollowUp) => void;
+  onImprove: (followUp: TaskFollowUp) => void;
+}) {
   const queryClient = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<TaskFollowUp | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const { data: followUps, isLoading, error } = useQuery({
     queryKey: ['task-followups'],
     queryFn: api.listTaskFollowUps,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: async (body: CreateTaskFollowUpRequest | UpdateTaskFollowUpRequest) => {
-      if (editing) return api.updateTaskFollowUp(editing.id, body);
-      return api.createTaskFollowUp(body as CreateTaskFollowUpRequest);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['task-followups'] });
-      setDialogOpen(false);
-      setEditing(null);
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteTaskFollowUp(id),
     onSuccess: async () => {
+      setPendingDelete(null);
       await queryClient.invalidateQueries({ queryKey: ['task-followups'] });
     },
   });
-
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
-
-  const openEdit = (followUp: TaskFollowUp) => {
-    setEditing(followUp);
-    setDialogOpen(true);
-  };
 
   return (
     <Stack spacing={2}>
       <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-        <ControlTooltip title="Create a new follow-up">
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+        <ControlTooltip title="Create a follow-up with AI">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
             New follow-up
           </Button>
         </ControlTooltip>
@@ -89,7 +72,7 @@ export function BrainFollowUpsPanel() {
           title="No follow-ups"
           description="Create follow-ups with a name, description, and prompt for AI to choose from after sessions."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
               New follow-up
             </Button>
           }
@@ -99,48 +82,49 @@ export function BrainFollowUpsPanel() {
           {followUps?.map((followUp) => (
             <ListRow
               key={followUp.id}
+              selected={selectedKey === followUp.id}
+              onClick={() => onSelect(followUp)}
               secondaryAction={
-                <Stack direction="row" spacing={0.5}>
-                  <ControlTooltip title="Edit follow-up">
-                    <IconButton
-                      aria-label={`Edit ${followUp.title}`}
-                      onClick={() => openEdit(followUp)}
-                    >
-                      <EditOutlinedIcon fontSize="small" />
+                <Stack direction="row" spacing={0.5} onClick={(event) => event.stopPropagation()}>
+                  <ControlTooltip title="Improve with AI">
+                    <IconButton aria-label={`Improve ${followUp.title}`} onClick={() => onImprove(followUp)}>
+                      <AutoAwesomeOutlinedIcon fontSize="small" />
                     </IconButton>
                   </ControlTooltip>
-                  <ControlTooltip
-                    title={
-                      followUp.builtIn
-                        ? 'Built-in follow-ups cannot be deleted'
-                        : 'Delete follow-up'
-                    }
-                    disabled={followUp.builtIn || deleteMutation.isPending}
-                  >
-                    <span>
-                      <IconButton
-                        aria-label={`Delete ${followUp.title}`}
-                        disabled={followUp.builtIn || deleteMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete follow-up “${followUp.title}”?`)) {
-                            deleteMutation.mutate(followUp.id);
-                          }
-                        }}
-                      >
-                        <DeleteOutlinedIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </ControlTooltip>
+                  {pendingDelete === followUp.id ? (
+                    <>
+                      <Button size="small" color="error" onClick={() => deleteMutation.mutate(followUp.id)}>
+                        Confirm
+                      </Button>
+                      <Button size="small" onClick={() => setPendingDelete(null)}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <ControlTooltip
+                      title={
+                        followUp.builtIn
+                          ? 'Built-in follow-ups cannot be deleted'
+                          : 'Delete follow-up'
+                      }
+                      disabled={followUp.builtIn || deleteMutation.isPending}
+                    >
+                      <span>
+                        <IconButton
+                          aria-label={`Delete ${followUp.title}`}
+                          disabled={followUp.builtIn || deleteMutation.isPending}
+                          onClick={() => setPendingDelete(followUp.id)}
+                        >
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </ControlTooltip>
+                  )}
                 </Stack>
               }
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  useFlexGap
-                  sx={{ flexWrap: 'wrap', alignItems: 'center' }}
-                >
+                <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
                   <ListRowTitle>{followUp.title}</ListRowTitle>
                   <Chip size="small" label={followUp.name} variant="outlined" />
                   {followUp.builtIn ? (
@@ -156,11 +140,7 @@ export function BrainFollowUpsPanel() {
                   {followUp.template ? ` · template: ${followUp.template}` : ''}
                 </ListRowMeta>
                 {followUp.description ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', mt: 0.5 }}
-                  >
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
                     Prompt: {followUp.prompt}
                   </Typography>
                 ) : null}
@@ -169,19 +149,6 @@ export function BrainFollowUpsPanel() {
           ))}
         </ListPanel>
       )}
-
-      <TaskFollowUpDialog
-        open={dialogOpen}
-        followUp={editing}
-        saving={saveMutation.isPending}
-        error={saveMutation.error ? (saveMutation.error as Error).message : null}
-        onClose={() => {
-          setDialogOpen(false);
-          setEditing(null);
-          saveMutation.reset();
-        }}
-        onSave={(body) => saveMutation.mutate(body)}
-      />
     </Stack>
   );
 }
