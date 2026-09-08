@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import {
-  filterApplicableTaskFollowUps,
   toTaskSuggestions,
   type AgentDeliveryPhase,
+  type SessionUsageSignals,
   type TaskFollowUp,
   type TaskSuggestion,
   type TaskSuggestionChangeStatus,
@@ -38,6 +38,9 @@ export interface TaskSuggestionsAgentSnapshot {
   githubRepo: string;
   deliveryPhase: AgentDeliveryPhase;
   changeStatus: TaskSuggestionChangeStatus;
+  sessionUsage: SessionUsageSignals;
+  analyzeSessionEnabled: boolean;
+  hasSessionGrade: boolean;
 }
 
 export interface TaskSuggestionsContext {
@@ -55,6 +58,8 @@ export function buildTaskSuggestionsPrompt(context: TaskSuggestionsContext): {
     'Call the submit_task_suggestions tool with an ordered list of followUpIds from the catalog.',
     'If you cannot call a tool, respond with ONLY a JSON object {"followUpIds":["..."]} (no markdown fences).',
     'Pick 1 to 6 ids that best match the agent state and recent assistant replies.',
+    'Use change status and session usage as context, but you decide which chips to show — do not assume the UI will add extra buttons.',
+    'Every selected chip sends its catalog prompt into chat (or a new chat). Do not pick chips that only make sense as dialogs.',
     'Prefer concrete, relevant next steps. Omit inapplicable status actions (commit/PR/CI/review) when the change status says they do not apply.',
     'Do not invent ids. Only use catalog ids.',
     'Order matters: most useful first.',
@@ -101,6 +106,9 @@ export function buildTaskSuggestionsPrompt(context: TaskSuggestionsContext): {
           hasOpenPr: agent.changeStatus.hasOpenPr,
           pr: agent.changeStatus.pr ?? null,
         },
+        sessionUsage: agent.sessionUsage,
+        analyzeSessionEnabled: agent.analyzeSessionEnabled,
+        hasSessionGrade: agent.hasSessionGrade,
       },
       null,
       2,
@@ -192,7 +200,6 @@ export function followUpToSuggestion(followUp: TaskFollowUp): TaskSuggestion {
 export function mapFollowUpIdsToSuggestions(
   ids: string[],
   catalog: readonly TaskFollowUp[],
-  changeStatus: TaskSuggestionChangeStatus,
   max = MAX_TOTAL_SUGGESTIONS,
 ): TaskSuggestion[] {
   const byId = new Map(catalog.map((item) => [item.id, item]));
@@ -200,7 +207,6 @@ export function mapFollowUpIdsToSuggestions(
   for (const id of ids) {
     const followUp = byId.get(id);
     if (!followUp) continue;
-    if (!filterApplicableTaskFollowUps([followUp], changeStatus).length) continue;
     mapped.push(followUpToSuggestion(followUp));
     if (mapped.length >= max) break;
   }

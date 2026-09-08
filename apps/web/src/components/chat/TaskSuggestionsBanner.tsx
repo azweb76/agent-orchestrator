@@ -2,14 +2,8 @@ import { useMemo, useState } from 'react';
 import { Alert, Button, CircularProgress, Stack } from '@mui/material';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  filterApplicableTaskFollowUps,
-  type AgentDetail,
-  type ChatSession,
-  type TaskSuggestion,
-  type TaskSuggestionChangeStatus,
-} from '@agent-orchestrator/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { AgentDetail, ChatSession, TaskSuggestion } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { paletteShortcutLabel } from '../commandPalette/paletteCommands';
 import { ControlTooltip } from '../ui/ControlTooltip';
@@ -20,7 +14,7 @@ const FOLLOWUP_CLICK_HINT = `Click to send in this chat · ${FOLLOWUP_MOD}-click
 
 interface TaskSuggestionsBannerProps {
   agentId: string;
-  agent: Pick<AgentDetail, 'taskSuggestions' | 'worktree' | 'prStatus'>;
+  agent: Pick<AgentDetail, 'taskSuggestions'>;
   session: Pick<ChatSession, 'id' | 'status'> | undefined;
   isStreaming: boolean;
   archived?: boolean;
@@ -28,9 +22,8 @@ interface TaskSuggestionsBannerProps {
 }
 
 /**
- * AI-selected follow-ups from the user-managed catalog. Live diffs only drop
- * status chips that are no longer applicable (never re-add AI-omitted ones).
- * Users can refresh or trigger selection for the current idle session.
+ * AI-selected follow-ups from the user-managed catalog. The banner renders
+ * whatever the server stored — no status-driven extra chips.
  */
 export function TaskSuggestionsBanner({
   agentId,
@@ -43,19 +36,6 @@ export function TaskSuggestionsBanner({
   const queryClient = useQueryClient();
   const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-
-  const pendingQuery = useQuery({
-    queryKey: ['diff', agentId, 'pending'],
-    queryFn: () => api.getDiff(agentId, 'pending'),
-    enabled: Boolean(agentId) && !archived,
-    staleTime: 10_000,
-  });
-  const prDiffQuery = useQuery({
-    queryKey: ['diff', agentId, 'pr'],
-    queryFn: () => api.getDiff(agentId, 'pr'),
-    enabled: Boolean(agentId) && !archived,
-    staleTime: 10_000,
-  });
 
   const refreshMutation = useMutation({
     mutationFn: (sessionId: string) => api.refreshTaskSuggestions(agentId, sessionId),
@@ -73,41 +53,8 @@ export function TaskSuggestionsBanner({
     if (!session) return [] as TaskSuggestion[];
     const offer = agent.taskSuggestions;
     if (!offer || offer.sessionId !== session.id) return [] as TaskSuggestion[];
-
-    const hasPendingChanges = Boolean(
-      pendingQuery.data?.patch?.trim() || pendingQuery.data?.stat?.trim(),
-    );
-    const hasBranchDiff =
-      hasPendingChanges ||
-      Boolean(prDiffQuery.data?.patch?.trim() || prDiffQuery.data?.stat?.trim());
-    const changeStatus: TaskSuggestionChangeStatus = {
-      hasPendingChanges,
-      hasBranchDiff,
-      hasOpenPr: agent.worktree.prNumber != null,
-      pr: agent.prStatus,
-    };
-
-    return filterApplicableTaskFollowUps(
-      offer.suggestions.map((s) => ({
-        ...s,
-        kind: s.kind ?? 'prompt',
-        template: s.template ?? null,
-      })),
-      changeStatus,
-    ).map(({ template, ...rest }) => ({
-      ...rest,
-      template: template ?? undefined,
-    }));
-  }, [
-    agent.prStatus,
-    agent.taskSuggestions,
-    agent.worktree.prNumber,
-    pendingQuery.data?.patch,
-    pendingQuery.data?.stat,
-    prDiffQuery.data?.patch,
-    prDiffQuery.data?.stat,
-    session,
-  ]);
+    return offer.suggestions;
+  }, [agent.taskSuggestions, session]);
 
   if (!session || isStreaming || archived) return null;
   if (session.status !== 'idle') return null;

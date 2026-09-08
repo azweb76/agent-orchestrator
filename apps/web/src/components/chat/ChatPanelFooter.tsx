@@ -14,10 +14,7 @@ import type { PendingMention } from './mentionComposer';
 
 interface ChatPanelFooterProps {
   agentId: string;
-  agent?: Pick<
-    AgentDetail,
-    'draftPrOffer' | 'taskSuggestions' | 'instructionDraftOffer' | 'worktree' | 'prStatus'
-  >;
+  agent?: Pick<AgentDetail, 'draftPrOffer' | 'taskSuggestions' | 'instructionDraftOffer'>;
   archived: boolean;
   activeSessionId: string;
   session?: ChatSession;

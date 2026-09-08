@@ -1,5 +1,4 @@
 import type { ChatSessionTemplateId } from './chat-session.js';
-import type { TaskSuggestionChangeStatus } from './task-suggestions.js';
 import type { TaskSuggestionKind } from './types/views.js';
 
 /** Follow-up slug: lowercase, max 63 chars. */
@@ -17,7 +16,7 @@ export interface TaskFollowUp {
   title: string;
   /** Short subtitle / tooltip. */
   description: string;
-  /** Ready-to-send chat text (or handoff prompt for template kinds). */
+  /** Ready-to-send chat text (current chat, or new chat on Cmd/Ctrl-click). */
   prompt: string;
   kind: TaskSuggestionKind;
   /** When `kind` is `start-template`, which session template to open. */
@@ -137,55 +136,4 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
 
 export function isValidTaskFollowUpName(name: string): boolean {
   return TASK_FOLLOWUP_NAME_PATTERN.test(name.trim());
-}
-
-function checksFailing(status: TaskSuggestionChangeStatus): boolean {
-  const pr = status.pr;
-  if (!pr) return false;
-  if (typeof pr.checksFailing === 'number' && pr.checksFailing > 0) return true;
-  return pr.checksRollup === 'failure';
-}
-
-/**
- * Whether a catalog entry is eligible given live worktree / PR signals.
- * Prompt kinds are always eligible; status kinds match `buildStatusTaskSuggestionDrafts`.
- */
-export function isTaskFollowUpApplicable(
-  followUp: Pick<TaskFollowUp, 'kind'> & { template?: ChatSessionTemplateId | null },
-  status: TaskSuggestionChangeStatus,
-): boolean {
-  if (followUp.kind === 'prompt' || !followUp.kind) return true;
-
-  // Once offered, keep the chip visible; the server only injects it when usage is high.
-  if (followUp.kind === 'grade-session') return true;
-
-  if (followUp.kind === 'commit-and-push') {
-    return status.hasPendingChanges;
-  }
-
-  if (followUp.kind !== 'start-template') return true;
-
-  const template = followUp.template ?? null;
-  const hasLocalWork = status.hasBranchDiff || status.hasPendingChanges;
-
-  if (template === 'create-draft-pr') return !status.hasOpenPr;
-  if (template === 'resolve-conflicts') {
-    return Boolean(status.hasOpenPr && status.pr && status.pr.mergeableState === 'dirty');
-  }
-  if (template === 'fix-ci') {
-    return Boolean(status.hasOpenPr && checksFailing(status));
-  }
-  if (template === 'address-review') {
-    return Boolean(status.hasOpenPr && (status.pr?.reviewCommentCount ?? 0) > 0);
-  }
-  if (template === 'review') return hasLocalWork;
-
-  return true;
-}
-
-/** Filter catalog entries to those eligible for the current change status. */
-export function filterApplicableTaskFollowUps<
-  T extends Pick<TaskFollowUp, 'kind'> & { template?: ChatSessionTemplateId | null },
->(followUps: readonly T[], status: TaskSuggestionChangeStatus): T[] {
-  return followUps.filter((item) => isTaskFollowUpApplicable(item, status));
 }
