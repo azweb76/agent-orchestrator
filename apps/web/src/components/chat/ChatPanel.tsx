@@ -291,8 +291,6 @@ export const ChatPanel = memo(function ChatPanel({
                 draftPrOffer: agentDefaults.draftPrOffer,
                 taskSuggestions: agentDefaults.taskSuggestions,
                 instructionDraftOffer: agentDefaults.instructionDraftOffer,
-                worktree: agentDefaults.worktree,
-                prStatus: agentDefaults.prStatus,
               }
             : undefined
         }
