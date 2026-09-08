@@ -15,13 +15,12 @@ import FlightOutlinedIcon from '@mui/icons-material/FlightOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import MenuIcon from '@mui/icons-material/Menu';
 import MergeTypeIcon from '@mui/icons-material/MergeType';
+import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
-import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { useSseConnectionState } from '../api/events';
 import { useNotificationSettings, permissionStatusLabel } from '../notifications';
 import { paletteShortcutLabel } from './commandPalette/paletteCommands';
@@ -46,6 +45,16 @@ export const NAV_ITEMS = [
     label: 'Pull requests',
     icon: <MergeTypeIcon />,
     match: (path: string) => path.startsWith('/pull-requests'),
+  },
+  {
+    to: '/brain',
+    label: 'Brain',
+    icon: <PsychologyOutlinedIcon />,
+    match: (path: string) =>
+      path === '/brain' ||
+      path.startsWith('/brain/') ||
+      path === '/tasks' ||
+      path === '/follow-ups',
   },
 ] as const;
 
@@ -206,34 +215,6 @@ export function AppHeader({ isMobile, onOpenMobileNav, onOpenPalette }: AppHeade
             sx={{ mr: 0.5 }}
           >
             <SearchIcon fontSize="small" />
-          </IconButton>
-        </ControlTooltip>
-
-        <ControlTooltip title="Tasks">
-          <IconButton
-            component={RouterLink}
-            to="/tasks"
-            size="small"
-            color={location.pathname === '/tasks' ? 'secondary' : 'inherit'}
-            aria-label="Tasks"
-            aria-current={location.pathname === '/tasks' ? 'page' : undefined}
-            sx={{ mr: 0.5 }}
-          >
-            <TuneOutlinedIcon fontSize="small" />
-          </IconButton>
-        </ControlTooltip>
-
-        <ControlTooltip title="Follow-ups">
-          <IconButton
-            component={RouterLink}
-            to="/follow-ups"
-            size="small"
-            color={location.pathname === '/follow-ups' ? 'secondary' : 'inherit'}
-            aria-label="Follow-ups"
-            aria-current={location.pathname === '/follow-ups' ? 'page' : undefined}
-            sx={{ mr: 0.5 }}
-          >
-            <LightbulbOutlinedIcon fontSize="small" />
           </IconButton>
         </ControlTooltip>
 

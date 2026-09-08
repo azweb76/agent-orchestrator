@@ -147,12 +147,15 @@ export {
   DEFAULT_NEW_SKILL_SCOPE,
   type ApplyInstructionFileRequest,
   type ApplyInstructionFileResponse,
+  type CreatePersonalSkillRequest,
   type GenerateInstructionDraftRequest,
   type InstructionDraft,
   type InstructionDraftOffer,
   type InstructionFile,
   type InstructionFileKind,
   type InstructionFileScope,
+  type PersonalSkill,
+  type UpdatePersonalSkillRequest,
 } from './instruction-files.js';
 
 export {

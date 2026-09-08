@@ -1,5 +1,6 @@
 import { apiAgentTasks } from './apiAgentTasks';
 import { apiTaskFollowUps } from './apiTaskFollowUps';
+import { apiPersonalSkills } from './apiPersonalSkills';
 import { apiAgents } from './apiAgents';
 import { apiAssistant } from './apiAssistant';
 import { apiGitHub } from './apiGitHub';
@@ -31,6 +32,7 @@ export const api = {
   ...apiAgents,
   ...apiAgentTasks,
   ...apiTaskFollowUps,
+  ...apiPersonalSkills,
   ...apiAssistant,
   getAutomationSettings,
   triggerAutomationPollNow,

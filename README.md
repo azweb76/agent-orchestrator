@@ -4,6 +4,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
 
 ## Features
 
+- **Brain** — user-level library for **personal skills**, **agent tasks** (kickoff templates), and **follow-ups** (post-session chips).
 - **Command center** — home dashboard with the live agent fleet, **Assistant** (work queue + AI chat for managing workspaces/agents/tasks), spend/usage rollup, system readiness, recent workspaces, and PR / GitHub / Jira issue inboxes. Everything updates live over SSE — no manual refresh.
 - **Workspaces** — clone GitHub repos as managed workspaces.
 - **Pull requests** — browse your open PRs and review requests; open a PR to see checks, files, commits, reviews, and conversation, and start an agent from it. **Fix CI** and **Address review** kick off ready-made sessions against the PR branch.
