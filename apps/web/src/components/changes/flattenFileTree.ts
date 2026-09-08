@@ -2,8 +2,13 @@ import type { DiffFile } from '../../utils/parseUnifiedDiff';
 import type { FileTreeNode } from '../../utils/fileTree';
 
 export type FlatFileTreeRow =
-  | { type: 'dir'; path: string; name: string; depth: number }
+  | { type: 'dir'; path: string; name: string; depth: number; filePaths: string[] }
   | { type: 'file'; path: string; name: string; depth: number; file: DiffFile };
+
+function descendantFilePaths(node: FileTreeNode): string[] {
+  if (node.type === 'file') return [node.path];
+  return node.children.flatMap(descendantFilePaths);
+}
 
 /** Flatten an expanded file tree into scrollable rows for virtualization. */
 export function flattenVisibleFileTree(
@@ -14,7 +19,13 @@ export function flattenVisibleFileTree(
   const rows: FlatFileTreeRow[] = [];
   for (const node of nodes) {
     if (node.type === 'dir') {
-      rows.push({ type: 'dir', path: node.path, name: node.name, depth });
+      rows.push({
+        type: 'dir',
+        path: node.path,
+        name: node.name,
+        depth,
+        filePaths: descendantFilePaths(node),
+      });
       if (expanded.has(node.path)) {
         rows.push(...flattenVisibleFileTree(node.children, expanded, depth + 1));
       }

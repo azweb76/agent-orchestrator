@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { restoreWorktreePaths as restoreGitWorktreePaths } from './git-restore.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -117,6 +118,14 @@ export class GitService {
       await fs.rm(worktreePath, { recursive: true, force: true });
       await execFileAsync('git', ['-C', mainRepoPath, 'worktree', 'prune']);
     }
+  }
+
+  /**
+   * Restore listed paths to HEAD. Untracked / staged-new files are deleted.
+   * Paths must be worktree-relative (no `..`, `.git`, or absolute paths).
+   */
+  async restoreWorktreePaths(worktreePath: string, paths: string[]): Promise<string[]> {
+    return restoreGitWorktreePaths(worktreePath, paths);
   }
 
   /** Discard uncommitted/untracked changes in a worktree, resetting it to `ref`. */

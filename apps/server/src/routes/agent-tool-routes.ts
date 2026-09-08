@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
   commitAgentChanges,
+  discardAgentFiles,
   createAgentPullRequest,
   getAgentAttachment,
   getAgentDiff,
@@ -84,6 +85,18 @@ export function registerAgentToolRoutes(router: express.Router, ctx: AppContext)
         })
         .parse(req.body ?? {});
       res.json(await commitAgentChanges(ctx, param(req.params.agentId), body));
+    }),
+  );
+
+  router.post(
+    '/agents/:agentId/discard-files',
+    asyncHandler(async (req, res) => {
+      const body = z
+        .object({
+          paths: z.array(z.string().trim().min(1).max(1024)).min(1).max(200),
+        })
+        .parse(req.body ?? {});
+      res.json(await discardAgentFiles(ctx, param(req.params.agentId), body));
     }),
   );
 }

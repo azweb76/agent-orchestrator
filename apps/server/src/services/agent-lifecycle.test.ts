@@ -10,6 +10,7 @@ import {
   createAgentPullRequest,
   deleteAgent,
   deleteWorkspace,
+  discardAgentFiles,
   listSidebarTree,
   unarchiveAgent,
   type AppContext,
@@ -175,6 +176,29 @@ describe('agent lifecycle: unarchive, delete, commit, workspace cleanup', () => 
     assert.equal(commits.length, 0);
     assert.deepEqual(pushes, [{ path: ctx.repos.worktrees.getById('wt-1')!.path, branch: 'feat' }]);
     assert.equal(result.message, 'Pushed without a new commit');
+  });
+
+  it('discardAgentFiles restores selected paths', async () => {
+    const { worktree } = seed();
+    const calls: Array<{ path: string; paths: string[] }> = [];
+    (ctx.git as unknown as { restoreWorktreePaths: GitService['restoreWorktreePaths'] }).restoreWorktreePaths =
+      async (worktreePath, paths) => {
+        calls.push({ path: worktreePath, paths });
+        return paths;
+      };
+
+    const result = await discardAgentFiles(ctx, 'ag-1', { paths: ['src/a.ts', 'src/b.ts'] });
+    assert.deepEqual(result.restored, ['src/a.ts', 'src/b.ts']);
+    assert.deepEqual(calls, [{ path: worktree.path, paths: ['src/a.ts', 'src/b.ts'] }]);
+    assert.equal(ctx.repos.events.listByAgent('ag-1').some((event) => event.type === 'files_discarded'), true);
+  });
+
+  it('discardAgentFiles rejects archived agents', async () => {
+    seed({ archivedAt: '2026-01-03T00:00:00.000Z' });
+    await assert.rejects(
+      () => discardAgentFiles(ctx, 'ag-1', { paths: ['src/a.ts'] }),
+      /archived agent/,
+    );
   });
 
   it('commitAgentChanges rejects a clean tree when push is disabled', async () => {

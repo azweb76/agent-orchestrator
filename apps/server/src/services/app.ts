@@ -62,6 +62,7 @@ export {
   createAgentPullRequest,
   commitAgentChanges,
 } from './agents-lifecycle.js';
+export { discardAgentFiles } from './agents-discard.js';
 
 export {
   createAgentSession,

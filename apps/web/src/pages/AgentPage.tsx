@@ -8,6 +8,7 @@ import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
+import { UndoFilesDialog } from '../components/changes/UndoFilesDialog';
 import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import type { ChatTemplateKickoffRequest } from '../components/chat/useChatTemplateKickoff';
@@ -48,6 +49,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [commitMessage, setCommitMessage] = useState('');
   const [commitPush, setCommitPush] = useState(true);
   const [commitHasPending, setCommitHasPending] = useState(true);
+  const [undoOpen, setUndoOpen] = useState(false);
+  const [undoPaths, setUndoPaths] = useState<string[]>([]);
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [prDraft, setPrDraft] = useState(true);
@@ -59,6 +62,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
     unarchiveMutation,
     commitMutation,
     createPrMutation,
+    discardMutation,
   } = useAgentPageMutations(agentId);
 
   useEffect(() => {
@@ -243,6 +247,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             archived={archived}
             onCommit={() => openCommitDialog({ push: false, hasPendingChanges: true })}
             onCommitAndPush={() => openCommitDialog({ push: true, hasPendingChanges: true })}
+            onUndoFiles={(paths) => {
+              discardMutation.reset();
+              setUndoPaths(paths);
+              setUndoOpen(true);
+            }}
           />
         </Box>
 
@@ -315,6 +324,26 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         }}
         onMessageChange={setCommitMessage}
         onPushChange={setCommitPush}
+      />
+
+      <UndoFilesDialog
+        open={undoOpen}
+        paths={undoPaths}
+        loading={discardMutation.isPending}
+        error={discardMutation.error ? (discardMutation.error as Error).message : null}
+        onCancel={() => {
+          if (discardMutation.isPending) return;
+          setUndoOpen(false);
+          discardMutation.reset();
+        }}
+        onConfirm={() => {
+          discardMutation.mutate(undoPaths, {
+            onSuccess: () => {
+              setUndoOpen(false);
+              setUndoPaths([]);
+            },
+          });
+        }}
       />
     </Stack>
   );
