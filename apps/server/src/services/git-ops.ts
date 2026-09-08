@@ -248,7 +248,13 @@ export class GitService {
 
   /** Paths from `git status --porcelain` (renames use the new path). */
   async listChangedFiles(worktreePath: string): Promise<string[]> {
-    const { stdout } = await execFileAsync('git', ['-C', worktreePath, 'status', '--porcelain']);
+    const { stdout } = await execFileAsync('git', [
+      '-C',
+      worktreePath,
+      'status',
+      '--porcelain',
+      '-uall',
+    ]);
     return stdout
       .split('\n')
       .map((line) => line.trimEnd())
