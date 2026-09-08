@@ -64,11 +64,21 @@ export function useAgentPageMutations(agentId: string) {
     },
   });
 
+  const discardMutation = useMutation({
+    mutationFn: (paths: string[]) => api.discardFiles(agentId, { paths }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['diff', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+    },
+  });
+
   return {
     archiveMutation,
     stopMutation,
     unarchiveMutation,
     commitMutation,
     createPrMutation,
+    discardMutation,
   };
 }

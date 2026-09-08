@@ -28,6 +28,7 @@ export interface AgentChangesPanelProps {
   archived?: boolean;
   onCommit?: () => void;
   onCommitAndPush?: () => void;
+  onUndoFiles?: (paths: string[]) => void;
 }
 
 function emptyCopy(scope: AgentDiffScope): { title: string; description: string } {
@@ -62,6 +63,7 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
   archived = false,
   onCommit,
   onCommitAndPush,
+  onUndoFiles,
 }: AgentChangesPanelProps) {
   const diffQuery = useQuery({
     queryKey: ['diff', agentId, diffScope],
@@ -167,7 +169,12 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
       ) : !diffQuery.data?.patch ? (
         <EmptyState compact title={empty.title} description={empty.description} />
       ) : (
-        <ChangesDiffView patch={diffQuery.data.patch} />
+        <ChangesDiffView
+          patch={diffQuery.data.patch}
+          onUndoFiles={
+            !archived && diffScope === 'pending' && onUndoFiles ? onUndoFiles : undefined
+          }
+        />
       )}
     </Stack>
   );

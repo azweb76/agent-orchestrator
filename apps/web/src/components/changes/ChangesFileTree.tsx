@@ -1,4 +1,4 @@
-import { Box, Collapse, Typography } from '@mui/material';
+import { Box, Checkbox, Collapse, Typography } from '@mui/material';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
@@ -12,6 +12,7 @@ import {
   flattenVisibleFileTree,
   type FlatFileTreeRow,
 } from './flattenFileTree';
+import { collectDiffFiles, dirSelectState } from './discardPaths';
 
 const STATUS_COLOR: Record<DiffFileStatus, string> = {
   added: 'success.main',
@@ -32,45 +33,64 @@ function DirRow({
   depth,
   expanded,
   onToggleDir,
+  selectable,
+  dirState,
+  onToggleSelect,
 }: {
   node: FileTreeDirNode;
   depth: number;
   expanded: Set<string>;
   onToggleDir: (path: string) => void;
+  selectable?: boolean;
+  dirState?: 'none' | 'some' | 'all';
+  onToggleSelect?: () => void;
 }) {
   const isOpen = expanded.has(node.path);
   return (
-    <Box
-      component="button"
-      type="button"
-      onClick={() => onToggleDir(node.path)}
-      aria-expanded={isOpen}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 0.5,
-        width: '100%',
-        pl: 0.5 + depth * 1.25,
-        pr: 1,
-        py: 0.35,
-        border: 0,
-        bgcolor: 'transparent',
-        color: 'text.primary',
-        cursor: 'pointer',
-        textAlign: 'left',
-        borderRadius: 1,
-        '&:hover': { bgcolor: 'ao.surface.hover' },
-      }}
-    >
-      {isOpen ? (
-        <ExpandMoreIcon sx={{ fontSize: 16, opacity: 0.7 }} />
-      ) : (
-        <ChevronRightIcon sx={{ fontSize: 16, opacity: 0.7 }} />
-      )}
-      <FolderOutlinedIcon sx={{ fontSize: 15, color: 'secondary.main', opacity: 0.9 }} />
-      <Typography variant="body2" noWrap sx={{ fontSize: 13, fontWeight: 500 }}>
-        {node.name}
-      </Typography>
+    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', pl: 0.25 + depth * 1.25 }}>
+      {selectable ? (
+        <Checkbox
+          size="small"
+          checked={dirState === 'all'}
+          indeterminate={dirState === 'some'}
+          onChange={() => onToggleSelect?.()}
+          slotProps={{ input: { 'aria-label': `Select files in ${node.name}` } }}
+          sx={{ p: 0.25, ml: 0.25, flexShrink: 0 }}
+        />
+      ) : null}
+      <Box
+        component="button"
+        type="button"
+        onClick={() => onToggleDir(node.path)}
+        aria-expanded={isOpen}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          flex: 1,
+          minWidth: 0,
+          pl: 0,
+          pr: 1,
+          py: 0.35,
+          border: 0,
+          bgcolor: 'transparent',
+          color: 'text.primary',
+          cursor: 'pointer',
+          textAlign: 'left',
+          borderRadius: 1,
+          '&:hover': { bgcolor: 'ao.surface.hover' },
+        }}
+      >
+        {isOpen ? (
+          <ExpandMoreIcon sx={{ fontSize: 16, opacity: 0.7 }} />
+        ) : (
+          <ChevronRightIcon sx={{ fontSize: 16, opacity: 0.7 }} />
+        )}
+        <FolderOutlinedIcon sx={{ fontSize: 15, color: 'secondary.main', opacity: 0.9 }} />
+        <Typography variant="body2" noWrap sx={{ fontSize: 13, fontWeight: 500 }}>
+          {node.name}
+        </Typography>
+      </Box>
     </Box>
   );
 }
@@ -81,15 +101,31 @@ function FileRow({
   depth,
   selected,
   onSelect,
+  selectable,
+  checked,
+  onToggleSelect,
 }: {
   file: DiffFile;
   name: string;
   depth: number;
   selected: boolean;
   onSelect: (file: DiffFile) => void;
+  selectable?: boolean;
+  checked?: boolean;
+  onToggleSelect?: (file: DiffFile) => void;
 }) {
   return (
     <ControlTooltip title={file.path}>
+      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', pl: 0.25 + depth * 1.25 }}>
+      {selectable ? (
+        <Checkbox
+          size="small"
+          checked={Boolean(checked)}
+          onChange={() => onToggleSelect?.(file)}
+          slotProps={{ input: { 'aria-label': `Select ${name} to undo` } }}
+          sx={{ p: 0.25, ml: 0.25, flexShrink: 0 }}
+        />
+      ) : null}
       <Box
         component="button"
         type="button"
@@ -99,8 +135,9 @@ function FileRow({
           display: 'flex',
           alignItems: 'center',
           gap: 0.5,
-          width: '100%',
-          pl: 0.5 + depth * 1.25 + 2,
+          flex: 1,
+          minWidth: 0,
+          pl: 0,
           pr: 1,
           py: 0.4,
           border: 0,
@@ -152,6 +189,7 @@ function FileRow({
           {STATUS_LETTER[file.status]}
         </Typography>
       </Box>
+      </Box>
     </ControlTooltip>
   );
 }
@@ -163,6 +201,10 @@ function FileTreeBranch({
   expanded,
   onToggleDir,
   onSelectFile,
+  selectable,
+  selectedToUndo,
+  onToggleFile,
+  onToggleDirFiles,
 }: {
   nodes: FileTreeNode[];
   depth: number;
@@ -170,13 +212,34 @@ function FileTreeBranch({
   expanded: Set<string>;
   onToggleDir: (path: string) => void;
   onSelectFile: (file: DiffFile) => void;
+  selectable?: boolean;
+  selectedToUndo?: Set<string>;
+  onToggleFile?: (file: DiffFile) => void;
+  onToggleDirFiles?: (paths: string[]) => void;
 }) {
   return (
     <>
       {nodes.map((node) =>
         node.type === 'dir' ? (
           <Box key={`dir:${node.path}`}>
-            <DirRow node={node} depth={depth} expanded={expanded} onToggleDir={onToggleDir} />
+            <DirRow
+              node={node}
+              depth={depth}
+              expanded={expanded}
+              onToggleDir={onToggleDir}
+              selectable={selectable}
+              dirState={
+                selectable && selectedToUndo
+                  ? dirSelectState(
+                      collectDiffFiles([node]).map((file) => file.path),
+                      selectedToUndo,
+                    )
+                  : undefined
+              }
+              onToggleSelect={() =>
+                onToggleDirFiles?.(collectDiffFiles([node]).map((file) => file.path))
+              }
+            />
             <Collapse in={expanded.has(node.path)} timeout="auto" unmountOnExit>
               <FileTreeBranch
                 nodes={node.children}
@@ -185,6 +248,10 @@ function FileTreeBranch({
                 expanded={expanded}
                 onToggleDir={onToggleDir}
                 onSelectFile={onSelectFile}
+                selectable={selectable}
+                selectedToUndo={selectedToUndo}
+                onToggleFile={onToggleFile}
+                onToggleDirFiles={onToggleDirFiles}
               />
             </Collapse>
           </Box>
@@ -196,6 +263,9 @@ function FileTreeBranch({
             depth={depth}
             selected={selectedPath === node.path}
             onSelect={onSelectFile}
+            selectable={selectable}
+            checked={selectedToUndo?.has(node.path)}
+            onToggleSelect={onToggleFile}
           />
         ),
       )}
@@ -209,12 +279,20 @@ function VirtualFileTree({
   expanded,
   onToggleDir,
   onSelectFile,
+  selectable,
+  selectedToUndo,
+  onToggleFile,
+  onToggleDirFiles,
 }: {
   rows: FlatFileTreeRow[];
   selectedPath: string | null;
   expanded: Set<string>;
   onToggleDir: (path: string) => void;
   onSelectFile: (file: DiffFile) => void;
+  selectable?: boolean;
+  selectedToUndo?: Set<string>;
+  onToggleFile?: (file: DiffFile) => void;
+  onToggleDirFiles?: (paths: string[]) => void;
 }) {
   return (
     <Virtuoso
@@ -227,6 +305,13 @@ function VirtualFileTree({
             depth={row.depth}
             expanded={expanded}
             onToggleDir={onToggleDir}
+            selectable={selectable}
+            dirState={
+              selectable && selectedToUndo
+                ? dirSelectState(row.filePaths, selectedToUndo)
+                : undefined
+            }
+            onToggleSelect={() => onToggleDirFiles?.(row.filePaths)}
           />
         ) : (
           <FileRow
@@ -235,6 +320,9 @@ function VirtualFileTree({
             depth={row.depth}
             selected={selectedPath === row.path}
             onSelect={onSelectFile}
+            selectable={selectable}
+            checked={selectedToUndo?.has(row.path)}
+            onToggleSelect={onToggleFile}
           />
         )
       }
@@ -248,6 +336,10 @@ export interface ChangesFileTreeProps {
   expanded: Set<string>;
   onToggleDir: (path: string) => void;
   onSelectFile: (file: DiffFile) => void;
+  selectable?: boolean;
+  selectedToUndo?: Set<string>;
+  onToggleFile?: (file: DiffFile) => void;
+  onToggleDirFiles?: (paths: string[]) => void;
 }
 
 /** Scrollable file tree for the Changes diff viewer. */
@@ -257,9 +349,14 @@ export function ChangesFileTree({
   expanded,
   onToggleDir,
   onSelectFile,
+  selectable,
+  selectedToUndo,
+  onToggleFile,
+  onToggleDirFiles,
 }: ChangesFileTreeProps) {
   const flatRows = flattenVisibleFileTree(tree, expanded);
   const useVirtualTree = flatRows.length > FILE_TREE_VIRTUOSO_THRESHOLD;
+  const selectProps = { selectable, selectedToUndo, onToggleFile, onToggleDirFiles };
 
   return (
     <Box
@@ -277,6 +374,7 @@ export function ChangesFileTree({
           expanded={expanded}
           onToggleDir={onToggleDir}
           onSelectFile={onSelectFile}
+          {...selectProps}
         />
       ) : (
         <FileTreeBranch
@@ -286,6 +384,7 @@ export function ChangesFileTree({
           expanded={expanded}
           onToggleDir={onToggleDir}
           onSelectFile={onSelectFile}
+          {...selectProps}
         />
       )}
     </Box>

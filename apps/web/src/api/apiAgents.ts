@@ -11,6 +11,8 @@ import type {
   ChatSession,
   CommitAgentChangesRequest,
   CommitAgentChangesResponse,
+  DiscardAgentFilesRequest,
+  DiscardAgentFilesResponse,
   CreateAgentMemoryRequest,
   CreateChatSessionRequest,
   CreatePrRequest,
@@ -165,6 +167,11 @@ export const apiAgents = {
     }),
   commitChanges: (agentId: string, body: CommitAgentChangesRequest) =>
     request<CommitAgentChangesResponse>(`/agents/${agentId}/commit`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  discardFiles: (agentId: string, body: DiscardAgentFilesRequest) =>
+    request<DiscardAgentFilesResponse>(`/agents/${agentId}/discard-files`, {
       method: 'POST',
       body: JSON.stringify(body),
     }),

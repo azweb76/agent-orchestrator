@@ -118,6 +118,15 @@ export interface CommitAgentChangesResponse {
   message: string;
 }
 
+export interface DiscardAgentFilesRequest {
+  /** Worktree-relative paths to restore to HEAD (or delete if untracked). */
+  paths: string[];
+}
+
+export interface DiscardAgentFilesResponse {
+  restored: string[];
+}
+
 export interface PruneArchivedAgentsResponse {
   /** Number of archived agent rows removed. */
   prunedAgents: number;

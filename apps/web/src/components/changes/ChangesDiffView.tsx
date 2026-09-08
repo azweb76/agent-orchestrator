@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   Stack,
@@ -9,6 +12,7 @@ import {
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SearchIcon from '@mui/icons-material/Search';
+import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
 import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import { DiffBlock } from '../pr/DiffBlock';
@@ -20,21 +24,31 @@ import {
   defaultExpandedDirs,
   filterDiffFiles,
 } from '../../utils/fileTree';
-import { parseUnifiedDiff } from '../../utils/parseUnifiedDiff';
+import { parseUnifiedDiff, type DiffFile } from '../../utils/parseUnifiedDiff';
 import { ChangesFileTree } from './ChangesFileTree';
 import { truncatePatch, MAX_DIFF_PREVIEW_LINES } from './diffPreview';
+import {
+  discardPathsForFile,
+  discardPathsForFiles,
+  dirSelectState,
+  togglePaths,
+} from './discardPaths';
 
 export interface ChangesDiffViewProps {
   patch: string;
+  /** When set, checkboxes and undo actions restore uncommitted files to HEAD. */
+  onUndoFiles?: (paths: string[]) => void;
 }
 
 /** File-tree + per-file diff viewer for an agent worktree patch. */
-export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
+export function ChangesDiffView({ patch, onUndoFiles }: ChangesDiffViewProps) {
   const files = useMemo(() => parseUnifiedDiff(patch), [patch]);
   const [filter, setFilter] = useState('');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [copied, setCopied] = useState(false);
+  const [selectedToUndo, setSelectedToUndo] = useState<Set<string>>(() => new Set());
+  const canUndo = Boolean(onUndoFiles);
 
   const visibleFiles = useMemo(() => filterDiffFiles(files, filter), [files, filter]);
   const tree = useMemo(() => buildFileTree(visibleFiles), [visibleFiles]);
@@ -48,6 +62,14 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
       return visibleFiles[0]?.path ?? null;
     });
   }, [files, tree, visibleFiles, filtering]);
+
+  useEffect(() => {
+    const allowed = new Set(files.map((file) => file.path));
+    setSelectedToUndo((prev) => {
+      const next = new Set([...prev].filter((filePath) => allowed.has(filePath)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [files]);
 
   const selected = visibleFiles.find((file) => file.path === selectedPath) ?? null;
   const preview = useMemo(
@@ -75,6 +97,20 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
     } catch {
       setCopied(false);
     }
+  };
+
+  const visiblePaths = visibleFiles.map((file) => file.path);
+  const visibleSelect = dirSelectState(visiblePaths, selectedToUndo);
+  const undoCount = selectedToUndo.size;
+
+  const toggleFileSelect = (file: DiffFile) => {
+    setSelectedToUndo((prev) => togglePaths(prev, [file.path], !prev.has(file.path)));
+  };
+
+  const toggleDirFiles = (paths: string[]) => {
+    setSelectedToUndo((prev) =>
+      togglePaths(prev, paths, dirSelectState(paths, prev) !== 'all'),
+    );
   };
 
   if (files.length === 0) {
@@ -125,6 +161,25 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
               <UnfoldLessIcon fontSize="small" />
             </IconButton>
           </ControlTooltip>
+          {canUndo ? (
+            <Button
+              size="small"
+              color="warning"
+              startIcon={<UndoOutlinedIcon />}
+              disabled={undoCount === 0}
+              onClick={() => {
+                const chosen = files.filter((file) => selectedToUndo.has(file.path));
+                onUndoFiles?.(discardPathsForFiles(chosen));
+              }}
+              sx={{ textTransform: 'none', ml: 0.5 }}
+            >
+              {undoCount === 0
+                ? 'Undo files'
+                : undoCount === 1
+                  ? 'Undo 1 file'
+                  : `Undo ${undoCount} files`}
+            </Button>
+          ) : null}
         </Stack>
       </Stack>
 
@@ -173,6 +228,28 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
               }}
             />
           </Box>
+          {canUndo && visibleFiles.length > 0 ? (
+            <Box sx={{ px: 0.75, flexShrink: 0 }}>
+              <FormControlLabel
+                sx={{ ml: 0, mr: 0, gap: 0.5 }}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={visibleSelect === 'all'}
+                    indeterminate={visibleSelect === 'some'}
+                    onChange={() => toggleDirFiles(visiblePaths)}
+                    slotProps={{ input: { 'aria-label': 'Select all visible files' } }}
+                    sx={{ p: 0.25 }}
+                  />
+                }
+                label={
+                  <Typography variant="caption" color="text.secondary">
+                    Select all
+                  </Typography>
+                }
+              />
+            </Box>
+          ) : null}
           {visibleFiles.length === 0 ? (
             <Box sx={{ px: 1, py: 2 }}>
               <EmptyState compact title="No matching files" description="Try a different filter." />
@@ -185,6 +262,10 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
                 expanded={expanded}
                 onToggleDir={toggleDir}
                 onSelectFile={(file) => setSelectedPath(file.path)}
+                selectable={canUndo}
+                selectedToUndo={selectedToUndo}
+                onToggleFile={toggleFileSelect}
+                onToggleDirFiles={toggleDirFiles}
               />
             </Box>
           )}
@@ -213,6 +294,18 @@ export function ChangesDiffView({ patch }: ChangesDiffViewProps) {
                     <ContentCopyIcon fontSize="inherit" />
                   </IconButton>
                 </ControlTooltip>
+                {canUndo && selected ? (
+                  <ControlTooltip title="Undo this file (restore to HEAD)">
+                    <IconButton
+                      size="small"
+                      color="warning"
+                      aria-label="Undo this file"
+                      onClick={() => onUndoFiles?.(discardPathsForFile(selected))}
+                    >
+                      <UndoOutlinedIcon fontSize="inherit" />
+                    </IconButton>
+                  </ControlTooltip>
+                ) : null}
                 <Typography variant="caption" color="success.main">
                   +{selected.additions}
                 </Typography>
