@@ -1,6 +1,7 @@
 import { apiAgentTasks } from './apiAgentTasks';
 import { apiTaskFollowUps } from './apiTaskFollowUps';
 import { apiPersonalSkills } from './apiPersonalSkills';
+import { apiPersonalAgents } from './apiPersonalAgents';
 import { apiBrain } from './apiBrain';
 import { apiAgents } from './apiAgents';
 import { apiAssistant } from './apiAssistant';
@@ -34,6 +35,7 @@ export const api = {
   ...apiAgentTasks,
   ...apiTaskFollowUps,
   ...apiPersonalSkills,
+  ...apiPersonalAgents,
   ...apiBrain,
   ...apiAssistant,
   getAutomationSettings,

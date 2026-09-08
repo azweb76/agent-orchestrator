@@ -2,13 +2,13 @@ import express from 'express';
 import { z } from 'zod';
 import type { AppContext } from '../services/app.js';
 import {
-  createPersonalSkill,
-  deletePersonalSkill,
-  getPersonalSkill,
-  listPersonalSkills,
-  updatePersonalSkill,
-} from '../services/personal-skills.js';
-import { installRepoSkills, previewRepoSkills } from '../services/personal-skill-install.js';
+  createPersonalAgent,
+  deletePersonalAgent,
+  getPersonalAgent,
+  listPersonalAgents,
+  updatePersonalAgent,
+} from '../services/personal-agents.js';
+import { installRepoAgents, previewRepoAgents } from '../services/personal-agent-install.js';
 import { asyncHandler, param } from './helpers.js';
 
 const createBody = z.object({
@@ -34,57 +34,57 @@ const installBody = repoSourceBody.extend({
   overwrite: z.boolean().optional(),
 });
 
-export function registerPersonalSkillRoutes(router: express.Router, ctx: AppContext): void {
+export function registerPersonalAgentRoutes(router: express.Router, ctx: AppContext): void {
   router.get(
-    '/personal-skills',
+    '/personal-agents',
     asyncHandler(async (_req, res) => {
-      res.json(await listPersonalSkills());
+      res.json(await listPersonalAgents());
     }),
   );
 
   router.post(
-    '/personal-skills/preview',
+    '/personal-agents/preview',
     asyncHandler(async (req, res) => {
       const body = repoSourceBody.parse(req.body ?? {});
-      res.json(await previewRepoSkills(ctx, body));
+      res.json(await previewRepoAgents(ctx, body));
     }),
   );
 
   router.post(
-    '/personal-skills/install',
+    '/personal-agents/install',
     asyncHandler(async (req, res) => {
       const body = installBody.parse(req.body ?? {});
-      res.json(await installRepoSkills(ctx, body));
+      res.json(await installRepoAgents(ctx, body));
     }),
   );
 
   router.get(
-    '/personal-skills/:slug',
+    '/personal-agents/:slug',
     asyncHandler(async (req, res) => {
-      res.json(await getPersonalSkill(param(req.params.slug)));
+      res.json(await getPersonalAgent(param(req.params.slug)));
     }),
   );
 
   router.post(
-    '/personal-skills',
+    '/personal-agents',
     asyncHandler(async (req, res) => {
       const body = createBody.parse(req.body ?? {});
-      res.status(201).json(await createPersonalSkill(body));
+      res.status(201).json(await createPersonalAgent(body));
     }),
   );
 
   router.put(
-    '/personal-skills/:slug',
+    '/personal-agents/:slug',
     asyncHandler(async (req, res) => {
       const body = updateBody.parse(req.body ?? {});
-      res.json(await updatePersonalSkill(param(req.params.slug), body));
+      res.json(await updatePersonalAgent(param(req.params.slug), body));
     }),
   );
 
   router.delete(
-    '/personal-skills/:slug',
+    '/personal-agents/:slug',
     asyncHandler(async (req, res) => {
-      await deletePersonalSkill(param(req.params.slug));
+      await deletePersonalAgent(param(req.params.slug));
       res.status(204).end();
     }),
   );

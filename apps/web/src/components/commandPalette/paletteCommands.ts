@@ -69,8 +69,15 @@ export function buildPaletteCommands(
       id: 'action:go-brain',
       group: 'Actions',
       label: 'Go to Brain',
-      keywords: 'skills personal library user agent tasks templates follow-ups',
+      keywords: 'skills personal library user agent tasks templates follow-ups subagents',
       action: { kind: 'navigate', to: '/brain' },
+    },
+    {
+      id: 'action:go-brain-agents',
+      group: 'Actions',
+      label: 'Go to personal agents',
+      keywords: 'personal subagents claude agents library brain',
+      action: { kind: 'navigate', to: '/brain?tab=agents' },
     },
     {
       id: 'action:go-tasks',

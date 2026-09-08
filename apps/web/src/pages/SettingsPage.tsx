@@ -189,7 +189,7 @@ export function SettingsPage() {
 
       <SettingsSection
         title="Brain"
-        description="Manage personal skills, agent task templates, and post-session follow-up chips from one library."
+        description="Manage personal skills, Claude Code subagents, kickoff task templates, and post-session follow-up chips from one library."
       >
         <ControlTooltip title="Open Brain">
           <Button
