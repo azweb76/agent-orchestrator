@@ -164,7 +164,7 @@ export function TaskFollowUpDialog({
             required
             multiline
             minRows={3}
-            helperText="Message sent into chat, or handoff prompt for template actions."
+            helperText="Message sent into the current chat. Cmd/Ctrl-click on the chip opens a new chat with the same prompt."
           />
           {!builtIn ? (
             <FormControl fullWidth>
@@ -185,8 +185,8 @@ export function TaskFollowUpDialog({
               >
                 <MenuItem value="prompt">Prompt (send into chat)</MenuItem>
                 <MenuItem value="commit-and-push">Commit and push</MenuItem>
-                <MenuItem value="start-template">Start session template</MenuItem>
-                <MenuItem value="grade-session">Grade session (open dialog)</MenuItem>
+                <MenuItem value="start-template">Session template</MenuItem>
+                <MenuItem value="grade-session">Grade session</MenuItem>
               </Select>
             </FormControl>
           ) : null}

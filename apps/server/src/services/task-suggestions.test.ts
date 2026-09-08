@@ -96,7 +96,61 @@ test('maybeSuggestFollowUpTasks selects catalog ids via Anthropic', async () => 
   }
 });
 
-test('maybeSuggestFollowUpTasks falls back when LLM fails', async () => {
+test('maybeSuggestFollowUpTasks keeps AI picks that status chips used to drop', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-task-suggestions-ai-only-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    ensureBuiltInTaskFollowUps(ctx);
+    ctx.git = {
+      hasChanges: async () => false,
+      getDiff: async () => ({ stat: '', patch: '' }),
+    } as unknown as GitService;
+    ctx.github = {
+      getPullRequestForBranch: async () => null,
+    } as unknown as typeof ctx.github;
+
+    const catalog = ctx.repos.taskFollowUps.listEnabled();
+    const commit = catalog.find((item) => item.name === 'commit-and-push');
+    assert.ok(commit);
+
+    let capturedCatalogSize = 0;
+    ctx.anthropic = {
+      selectTaskFollowUps: async (input: { catalog: unknown[] }) => {
+        capturedCatalogSize = input.catalog.length;
+        return [commit.id];
+      },
+    } as unknown as typeof ctx.anthropic;
+
+    const session = ctx.repos.sessions.create({
+      id: 'sess-ai-only',
+      agentId: agent.id,
+      title: 'Chat',
+      template: 'chat',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:01.000Z',
+      updatedAt: '2026-01-01T00:00:02.000Z',
+    });
+
+    await maybeSuggestFollowUpTasks(ctx, session, {});
+    const offer = getTaskSuggestionsOffer(ctx, agent.id);
+    assert.ok(offer);
+    assert.equal(capturedCatalogSize, catalog.length);
+    assert.deepEqual(
+      offer.suggestions.map((s) => s.title),
+      ['Commit and Push'],
+    );
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('maybeSuggestFollowUpTasks stores an empty offer when LLM fails', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-task-suggestions-fallback-'));
   try {
     const { ctx, agent } = await seedAgent(tmp);
@@ -140,8 +194,8 @@ test('maybeSuggestFollowUpTasks falls back when LLM fails', async () => {
     await maybeSuggestFollowUpTasks(ctx, session, {});
     const offer = getTaskSuggestionsOffer(ctx, agent.id);
     assert.ok(offer);
-    assert.ok(offer.suggestions.some((s) => s.title === 'Create PR (draft)'));
-    assert.ok(offer.suggestions.every((s) => s.description));
+    assert.equal(offer.sessionId, session.id);
+    assert.deepEqual(offer.suggestions, []);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
@@ -244,7 +298,7 @@ test('refreshTaskSuggestionsForSession rejects non-idle sessions', async () => {
   }
 });
 
-test('maybeSuggestFollowUpTasks prepends Grade session when usage is excessive', async () => {
+test('maybeSuggestFollowUpTasks does not inject Grade session without AI', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-task-suggestions-grade-'));
   try {
     const { ctx, agent } = await seedAgent(tmp);
@@ -304,9 +358,11 @@ test('maybeSuggestFollowUpTasks prepends Grade session when usage is excessive',
     await maybeSuggestFollowUpTasks(ctx, session, {});
     const offer = getTaskSuggestionsOffer(ctx, agent.id);
     assert.ok(offer);
-    assert.equal(offer.suggestions[0]?.kind, 'grade-session');
-    assert.match(offer.suggestions[0]?.description ?? '', /turns|\$/);
-    assert.ok(offer.suggestions.some((item) => item.title === 'Continue'));
+    assert.deepEqual(
+      offer.suggestions.map((item) => item.title),
+      ['Continue'],
+    );
+    assert.ok(offer.suggestions.every((item) => item.kind !== 'grade-session'));
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

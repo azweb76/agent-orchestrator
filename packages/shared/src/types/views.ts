@@ -39,12 +39,14 @@ export interface DraftPrOffer {
   sessionId: string;
 }
 
-/** How selecting a follow-up chip should behave in the chat UI. */
+/**
+ * Catalog metadata for a follow-up. The agent-page banner always sends
+ * `prompt` into the current chat (Cmd/Ctrl-click opens a new chat).
+ */
 export type TaskSuggestionKind =
   | 'prompt'
   | 'commit-and-push'
   | 'start-template'
-  /** Opens the Grade session dialog (manual analysis). */
   | 'grade-session';
 
 export interface TaskSuggestion {
@@ -52,11 +54,11 @@ export interface TaskSuggestion {
   title: string;
   /** Short subtitle / tooltip; falls back to `prompt` in the UI when omitted. */
   description?: string;
-  /** Ready-to-send chat text for `prompt` kinds. */
+  /** Ready-to-send chat text. */
   prompt: string;
-  /** Defaults to `prompt` (send into the current chat). */
+  /** Catalog kind; chip clicks ignore this and send `prompt`. */
   kind?: TaskSuggestionKind;
-  /** When `kind` is `start-template`, which session template to open. */
+  /** Optional session template associated with the catalog entry. */
   template?: ChatSessionTemplateId;
 }
 

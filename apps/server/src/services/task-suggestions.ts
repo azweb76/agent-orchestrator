@@ -1,11 +1,5 @@
-import { v4 as uuidv4 } from 'uuid';
 import {
-  buildStatusTaskSuggestionDrafts,
-  describeExcessiveSessionUsage,
-  filterApplicableTaskFollowUps,
-  isSessionUsageExcessive,
   measureSessionUsage,
-  mergeTaskSuggestionDrafts,
   resolveAgentDeliveryPhase,
   type ChatSession,
   type TaskFollowUp,
@@ -18,7 +12,6 @@ import { type AppContext, makeEvent, notify } from './app-context.js';
 import { getAppSettings } from './app-settings.js';
 import { getCachedPrStatus } from './pr-status-cache.js';
 import {
-  followUpToSuggestion,
   mapFollowUpIdsToSuggestions,
   type TaskSuggestionsContext,
 } from './task-suggestions-select.js';
@@ -37,7 +30,6 @@ export {
 } from './task-suggestions-select.js';
 
 const OFFER_KEY = (agentId: string) => `task-suggestions.offer:${agentId}`;
-const MAX_TOTAL_SUGGESTIONS = 6;
 const MAX_ASSISTANT_MESSAGES = 5;
 const MAX_MESSAGE_CHARS = 2000;
 
@@ -156,73 +148,11 @@ export function recentAssistantMessagesFromSession(
     .map((m) => clipMessage(m.content));
 }
 
-function fallbackSuggestions(
-  changeStatus: TaskSuggestionChangeStatus,
-  catalog: readonly TaskFollowUp[],
-): TaskSuggestion[] {
-  const statusDrafts = buildStatusTaskSuggestionDrafts(changeStatus);
-  const drafts = mergeTaskSuggestionDrafts(statusDrafts, [], MAX_TOTAL_SUGGESTIONS);
-  const byTitle = new Map(catalog.map((item) => [item.title.toLowerCase(), item]));
-  const mapped: TaskSuggestion[] = [];
-  for (const draft of drafts) {
-    const match = byTitle.get(draft.title.toLowerCase());
-    if (match) {
-      mapped.push(followUpToSuggestion(match));
-    } else {
-      mapped.push({
-        id: uuidv4(),
-        title: draft.title,
-        description: draft.description,
-        prompt: draft.prompt,
-        kind: draft.kind ?? 'prompt',
-        template: draft.template,
-      });
-    }
-  }
-  return mapped;
-}
-
-/**
- * When turns/tokens look high and session analysis is enabled, prepend a
- * manual Grade session chip. Auto-grade stays off unless the operator opts in.
- */
-function ensureGradeSessionSuggestion(
-  ctx: AppContext,
-  session: ChatSession,
-  catalog: readonly TaskFollowUp[],
-  suggestions: TaskSuggestion[],
-): TaskSuggestion[] {
-  if (session.grade) return suggestions;
-  if (!getAppSettings(ctx.repos).analyzeSessionEnabled) return suggestions;
-
-  const messages = ctx.repos.messages.listBySession(session.id);
-  const usage = measureSessionUsage(messages);
-  if (!isSessionUsageExcessive(usage)) return suggestions;
-
-  const gradeFollowUp =
-    catalog.find((item) => item.kind === 'grade-session') ??
-    catalog.find((item) => item.name === 'grade-session');
-  if (!gradeFollowUp?.enabled) return suggestions;
-
-  if (suggestions.some((item) => item.kind === 'grade-session' || item.id === gradeFollowUp.id)) {
-    return suggestions;
-  }
-
-  const reason = describeExcessiveSessionUsage(usage);
-  const chip: TaskSuggestion = {
-    ...followUpToSuggestion(gradeFollowUp),
-    description: reason
-      ? `${gradeFollowUp.description} (${reason})`
-      : gradeFollowUp.description || undefined,
-  };
-  return [chip, ...suggestions].slice(0, MAX_TOTAL_SUGGESTIONS);
-}
-
 function buildSelectionContext(
   ctx: AppContext,
   session: ChatSession,
   changeStatus: TaskSuggestionChangeStatus,
-  applicableCatalog: readonly TaskFollowUp[],
+  catalog: readonly TaskFollowUp[],
 ): TaskSuggestionsContext | null {
   const agent = ctx.repos.agents.getById(session.agentId);
   if (!agent) return null;
@@ -256,6 +186,8 @@ function buildSelectionContext(
       : null,
   });
 
+  const messages = ctx.repos.messages.listBySession(session.id);
+
   return {
     agent: {
       agentName: agent.name,
@@ -273,8 +205,11 @@ function buildSelectionContext(
       githubRepo: workspace.githubRepo,
       deliveryPhase,
       changeStatus,
+      sessionUsage: measureSessionUsage(messages),
+      analyzeSessionEnabled: getAppSettings(ctx.repos).analyzeSessionEnabled,
+      hasSessionGrade: Boolean(session.grade),
     },
-    catalog: applicableCatalog.map((item) => ({
+    catalog: catalog.map((item) => ({
       id: item.id,
       name: item.name,
       title: item.title,
@@ -289,7 +224,7 @@ function buildSelectionContext(
 
 /**
  * Ask AI to pick follow-ups from the user-managed catalog using agent context
- * + recent assistant messages, then persist and notify.
+ * + recent assistant messages, then persist and notify. Empty when AI fails.
  */
 export async function suggestFollowUpTasks(
   ctx: AppContext,
@@ -298,28 +233,21 @@ export async function suggestFollowUpTasks(
   ensureBuiltInTaskFollowUps(ctx);
   const changeStatus = await gatherTaskSuggestionChangeStatus(ctx, session.agentId);
   const catalog = listEnabledTaskFollowUps(ctx);
-  const applicableCatalog = filterApplicableTaskFollowUps(catalog, changeStatus);
 
   let suggestions: TaskSuggestion[] = [];
-  const selectionContext = buildSelectionContext(ctx, session, changeStatus, applicableCatalog);
+  const selectionContext = buildSelectionContext(ctx, session, changeStatus, catalog);
   if (
     selectionContext &&
-    applicableCatalog.length > 0 &&
+    catalog.length > 0 &&
     typeof ctx.anthropic.selectTaskFollowUps === 'function'
   ) {
     try {
       const selectedIds = await ctx.anthropic.selectTaskFollowUps(selectionContext);
-      suggestions = mapFollowUpIdsToSuggestions(selectedIds, applicableCatalog, changeStatus);
+      suggestions = mapFollowUpIdsToSuggestions(selectedIds, catalog);
     } catch (error) {
       console.warn(`[task-suggestions] LLM selection failed for session ${session.id}:`, error);
     }
   }
-
-  if (suggestions.length === 0) {
-    suggestions = fallbackSuggestions(changeStatus, catalog);
-  }
-
-  suggestions = ensureGradeSessionSuggestion(ctx, session, catalog, suggestions);
 
   const offer: TaskSuggestionsOffer = { sessionId: session.id, suggestions };
   setTaskSuggestionsOffer(ctx, session.agentId, offer);
