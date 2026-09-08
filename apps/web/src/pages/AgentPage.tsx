@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, CircularProgress, Paper, Stack, Tab, Tabs } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -10,6 +10,8 @@ import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
+import type { ChatTemplateKickoffRequest } from '../components/chat/useChatTemplateKickoff';
+import type { AgentPrKickoffTemplate } from '../components/agent/agentPrStatusSummary';
 import { AgentPageHeader } from './AgentPageHeader';
 import { CommitChangesDialog } from './CommitChangesDialog';
 import { CreatePullRequestDialog } from './CreatePullRequestDialog';
@@ -37,6 +39,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [focusAttention] = useState(() => locationState?.focusAttention);
   const [focusSessionId] = useState(() => locationState?.sessionId);
   const [tab, setTab] = useState(0);
+  const [prKickoff, setPrKickoff] = useState<ChatTemplateKickoffRequest | null>(null);
+  const prKickoffNonce = useRef(0);
   const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
   const [prOpen, setPrOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -146,6 +150,11 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         onStop={() => stopMutation.mutate()}
         onCommit={openCommitDialog}
         onCreateDraftPr={openCreateDraftPr}
+        onStartPrKickoff={(template: AgentPrKickoffTemplate) => {
+          prKickoffNonce.current += 1;
+          setPrKickoff({ template, nonce: prKickoffNonce.current });
+          setTab(0);
+        }}
       />
 
       {stopMutation.error && (
@@ -211,6 +220,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             initialTemplate={initialTemplate}
             focusAttention={focusAttention}
             focusSessionId={focusSessionId}
+            templateKickoff={prKickoff}
             onCommitAndPush={() => openCommitDialog({ push: true, hasPendingChanges: true })}
           />
         </Box>

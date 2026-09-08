@@ -66,6 +66,7 @@ describe('buildAgentPrStatusSummary', () => {
     expect(model.mergeLabel).toBe('Ready to merge');
     expect(model.mergeTone).toBe('success');
     expect(model.conflicted).toBe(false);
+    expect(model.kickoffs).toEqual([]);
   });
 
   it('surfaces conflicts over checks tone', () => {
@@ -76,6 +77,30 @@ describe('buildAgentPrStatusSummary', () => {
     expect(model.conflicted).toBe(true);
     expect(model.mergeLabel).toBe('Conflicts');
     expect(model.checksTone).toBe('error');
+    expect(model.kickoffs).toEqual(['resolve-conflicts']);
+  });
+
+  it('offers Fix CI and Address review from checks and comments', () => {
+    const model = buildAgentPrStatusSummary({
+      pr: basePr({ reviewCommentCount: 2 }),
+      checks: checks({ rollup: 'failure', failing: 1, passing: 2 }),
+    });
+    expect(model.kickoffs).toEqual(['fix-ci', 'address-review']);
+  });
+
+  it('hides kickoffs while that template is running or the agent is archived', () => {
+    const busy = buildAgentPrStatusSummary({
+      pr: basePr({ mergeable: false, mergeableState: 'dirty', reviewCommentCount: 1 }),
+      checks: checks({ rollup: 'failure', failing: 2, passing: 0 }),
+      sessions: [{ template: 'resolve-conflicts', status: 'running' }],
+    });
+    expect(busy.kickoffs).toEqual(['fix-ci', 'address-review']);
+
+    const archived = buildAgentPrStatusSummary({
+      pr: basePr({ mergeable: false, mergeableState: 'dirty' }),
+      archived: true,
+    });
+    expect(archived.kickoffs).toEqual([]);
   });
 
   it('labels draft PRs without ready-to-merge', () => {
