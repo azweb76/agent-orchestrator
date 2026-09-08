@@ -129,6 +129,43 @@ test('buildInstructionOfferSeed clusters lookback grades from the repository', a
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-skill-gap-'));
   const db = initDatabase(tmp);
   const repos = createRepositories(db);
+  repos.workspaces.create({
+    id: 'ws-1',
+    name: 'demo',
+    repoUrl: 'https://github.com/example/demo',
+    repoPath: tmp,
+    defaultBranch: 'main',
+    githubOwner: 'example',
+    githubRepo: 'demo',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+  repos.worktrees.create({
+    id: 'wt-1',
+    workspaceId: 'ws-1',
+    name: 'feat',
+    path: tmp,
+    branch: 'feat',
+    prNumber: null,
+    prTitle: null,
+    baseBranch: 'main',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+  repos.agents.create({
+    id: 'ag-1',
+    worktreeId: 'wt-1',
+    name: 'Agent',
+    status: 'idle',
+    model: 'sonnet',
+    effort: 'high',
+    permissionMode: 'plan',
+    claudeSessionId: null,
+    pid: null,
+    runLogPath: null,
+    activeSessionId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    archivedAt: null,
+  });
   const gap = finding({ title: 'Never ran tests', detail: 'No vitest run.' });
   const s1 = gradedSession('sess-a', 'build', [gap]);
   const s2 = gradedSession('sess-b', 'fix-ci', [gap]);
