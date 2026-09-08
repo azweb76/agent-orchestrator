@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -71,10 +71,21 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
     enabled: Boolean(agentId) && enabled,
   });
 
+  const [copiedPath, setCopiedPath] = useState(false);
   const hasPatch = Boolean(diffQuery.data?.patch);
   const showCommitActions =
     !archived && diffScope === 'pending' && hasPatch && (onCommit || onCommitAndPush);
   const empty = emptyCopy(diffScope);
+
+  const copyWorktreePath = async () => {
+    try {
+      await navigator.clipboard.writeText(worktreePath);
+      setCopiedPath(true);
+      window.setTimeout(() => setCopiedPath(false), 1500);
+    } catch {
+      setCopiedPath(false);
+    }
+  };
 
   return (
     <Stack spacing={1} sx={{ height: '100%', minHeight: 0, p: { xs: 1.25, md: 1 } }}>
@@ -119,8 +130,12 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
         </ToggleButtonGroup>
 
         <Stack direction="row" spacing={0.15} sx={{ alignItems: 'center', flexShrink: 0 }}>
-          <ControlTooltip title={worktreePath}>
-            <IconButton size="small" aria-label="Worktree path" tabIndex={-1}>
+          <ControlTooltip title={copiedPath ? 'Copied' : `Copy ${worktreePath}`}>
+            <IconButton
+              size="small"
+              aria-label="Copy worktree path"
+              onClick={() => void copyWorktreePath()}
+            >
               <FolderOpenOutlinedIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </ControlTooltip>
