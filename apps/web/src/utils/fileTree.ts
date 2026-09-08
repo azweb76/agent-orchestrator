@@ -1,31 +1,31 @@
 import type { DiffFile } from './parseUnifiedDiff';
 
-interface FileTreeFileNode {
+interface FileTreeFileNode<T> {
   type: 'file';
   name: string;
   path: string;
-  file: DiffFile;
+  file: T;
 }
 
-export interface FileTreeDirNode {
+export interface FileTreeDirNode<T = DiffFile> {
   type: 'dir';
   name: string;
   path: string;
-  children: FileTreeNode[];
+  children: FileTreeNode<T>[];
 }
 
-export type FileTreeNode = FileTreeFileNode | FileTreeDirNode;
+export type FileTreeNode<T = DiffFile> = FileTreeFileNode<T> | FileTreeDirNode<T>;
 
-/** Build a nested directory tree from flat diff file paths. */
-export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
-  const root: FileTreeDirNode = { type: 'dir', name: '', path: '', children: [] };
+/** Build a nested directory tree from flat file paths. */
+export function buildFileTree<T extends { path: string }>(files: T[]): FileTreeNode<T>[] {
+  const root: FileTreeDirNode<T> = { type: 'dir', name: '', path: '', children: [] };
 
-  const ensureDir = (parent: FileTreeDirNode, name: string, path: string): FileTreeDirNode => {
+  const ensureDir = (parent: FileTreeDirNode<T>, name: string, path: string): FileTreeDirNode<T> => {
     const existing = parent.children.find(
-      (child): child is FileTreeDirNode => child.type === 'dir' && child.name === name,
+      (child): child is FileTreeDirNode<T> => child.type === 'dir' && child.name === name,
     );
     if (existing) return existing;
-    const dir: FileTreeDirNode = { type: 'dir', name, path, children: [] };
+    const dir: FileTreeDirNode<T> = { type: 'dir', name, path, children: [] };
     parent.children.push(dir);
     return dir;
   };
@@ -43,7 +43,7 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
     current.children.push({ type: 'file', name, path: file.path, file });
   }
 
-  const sortNodes = (nodes: FileTreeNode[]): FileTreeNode[] => {
+  const sortNodes = (nodes: FileTreeNode<T>[]): FileTreeNode<T>[] => {
     nodes.sort((a, b) => {
       if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
       return a.name.localeCompare(b.name);
@@ -58,9 +58,9 @@ export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
 }
 
 /** Collect every directory path that should start expanded. */
-export function defaultExpandedDirs(nodes: FileTreeNode[], maxDepth = 2): string[] {
+export function defaultExpandedDirs<T>(nodes: FileTreeNode<T>[], maxDepth = 2): string[] {
   const expanded: string[] = [];
-  const walk = (list: FileTreeNode[], depth: number) => {
+  const walk = (list: FileTreeNode<T>[], depth: number) => {
     for (const node of list) {
       if (node.type !== 'dir') continue;
       if (depth < maxDepth) expanded.push(node.path);
@@ -72,9 +72,9 @@ export function defaultExpandedDirs(nodes: FileTreeNode[], maxDepth = 2): string
 }
 
 /** Collect every directory path in the tree (for expand-all). */
-export function allDirPaths(nodes: FileTreeNode[]): string[] {
+export function allDirPaths<T>(nodes: FileTreeNode<T>[]): string[] {
   const paths: string[] = [];
-  const walk = (list: FileTreeNode[]) => {
+  const walk = (list: FileTreeNode<T>[]) => {
     for (const node of list) {
       if (node.type !== 'dir') continue;
       paths.push(node.path);

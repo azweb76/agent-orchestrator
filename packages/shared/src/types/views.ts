@@ -6,7 +6,7 @@ import type { Agent, Worktree, Workspace } from './entities.js';
 import type { PrStatusSnapshot } from './github.js';
 
 /** Diff view scope for an agent's worktree. */
-export type AgentDiffScope = 'pending' | 'unpushed' | 'pr';
+export type AgentDiffScope = 'pending' | 'unpushed' | 'branch';
 
 export interface AgentDiff {
   stat: string;
@@ -14,6 +14,16 @@ export interface AgentDiff {
   /** Absolute worktree path on the server. */
   path: string;
   scope: AgentDiffScope;
+}
+
+/** One worktree file's contents for the agent Files browser. */
+export interface WorktreeFileContent {
+  path: string;
+  content: string;
+  /** Byte size on disk, before any truncation. */
+  size: number;
+  truncated: boolean;
+  binary: boolean;
 }
 
 export interface WorkspaceWithCounts extends Workspace {
@@ -159,6 +169,14 @@ export interface UsageSummary {
   agents: AgentUsage[];
   /** Spend cap snapshot for dashboard hints. */
   budget: SpendBudgetStatus;
+}
+
+/** One immediate child of a worktree directory, for lazy tree expansion. */
+export interface WorktreeDirEntry {
+  name: string;
+  /** Worktree-relative path, POSIX separators. */
+  path: string;
+  type: 'file' | 'dir';
 }
 
 /** Whether a live Claude Code process is managed by this orchestrator. */

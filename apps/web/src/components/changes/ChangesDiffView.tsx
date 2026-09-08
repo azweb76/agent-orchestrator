@@ -26,6 +26,7 @@ import {
 } from '../../utils/fileTree';
 import { parseUnifiedDiff, type DiffFile } from '../../utils/parseUnifiedDiff';
 import { ChangesFileTree } from './ChangesFileTree';
+import { DiffFileMeta } from './DiffFileMeta';
 import { truncatePatch, MAX_DIFF_PREVIEW_LINES } from './diffPreview';
 import {
   discardPathsForFile,
@@ -266,6 +267,7 @@ export function ChangesDiffView({ patch, onUndoFiles }: ChangesDiffViewProps) {
                 selectedToUndo={selectedToUndo}
                 onToggleFile={toggleFileSelect}
                 onToggleDirFiles={toggleDirFiles}
+                renderMeta={(file) => <DiffFileMeta file={file} />}
               />
             </Box>
           )}

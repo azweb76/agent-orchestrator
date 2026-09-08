@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, CircularProgress, Paper, Stack, Tab, Tabs } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../api/client';
 import { useSseConnectionState } from '../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../api/ssePolling';
 import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { UndoFilesDialog } from '../components/changes/UndoFilesDialog';
+import type { FilesViewMode } from '../components/changes/filesViewMode';
 import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import type { ChatTemplateKickoffRequest } from '../components/chat/useChatTemplateKickoff';
@@ -42,7 +42,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [tab, setTab] = useState(0);
   const [prKickoff, setPrKickoff] = useState<ChatTemplateKickoffRequest | null>(null);
   const prKickoffNonce = useRef(0);
-  const [diffScope, setDiffScope] = useState<AgentDiffScope>('pending');
+  const [mode, setMode] = useState<FilesViewMode>('pending');
   const [prOpen, setPrOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [commitOpen, setCommitOpen] = useState(false);
@@ -199,7 +199,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         >
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
           <Tab
-            label={pendingFileCount > 0 ? `Changes (${pendingFileCount})` : 'Changes'}
+            label={pendingFileCount > 0 ? `Files (${pendingFileCount})` : 'Files'}
             sx={{ minHeight: 40, py: 1 }}
           />
           <Tab label="Memory" sx={{ minHeight: 40, py: 1 }} />
@@ -240,8 +240,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           <AgentChangesPanel
             agentId={agentId}
             worktreePath={agent.worktree.path}
-            diffScope={diffScope}
-            onDiffScopeChange={setDiffScope}
+            mode={mode}
+            onModeChange={setMode}
             enabled={tab === 1}
             archived={archived}
             onCommit={() => openCommitDialog({ push: false, hasPendingChanges: true })}

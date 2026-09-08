@@ -12,18 +12,20 @@ import CommitOutlinedIcon from '@mui/icons-material/CommitOutlined';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import UploadOutlinedIcon from '@mui/icons-material/UploadOutlined';
-import { useQuery } from '@tanstack/react-query';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AgentDiffScope } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ChangesDiffView } from './ChangesDiffView';
+import { WorktreeFilesView } from './WorktreeFilesView';
+import { isDiffScope, type FilesViewMode } from './filesViewMode';
 
 export interface AgentChangesPanelProps {
   agentId: string;
   worktreePath: string;
-  diffScope: AgentDiffScope;
-  onDiffScopeChange: (scope: AgentDiffScope) => void;
+  mode: FilesViewMode;
+  onModeChange: (mode: FilesViewMode) => void;
   enabled?: boolean;
   archived?: boolean;
   onCommit?: () => void;
@@ -37,7 +39,7 @@ function emptyCopy(scope: AgentDiffScope): { title: string; description: string 
       return {
         title: 'No uncommitted changes',
         description:
-          'The working tree matches HEAD. Switch to Unpushed or PR to review commits on this branch.',
+          'The working tree matches HEAD. Switch to Unpushed or Branch to review commits on this branch.',
       };
     case 'unpushed':
       return {
@@ -45,37 +47,54 @@ function emptyCopy(scope: AgentDiffScope): { title: string; description: string 
         description:
           'HEAD matches the upstream branch, or no upstream is set yet. Push once to establish tracking.',
       };
-    case 'pr':
+    case 'branch':
       return {
-        title: 'No PR changes',
+        title: 'No branch changes',
         description: 'No differences from the base branch.',
       };
   }
 }
 
-/** Diff viewer for an agent worktree: uncommitted, unpushed, or PR-scoped. */
+/** Files viewer for an agent worktree: uncommitted, unpushed, branch diffs, or all files. */
 export const AgentChangesPanel = memo(function AgentChangesPanel({
   agentId,
   worktreePath,
-  diffScope,
-  onDiffScopeChange,
+  mode,
+  onModeChange,
   enabled = true,
   archived = false,
   onCommit,
   onCommitAndPush,
   onUndoFiles,
 }: AgentChangesPanelProps) {
+  const scope: AgentDiffScope = isDiffScope(mode) ? mode : 'pending';
   const diffQuery = useQuery({
-    queryKey: ['diff', agentId, diffScope],
-    queryFn: () => api.getDiff(agentId, diffScope),
-    enabled: Boolean(agentId) && enabled,
+    queryKey: ['diff', agentId, scope],
+    queryFn: () => api.getDiff(agentId, scope),
+    enabled: Boolean(agentId) && enabled && isDiffScope(mode),
   });
+  const queryClient = useQueryClient();
+  const filesFetching =
+    useIsFetching({ queryKey: ['mention-files', agentId] }) +
+      useIsFetching({ queryKey: ['worktree-dir', agentId] }) >
+    0;
 
   const [copiedPath, setCopiedPath] = useState(false);
   const hasPatch = Boolean(diffQuery.data?.patch);
   const showCommitActions =
-    !archived && diffScope === 'pending' && hasPatch && (onCommit || onCommitAndPush);
-  const empty = emptyCopy(diffScope);
+    !archived && mode === 'pending' && hasPatch && (onCommit || onCommitAndPush);
+  const empty = emptyCopy(scope);
+  const refreshing = mode === 'all' ? filesFetching : diffQuery.isFetching;
+
+  const refresh = () => {
+    if (mode === 'all') {
+      void queryClient.invalidateQueries({ queryKey: ['mention-files', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['worktree-dir', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['worktree-file', agentId] });
+      return;
+    }
+    void diffQuery.refetch();
+  };
 
   const copyWorktreePath = async () => {
     try {
@@ -103,11 +122,11 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
         <ToggleButtonGroup
           size="small"
           exclusive
-          value={diffScope}
-          onChange={(_, value: AgentDiffScope | null) => {
-            if (value) onDiffScopeChange(value);
+          value={mode}
+          onChange={(_, value: FilesViewMode | null) => {
+            if (value) onModeChange(value);
           }}
-          aria-label="Change scope"
+          aria-label="Files view mode"
           sx={{
             '& .MuiToggleButton-root': {
               px: 1.1,
@@ -124,8 +143,11 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
           <ToggleButton value="unpushed" title="Local commits not yet on the upstream branch">
             Unpushed
           </ToggleButton>
-          <ToggleButton value="pr" title="All changes on this branch compared to the base branch">
-            PR
+          <ToggleButton value="branch" title="All changes on this branch compared to the base branch">
+            Branch
+          </ToggleButton>
+          <ToggleButton value="all" title="Browse every file in the worktree">
+            All
           </ToggleButton>
         </ToggleButtonGroup>
 
@@ -162,12 +184,15 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
               ) : null}
             </>
           ) : null}
-          <ControlTooltip title="Reload the diff" disabled={diffQuery.isFetching}>
+          <ControlTooltip
+            title={mode === 'all' ? 'Reload the file list' : 'Reload the diff'}
+            disabled={refreshing}
+          >
             <IconButton
               size="small"
               aria-label="Refresh changes"
-              onClick={() => diffQuery.refetch()}
-              disabled={diffQuery.isFetching}
+              onClick={refresh}
+              disabled={refreshing}
             >
               <RefreshIcon fontSize="small" />
             </IconButton>
@@ -175,7 +200,9 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
         </Stack>
       </Stack>
 
-      {diffQuery.isLoading ? (
+      {mode === 'all' ? (
+        <WorktreeFilesView agentId={agentId} />
+      ) : diffQuery.isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={28} />
         </Box>
@@ -186,9 +213,7 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
       ) : (
         <ChangesDiffView
           patch={diffQuery.data.patch}
-          onUndoFiles={
-            !archived && diffScope === 'pending' && onUndoFiles ? onUndoFiles : undefined
-          }
+          onUndoFiles={!archived && mode === 'pending' && onUndoFiles ? onUndoFiles : undefined}
         />
       )}
     </Stack>
