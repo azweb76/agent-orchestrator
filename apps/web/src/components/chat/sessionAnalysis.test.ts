@@ -78,6 +78,18 @@ describe('findingImproveLabel', () => {
       }),
     ).toBe('Draft personal skill');
   });
+
+  it('labels CLAUDE.md and AGENTS.md actions', () => {
+    expect(
+      findingImproveLabel({
+        category: 'instruction_files',
+        severity: 'warning',
+        title: 'x',
+        detail: 'y',
+        recommendedAction: { kind: 'claude_md' },
+      }),
+    ).toBe('Update CLAUDE.md');
+  });
 });
 
 describe('instructionDraftOfferBannerBody', () => {

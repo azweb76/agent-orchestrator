@@ -92,6 +92,7 @@ describe('session grade analysis', () => {
     assert.equal(context.stats.skillCount, 2);
     assert.ok(context.stats.estimatedTokens > 1000);
     assert.deepEqual(context.usedSkills, ['/retry-tests']);
+    assert.ok(context.skippedSkills.includes('/code-review'));
     assert.deepEqual(context.tools, [
       { name: 'Read', count: 2 },
       { name: 'Skill', count: 1 },
@@ -128,9 +129,14 @@ describe('session grade analysis', () => {
     assert.match(system, /fewer corrections/i);
     assert.match(system, /personal/i);
     assert.match(system, /largest context bucket/i);
+    assert.match(system, /skipped/i);
+    assert.match(system, /corrections/i);
+    assert.match(system, /kebab-case/i);
     assert.match(user, /Be strict about tests/);
     assert.match(user, /CLAUDE.md/);
     assert.match(user, /\/retry-tests/);
+    assert.match(user, /skippedSkills/);
+    assert.match(user, /\/code-review/);
     assert.match(user, /Add retry logic/);
     assert.match(system, /submit_session_grade/);
   });
@@ -306,6 +312,41 @@ describe('session grade analysis', () => {
     assert.deepEqual(
       parsed.findings.find((item) => item.category === 'instruction_files')?.recommendedAction,
       { kind: 'claude_md' },
+    );
+  });
+
+  it('grounds invented skill names onto listed skills', () => {
+    const parsed = parseSessionGradeResponse(
+      JSON.stringify({
+        score: 2,
+        summary: 'Skipped code-review.',
+        findings: [
+          {
+            category: 'skills',
+            severity: 'issue',
+            title: 'Ignored review skill',
+            detail: 'Never invoked /code-review.',
+            action: { kind: 'skill', scope: 'personal', name: 'Code Review Helper', operation: 'create' },
+          },
+        ],
+      }),
+      {
+        userTurns: 1,
+        assistantTurns: 1,
+        estimatedTokens: 10,
+        costUsd: null,
+        toolCalls: 0,
+        instructionFileCount: 0,
+        skillCount: 1,
+      },
+      {
+        availableSkills: [{ command: '/code-review', description: 'Review the diff' }],
+        skippedSkills: ['/code-review'],
+      },
+    );
+    assert.deepEqual(
+      parsed.findings.find((item) => item.category === 'skills')?.recommendedAction,
+      { kind: 'skill', scope: 'personal', name: 'code-review', operation: 'update' },
     );
   });
 

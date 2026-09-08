@@ -203,6 +203,8 @@ export async function gradeAgentSession(
     costUsd: fileCostUsd,
     sessionTemplate: session.template,
     contextAttribution,
+    events: ctx.repos.events.listByAgent(agentId),
+    sessionId: session.id,
   });
   if (!context.transcript) {
     context.transcript = storedTranscript;

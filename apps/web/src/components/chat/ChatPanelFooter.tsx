@@ -1,6 +1,7 @@
 import { Alert, Box, Button } from '@mui/material';
 import { useQuery, type UseMutationResult } from '@tanstack/react-query';
 import type { AgentDetail, ChatSession, EffortLevel, InstructionDraftOffer, TaskSuggestion } from '@agent-orchestrator/shared';
+import { shouldOfferInstructionDraft } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
 import { ControlTooltip } from '../ui/ControlTooltip';
@@ -206,6 +207,10 @@ export function ChatPanelFooter({
           grade={session?.grade}
           canGrade={Boolean(settings?.analyzeSessionEnabled) && (displayMessageCount > 0 || Boolean(session?.grade))}
           onGrade={onGradeOpen}
+          hasDraftOffer={
+            agent?.instructionDraftOffer?.sessionId === activeSessionId ||
+            Boolean(session && shouldOfferInstructionDraft(session))
+          }
           onRemoveQueued={onRemoveQueued}
         />
       </Box>

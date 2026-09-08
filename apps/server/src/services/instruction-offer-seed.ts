@@ -29,7 +29,7 @@ function baseSeedFromFindings(
   findings: SessionGradeFinding[],
 ): InstructionOfferSeed {
   const findingTitles = findings.map((item) => item.title).filter(Boolean);
-  const withAction = findings.find((item) => item.recommendedAction?.kind);
+  const withAction = pickOfferFinding(findings);
   const kind = withAction?.recommendedAction?.kind ?? 'skill';
   const explicitScope = withAction?.recommendedAction?.scope;
   const extraNotes = findings
@@ -61,6 +61,29 @@ function baseSeedFromFindings(
     name: kind === 'skill' ? skillName : undefined,
     preferredSkillSlug: kind === 'skill' ? skillName : undefined,
   };
+}
+
+/** Prefer skills / instruction-file findings whose action kind matches the category. */
+export function pickOfferFinding(
+  findings: SessionGradeFinding[],
+): SessionGradeFinding | undefined {
+  const actionable = findings.filter((item) => item.severity !== 'ok');
+  const skillsMatch = actionable.find(
+    (item) => item.category === 'skills' && item.recommendedAction?.kind === 'skill',
+  );
+  const fileMatch = actionable.find(
+    (item) =>
+      item.category === 'instruction_files' &&
+      (item.recommendedAction?.kind === 'claude_md' ||
+        item.recommendedAction?.kind === 'agents_md'),
+  );
+  return (
+    skillsMatch ??
+    fileMatch ??
+    actionable.find((item) => item.category === 'skills') ??
+    actionable.find((item) => item.category === 'instruction_files') ??
+    actionable.find((item) => item.recommendedAction?.kind)
+  );
 }
 
 /** Replace N one-off drafts with one personal skill covering the repeated gap. */

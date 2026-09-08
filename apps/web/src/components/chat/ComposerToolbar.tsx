@@ -48,6 +48,7 @@ interface ComposerToolbarProps {
   onStop: () => void;
   onClear: () => void;
   onGrade?: (tab?: SessionInsightsTab) => void;
+  hasDraftOffer?: boolean;
   onAddFiles: (files: FileList | File[]) => void;
   onSubmit: (force: boolean) => void;
 }
@@ -69,6 +70,7 @@ export function ComposerToolbar({
   onStop,
   onClear,
   onGrade,
+  hasDraftOffer,
   onAddFiles,
   onSubmit,
 }: ComposerToolbarProps) {
@@ -169,6 +171,7 @@ export function ComposerToolbar({
           isStreaming={isStreaming}
           grade={grade}
           canAnalyze={canGrade}
+          hasDraftOffer={hasDraftOffer}
           onOpen={(tab) => onGrade?.(tab)}
         />
       ) : null}

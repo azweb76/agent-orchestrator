@@ -47,6 +47,7 @@ async function readSkillFromDir(
       description: meta.description || `Skill: ${command.slice(1)}`,
       kind: 'skill',
       source,
+      charCount: markdown.length,
     };
   } catch {
     return null;
@@ -72,6 +73,7 @@ async function readCommandFile(
       description: meta.description || firstLine?.replace(/^#+\s*/, '').slice(0, 120) || `Command: ${command.slice(1)}`,
       kind: 'skill',
       source,
+      charCount: markdown.length,
     };
   } catch {
     return null;

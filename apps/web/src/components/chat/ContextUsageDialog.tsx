@@ -14,6 +14,7 @@ interface ContextUsageButtonProps {
   isStreaming?: boolean;
   grade?: SessionGrade | null;
   canAnalyze?: boolean;
+  hasDraftOffer?: boolean;
   onOpen: (tab: SessionInsightsTab) => void;
 }
 
@@ -23,6 +24,7 @@ export function ContextUsageButton({
   isStreaming,
   grade,
   canAnalyze,
+  hasDraftOffer,
   onOpen,
 }: ContextUsageButtonProps) {
   const theme = useTheme();
@@ -67,7 +69,8 @@ export function ContextUsageButton({
     : canAnalyze
       ? 'Analyze this session'
       : null;
-  const tooltip = analysisHint ? `${usageHint} · ${analysisHint}` : usageHint;
+  const offerHint = hasDraftOffer ? 'Skill draft waiting' : null;
+  const tooltip = [usageHint, analysisHint, offerHint].filter(Boolean).join(' · ');
 
   return (
     <ControlTooltip title={tooltip} disabled={!sessionId}>
@@ -76,8 +79,8 @@ export function ContextUsageButton({
         color={color}
         variant="text"
         disabled={!sessionId}
-        onClick={() => onOpen(canAnalyze && grade ? 'analysis' : 'context')}
-        aria-label={`Session insights ${label}${grade ? ` graded ${grade.score} of 5` : ''}`}
+        onClick={() => onOpen(hasDraftOffer || (canAnalyze && grade) ? 'analysis' : 'context')}
+        aria-label={`Session insights ${label}${grade ? ` graded ${grade.score} of 5` : ''}${hasDraftOffer ? ' skill draft waiting' : ''}`}
         sx={{
           minWidth: 0,
           px: 0.75,
@@ -106,6 +109,19 @@ export function ContextUsageButton({
             <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary' }}>
               {grade.score}/5
             </Box>
+          ) : null}
+          {hasDraftOffer ? (
+            <Box
+              component="span"
+              aria-hidden
+              sx={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                bgcolor: 'info.main',
+                flexShrink: 0,
+              }}
+            />
           ) : null}
         </Stack>
       </Button>

@@ -79,7 +79,7 @@ function stubAnthropic(options: {
     summarizeSessionForContinuation: async (input: { title: string; transcript: string }) => {
       options.summaries.push(input);
       if (options.fail) throw new Error('summarizer unavailable');
-      return options.summary ?? 'Summary of prior work.';
+  return options.summary ?? 'Summary of prior work.\n\n## Durable lessons\n- Prefer /plan-work before exploring';
     },
   } as unknown as AnthropicService;
 }
@@ -219,6 +219,8 @@ test('compact-and-continue stashes the session and seeds a continuation', async 
     assert.equal(runs[0]!.permissionMode, 'acceptEdits');
     assert.match(runs[0]!.prompt, /## Session summary/);
     assert.match(runs[0]!.prompt, /Summary of prior work\./);
+    assert.match(runs[0]!.prompt, /## Durable lessons/);
+    assert.match(runs[0]!.prompt, /Prefer \/plan-work before exploring/);
     assert.match(runs[0]!.prompt, /## Files in play/);
     assert.match(runs[0]!.prompt, /src\/auth\/login\.ts/);
 
@@ -234,6 +236,11 @@ test('compact-and-continue stashes the session and seeds a continuation', async 
     assert.ok(event);
     assert.equal(event.data.stashedSessionId, 'hot-sess');
     assert.equal(event.data.sessionId, continuation.id);
+    assert.equal(event.data.lessonCount, 1);
+
+    const offer = ctx.repos.automationState.get(`instruction-draft.offer:${agent.id}`);
+    assert.ok(offer);
+    assert.match(offer, /plan-work/);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
