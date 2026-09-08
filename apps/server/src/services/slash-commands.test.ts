@@ -39,6 +39,12 @@ Ship it.
     if (tmpRoot) await fs.rm(tmpRoot, { recursive: true, force: true });
   });
 
+  it('does not seed phase skills into the worktree', async () => {
+    await discoverSlashCommands(tmpRoot);
+    const skillDirs = await fs.readdir(path.join(tmpRoot, '.claude', 'skills'));
+    assert.deepEqual(skillDirs, ['deploy']);
+  });
+
   it('discovers project skills and commands plus local /clear and /rewind', async () => {
     const commands = await discoverSlashCommands(tmpRoot);
     const names = commands.map((c) => c.command);

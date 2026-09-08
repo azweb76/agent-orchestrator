@@ -11,7 +11,7 @@ export interface SkillEfficiencyStats {
   toolCalls: number;
 }
 
-/** Built-in orchestrator phase skills seeded into each worktree. */
+/** Built-in orchestrator phase skills (offered as bundled slash commands; not auto-copied into worktrees). */
 export const PHASE_SKILL_SLUGS = [
   'plan-work',
   'implement-plan',

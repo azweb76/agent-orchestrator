@@ -17,7 +17,6 @@ import {
 import { fallbackTitleFromPrompt, sanitizeChatTitle } from './anthropic.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { refreshSessionSearchIndex, touchSessionSearchTitle } from './session-search-index.js';
-import { ensureBuiltInPhaseSkills } from './phase-skills.js';
 
 export async function createAgentForWorktree(
   ctx: AppContext,
@@ -33,11 +32,6 @@ export async function createAgentForWorktree(
   const existing = ctx.repos.agents.getByWorktreeId(worktreeId);
   if (existing) {
     throw new Error('This worktree already has an active agent');
-  }
-
-  const worktree = ctx.repos.worktrees.getById(worktreeId);
-  if (worktree?.path) {
-    await ensureBuiltInPhaseSkills(worktree.path);
   }
 
   const task = options?.task;

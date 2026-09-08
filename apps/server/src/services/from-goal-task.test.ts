@@ -65,6 +65,24 @@ function seedWorktree(ctx: AppContext): string {
   return worktreeId;
 }
 
+test('createAgentForWorktree does not write files into the worktree', async () => {
+  const { ctx, cleanup } = tempCtx();
+  try {
+    const worktreeId = seedWorktree(ctx);
+    const worktree = ctx.repos.worktrees.getById(worktreeId)!;
+    fs.mkdirSync(worktree.path, { recursive: true });
+    fs.writeFileSync(path.join(worktree.path, 'README.md'), 'existing\n');
+
+    await createAgentForWorktree(ctx, worktreeId, 'feature agent');
+
+    const entries = fs.readdirSync(worktree.path);
+    assert.deepEqual(entries, ['README.md']);
+    assert.equal(fs.existsSync(path.join(worktree.path, '.claude')), false);
+  } finally {
+    cleanup();
+  }
+});
+
 test('createAgentForWorktree applies agent task to agent and session', async () => {
   const { ctx, cleanup } = tempCtx();
   try {
