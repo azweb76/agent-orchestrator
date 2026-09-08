@@ -12,11 +12,14 @@ Ideas for a closed loop where every session makes the next one cheaper, faster, 
 - **Compact-and-learn** — Compact & continue extracts durable lessons into the continuation prompt and a human-gated draft offer (never auto-writes files).
 - **Insights chip** — Quiet badge when a skill draft is waiting; click opens Analysis next to the offer banner.
 
+## Already on main
+
+- **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After 3 similar grades, the instruction-draft offer is one personal skill instead of N one-off drafts.
+
 ## Next (high leverage)
 
-1. **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After N similar grades, auto-offer one personal skill instead of N one-off drafts.
-2. **Memory vs skill vs CLAUDE.md routing** — Analysis already has `action.kind`/`scope`; keep tightening the classifier and UI copy so every offer follows the same rules.
-3. **Session comparison** — “This build vs last build on the same skill version”: turns, tokens, cost, tool-call mix. Makes skill edits measurable.
+1. **Memory vs skill vs CLAUDE.md routing** — Analysis already has `action.kind`/`scope`; keep tightening the classifier and UI copy so every offer follows the same rules.
+2. **Session comparison** — “This build vs last build on the same skill version”: turns, tokens, cost, tool-call mix. Makes skill edits measurable.
 
 ## Fleet loop
 

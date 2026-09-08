@@ -74,6 +74,20 @@ export class ChatSessionRepository {
       .map(rowToChatSession);
   }
 
+  /** Newest graded sessions with analysis JSON (for fleet skill-gap clustering). */
+  listRecentlyGraded(limit: number): ChatSession[] {
+    const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 40;
+    return this.db
+      .prepare(
+        `SELECT * FROM chat_sessions
+         WHERE grade_analysis IS NOT NULL AND graded_at IS NOT NULL
+         ORDER BY graded_at DESC
+         LIMIT ?`,
+      )
+      .all(cap)
+      .map(rowToChatSession);
+  }
+
   update(session: ChatSession): ChatSession {
     this.db
       .prepare(

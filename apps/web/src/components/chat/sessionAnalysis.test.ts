@@ -3,6 +3,7 @@ import type { SessionGradeFinding } from '@agent-orchestrator/shared';
 import {
   buildFindingImplementPrompt,
   findingImproveLabel,
+  instructionDraftOfferBannerBody,
   seedImproveFromFinding,
 } from './sessionAnalysis';
 
@@ -88,5 +89,37 @@ describe('findingImproveLabel', () => {
         recommendedAction: { kind: 'claude_md' },
       }),
     ).toBe('Update CLAUDE.md');
+  });
+});
+
+describe('instructionDraftOfferBannerBody', () => {
+  it('mentions a clustered personal skill', () => {
+    const text = instructionDraftOfferBannerBody('Build', 'skills', {
+      sessionId: 's1',
+      gradedAt: '2026-01-01T00:00:00.000Z',
+      findingTitles: ['Never ran tests'],
+      cluster: {
+        key: 'theme:skipped-tests',
+        theme: 'never ran tests',
+        skillSlug: 'always-run-tests',
+        count: 3,
+        sessionIds: ['a', 'b', 'c'],
+      },
+      draft: { kind: 'skill', action: 'create', scope: 'personal', name: 'always-run-tests', description: 'x', relativePath: 'x', content: 'x', rationale: 'x' },
+    });
+    expect(text).toMatch(/repeated skill gap \(never ran tests\)/);
+    expect(text).toMatch(/3 sessions/);
+    expect(text).toMatch(/personal skill draft/);
+    expect(text).toMatch(/draft ready/);
+  });
+
+  it('falls back to the per-session copy', () => {
+    const text = instructionDraftOfferBannerBody('Fix CI', 'skills and instruction files', {
+      sessionId: 's1',
+      gradedAt: '2026-01-01T00:00:00.000Z',
+      findingTitles: ['Weak skill'],
+    });
+    expect(text).toMatch(/Fix CI session grade flagged skills and instruction files/);
+    expect(text).not.toMatch(/repeated skill gap/);
   });
 });

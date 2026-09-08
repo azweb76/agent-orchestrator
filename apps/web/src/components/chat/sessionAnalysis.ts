@@ -1,6 +1,7 @@
 import {
   SESSION_GRADE_FINDING_LABELS,
   resolveInstructionScope,
+  type InstructionDraftOffer,
   type InstructionFileKind,
   type InstructionFileScope,
   type SessionGradeFinding,
@@ -64,4 +65,23 @@ export function findingImproveLabel(finding: SessionGradeFinding): string {
     return personal ? 'Update personal skill' : 'Update project skill';
   }
   return personal ? 'Draft personal skill' : 'Draft project skill';
+}
+
+/** Chat banner copy for a persisted or derived instruction-draft offer. */
+export function instructionDraftOfferBannerBody(
+  templateTitle: string,
+  labels: string,
+  offer?: InstructionDraftOffer | null,
+): string {
+  const draft = offer?.draft ? ' (draft ready)' : '';
+  if (offer?.cluster && offer.cluster.count >= 2) {
+    return (
+      `The ${templateTitle} session grade flagged a repeated skill gap (${offer.cluster.theme}) ` +
+      `in ${offer.cluster.count} sessions. Review one personal skill draft instead of a one-off${draft}?`
+    );
+  }
+  return (
+    `The ${templateTitle} session grade flagged ${labels || 'instruction gaps'}. ` +
+    `Review and apply an instruction draft to fold the lessons into this repo${draft}?`
+  );
 }

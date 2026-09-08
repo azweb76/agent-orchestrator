@@ -3,8 +3,11 @@ import type {
   InstructionFileKind,
   InstructionFileScope,
   SessionGradeFinding,
+  SkillGapCluster,
 } from '@agent-orchestrator/shared';
 import {
+  findSkillGapCluster,
+  instructionGradeFindings,
   phaseSkillForTemplate,
   phaseSkillRelativePath,
   resolveInstructionScope,
@@ -18,10 +21,10 @@ export interface InstructionOfferSeed {
   preferredSkillSlug?: string;
   relativePath?: string;
   name?: string;
+  cluster?: SkillGapCluster | null;
 }
 
-/** Route grade findings to a phase skill when the session template maps to one. */
-export function seedInstructionOfferFromFindings(
+function baseSeedFromFindings(
   session: Pick<ChatSession, 'template'>,
   findings: SessionGradeFinding[],
 ): InstructionOfferSeed {
@@ -81,4 +84,58 @@ export function pickOfferFinding(
     actionable.find((item) => item.category === 'instruction_files') ??
     actionable.find((item) => item.recommendedAction?.kind)
   );
+}
+
+/** Replace N one-off drafts with one personal skill covering the repeated gap. */
+export function applySkillGapCluster(
+  seed: InstructionOfferSeed,
+  cluster: SkillGapCluster,
+): InstructionOfferSeed {
+  const titles = [
+    `Repeated across ${cluster.count} sessions: ${cluster.theme}`,
+    ...cluster.titles.filter((title) => title !== cluster.theme),
+  ];
+  const extraNotes = [
+    `Repeated skill gap (${cluster.count} sessions): ${cluster.theme}.`,
+    'Write one personal skill covering this habit instead of a per-session one-off draft.',
+    ...cluster.details,
+    seed.extraNotes,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+  return {
+    kind: 'skill',
+    scope: 'personal',
+    extraNotes,
+    findingTitles: titles,
+    preferredSkillSlug: cluster.skillSlug,
+    name: cluster.skillSlug,
+    cluster,
+  };
+}
+
+/** Route grade findings to a phase skill, or a clustered personal skill when repeated. */
+export function seedInstructionOfferFromFindings(
+  session: Pick<ChatSession, 'template'>,
+  findings: SessionGradeFinding[],
+  cluster?: SkillGapCluster | null,
+): InstructionOfferSeed {
+  const seed = baseSeedFromFindings(session, findings);
+  if (!cluster) return seed;
+  return applySkillGapCluster(seed, cluster);
+}
+
+export function buildInstructionOfferSeed(
+  session: Pick<ChatSession, 'id' | 'template' | 'grade'>,
+  recentSessions: Array<Pick<ChatSession, 'id' | 'grade'>>,
+): { seed: InstructionOfferSeed; cluster: SkillGapCluster | null } {
+  const findings = instructionGradeFindings(session.grade);
+  const cluster = findSkillGapCluster(
+    findings,
+    recentSessions.map((item) => ({
+      id: item.id,
+      findings: instructionGradeFindings(item.grade),
+    })),
+  );
+  return { seed: seedInstructionOfferFromFindings(session, findings, cluster), cluster };
 }
