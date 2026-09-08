@@ -8,7 +8,6 @@ import {
   PHASE_SKILL_COMMANDS,
   type SlashCommand,
 } from '@agent-orchestrator/shared';
-import { ensureBuiltInPhaseSkills } from './phase-skills.js';
 
 function normalizeCommandName(raw: string): string {
   const trimmed = raw.trim().replace(/^\//, '');
@@ -113,8 +112,6 @@ async function listCommandFiles(root: string, source: SlashCommand['source']): P
  * Precedence (later wins on name collision): bundled → phase pack → prompt shortcuts → personal → project → local.
  */
 export async function discoverSlashCommands(worktreePath: string): Promise<SlashCommand[]> {
-  await ensureBuiltInPhaseSkills(worktreePath);
-
   const home = os.homedir();
   const [projectSkills, projectCommands, personalSkills, personalCommands] = await Promise.all([
     listSkillDirs(path.join(worktreePath, '.claude', 'skills'), 'project'),

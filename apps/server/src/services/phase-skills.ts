@@ -12,6 +12,8 @@ export function builtInSkillsPackRoot(): string {
 /**
  * Copy missing orchestrator phase skills into a worktree.
  * Never overwrites an existing SKILL.md so graded improvements stick.
+ * Do not call this from agent create or slash-command discovery — those paths
+ * must not write files into the worktree.
  */
 export async function ensureBuiltInPhaseSkills(worktreePath: string): Promise<{
   seeded: PhaseSkillSlug[];
