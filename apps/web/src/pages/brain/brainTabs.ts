@@ -1,9 +1,11 @@
-export const BRAIN_TABS = ['skills', 'tasks', 'follow-ups'] as const;
+export const BRAIN_TABS = ['skills', 'agents', 'tasks', 'follow-ups'] as const;
 
 export type BrainTab = (typeof BRAIN_TABS)[number];
 
 export function parseBrainTab(value: string | null | undefined): BrainTab {
-  if (value === 'tasks' || value === 'follow-ups' || value === 'skills') return value;
+  if (value === 'tasks' || value === 'follow-ups' || value === 'skills' || value === 'agents') {
+    return value;
+  }
   return 'skills';
 }
 
