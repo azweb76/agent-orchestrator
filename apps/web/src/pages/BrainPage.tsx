@@ -5,6 +5,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { BrainAgentsPanel } from './brain/BrainAgentsPanel';
 import { BrainFollowUpsPanel } from './brain/BrainFollowUpsPanel';
 import { BrainSkillsPanel } from './brain/BrainSkillsPanel';
+import { BrainSyncBar } from './brain/BrainSyncBar';
 import { BrainTasksPanel } from './brain/BrainTasksPanel';
 import { parseBrainTab, type BrainTab } from './brain/brainTabs';
 
@@ -34,6 +35,8 @@ export function BrainPage() {
         title="Brain"
         description="User-level skills and Claude Code subagents, plus kickoff tasks and follow-up chips."
       />
+
+      <BrainSyncBar />
 
       <Tabs
         value={tab}
