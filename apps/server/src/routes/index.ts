@@ -13,6 +13,7 @@ import { registerSettingsRoutes } from './settings-routes.js';
 import { registerAgentTaskRoutes } from './agent-task-routes.js';
 import { registerTaskFollowUpRoutes } from './task-followup-routes.js';
 import { registerPersonalSkillRoutes } from './personal-skill-routes.js';
+import { registerPersonalAgentRoutes } from './personal-agent-routes.js';
 import { registerMemoryRoutes } from './memory-routes.js';
 import { registerAssistantRoutes } from './assistant-routes.js';
 
@@ -26,7 +27,8 @@ export function createRouter(ctx: AppContext): express.Router {
   registerSettingsRoutes(router, ctx);
   registerAgentTaskRoutes(router, ctx);
   registerTaskFollowUpRoutes(router, ctx);
-  registerPersonalSkillRoutes(router);
+  registerPersonalSkillRoutes(router, ctx);
+  registerPersonalAgentRoutes(router, ctx);
   registerWorkspaceRoutes(router, ctx);
   registerGitHubRoutes(router, ctx);
   registerJiraRoutes(router, ctx);
