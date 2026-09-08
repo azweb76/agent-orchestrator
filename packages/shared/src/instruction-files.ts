@@ -67,6 +67,29 @@ export interface ApplyInstructionFileResponse {
   action: 'create' | 'update';
 }
 
+/** User-library skill (`~/.claude/skills/<slug>/SKILL.md`). */
+export interface PersonalSkill {
+  slug: string;
+  name: string;
+  description: string;
+  relativePath: string;
+  content: string;
+}
+
+export interface CreatePersonalSkillRequest {
+  /** Folder slug; sanitized to kebab-case. */
+  name: string;
+  description?: string;
+  content: string;
+}
+
+export interface UpdatePersonalSkillRequest {
+  /** Display name in frontmatter; does not rename the folder. */
+  name?: string;
+  description?: string;
+  content?: string;
+}
+
 /**
  * Pending human-gated instruction improvement offer (persisted in automation_state).
  * Writing still requires an explicit apply in the Improve-instructions dialog.

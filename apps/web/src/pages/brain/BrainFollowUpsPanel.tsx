@@ -19,14 +19,13 @@ import type {
   TaskFollowUp,
   UpdateTaskFollowUpRequest,
 } from '@agent-orchestrator/shared';
-import { api } from '../api/client';
-import { TaskFollowUpDialog } from '../components/TaskFollowUpDialog';
-import { EmptyState } from '../components/ui/EmptyState';
-import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
-import { ControlTooltip } from '../components/ui/ControlTooltip';
-import { PageHeader } from '../components/ui/PageHeader';
+import { api } from '../../api/client';
+import { TaskFollowUpDialog } from '../../components/TaskFollowUpDialog';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
+import { ControlTooltip } from '../../components/ui/ControlTooltip';
 
-export function FollowUpsPage() {
+export function BrainFollowUpsPanel() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<TaskFollowUp | null>(null);
@@ -66,19 +65,14 @@ export function FollowUpsPage() {
   };
 
   return (
-    <Stack spacing={2.5}>
-      <PageHeader
-        eyebrow="Agents"
-        title="Follow-ups"
-        description="Manage the catalog of post-session follow-up chips. After a session finishes, AI picks which enabled entries to show using agent state and recent assistant replies."
-        actions={
-          <ControlTooltip title="Create a new follow-up">
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-              New follow-up
-            </Button>
-          </ControlTooltip>
-        }
-      />
+    <Stack spacing={2}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+        <ControlTooltip title="Create a new follow-up">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            New follow-up
+          </Button>
+        </ControlTooltip>
+      </Stack>
 
       {error ? <Alert severity="error">{(error as Error).message}</Alert> : null}
       {deleteMutation.error ? (

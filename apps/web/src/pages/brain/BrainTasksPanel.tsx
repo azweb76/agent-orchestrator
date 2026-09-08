@@ -19,14 +19,13 @@ import type {
   CreateAgentTaskRequest,
   UpdateAgentTaskRequest,
 } from '@agent-orchestrator/shared';
-import { api } from '../api/client';
-import { AgentTaskDialog } from '../components/AgentTaskDialog';
-import { EmptyState } from '../components/ui/EmptyState';
-import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../components/ui/ListPanel';
-import { ControlTooltip } from '../components/ui/ControlTooltip';
-import { PageHeader } from '../components/ui/PageHeader';
+import { api } from '../../api/client';
+import { AgentTaskDialog } from '../../components/AgentTaskDialog';
+import { EmptyState } from '../../components/ui/EmptyState';
+import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
+import { ControlTooltip } from '../../components/ui/ControlTooltip';
 
-export function TasksPage() {
+export function BrainTasksPanel() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgentTask | null>(null);
@@ -60,25 +59,15 @@ export function TasksPage() {
     setDialogOpen(true);
   };
 
-  const openEdit = (task: AgentTask) => {
-    setEditing(task);
-    setDialogOpen(true);
-  };
-
   return (
-    <Stack spacing={2.5}>
-      <PageHeader
-        eyebrow="Agents"
-        title="Tasks"
-        description="Define purpose, prompt templates, system prompts, models, effort, permissions, and allowed tools for agent sessions. From goal can Auto-select a task using purpose."
-        actions={
-          <ControlTooltip title="Create a new task">
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-              New task
-            </Button>
-          </ControlTooltip>
-        }
-      />
+    <Stack spacing={2}>
+      <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+        <ControlTooltip title="Create a new task">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            New task
+          </Button>
+        </ControlTooltip>
+      </Stack>
 
       {error ? <Alert severity="error">{(error as Error).message}</Alert> : null}
       {deleteMutation.error ? (
@@ -108,7 +97,13 @@ export function TasksPage() {
               secondaryAction={
                 <Stack direction="row" spacing={0.5}>
                   <ControlTooltip title="Edit task">
-                    <IconButton aria-label={`Edit ${task.title}`} onClick={() => openEdit(task)}>
+                    <IconButton
+                      aria-label={`Edit ${task.title}`}
+                      onClick={() => {
+                        setEditing(task);
+                        setDialogOpen(true);
+                      }}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </ControlTooltip>
