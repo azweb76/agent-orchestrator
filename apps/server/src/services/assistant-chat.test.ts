@@ -116,3 +116,37 @@ test('runAssistantChat refuses empty content', async () => {
   const ctx = makeCtx(tmp);
   await assert.rejects(() => runAssistantChat(ctx, '   '), /Message is required/);
 });
+
+test('ask_user pauses the tool loop until the user replies', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-assistant-chat-ask-'));
+  const ctx = makeCtx(tmp);
+  let calls = 0;
+  const runModelRound: AssistantModelRound = async () => {
+    calls += 1;
+    return {
+      content: [
+        { type: 'text', text: 'Need a bit more.' },
+        {
+          type: 'tool_use',
+          id: 'toolu_ask',
+          name: 'ask_user',
+          input: {
+            questions: [
+              {
+                question: 'Personal or project skill?',
+                options: [{ label: 'Personal' }, { label: 'Project' }],
+              },
+            ],
+          },
+        },
+      ] as Anthropic.ContentBlock[],
+      stop_reason: 'tool_use',
+    };
+  };
+
+  const result = await runAssistantChat(ctx, 'new skill', { runModelRound });
+  assert.equal(calls, 1);
+  const tool = result.messages.find((msg) => msg.role === 'tool');
+  assert.equal(tool?.toolResult?.toolName, 'ask_user');
+  assert.equal(tool?.toolResult?.awaitingUser, true);
+});

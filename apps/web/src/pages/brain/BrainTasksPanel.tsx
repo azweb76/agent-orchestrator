@@ -10,60 +10,48 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  AgentTask,
-  CreateAgentTaskRequest,
-  UpdateAgentTaskRequest,
-} from '@agent-orchestrator/shared';
+import type { AgentTask } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
-import { AgentTaskDialog } from '../../components/AgentTaskDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 
-export function BrainTasksPanel() {
+export function BrainTasksPanel({
+  selectedKey,
+  onNew,
+  onSelect,
+  onImprove,
+}: {
+  selectedKey: string | null;
+  onNew: () => void;
+  onSelect: (task: AgentTask) => void;
+  onImprove: (task: AgentTask) => void;
+}) {
   const queryClient = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<AgentTask | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const { data: tasks, isLoading, error } = useQuery({
     queryKey: ['agent-tasks'],
     queryFn: api.listAgentTasks,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: async (body: CreateAgentTaskRequest | UpdateAgentTaskRequest) => {
-      if (editing) return api.updateAgentTask(editing.id, body);
-      return api.createAgentTask(body as CreateAgentTaskRequest);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['agent-tasks'] });
-      setDialogOpen(false);
-      setEditing(null);
-    },
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteAgentTask(id),
     onSuccess: async () => {
+      setPendingDelete(null);
       await queryClient.invalidateQueries({ queryKey: ['agent-tasks'] });
     },
   });
-
-  const openCreate = () => {
-    setEditing(null);
-    setDialogOpen(true);
-  };
 
   return (
     <Stack spacing={2}>
       <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-        <ControlTooltip title="Create a new task">
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+        <ControlTooltip title="Create a task with AI">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
             New task
           </Button>
         </ControlTooltip>
@@ -84,7 +72,7 @@ export function BrainTasksPanel() {
           title="No tasks"
           description="Create a task to reuse kickoff settings and enable From goal Auto matching."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
               New task
             </Button>
           }
@@ -94,37 +82,40 @@ export function BrainTasksPanel() {
           {tasks?.map((task) => (
             <ListRow
               key={task.id}
+              selected={selectedKey === task.id}
+              onClick={() => onSelect(task)}
               secondaryAction={
-                <Stack direction="row" spacing={0.5}>
-                  <ControlTooltip title="Edit task">
-                    <IconButton
-                      aria-label={`Edit ${task.title}`}
-                      onClick={() => {
-                        setEditing(task);
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <EditOutlinedIcon fontSize="small" />
+                <Stack direction="row" spacing={0.5} onClick={(event) => event.stopPropagation()}>
+                  <ControlTooltip title="Improve with AI">
+                    <IconButton aria-label={`Improve ${task.title}`} onClick={() => onImprove(task)}>
+                      <AutoAwesomeOutlinedIcon fontSize="small" />
                     </IconButton>
                   </ControlTooltip>
-                  <ControlTooltip
-                    title={task.builtIn ? 'Built-in tasks cannot be deleted' : 'Delete task'}
-                    disabled={task.builtIn || deleteMutation.isPending}
-                  >
-                    <span>
-                      <IconButton
-                        aria-label={`Delete ${task.title}`}
-                        disabled={task.builtIn || deleteMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete task “${task.title}”?`)) {
-                            deleteMutation.mutate(task.id);
-                          }
-                        }}
-                      >
-                        <DeleteOutlinedIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </ControlTooltip>
+                  {pendingDelete === task.id ? (
+                    <>
+                      <Button size="small" color="error" onClick={() => deleteMutation.mutate(task.id)}>
+                        Confirm
+                      </Button>
+                      <Button size="small" onClick={() => setPendingDelete(null)}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <ControlTooltip
+                      title={task.builtIn ? 'Built-in tasks cannot be deleted' : 'Delete task'}
+                      disabled={task.builtIn || deleteMutation.isPending}
+                    >
+                      <span>
+                        <IconButton
+                          aria-label={`Delete ${task.title}`}
+                          disabled={task.builtIn || deleteMutation.isPending}
+                          onClick={() => setPendingDelete(task.id)}
+                        >
+                          <DeleteOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </ControlTooltip>
+                  )}
                 </Stack>
               }
             >
@@ -146,35 +137,11 @@ export function BrainTasksPanel() {
                     Purpose: {task.purpose}
                   </Typography>
                 ) : null}
-                {task.promptTemplate || task.systemPrompt || task.allowedTools ? (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                    {[
-                      task.promptTemplate ? 'prompt template' : null,
-                      task.systemPrompt ? 'system prompt' : null,
-                      task.allowedTools ? 'allowed tools' : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Typography>
-                ) : null}
               </Box>
             </ListRow>
           ))}
         </ListPanel>
       )}
-
-      <AgentTaskDialog
-        open={dialogOpen}
-        task={editing}
-        saving={saveMutation.isPending}
-        error={saveMutation.error ? (saveMutation.error as Error).message : null}
-        onClose={() => {
-          setDialogOpen(false);
-          setEditing(null);
-          saveMutation.reset();
-        }}
-        onSave={(body) => saveMutation.mutate(body)}
-      />
     </Stack>
   );
 }

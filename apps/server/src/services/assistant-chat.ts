@@ -46,11 +46,27 @@ function textFromContent(content: Anthropic.ContentBlock[]): string {
     .trim();
 }
 
+function appendUserBlocks(messages: ApiMessage[], blocks: Anthropic.ContentBlockParam[]): void {
+  const last = messages[messages.length - 1];
+  if (last?.role === 'user') {
+    const existing: Anthropic.ContentBlockParam[] =
+      typeof last.content === 'string'
+        ? [{ type: 'text', text: last.content }]
+        : [...(last.content as Anthropic.ContentBlockParam[])];
+    last.content = [...existing, ...blocks];
+    return;
+  }
+  messages.push({
+    role: 'user',
+    content: blocks.length === 1 && blocks[0]?.type === 'text' ? blocks[0].text : blocks,
+  });
+}
+
 function toApiMessages(history: AssistantMessage[]): ApiMessage[] {
   const messages: ApiMessage[] = [];
   for (const msg of history) {
     if (msg.role === 'user') {
-      messages.push({ role: 'user', content: msg.content });
+      appendUserBlocks(messages, [{ type: 'text', text: msg.content }]);
       continue;
     }
     if (msg.role === 'assistant') {
@@ -72,18 +88,13 @@ function toApiMessages(history: AssistantMessage[]): ApiMessage[] {
       continue;
     }
     if (msg.role === 'tool' && msg.toolResult) {
-      const last = messages[messages.length - 1];
       const toolResult: Anthropic.ToolResultBlockParam = {
         type: 'tool_result',
         tool_use_id: msg.toolResult.toolUseId,
         content: msg.content,
         is_error: msg.toolResult.isError,
       };
-      if (last?.role === 'user' && Array.isArray(last.content)) {
-        (last.content as Anthropic.ToolResultBlockParam[]).push(toolResult);
-      } else {
-        messages.push({ role: 'user', content: [toolResult] });
-      }
+      appendUserBlocks(messages, [toolResult]);
     }
   }
   return messages;
@@ -233,6 +244,7 @@ export async function runAssistantChat(
           isError: execution.isError,
           navigateTo: execution.navigateTo,
           agentId: execution.agentId,
+          awaitingUser: execution.awaitingUser,
         },
       });
       created.push(toolMsg);
@@ -245,6 +257,11 @@ export async function runAssistantChat(
       });
     }
     apiMessages.push({ role: 'user', content: toolResults });
+
+    const awaitingUser = created.some(
+      (msg) => msg.role === 'tool' && msg.toolResult?.awaitingUser && !msg.toolResult.isError,
+    );
+    if (awaitingUser) break;
   }
 
   emit(options, { type: 'done', messages: created });

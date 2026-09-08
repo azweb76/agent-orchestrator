@@ -17,7 +17,7 @@ import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatPromptCard } from './ChatPromptCard';
 
 interface AskUserQuestionCardProps {
-  request: PermissionRequest;
+  request?: PermissionRequest;
   questions: AskUserQuestionItem[];
   submitting?: boolean;
   onSubmit: (answers: Record<string, string>, response?: string) => void;

@@ -35,10 +35,12 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 
 export function InstallSkillsFromRepoDialog({
   open,
+  embedded = false,
   onClose,
   onInstalled,
 }: {
   open: boolean;
+  embedded?: boolean;
   onClose: () => void;
   onInstalled: () => void;
 }) {
@@ -118,10 +120,7 @@ export function InstallSkillsFromRepoDialog({
         ? installMutation.error.message
         : null;
 
-  return (
-    <ResponsiveDialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Install skills from repo</DialogTitle>
-      <DialogContent>
+  const body = (
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           {error ? <Alert severity="error">{error}</Alert> : null}
           <Typography color="text.secondary">
@@ -233,8 +232,10 @@ export function InstallSkillsFromRepoDialog({
             )
           ) : null}
         </Stack>
-      </DialogContent>
-      <DialogActions>
+  );
+
+  const actions = (
+        <>
         <Button onClick={onClose} disabled={installMutation.isPending}>
           Cancel
         </Button>
@@ -251,7 +252,31 @@ export function InstallSkillsFromRepoDialog({
             </Button>
           </span>
         </ControlTooltip>
-      </DialogActions>
+        </>
+  );
+
+  if (embedded) {
+    return (
+      <Stack
+        spacing={2}
+        sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+          Install skills from repo
+        </Typography>
+        {body}
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+          {actions}
+        </Stack>
+      </Stack>
+    );
+  }
+
+  return (
+    <ResponsiveDialog open={open} onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>Install skills from repo</DialogTitle>
+      <DialogContent>{body}</DialogContent>
+      <DialogActions>{actions}</DialogActions>
     </ResponsiveDialog>
   );
 }

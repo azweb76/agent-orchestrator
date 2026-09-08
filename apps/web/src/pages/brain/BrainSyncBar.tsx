@@ -4,9 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Stack,
   TextField,
   Typography,
@@ -18,7 +15,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { CreatePullRequestDialog } from '../CreatePullRequestDialog';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
-import { ResponsiveDialog } from '../../components/ui/ResponsiveDialog';
 import { brainSyncHeadline } from './brainSync';
 
 function invalidateBrain(queryClient: ReturnType<typeof useQueryClient>) {
@@ -27,6 +23,7 @@ function invalidateBrain(queryClient: ReturnType<typeof useQueryClient>) {
     queryClient.invalidateQueries({ queryKey: ['personal-skills'] }),
     queryClient.invalidateQueries({ queryKey: ['agent-tasks'] }),
     queryClient.invalidateQueries({ queryKey: ['task-followups'] }),
+    queryClient.invalidateQueries({ queryKey: ['personal-agents'] }),
   ]);
 }
 
@@ -162,6 +159,29 @@ export function BrainSyncBar() {
                 </Button>
               </ControlTooltip>
             </>
+          ) : connectOpen ? (
+            <Stack spacing={1} sx={{ minWidth: { sm: 280 } }}>
+              <ControlTooltip title="GitHub repository that stores the Brain library">
+                <TextField
+                  label="GitHub repo"
+                  placeholder="you/brain-library"
+                  value={repoUrl}
+                  onChange={(event) => setRepoUrl(event.target.value)}
+                  fullWidth
+                  size="small"
+                />
+              </ControlTooltip>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="contained"
+                  disabled={!repoUrl.trim() || connectMutation.isPending}
+                  onClick={() => connectMutation.mutate()}
+                >
+                  {connectMutation.isPending ? 'Connecting…' : 'Connect'}
+                </Button>
+                <Button onClick={() => setConnectOpen(false)}>Cancel</Button>
+              </Stack>
+            </Stack>
           ) : (
             <ControlTooltip title="Clone a GitHub repo to store this library">
               <Button
@@ -186,41 +206,6 @@ export function BrainSyncBar() {
       {disconnectMutation.error ? (
         <Alert severity="error" sx={{ mt: 2 }}>{(disconnectMutation.error as Error).message}</Alert>
       ) : null}
-
-      <ResponsiveDialog open={connectOpen} onClose={() => setConnectOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Connect library repo</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography color="text.secondary">
-              Use <code>owner/repo</code> or a GitHub HTTPS URL. Skills, tasks, and follow-ups are
-              stored under <code>skills/</code>, <code>tasks/</code>, and <code>follow-ups/</code>.
-            </Typography>
-            <ControlTooltip title="GitHub repository that stores the Brain library">
-              <TextField
-                label="GitHub repo"
-                placeholder="you/brain-library"
-                value={repoUrl}
-                onChange={(event) => setRepoUrl(event.target.value)}
-                fullWidth
-                autoFocus
-              />
-            </ControlTooltip>
-            {connectMutation.error ? (
-              <Alert severity="error">{(connectMutation.error as Error).message}</Alert>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConnectOpen(false)}>Close</Button>
-          <Button
-            variant="contained"
-            disabled={!repoUrl.trim() || connectMutation.isPending}
-            onClick={() => connectMutation.mutate()}
-          >
-            {connectMutation.isPending ? 'Connecting…' : 'Connect'}
-          </Button>
-        </DialogActions>
-      </ResponsiveDialog>
 
       <CreatePullRequestDialog
         open={prOpen}
