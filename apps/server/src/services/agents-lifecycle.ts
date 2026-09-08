@@ -260,7 +260,7 @@ export async function getAgentDiff(
     }
   }
 
-  if (scope === 'pr') {
+  if (scope === 'branch') {
     const base = detail.worktree.baseBranch ?? detail.workspace.defaultBranch;
     try {
       const diff = await ctx.git.getDiff(path, `origin/${base}`);

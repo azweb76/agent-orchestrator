@@ -63,6 +63,7 @@ export {
   commitAgentChanges,
 } from './agents-lifecycle.js';
 export { discardAgentFiles } from './agents-discard.js';
+export { readAgentWorktreeFile, WorktreeFileError } from './agents-files.js';
 
 export {
   createAgentSession,

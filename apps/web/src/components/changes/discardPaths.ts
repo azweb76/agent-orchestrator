@@ -17,9 +17,10 @@ export function discardPathsForFiles(files: DiffFile[]): string[] {
   return [...paths];
 }
 
-export function collectDiffFiles(nodes: FileTreeNode[]): DiffFile[] {
-  const files: DiffFile[] = [];
-  const walk = (list: FileTreeNode[]) => {
+/** Collect every file payload under the given tree nodes, depth-first. */
+export function collectTreeFiles<T>(nodes: FileTreeNode<T>[]): T[] {
+  const files: T[] = [];
+  const walk = (list: FileTreeNode<T>[]) => {
     for (const node of list) {
       if (node.type === 'file') files.push(node.file);
       else walk(node.children);

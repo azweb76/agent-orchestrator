@@ -10,6 +10,7 @@ import {
   getAgentDiff,
   listAgentMentionFiles,
   listAgentSlashCommands,
+  readAgentWorktreeFile,
 } from '../services/app.js';
 import { asyncHandler, param } from './helpers.js';
 
@@ -36,10 +37,10 @@ export function registerAgentToolRoutes(router: express.Router, ctx: AppContext)
     '/agents/:agentId/diff',
     asyncHandler(async (req, res) => {
       const scopeParse = z
-        .enum(['pending', 'unpushed', 'pr'])
+        .enum(['pending', 'unpushed', 'branch'])
         .safeParse(req.query.scope ?? 'pending');
       if (!scopeParse.success) {
-        res.status(400).json({ error: 'Invalid scope; use pending, unpushed, or pr' });
+        res.status(400).json({ error: 'Invalid scope; use pending, unpushed, or branch' });
         return;
       }
       res.json(await getAgentDiff(ctx, param(req.params.agentId), scopeParse.data));
@@ -57,6 +58,14 @@ export function registerAgentToolRoutes(router: express.Router, ctx: AppContext)
     '/agents/:agentId/mention-files',
     asyncHandler(async (req, res) => {
       res.json(await listAgentMentionFiles(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/file',
+    asyncHandler(async (req, res) => {
+      const filePath = z.string().trim().min(1).max(1024).parse(req.query.path);
+      res.json(await readAgentWorktreeFile(ctx, param(req.params.agentId), filePath));
     }),
   );
 

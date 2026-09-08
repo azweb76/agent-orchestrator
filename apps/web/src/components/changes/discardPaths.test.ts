@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DiffFile } from '../../utils/parseUnifiedDiff';
 import { buildFileTree } from '../../utils/fileTree';
 import {
-  collectDiffFiles,
+  collectTreeFiles,
   dirSelectState,
   discardPathsForFile,
   discardPathsForFiles,
@@ -38,13 +38,13 @@ describe('discardPathsForFiles', () => {
   });
 });
 
-describe('collectDiffFiles / dirSelectState / togglePaths', () => {
+describe('collectTreeFiles / dirSelectState / togglePaths', () => {
   it('collects nested files and toggles a directory selection', () => {
     const files = [file('src/a.ts'), file('src/util/b.ts'), file('README.md')];
     const tree = buildFileTree(files);
     const src = tree.find((node) => node.type === 'dir' && node.name === 'src');
     if (!src || src.type !== 'dir') throw new Error('expected src');
-    const srcFiles = collectDiffFiles([src]);
+    const srcFiles = collectTreeFiles([src]);
     expect(srcFiles.map((item) => item.path)).toEqual(['src/util/b.ts', 'src/a.ts']);
 
     const selected = togglePaths(new Set(), srcFiles.map((item) => item.path), true);

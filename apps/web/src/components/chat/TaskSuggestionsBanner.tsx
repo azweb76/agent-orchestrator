@@ -51,8 +51,8 @@ export function TaskSuggestionsBanner({
     staleTime: 10_000,
   });
   const prDiffQuery = useQuery({
-    queryKey: ['diff', agentId, 'pr'],
-    queryFn: () => api.getDiff(agentId, 'pr'),
+    queryKey: ['diff', agentId, 'branch'],
+    queryFn: () => api.getDiff(agentId, 'branch'),
     enabled: Boolean(agentId) && !archived,
     staleTime: 10_000,
   });

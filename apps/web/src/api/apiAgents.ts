@@ -35,6 +35,7 @@ import type {
   SlashCommand,
   UpdateAgentMemoryRequest,
   UpdateChatSessionRequest,
+  WorktreeFileContent,
   WorktreeFileEntry,
 } from '@agent-orchestrator/shared';
 import { request } from './request';
@@ -143,6 +144,8 @@ export const apiAgents = {
     request<SlashCommand[]>(`/agents/${agentId}/slash-commands`),
   listMentionFiles: (agentId: string) =>
     request<WorktreeFileEntry[]>(`/agents/${agentId}/mention-files`),
+  getWorktreeFile: (agentId: string, path: string) =>
+    request<WorktreeFileContent>(`/agents/${agentId}/file?path=${encodeURIComponent(path)}`),
   listPendingPermissions: (agentId: string, sessionId: string) =>
     request<PermissionRequest[]>(`/agents/${agentId}/sessions/${sessionId}/permissions`),
   answerPermission: (agentId: string, sessionId: string, body: AnswerAskUserQuestionRequest) =>
