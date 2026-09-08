@@ -1,3 +1,6 @@
+import type { ContextAttributionChars, SessionContextAttribution } from './context-attribution.js';
+import { buildContextAttribution } from './context-attribution.js';
+
 /** Token buckets reported by Claude on an assistant message or result event. */
 export interface TokenUsageBreakdown {
   inputTokens: number;
@@ -51,6 +54,8 @@ export interface SessionContextUsage {
   /** Subagent branches forked off the parent timeline. Excluded from `billed`/`percent`. */
   branches: SessionContextBranch[];
   sessionFilePath: string | null;
+  /** Estimated occupancy by source, scaled to `currentContextTokens`. */
+  attribution: SessionContextAttribution | null;
 }
 
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 200_000;
@@ -162,6 +167,7 @@ export function buildSessionContextUsage(input: {
   costUsd?: number | null;
   sessionFilePath?: string | null;
   branches?: SessionContextBranch[];
+  attributionChars?: ContextAttributionChars;
 }): SessionContextUsage {
   const history = input.history ?? [];
   const current = latestContextTurn(history);
@@ -188,5 +194,8 @@ export function buildSessionContextUsage(input: {
     history,
     branches: input.branches ?? [],
     sessionFilePath: input.sessionFilePath?.trim() || null,
+    attribution: input.attributionChars
+      ? buildContextAttribution(input.attributionChars, currentContextTokens)
+      : null,
   };
 }

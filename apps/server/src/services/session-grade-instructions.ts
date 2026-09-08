@@ -1,11 +1,9 @@
-import { existsSync } from 'node:fs';
 import type {
   ApplyInstructionFileRequest,
   ChatSession,
   GenerateInstructionDraftRequest,
   GradeChatSessionRequest,
   InstructionDraftOffer,
-  SessionContextUsage,
 } from '@agent-orchestrator/shared';
 import {
   buildSessionContextUsage,
@@ -38,6 +36,7 @@ import {
 import { seedInstructionOfferFromFindings } from './instruction-offer-seed.js';
 import { recordSkillGradeMetrics } from './skill-metrics.js';
 import { recordGradeMemoriesFromFindings } from './grade-memories.js';
+import { mergePromptAttribution } from './session-context-usage.js';
 
 function instructionRoots(ctx: AppContext, agentId: string): InstructionFileRoots {
   const agent = requireAgent(ctx, agentId);
@@ -167,6 +166,21 @@ export async function gradeAgentSession(
     discoverSlashCommands(roots.worktreePath),
   ]);
 
+  let contextAttribution = null;
+  if (sessionFilePath) {
+    const parsedContext = await readClaudeSessionContext(sessionFilePath);
+    contextAttribution = buildSessionContextUsage({
+      fallbackModel: session.model,
+      history: parsedContext.history,
+      attributionChars: mergePromptAttribution(
+        ctx,
+        agentId,
+        parsedContext.attributionChars,
+        instructionFiles,
+      ),
+    }).attribution;
+  }
+
   const context = buildSessionGradeContext({
     messages: sourceMessages,
     instructionFiles,
@@ -179,6 +193,7 @@ export async function gradeAgentSession(
     usageTokens,
     costUsd: fileCostUsd,
     sessionTemplate: session.template,
+    contextAttribution,
   });
   if (!context.transcript) {
     context.transcript = storedTranscript;
@@ -312,53 +327,4 @@ export async function applyAgentInstructionFile(
   return result;
 }
 
-export async function getAgentSessionContext(
-  ctx: AppContext,
-  agentId: string,
-  sessionId?: string,
-): Promise<SessionContextUsage> {
-  const session = requireSession(ctx, agentId, sessionId);
-  const roots = instructionRoots(ctx, agentId);
-  const claudeSessionPath = resolveClaudeSessionFilePath({
-    cwd: roots.worktreePath,
-    sessionId: session.claudeSessionId,
-    runLogPath: null,
-  });
-  const runLogPath =
-    session.runLogPath?.trim() && existsSync(session.runLogPath.trim())
-      ? session.runLogPath.trim()
-      : null;
-
-  const candidates = [...new Set([claudeSessionPath, runLogPath].filter(Boolean))] as string[];
-  if (candidates.length === 0) {
-    return buildSessionContextUsage({
-      fallbackModel: session.model,
-      history: [],
-      branches: [],
-      sessionFilePath: null,
-    });
-  }
-
-  let best = await readClaudeSessionContext(candidates[0]!);
-  let bestPath: string | null = candidates[0]!;
-  if (!best.history.some((turn) => turn.contextTokens > 0)) {
-    for (const candidate of candidates.slice(1)) {
-      const parsed = await readClaudeSessionContext(candidate);
-      if (parsed.history.some((turn) => turn.contextTokens > 0)) {
-        best = parsed;
-        bestPath = candidate;
-        break;
-      }
-    }
-  }
-
-  return buildSessionContextUsage({
-    model: best.model,
-    fallbackModel: session.model,
-    history: best.history,
-    billed: best.billed,
-    costUsd: best.costUsd,
-    branches: best.branches,
-    sessionFilePath: bestPath,
-  });
-}
+export { getAgentSessionContext } from './session-context-usage.js';

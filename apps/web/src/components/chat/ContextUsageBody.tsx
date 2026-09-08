@@ -1,6 +1,7 @@
 import { Box, Chip, LinearProgress, Stack, Typography, useTheme } from '@mui/material';
 import type { SessionContextUsage } from '@agent-orchestrator/shared';
 import { percentChipColor, percentFillColor } from './contextUsageColors';
+import { ContextAttributionSection } from './ContextAttributionSection';
 import { ContextFillBar } from './ContextHistoryBar';
 import { ContextHistoryChart } from './ContextHistoryChart';
 import { ContextUsageLegendItem } from './ContextUsageLegend';
@@ -46,9 +47,16 @@ export function ContextUsageBody({ data }: { data: SessionContextUsage }) {
         </Typography>
       </Stack>
 
+      {data.attribution && data.currentContextTokens > 0 ? (
+        <ContextAttributionSection
+          attribution={data.attribution}
+          windowTokens={data.compactThresholdTokens}
+        />
+      ) : null}
+
       {hasUsage ? (
         <Stack spacing={1}>
-          <Typography variant="subtitle2">Usage</Typography>
+          <Typography variant="subtitle2">Cache</Typography>
           <ContextFillBar usage={data.usage!} windowTokens={data.compactThresholdTokens} />
           <Box
             sx={{

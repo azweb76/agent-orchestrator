@@ -106,6 +106,20 @@ export {
 } from './session-context.js';
 
 export {
+  CONTEXT_ATTRIBUTION_CUT_HINTS,
+  CONTEXT_ATTRIBUTION_KEYS,
+  CONTEXT_ATTRIBUTION_LABELS,
+  addAttributionChars,
+  buildContextAttribution,
+  emptyAttributionChars,
+  estimateTokensFromChars,
+  type ContextAttributionBucket,
+  type ContextAttributionChars,
+  type ContextAttributionKey,
+  type SessionContextAttribution,
+} from './context-attribution.js';
+
+export {
   isBuildReadyForDraftPrStep,
   shouldOfferDraftPr,
 } from './draft-pr.js';
