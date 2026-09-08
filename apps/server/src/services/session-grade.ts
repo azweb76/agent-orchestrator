@@ -1,5 +1,6 @@
 import type {
   Message,
+  SessionContextAttribution,
   SessionGradeAnalysis,
   SessionGradeFinding,
   SessionGradeFindingCategory,
@@ -11,12 +12,11 @@ import type {
 import {
   SESSION_GRADE_FINDING_CATEGORIES,
   SESSION_GRADE_SCORES,
+  estimateTokensFromChars,
 } from '@agent-orchestrator/shared';
 import { extractJsonObject } from './extract-json-object.js';
 import { buildSessionTranscript } from './session-transcript.js';
 import type { InstructionFileExcerpt } from './instruction-files.js';
-
-const CHARS_PER_TOKEN = 4;
 
 export interface SessionGradeContext {
   transcript: string;
@@ -32,11 +32,7 @@ export interface SessionGradeContext {
   sessionFilePath?: string | null;
   /** Chat session template id when known (routes skill recommendations). */
   sessionTemplate?: string;
-}
-
-export function estimateTokensFromChars(chars: number): number {
-  if (chars <= 0) return 0;
-  return Math.ceil(chars / CHARS_PER_TOKEN);
+  contextAttribution?: SessionContextAttribution | null;
 }
 
 export function collectToolCounts(messages: Message[]): Array<{ name: string; count: number }> {
@@ -136,6 +132,7 @@ export function buildSessionGradeContext(input: {
   usageTokens?: number | null;
   costUsd?: number | null;
   sessionTemplate?: string;
+  contextAttribution?: SessionContextAttribution | null;
 }): SessionGradeContext {
   const skillCommands = input.skills.filter((item) => item.kind === 'skill');
   const stats = buildSessionGradeStats(input.messages, input.instructionFiles, skillCommands.length);
@@ -162,6 +159,7 @@ export function buildSessionGradeContext(input: {
     permissionMode: input.permissionMode,
     sessionFilePath: input.sessionFilePath?.trim() || undefined,
     sessionTemplate: input.sessionTemplate,
+    contextAttribution: input.contextAttribution ?? null,
   };
 }
 
@@ -192,7 +190,8 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     'When action.kind is skill, set action.scope: default personal (user-wide). Use project only when the lesson cannot transfer to other repos.',
     'Omit "suggestion" and "action" for findings with severity ok.',
     'Include exactly one finding for each of those five categories. Use ok when that area looks healthy.',
-    'Ground every finding in the supplied stats, session-file transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
+    'Ground every finding in the supplied stats, context attribution, session-file transcript, instruction files, and skills. Do not invent files or tools that are not listed.',
+    'Name the largest context bucket (conversation, tool results, skills, CLAUDE.md/AGENTS.md, memory, or other) and suggest a cut: trim a skill, stop re-reading a file, compact earlier, or slim instruction files.',
     'Score: 5 efficient, 4 good, 3 mixed, 2 wasteful, 1 poor.',
   ].join(' ');
 
@@ -221,6 +220,7 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
         usedSkills: context.usedSkills,
         availableSkills: context.availableSkills,
         instructionFiles: instructionSummary,
+        contextAttribution: context.contextAttribution ?? null,
       },
       null,
       2,

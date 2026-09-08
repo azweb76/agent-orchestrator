@@ -4,20 +4,16 @@ Ideas for a closed loop where every session makes the next one cheaper, faster, 
 
 ## Now (shipped in this change)
 
-- Merge context usage and session analysis into one **Session insights** dialog from the composer chip.
-- Analysis must recommend skill updates or new skills that help *future* sessions.
-- New skills default to the **personal (user) library**. Use project scope only when the lesson is bound to this repo’s APIs, layout, or conventions.
-- Finding cards can open a reviewed skill draft (not only a new chat).
+- **Attribution inside context** — Session insights splits occupancy into conversation, tool results, skills, CLAUDE.md/AGENTS.md, and memory. Analysis names the largest bucket and suggests a cut (trim a skill, stop re-reading a file, compact earlier).
 
 ## Next (high leverage)
 
-1. **Attribution inside context** — Break the usage chart into conversation, tool results, skills, CLAUDE.md/AGENTS.md, and memory. Analysis should name the biggest bucket and suggest a cut (trim a skill, stop re-reading a file, compact earlier).
-2. **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After N similar grades, auto-offer one personal skill instead of N one-off drafts.
-3. **Used vs skipped skills** — Compare `availableSkills` to Skill-tool / slash use. If `/code-review` or `plan-work` existed and was ignored, the skills finding should say so and prefer *update that skill* over a new slug.
-4. **Correction mining** — Treat rewind, user “no, do X”, and permission denials as labeled failures. Fold those into analysis notes automatically so skills capture the human fix, not just token waste.
-5. **Memory vs skill vs CLAUDE.md routing** — A small classifier: situational fact → memory; reusable habit → personal skill; repo convention → CLAUDE.md/AGENTS.md; phase tactic → project phase skill. Analysis already has `action.kind`/`scope`; make the UI and offers follow the same rules every time.
-6. **Compact-and-learn** — Before compact & continue, extract durable lessons (and optional skill draft) so compaction does not throw away the improvement signal.
-7. **Skill hygiene** — Detect duplicate, stale, or conflicting personal skills. Offer merge/archive. Bloated skills are a context problem; analysis should flag oversized SKILL.md files the same way it flags bloated CLAUDE.md.
+1. **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After N similar grades, auto-offer one personal skill instead of N one-off drafts.
+2. **Used vs skipped skills** — Compare `availableSkills` to Skill-tool / slash use. If `/code-review` or `plan-work` existed and was ignored, the skills finding should say so and prefer *update that skill* over a new slug.
+3. **Correction mining** — Treat rewind, user “no, do X”, and permission denials as labeled failures. Fold those into analysis notes automatically so skills capture the human fix, not just token waste.
+4. **Memory vs skill vs CLAUDE.md routing** — A small classifier: situational fact → memory; reusable habit → personal skill; repo convention → CLAUDE.md/AGENTS.md; phase tactic → project phase skill. Analysis already has `action.kind`/`scope`; make the UI and offers follow the same rules every time.
+5. **Compact-and-learn** — Before compact & continue, extract durable lessons (and optional skill draft) so compaction does not throw away the improvement signal.
+6. **Skill hygiene** — Detect duplicate, stale, or conflicting personal skills. Offer merge/archive. Bloated skills are a context problem; analysis should flag oversized SKILL.md files the same way it flags bloated CLAUDE.md.
 
 ## Fleet loop
 

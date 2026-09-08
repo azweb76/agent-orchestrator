@@ -4,6 +4,7 @@ import {
   emptyTokenUsage,
   isNestedSubagentEvent,
   parentToolUseId,
+  type ContextAttributionChars,
   type SessionContextBranch,
   type SessionContextTurn,
   type TokenUsageBreakdown,
@@ -19,6 +20,7 @@ import {
   taskToolUseBlocks,
   toolNamesFromContent,
 } from './claude-session-parse-helpers.js';
+import { createAttributionAccumulator, observeAttributionEvent } from './claude-session-attribution.js';
 
 export interface ParsedClaudeSessionContext {
   model: string | null;
@@ -26,6 +28,7 @@ export interface ParsedClaudeSessionContext {
   billed: TokenUsageBreakdown;
   history: SessionContextTurn[];
   branches: SessionContextBranch[];
+  attributionChars: ContextAttributionChars;
 }
 
 interface TaskDraft {
@@ -86,6 +89,7 @@ export function parseClaudeSessionContext(contents: string): ParsedClaudeSession
   const history: SessionContextTurn[] = [];
   const taskDrafts = new Map<string, TaskDraft>();
   const branchAccum = new Map<string, BranchAccumulator>();
+  const attribution = createAttributionAccumulator();
   let billed = emptyTokenUsage();
   let model: string | null = null;
   let costUsd = 0;
@@ -105,6 +109,8 @@ export function parseClaudeSessionContext(contents: string): ParsedClaudeSession
     }
     const event = asRecord(parsed);
     if (!event) continue;
+
+    observeAttributionEvent(attribution, event);
 
     const nestedId = parentToolUseId(event);
     if (nestedId) {
@@ -218,6 +224,7 @@ export function parseClaudeSessionContext(contents: string): ParsedClaudeSession
     billed,
     history,
     branches,
+    attributionChars: attribution.chars,
   };
 }
 

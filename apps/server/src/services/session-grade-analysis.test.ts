@@ -127,6 +127,7 @@ describe('session grade analysis', () => {
     assert.match(system, /token efficiency/i);
     assert.match(system, /fewer corrections/i);
     assert.match(system, /personal/i);
+    assert.match(system, /largest context bucket/i);
     assert.match(user, /Be strict about tests/);
     assert.match(user, /CLAUDE.md/);
     assert.match(user, /\/retry-tests/);
@@ -143,10 +144,20 @@ describe('session grade analysis', () => {
       model: 'sonnet',
       permissionMode: 'auto',
       sessionFilePath: '/home/dan/.claude/projects/-data-wt/sess-1.jsonl',
+      contextAttribution: {
+        buckets: [
+          { key: 'tool_results', tokens: 8000, share: 80 },
+          { key: 'conversation', tokens: 2000, share: 20 },
+        ],
+        largest: 'tool_results',
+        cutHint: 'Stop re-reading files; prefer Explore or a tighter grep.',
+      },
     });
     const { user } = buildSessionGradePrompt(context);
     assert.match(user, /Session file \(source of this analysis\): \/home\/dan\/\.claude\/projects\/-data-wt\/sess-1\.jsonl/);
     assert.match(user, /Transcript extracted from the session file/);
+    assert.match(user, /tool_results/);
+    assert.match(user, /Stop re-reading files/);
   });
 
   it('parses fenced JSON and fills missing finding categories', () => {

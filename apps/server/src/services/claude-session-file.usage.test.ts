@@ -157,8 +157,12 @@ describe('buildSessionContextUsage branches', () => {
   ];
 
   it('defaults to an empty array when omitted', () => {
-    const usage = buildSessionContextUsage({ fallbackModel: 'sonnet', history: historyInput });
+    const usage = buildSessionContextUsage({
+      fallbackModel: 'sonnet',
+      history: historyInput,
+    });
     assert.deepEqual(usage.branches, []);
+    assert.equal(usage.attribution, null);
   });
 
   it('passes branches through unchanged without affecting billed/percent/currentContextTokens', () => {

@@ -15,6 +15,8 @@ describe('buildAoPalette', () => {
     expect(dark.chart.cacheRead).toBe('#5eead4');
     expect(light.chart.cacheRead).toBe('#0d9488');
     expect(dark.chart.cacheWrite).not.toBe(light.chart.cacheWrite);
+    expect(dark.chart.attribution.conversation).toBe('#8ba4ff');
+    expect(light.chart.attribution.toolResults).toBe('#d97706');
   });
 });
 

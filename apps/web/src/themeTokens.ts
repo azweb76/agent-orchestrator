@@ -50,6 +50,14 @@ export interface AoPalette {
     cacheRead: string;
     cacheWrite: string;
     freshInput: string;
+    attribution: {
+      conversation: string;
+      toolResults: string;
+      skills: string;
+      instructionFiles: string;
+      memory: string;
+      other: string;
+    };
   };
   gradient: {
     body: string;
@@ -135,6 +143,14 @@ export function buildAoPalette(mode: PaletteMode): AoPalette {
       cacheRead: c.secondary,
       cacheWrite: c.primary,
       freshInput: c.warning,
+      attribution: {
+        conversation: c.primary,
+        toolResults: c.warning,
+        skills: c.secondary,
+        instructionFiles: c.info,
+        memory: isDark ? '#c084fc' : '#7c3aed',
+        other: isDark ? alpha('#fff', 0.45) : alpha('#0f172a', 0.42),
+      },
     },
     gradient: {
       body: isDark

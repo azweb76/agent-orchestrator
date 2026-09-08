@@ -21,6 +21,7 @@ test('getAgentSessionContext returns empty usage when no session file exists', a
     assert.equal(usage.compactThresholdTokens, 167_000);
     assert.equal(usage.sessionFilePath, null);
     assert.equal(usage.model, 'sonnet');
+    assert.equal(usage.attribution, null);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
@@ -59,6 +60,13 @@ test('getAgentSessionContext reads occupancy from the Claude session file', asyn
     assert.equal(usage.history.length, 1);
     assert.equal(usage.usage?.cacheReadInputTokens, 1500);
     assert.equal(usage.sessionFilePath, sessionFile);
+    assert.ok(usage.attribution);
+    assert.equal(
+      usage.attribution.buckets.reduce((sum, bucket) => sum + bucket.tokens, 0),
+      1580,
+    );
+    assert.ok(usage.attribution.largest);
+    assert.ok(usage.attribution.cutHint);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
