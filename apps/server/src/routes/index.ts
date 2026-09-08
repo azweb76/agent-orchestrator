@@ -26,7 +26,7 @@ export function createRouter(ctx: AppContext): express.Router {
   registerSettingsRoutes(router, ctx);
   registerAgentTaskRoutes(router, ctx);
   registerTaskFollowUpRoutes(router, ctx);
-  registerPersonalSkillRoutes(router);
+  registerPersonalSkillRoutes(router, ctx);
   registerWorkspaceRoutes(router, ctx);
   registerGitHubRoutes(router, ctx);
   registerJiraRoutes(router, ctx);

@@ -1,5 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
+import type { AppContext } from '../services/app.js';
 import {
   createPersonalSkill,
   deletePersonalSkill,
@@ -7,6 +8,7 @@ import {
   listPersonalSkills,
   updatePersonalSkill,
 } from '../services/personal-skills.js';
+import { installRepoSkills, previewRepoSkills } from '../services/personal-skill-install.js';
 import { asyncHandler, param } from './helpers.js';
 
 const createBody = z.object({
@@ -21,11 +23,38 @@ const updateBody = z.object({
   content: z.string().min(1).max(200_000).optional(),
 });
 
-export function registerPersonalSkillRoutes(router: express.Router): void {
+const repoSourceBody = z.object({
+  repo: z.string().min(1).max(240).optional(),
+  ref: z.string().min(1).max(200).optional(),
+  workspaceId: z.string().min(1).max(80).optional(),
+});
+
+const installBody = repoSourceBody.extend({
+  slugs: z.array(z.string().min(1).max(80)).min(1).max(40),
+  overwrite: z.boolean().optional(),
+});
+
+export function registerPersonalSkillRoutes(router: express.Router, ctx: AppContext): void {
   router.get(
     '/personal-skills',
     asyncHandler(async (_req, res) => {
       res.json(await listPersonalSkills());
+    }),
+  );
+
+  router.post(
+    '/personal-skills/preview',
+    asyncHandler(async (req, res) => {
+      const body = repoSourceBody.parse(req.body ?? {});
+      res.json(await previewRepoSkills(ctx, body));
+    }),
+  );
+
+  router.post(
+    '/personal-skills/install',
+    asyncHandler(async (req, res) => {
+      const body = installBody.parse(req.body ?? {});
+      res.json(await installRepoSkills(ctx, body));
     }),
   );
 
