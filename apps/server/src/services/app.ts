@@ -155,3 +155,11 @@ export {
 
 export { getAppSettings, updateAppSettings } from './app-settings.js';
 export type { UpdateAppSettingsRequest } from './app-settings.js';
+
+export {
+  connectBrainRepo,
+  createBrainPullRequest,
+  disconnectBrainRepo,
+  getBrainSyncStatus,
+  pullBrainRepo,
+} from './brain-sync.js';

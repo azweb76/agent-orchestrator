@@ -246,6 +246,35 @@ export class GitService {
     return stdout.trim().length > 0;
   }
 
+  /** Paths from `git status --porcelain` (renames use the new path). */
+  async listChangedFiles(worktreePath: string): Promise<string[]> {
+    const { stdout } = await execFileAsync('git', ['-C', worktreePath, 'status', '--porcelain']);
+    return stdout
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
+      .map((line) => {
+        const rest = line.slice(3);
+        const arrow = rest.indexOf(' -> ');
+        const raw = arrow === -1 ? rest : rest.slice(arrow + 4);
+        return raw.replace(/^"|"$/g, '');
+      })
+      .filter(Boolean);
+  }
+
+  async checkout(repoPath: string, branch: string): Promise<void> {
+    await execFileAsync('git', ['-C', repoPath, 'checkout', branch], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  }
+
+  /** Create or reset `branch` and check it out (`git checkout -B`). */
+  async checkoutNewBranch(repoPath: string, branch: string): Promise<void> {
+    await execFileAsync('git', ['-C', repoPath, 'checkout', '-B', branch], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  }
+
   /** True when HEAD has commits not contained in `baseRef` (e.g. origin/main). */
   async hasCommitsAhead(worktreePath: string, baseRef: string): Promise<boolean> {
     const { stdout } = await execFileAsync('git', [

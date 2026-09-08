@@ -21,7 +21,8 @@ interface CreatePullRequestDialogProps {
   mutation: UseMutationResult<
     { number: number; htmlUrl: string },
     Error,
-    { title: string; body: string; draft: boolean }
+    { title: string; body: string; draft: boolean },
+    unknown
   >;
   onClose: () => void;
   onCreated?: (pr: { number: number; htmlUrl: string }) => void;

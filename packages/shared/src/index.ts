@@ -6,6 +6,7 @@ export * from './types/requests.js';
 export * from './types/views.js';
 export * from './constants.js';
 export * from './app-settings.js';
+export * from './brain-sync.js';
 export * from './agent-task.js';
 export * from './task-followup.js';
 export * from './claude-tools.js';

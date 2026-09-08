@@ -4,6 +4,7 @@ import { Stack, Tab, Tabs, Typography } from '@mui/material';
 import { PageHeader } from '../components/ui/PageHeader';
 import { BrainFollowUpsPanel } from './brain/BrainFollowUpsPanel';
 import { BrainSkillsPanel } from './brain/BrainSkillsPanel';
+import { BrainSyncBar } from './brain/BrainSyncBar';
 import { BrainTasksPanel } from './brain/BrainTasksPanel';
 import { parseBrainTab, type BrainTab } from './brain/brainTabs';
 
@@ -31,6 +32,8 @@ export function BrainPage() {
         title="Brain"
         description="User-level skills and agent templates. Tasks and follow-ups live here so session kickoff and post-session chips stay in one library."
       />
+
+      <BrainSyncBar />
 
       <Tabs
         value={tab}
