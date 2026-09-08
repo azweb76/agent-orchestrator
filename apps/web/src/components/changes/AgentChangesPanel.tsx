@@ -74,7 +74,10 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
     enabled: Boolean(agentId) && enabled && isDiffScope(mode),
   });
   const queryClient = useQueryClient();
-  const filesFetching = useIsFetching({ queryKey: ['mention-files', agentId] }) > 0;
+  const filesFetching =
+    useIsFetching({ queryKey: ['mention-files', agentId] }) +
+      useIsFetching({ queryKey: ['worktree-dir', agentId] }) >
+    0;
 
   const [copiedPath, setCopiedPath] = useState(false);
   const hasPatch = Boolean(diffQuery.data?.patch);
@@ -86,6 +89,7 @@ export const AgentChangesPanel = memo(function AgentChangesPanel({
   const refresh = () => {
     if (mode === 'all') {
       void queryClient.invalidateQueries({ queryKey: ['mention-files', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['worktree-dir', agentId] });
       void queryClient.invalidateQueries({ queryKey: ['worktree-file', agentId] });
       return;
     }

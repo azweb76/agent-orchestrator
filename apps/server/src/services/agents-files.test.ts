@@ -3,7 +3,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { readWorktreeFile, WORKTREE_FILE_MAX_BYTES, WorktreeFileError } from './agents-files.js';
+import {
+  listWorktreeDir,
+  readWorktreeFile,
+  WORKTREE_FILE_MAX_BYTES,
+  WorktreeFileError,
+} from './agents-files.js';
 import { execGit } from './git.test-helpers.js';
 
 async function fixture(): Promise<{ tmp: string; repo: string }> {
@@ -102,6 +107,41 @@ test('readWorktreeFile flags binary files and returns no content', async () => {
     truncated: false,
     binary: true,
   });
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('listWorktreeDir lists one level, folders first, hiding git and ignored paths', async () => {
+  const { tmp, repo } = await fixture();
+  await fs.writeFile(path.join(repo, '.gitignore'), 'ignored.log\nbuild/\n');
+  await fs.writeFile(path.join(repo, 'ignored.log'), 'noise\n');
+  await fs.mkdir(path.join(repo, 'build'));
+  await fs.writeFile(path.join(repo, 'build', 'out.js'), '1\n');
+  await fs.writeFile(path.join(repo, '.env'), 'SECRET=1\n');
+
+  const root = await listWorktreeDir(repo, '');
+  assert.deepEqual(root, [
+    { name: 'src', path: 'src', type: 'dir' },
+    { name: '.gitignore', path: '.gitignore', type: 'file' },
+    { name: 'untracked.md', path: 'untracked.md', type: 'file' },
+  ]);
+
+  const nested = await listWorktreeDir(repo, './src');
+  assert.deepEqual(nested, [{ name: 'tracked.ts', path: 'src/tracked.ts', type: 'file' }]);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('listWorktreeDir rejects escapes and missing directories', async () => {
+  const { tmp, repo } = await fixture();
+
+  await rejectsWithStatus(listWorktreeDir(repo, '..'), 400);
+  await rejectsWithStatus(listWorktreeDir(repo, 'src/../../elsewhere'), 400);
+  await rejectsWithStatus(listWorktreeDir(repo, '/etc'), 400);
+  await rejectsWithStatus(listWorktreeDir(repo, '.git'), 403);
+  await rejectsWithStatus(listWorktreeDir(repo, 'nope'), 404);
+  // A file is not a directory listing.
+  await rejectsWithStatus(listWorktreeDir(repo, 'untracked.md'), 404);
 
   await fs.rm(tmp, { recursive: true, force: true });
 });

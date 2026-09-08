@@ -8,62 +8,72 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import SearchIcon from '@mui/icons-material/Search';
 import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
-import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
-import { useQuery } from '@tanstack/react-query';
-import type { WorktreeFileEntry } from '@agent-orchestrator/shared';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import type { WorktreeDirEntry, WorktreeFileEntry } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
-import { allDirPaths, buildFileTree, defaultExpandedDirs } from '../../utils/fileTree';
+import { allDirPaths, buildFileTree } from '../../utils/fileTree';
 import { filterMentionFiles } from '../chat/mentionComposer';
 import { ChangesFileTree } from './ChangesFileTree';
-import { FileContentBlock } from './FileContentBlock';
-
-/** A worktree holds thousands of files, so open only the top level by default. */
-const DEFAULT_EXPAND_DEPTH = 1;
+import { WorktreeFileDetail } from './WorktreeFileDetail';
+import { buildLazyDirTree } from './worktreeDirTree';
 
 /** Browse every tracked and untracked file in an agent worktree. */
 export function WorktreeFilesView({ agentId }: { agentId: string }) {
   const [filter, setFilter] = useState('');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [copied, setCopied] = useState(false);
+  const [filterExpanded, setFilterExpanded] = useState<Set<string>>(() => new Set());
+  const filtering = filter.trim().length > 0;
 
+  // The root plus each open folder; expanding one adds its listing to the tree.
+  const dirPaths = useMemo(() => ['', ...expanded], [expanded]);
+  const dirQueries = useQueries({
+    queries: dirPaths.map((dirPath) => ({
+      queryKey: ['worktree-dir', agentId, dirPath],
+      queryFn: () => api.listWorktreeDir(agentId, dirPath),
+      enabled: Boolean(agentId),
+      staleTime: 60_000,
+    })),
+  });
+  const rootQuery = dirQueries[0];
+
+  // Only the loaded folders are in play, so rebuilding per render stays cheap.
+  const loadedDirs = new Map<string, WorktreeDirEntry[]>();
+  dirPaths.forEach((dirPath, index) => {
+    const data = dirQueries[index]?.data;
+    if (data) loadedDirs.set(dirPath, data);
+  });
+  const lazyTree = buildLazyDirTree(loadedDirs);
+
+  // Filtering needs every path at once, so that listing loads only on demand.
   const filesQuery = useQuery({
     queryKey: ['mention-files', agentId],
     queryFn: () => api.listMentionFiles(agentId),
-    enabled: Boolean(agentId),
+    enabled: Boolean(agentId) && filtering,
     staleTime: 60_000,
   });
-
   const allPaths = useMemo(
     () => (filesQuery.data ?? []).map((entry) => entry.path),
     [filesQuery.data],
   );
-  const visibleFiles = useMemo<WorktreeFileEntry[]>(
-    () => filterMentionFiles(allPaths, filter, allPaths.length).map((path) => ({ path })),
-    [allPaths, filter],
+  const matches = useMemo<WorktreeFileEntry[]>(
+    () =>
+      filtering ? filterMentionFiles(allPaths, filter, allPaths.length).map((path) => ({ path })) : [],
+    [allPaths, filter, filtering],
   );
-  const tree = useMemo(() => buildFileTree(visibleFiles), [visibleFiles]);
-  const filtering = Boolean(filter.trim());
+  const filterTree = useMemo(() => buildFileTree(matches), [matches]);
 
   useEffect(() => {
-    setExpanded(
-      new Set(filtering ? allDirPaths(tree) : defaultExpandedDirs(tree, DEFAULT_EXPAND_DEPTH)),
-    );
-  }, [tree, filtering]);
-
-  const fileQuery = useQuery({
-    queryKey: ['worktree-file', agentId, selectedPath],
-    queryFn: () => api.getWorktreeFile(agentId, selectedPath!),
-    enabled: Boolean(agentId) && Boolean(selectedPath),
-  });
+    if (filtering) setFilterExpanded(new Set(allDirPaths(filterTree)));
+  }, [filtering, filterTree]);
 
   const toggleDir = (path: string) => {
-    setExpanded((prev) => {
+    const setter = filtering ? setFilterExpanded : setExpanded;
+    setter((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -71,18 +81,7 @@ export function WorktreeFilesView({ agentId }: { agentId: string }) {
     });
   };
 
-  const copyPath = async () => {
-    if (!selectedPath) return;
-    try {
-      await navigator.clipboard.writeText(selectedPath);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  if (filesQuery.isLoading) {
+  if (rootQuery?.isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
         <CircularProgress size={28} />
@@ -90,19 +89,24 @@ export function WorktreeFilesView({ agentId }: { agentId: string }) {
     );
   }
 
-  if (allPaths.length === 0) {
+  if (rootQuery?.error) {
+    return (
+      <EmptyState compact title="No files" description={(rootQuery.error as Error).message} />
+    );
+  }
+
+  if (lazyTree.length === 0) {
     return (
       <EmptyState
         compact
         title="No files"
-        description={
-          filesQuery.error
-            ? (filesQuery.error as Error).message
-            : 'The worktree has no tracked or untracked files.'
-        }
+        description="The worktree has no tracked or untracked files."
       />
     );
   }
+
+  const tree = filtering ? filterTree : lazyTree;
+  const treeExpanded = filtering ? filterExpanded : expanded;
 
   return (
     <Stack spacing={1} sx={{ flex: 1, minHeight: 0 }}>
@@ -112,30 +116,19 @@ export function WorktreeFilesView({ agentId }: { agentId: string }) {
         sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', flexShrink: 0 }}
       >
         <Typography variant="subtitle2" color="text.secondary">
-          {visibleFiles.length === allPaths.length
-            ? `${allPaths.length} ${allPaths.length === 1 ? 'file' : 'files'}`
-            : `${visibleFiles.length} of ${allPaths.length} files`}
+          {filtering
+            ? `${matches.length} of ${allPaths.length} files`
+            : 'Open a folder to load its contents'}
         </Typography>
-        <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-          <ControlTooltip title="Expand all folders">
-            <IconButton
-              size="small"
-              aria-label="Expand all folders"
-              onClick={() => setExpanded(new Set(allDirPaths(tree)))}
-            >
-              <UnfoldMoreIcon fontSize="small" />
-            </IconButton>
-          </ControlTooltip>
-          <ControlTooltip title="Collapse all folders">
-            <IconButton
-              size="small"
-              aria-label="Collapse all folders"
-              onClick={() => setExpanded(new Set())}
-            >
-              <UnfoldLessIcon fontSize="small" />
-            </IconButton>
-          </ControlTooltip>
-        </Stack>
+        <ControlTooltip title="Collapse all folders">
+          <IconButton
+            size="small"
+            aria-label="Collapse all folders"
+            onClick={() => (filtering ? setFilterExpanded(new Set()) : setExpanded(new Set()))}
+          >
+            <UnfoldLessIcon fontSize="small" />
+          </IconButton>
+        </ControlTooltip>
       </Stack>
 
       <Stack
@@ -183,7 +176,11 @@ export function WorktreeFilesView({ agentId }: { agentId: string }) {
               }}
             />
           </Box>
-          {visibleFiles.length === 0 ? (
+          {filtering && filesQuery.isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+              <CircularProgress size={22} />
+            </Box>
+          ) : tree.length === 0 ? (
             <Box sx={{ px: 1, py: 2 }}>
               <EmptyState compact title="No matching files" description="Try a different filter." />
             </Box>
@@ -192,7 +189,7 @@ export function WorktreeFilesView({ agentId }: { agentId: string }) {
               <ChangesFileTree<WorktreeFileEntry>
                 tree={tree}
                 selectedPath={selectedPath}
-                expanded={expanded}
+                expanded={treeExpanded}
                 onToggleDir={toggleDir}
                 onSelectFile={(file) => setSelectedPath(file.path)}
               />
@@ -202,53 +199,7 @@ export function WorktreeFilesView({ agentId }: { agentId: string }) {
 
         <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', p: 1.25 }}>
           {selectedPath ? (
-            <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontFamily: '"IBM Plex Mono", monospace',
-                    fontSize: 12.5,
-                    overflowWrap: 'anywhere',
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  {selectedPath}
-                </Typography>
-                <ControlTooltip title={copied ? 'Copied' : 'Copy path'}>
-                  <IconButton size="small" aria-label="Copy file path" onClick={() => void copyPath()}>
-                    <ContentCopyIcon fontSize="inherit" />
-                  </IconButton>
-                </ControlTooltip>
-              </Stack>
-              {fileQuery.isLoading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : fileQuery.error ? (
-                <EmptyState
-                  compact
-                  title="Cannot show this file"
-                  description={(fileQuery.error as Error).message}
-                />
-              ) : fileQuery.data?.binary ? (
-                <EmptyState
-                  compact
-                  title="Binary file"
-                  description="This file has no text preview."
-                />
-              ) : fileQuery.data ? (
-                <>
-                  {fileQuery.data.truncated ? (
-                    <Typography variant="caption" color="text.secondary">
-                      Showing the first 100 KB of this file.
-                    </Typography>
-                  ) : null}
-                  <FileContentBlock content={fileQuery.data.content} />
-                </>
-              ) : null}
-            </Stack>
+            <WorktreeFileDetail agentId={agentId} path={selectedPath} />
           ) : (
             <EmptyState
               compact

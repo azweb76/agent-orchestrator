@@ -169,6 +169,14 @@ export interface UsageSummary {
   budget: SpendBudgetStatus;
 }
 
+/** One immediate child of a worktree directory, for lazy tree expansion. */
+export interface WorktreeDirEntry {
+  name: string;
+  /** Worktree-relative path, POSIX separators. */
+  path: string;
+  type: 'file' | 'dir';
+}
+
 /** Whether a live Claude Code process is managed by this orchestrator. */
 export type ClaudeProcessOwnership = 'orchestrator' | 'external';
 

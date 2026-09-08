@@ -10,6 +10,7 @@ import {
   getAgentDiff,
   listAgentMentionFiles,
   listAgentSlashCommands,
+  listAgentWorktreeDir,
   readAgentWorktreeFile,
 } from '../services/app.js';
 import { asyncHandler, param } from './helpers.js';
@@ -58,6 +59,14 @@ export function registerAgentToolRoutes(router: express.Router, ctx: AppContext)
     '/agents/:agentId/mention-files',
     asyncHandler(async (req, res) => {
       res.json(await listAgentMentionFiles(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.get(
+    '/agents/:agentId/dir',
+    asyncHandler(async (req, res) => {
+      const dirPath = z.string().trim().max(1024).default('').parse(req.query.path ?? '');
+      res.json(await listAgentWorktreeDir(ctx, param(req.params.agentId), dirPath));
     }),
   );
 
