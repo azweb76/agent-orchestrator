@@ -11,18 +11,11 @@ import type {
 } from '@agent-orchestrator/shared';
 import type { AppContext } from './app-context.js';
 import { listPersonalSkills } from './personal-skills.js';
-import { findSkillDirs, parseRepoSkillSource, parseSkillFrontmatter, skillRelativeFiles } from './skill-dirs.js';
+import { resolveRepo } from './repo-source.js';
+import { findSkillDirs, parseSkillFrontmatter, skillRelativeFiles } from './skill-dirs.js';
 
 const MAX_SKILL_FILES = 80;
 const SKILL_MD = 'SKILL.md';
-
-interface ResolvedRepo {
-  owner: string;
-  repo: string;
-  ref: string;
-  filePaths: string[];
-  readFile: (filePath: string) => Promise<string>;
-}
 
 function personalSkillsRoot(homeDir?: string): string {
   return path.join(homeDir ?? os.homedir(), '.claude', 'skills');
@@ -31,39 +24,6 @@ function personalSkillsRoot(homeDir?: string): string {
 async function alreadyInstalledSlugs(homeDir?: string): Promise<Set<string>> {
   const skills = await listPersonalSkills(homeDir);
   return new Set(skills.map((skill) => skill.slug));
-}
-
-async function resolveRepo(ctx: AppContext, body: PreviewRepoSkillsRequest): Promise<ResolvedRepo> {
-  if (body.workspaceId) {
-    const workspace = ctx.repos.workspaces.getById(body.workspaceId);
-    if (!workspace) throw new Error('Workspace not found');
-    const ref = body.ref?.trim() || workspace.defaultBranch || 'HEAD';
-    const filePaths = await ctx.git.listPathsAtRef(workspace.repoPath, ref);
-    return {
-      owner: workspace.githubOwner,
-      repo: workspace.githubRepo,
-      ref,
-      filePaths,
-      readFile: async (filePath) => {
-        const content = await ctx.git.showFileAtRef(workspace.repoPath, ref, filePath);
-        if (content == null) throw new Error(`File not found: ${filePath}`);
-        return content;
-      },
-    };
-  }
-
-  const repoInput = body.repo?.trim();
-  if (!repoInput) throw new Error('Provide a GitHub repository or workspace');
-  const { owner, repo } = parseRepoSkillSource(repoInput);
-  const ref = body.ref?.trim() || (await ctx.github.getRepoDefaultBranch(owner, repo));
-  const filePaths = await ctx.github.listRepoFilePaths(owner, repo, ref);
-  return {
-    owner,
-    repo,
-    ref,
-    filePaths,
-    readFile: (filePath) => ctx.github.readRepoFileText(owner, repo, filePath, ref),
-  };
 }
 
 async function toCandidate(

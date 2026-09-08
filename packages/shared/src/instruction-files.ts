@@ -126,6 +126,63 @@ export interface InstallRepoSkillsResult {
   skipped: Array<{ slug: string; reason: string }>;
 }
 
+/** User-library Claude Code subagent (`~/.claude/agents/<slug>.md`). */
+export interface PersonalAgent {
+  slug: string;
+  name: string;
+  description: string;
+  relativePath: string;
+  content: string;
+}
+
+export interface CreatePersonalAgentRequest {
+  /** File slug; sanitized to kebab-case. */
+  name: string;
+  description?: string;
+  content: string;
+}
+
+export interface UpdatePersonalAgentRequest {
+  /** Display name in frontmatter; does not rename the file. */
+  name?: string;
+  description?: string;
+  content?: string;
+}
+
+export interface RepoAgentCandidate {
+  slug: string;
+  name: string;
+  description: string;
+  relativePath: string;
+  alreadyInstalled: boolean;
+}
+
+export interface PreviewRepoAgentsRequest {
+  repo?: string;
+  ref?: string;
+  workspaceId?: string;
+}
+
+export interface PreviewRepoAgentsResponse {
+  owner: string;
+  repo: string;
+  ref: string;
+  agents: RepoAgentCandidate[];
+}
+
+export interface InstallRepoAgentsRequest {
+  repo?: string;
+  ref?: string;
+  workspaceId?: string;
+  slugs: string[];
+  overwrite?: boolean;
+}
+
+export interface InstallRepoAgentsResult {
+  installed: PersonalAgent[];
+  skipped: Array<{ slug: string; reason: string }>;
+}
+
 /**
  * Pending human-gated instruction improvement offer (persisted in automation_state).
  * Writing still requires an explicit apply in the Improve-instructions dialog.
