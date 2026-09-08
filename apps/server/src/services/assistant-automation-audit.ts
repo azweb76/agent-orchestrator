@@ -60,3 +60,22 @@ export function formatPollAddressReviewStarted(input: {
     'Same action path as the review_sweep Assistant playbook.',
   ].join(' ');
 }
+
+export function formatPollAddressReviewBlocked(input: {
+  owner: string;
+  repo: string;
+  number: number;
+  agentId: string;
+  reason: string;
+}): string {
+  const why =
+    input.reason === 'worktree_busy'
+      ? 'worktree is busy'
+      : input.reason.replace(/_/g, ' ');
+  return [
+    '[GitHub poll · Address review]',
+    `Could not start address-review on ${input.owner}/${input.repo}#${input.number}`,
+    `(agent ${input.agentId}; ${why}).`,
+    'Same audit trail as the review_sweep Assistant playbook.',
+  ].join(' ');
+}

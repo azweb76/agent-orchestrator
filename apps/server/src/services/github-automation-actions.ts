@@ -3,6 +3,7 @@ import type { AppContext } from './app-context.js';
 import { notify } from './app-context.js';
 import { archiveAgent } from './agents-lifecycle.js';
 import {
+  formatPollAddressReviewBlocked,
   formatPollAddressReviewStarted,
   formatPollFixCiCapHit,
   formatPollFixCiStarted,
@@ -138,6 +139,16 @@ async function maybeAutoAddressReview(
       number: target.number,
       reason: 'worktree_busy',
     });
+    postAutomationAuditToAssistant(
+      ctx,
+      formatPollAddressReviewBlocked({
+        owner: target.owner,
+        repo: target.repo,
+        number: target.number,
+        agentId: target.agentId,
+        reason: 'worktree_busy',
+      }),
+    );
     return;
   }
 
