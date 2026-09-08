@@ -358,7 +358,11 @@ export function buildImplementPlanPrompt(plan: string, handoff?: PlanBuildHandof
  * Kickoff prompt for compact-and-continue: the full transcript stays on the
  * stashed session; the fresh session starts from this summary and file list.
  */
-export function buildCompactContinuePrompt(summary: string, filePaths: string[] = []): string {
+export function buildCompactContinuePrompt(
+  summary: string,
+  filePaths: string[] = [],
+  lessons: string[] = [],
+): string {
   const sections: string[] = [
     'This session continues earlier work whose context window was nearly full.',
     'The summary below covers the prior conversation. Re-read the files in play before changing them; do not assume unlisted work was done.',
@@ -373,6 +377,14 @@ export function buildCompactContinuePrompt(summary: string, filePaths: string[] 
     for (const filePath of filePaths) {
       sections.push(`- ${filePath}`);
     }
+  }
+
+  if (lessons.length > 0) {
+    sections.push('', '## Durable lessons', '');
+    for (const lesson of lessons) {
+      sections.push(`- ${lesson}`);
+    }
+    sections.push('', 'Apply these lessons in this continuation. Do not rewrite instruction files unless the user asks.');
   }
 
   sections.push(

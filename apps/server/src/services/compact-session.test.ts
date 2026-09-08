@@ -8,6 +8,7 @@ import {
 import {
   buildCompactSummaryPrompt,
   collectCompactFilePaths,
+  parseCompactLearnResponse,
   parseCompactSummaryResponse,
 } from './compact-session.js';
 
@@ -16,8 +17,8 @@ test('buildCompactSummaryPrompt includes the session title and transcript', () =
     title: 'Fix login flow',
     transcript: 'user: fix the login bug\n\nassistant: patched auth.ts',
   });
-  assert.match(system, /continuation summaries/);
-  assert.match(user, /Session title: Fix login flow/);
+    assert.match(system, /Durable lessons/);
+    assert.match(user, /Session title: Fix login flow/);
   assert.match(user, /patched auth\.ts/);
 });
 
@@ -54,9 +55,27 @@ test('buildCompactContinuePrompt seeds the summary and files in play', () => {
   assert.match(prompt, /- src\/b\.ts/);
 });
 
-test('buildCompactContinuePrompt omits the file section when nothing is in play', () => {
-  const prompt = buildCompactContinuePrompt('Just the summary.');
-  assert.doesNotMatch(prompt, /## Files in play/);
+test('parseCompactLearnResponse splits durable lessons from the summary', () => {
+  const parsed = parseCompactLearnResponse(`## Goal
+
+Ship login.
+
+## Durable lessons
+- Prefer /fix-ci instead of exploring the whole repo
+- Do not re-read auth.ts after the first pass
+`);
+  assert.match(parsed.summary, /Ship login/);
+  assert.doesNotMatch(parsed.summary, /Durable lessons/);
+  assert.deepEqual(parsed.lessons, [
+    'Prefer /fix-ci instead of exploring the whole repo',
+    'Do not re-read auth.ts after the first pass',
+  ]);
+});
+
+test('buildCompactContinuePrompt includes durable lessons when present', () => {
+  const prompt = buildCompactContinuePrompt('Prior work summary.', [], ['Use /plan-work first']);
+  assert.match(prompt, /## Durable lessons/);
+  assert.match(prompt, /Use \/plan-work first/);
 });
 
 test('threshold predicates flag crossed and hot usage', () => {

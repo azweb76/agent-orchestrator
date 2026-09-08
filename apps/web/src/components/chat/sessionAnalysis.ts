@@ -56,6 +56,8 @@ export function seedImproveFromFinding(finding: SessionGradeFinding): FindingImp
 
 export function findingImproveLabel(finding: SessionGradeFinding): string {
   const action = finding.recommendedAction;
+  if (action?.kind === 'claude_md') return 'Update CLAUDE.md';
+  if (action?.kind === 'agents_md') return 'Update AGENTS.md';
   if (!action || action.kind !== 'skill') return 'Improve instructions';
   const personal = action.scope !== 'project';
   if (action.operation === 'update') {

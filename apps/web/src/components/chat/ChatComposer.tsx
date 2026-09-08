@@ -39,6 +39,7 @@ export function ChatComposer({
   grade,
   canGrade,
   onGrade,
+  hasDraftOffer,
 }: ChatComposerProps) {
   const [slashDismissed, setSlashDismissed] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -212,6 +213,7 @@ export function ChatComposer({
           onStop={onStop}
           onClear={onClear}
           onGrade={onGrade}
+          hasDraftOffer={hasDraftOffer}
           onAddFiles={(files) => void addFiles(files)}
           onSubmit={submit}
         />

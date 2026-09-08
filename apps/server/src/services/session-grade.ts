@@ -1,4 +1,5 @@
 import type {
+  AgentEvent,
   Message,
   SessionContextAttribution,
   SessionGradeAnalysis,
@@ -17,13 +18,26 @@ import {
 import { extractJsonObject } from './extract-json-object.js';
 import { buildSessionTranscript } from './session-transcript.js';
 import type { InstructionFileExcerpt } from './instruction-files.js';
+import { groundSessionGradeFindings } from './session-grade-actions.js';
+import {
+  BLOATED_SKILL_CHARS,
+  collectCorrectionSignals,
+  collectOversizedSkills,
+  collectSkippedSkills,
+  skillsForGrade,
+  type CorrectionSignal,
+  type GradeSkillInfo,
+} from './session-grade-signals.js';
 
 export interface SessionGradeContext {
   transcript: string;
   stats: SessionGradeStats;
   tools: Array<{ name: string; count: number }>;
   usedSkills: string[];
-  availableSkills: Array<{ command: string; description: string; source?: string }>;
+  skippedSkills: string[];
+  availableSkills: GradeSkillInfo[];
+  oversizedSkills: GradeSkillInfo[];
+  corrections: CorrectionSignal[];
   instructionFiles: InstructionFileExcerpt[];
   notes?: string;
   sessionTitle: string;
@@ -133,7 +147,10 @@ export function buildSessionGradeContext(input: {
   costUsd?: number | null;
   sessionTemplate?: string;
   contextAttribution?: SessionContextAttribution | null;
+  events?: AgentEvent[];
+  sessionId?: string;
 }): SessionGradeContext {
+  const availableSkills = skillsForGrade(input.skills);
   const skillCommands = input.skills.filter((item) => item.kind === 'skill');
   const stats = buildSessionGradeStats(input.messages, input.instructionFiles, skillCommands.length);
   if (typeof input.usageTokens === 'number' && input.usageTokens > 0) {
@@ -142,16 +159,16 @@ export function buildSessionGradeContext(input: {
   if (typeof input.costUsd === 'number' && Number.isFinite(input.costUsd)) {
     stats.costUsd = input.costUsd;
   }
+  const usedSkills = collectUsedSkills(input.messages, skillCommands);
   return {
     transcript: buildSessionTranscript(input.messages),
     stats,
     tools: collectToolCounts(input.messages),
-    usedSkills: collectUsedSkills(input.messages, skillCommands),
-    availableSkills: skillCommands.map((item) => ({
-      command: item.command,
-      description: item.description,
-      source: item.source,
-    })),
+    usedSkills,
+    skippedSkills: collectSkippedSkills(usedSkills, availableSkills),
+    availableSkills,
+    oversizedSkills: collectOversizedSkills(availableSkills),
+    corrections: collectCorrectionSignals(input.messages, input.events ?? [], input.sessionId),
     instructionFiles: input.instructionFiles,
     notes: input.notes?.trim() || undefined,
     sessionTitle: input.sessionTitle,
@@ -175,7 +192,12 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
     'Look at excessive turns, wasted tokens, bloated context, misconfigured instruction files, and missing or weak skills.',
     'Judge whether the agent used Explore/Task subagents and phase skills (plan-work, implement-plan, code-review, fix-ci, address-review) when appropriate.',
     'The skills finding must say how future sessions get better: update an existing listed skill, or propose a new skill with a kebab-case slug in action.name.',
+    'Compare usedSkills to availableSkills. If a listed skill (especially /code-review, /plan-work, /implement-plan, /fix-ci, /address-review) was skipped, say so and prefer action.operation=update on that slug over inventing a new one.',
+    'Treat corrections (rewinds, user "no, do X", permission denials, failed tools) as labeled failures. Fold those into findings so skills capture the human fix, not just token waste.',
+    'Route the action: situational fact for this agent → do not invent a skill (leave skills ok, or a short note); reusable habit → skill (personal); repo convention → claude_md or agents_md; phase tactic on Build/Review/Fix CI → update the matching phase skill.',
+    'Flag oversized SKILL.md files (charCount over the bloated-skill threshold) the same way as bloated CLAUDE.md. Prefer trim/merge over a new slug.',
     'When recommending a skill fix for a phase session, prefer updating the matching phase skill over inventing a new skill slug.',
+    'action.name must match an existing availableSkills command or a valid kebab-case slug. Do not invent tool names.',
     'New skills belong in the user/personal scope unless the practice is truly specific to this repository (its APIs, layout, conventions, or tooling). Generic agent habits, checklists, and workflows are personal.',
     'Set action.operation to update when changing an existing skill, or create for a new skill. Set action.scope to personal or project accordingly.',
     'Call the submit_session_grade tool with a JSON object whose keys are quoted:',
@@ -218,7 +240,11 @@ export function buildSessionGradePrompt(context: SessionGradeContext): {
         stats: context.stats,
         tools: context.tools,
         usedSkills: context.usedSkills,
+        skippedSkills: context.skippedSkills,
         availableSkills: context.availableSkills,
+        oversizedSkills: context.oversizedSkills,
+        bloatedSkillChars: BLOATED_SKILL_CHARS,
+        corrections: context.corrections,
         instructionFiles: instructionSummary,
         contextAttribution: context.contextAttribution ?? null,
       },
@@ -318,6 +344,7 @@ function defaultFinding(category: SessionGradeFindingCategory): SessionGradeFind
 export function parseSessionGradeResponse(
   raw: unknown,
   stats: SessionGradeStats,
+  grounding?: { availableSkills: GradeSkillInfo[]; skippedSkills: string[]; sessionTemplate?: string },
 ): SessionGradeAnalysis & { score: SessionGradeScore } {
   const parsed = extractJsonObject(raw, 'Session grade response');
   const findings: SessionGradeFinding[] = [];
@@ -354,10 +381,14 @@ export function parseSessionGradeResponse(
   const summary = asString(parsed.summary);
   if (!summary) throw new Error('Session grade was missing a summary');
 
+  const findings = grounding
+    ? groundSessionGradeFindings(normalized, grounding)
+    : normalized;
+
   return {
-    score: parseScore(parsed.score) ?? scoreFromFindings(normalized),
+    score: parseScore(parsed.score) ?? scoreFromFindings(findings),
     summary,
-    findings: normalized,
+    findings,
     stats,
   };
 }

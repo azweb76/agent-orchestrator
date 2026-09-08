@@ -4,16 +4,19 @@ Ideas for a closed loop where every session makes the next one cheaper, faster, 
 
 ## Now (shipped in this change)
 
-- **Attribution inside context** — Session insights splits occupancy into conversation, tool results, skills, CLAUDE.md/AGENTS.md, and memory. Analysis names the largest bucket and suggests a cut (trim a skill, stop re-reading a file, compact earlier).
+- **Used vs skipped skills** — Grade context compares `availableSkills` to Skill-tool / slash use. Skipped phase skills prefer *update that skill* over a new slug.
+- **Correction mining** — Rewind, user “no, do X”, permission denials, and failed tools are labeled failures in the grader prompt.
+- **Grounded skill names** — `action.name` must match a listed skill or a valid kebab-case slug; invented tools are rewritten or dropped.
+- **Offer routing** — Instruction-draft offers follow skills / CLAUDE.md / AGENTS.md actions (situational efficiency notes still go to memory).
+- **Skill hygiene** — SKILL.md `charCount` is graded; oversized skills are flagged like bloated CLAUDE.md.
+- **Compact-and-learn** — Compact & continue extracts durable lessons into the continuation prompt and a human-gated draft offer (never auto-writes files).
+- **Insights chip** — Quiet badge when a skill draft is waiting; click opens Analysis next to the offer banner.
 
 ## Next (high leverage)
 
 1. **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After N similar grades, auto-offer one personal skill instead of N one-off drafts.
-2. **Used vs skipped skills** — Compare `availableSkills` to Skill-tool / slash use. If `/code-review` or `plan-work` existed and was ignored, the skills finding should say so and prefer *update that skill* over a new slug.
-3. **Correction mining** — Treat rewind, user “no, do X”, and permission denials as labeled failures. Fold those into analysis notes automatically so skills capture the human fix, not just token waste.
-4. **Memory vs skill vs CLAUDE.md routing** — A small classifier: situational fact → memory; reusable habit → personal skill; repo convention → CLAUDE.md/AGENTS.md; phase tactic → project phase skill. Analysis already has `action.kind`/`scope`; make the UI and offers follow the same rules every time.
-5. **Compact-and-learn** — Before compact & continue, extract durable lessons (and optional skill draft) so compaction does not throw away the improvement signal.
-6. **Skill hygiene** — Detect duplicate, stale, or conflicting personal skills. Offer merge/archive. Bloated skills are a context problem; analysis should flag oversized SKILL.md files the same way it flags bloated CLAUDE.md.
+2. **Memory vs skill vs CLAUDE.md routing** — Analysis already has `action.kind`/`scope`; keep tightening the classifier and UI copy so every offer follows the same rules.
+3. **Session comparison** — “This build vs last build on the same skill version”: turns, tokens, cost, tool-call mix. Makes skill edits measurable.
 
 ## Fleet loop
 
@@ -24,7 +27,7 @@ Ideas for a closed loop where every session makes the next one cheaper, faster, 
 
 ## Analysis quality
 
-12. **Grounded skill names** — Require `action.name` to match an existing skill or a valid new slug; reject invented tools. Prefer updating phase skills on Build/Review/Fix CI unless the model explicitly marks the lesson personal.
+12. ~~Grounded skill names~~ — shipped (see Now).
 13. **Session comparison** — “This build vs last build on the same skill version”: turns, tokens, cost, tool-call mix. Makes skill edits measurable.
 14. **Subagent playbooks** — Findings for missing Explore/Task use should draft a *personal* “when to spawn a subagent” skill, not a paragraph in CLAUDE.md.
 15. **Permission-mode waste** — Plan-mode ping-pong and over-broad auto-allow should become findings with a suggested default mode on the agent task, not a new skill every time.
@@ -32,7 +35,7 @@ Ideas for a closed loop where every session makes the next one cheaper, faster, 
 
 ## Product surfaces
 
-17. **Insights chip states** — Color already tracks context heat. Add a quiet badge when a skill draft is waiting, and a one-click path from the chip to the offer banner.
+17. ~~Insights chip states~~ — shipped (see Now).
 18. **From-goal kickoff** — After grading, suggested *task* prompt/system-prompt edits (agent tasks), not only skills. Kickoff should not grow hard-coded instructions; edit the task.
 19. **Diff the skill** — Improve-instructions dialog: show unified diff vs current SKILL.md before write.
 20. **Dry-run apply** — Preview which future kickoffs would inject the new skill (slash discovery + allowedTools), so users see blast radius before writing to `~/.claude/skills`.

@@ -122,6 +122,35 @@ test('seedInstructionOfferFromFindings keeps an explicit personal skill off the 
   assert.equal(seed.relativePath, undefined);
 });
 
+test('seedInstructionOfferFromFindings prefers a skills action over a mismatched instruction-file action', () => {
+  const seed = seedInstructionOfferFromFindings(
+    { template: 'create-draft-pr' },
+    [
+      {
+        category: 'instruction_files',
+        severity: 'warning',
+        title: 'Turns',
+        detail: 'Long',
+        recommendedAction: { kind: 'skill' },
+      },
+      {
+        category: 'skills',
+        severity: 'issue',
+        title: 'Update code-review',
+        detail: 'Skipped the listed skill',
+        recommendedAction: {
+          kind: 'skill',
+          scope: 'personal',
+          name: 'code-review',
+          operation: 'update',
+        },
+      },
+    ],
+  );
+  assert.equal(seed.name, 'code-review');
+  assert.equal(seed.scope, 'personal');
+});
+
 test('seedInstructionOfferFromFindings defaults chat skills to personal', () => {
   const seed = seedInstructionOfferFromFindings({ template: 'create-draft-pr' }, [
     {

@@ -56,6 +56,8 @@ export interface SlashCommand {
   aliases?: string[];
   /** Where the command was discovered from. */
   source?: 'app' | 'project' | 'personal' | 'bundled';
+  /** SKILL.md character count when known (skill hygiene / bloated-context). */
+  charCount?: number;
 }
 
 /** Built-in orchestrator-local slash commands (not forwarded to Claude). */

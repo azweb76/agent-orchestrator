@@ -209,14 +209,22 @@ export class AnthropicService {
 
     const toolBlock = response.content.find((block) => block.type === 'tool_use');
     if (toolBlock && toolBlock.type === 'tool_use') {
-      return parseSessionGradeResponse(toolBlock.input, input.stats);
+      return parseSessionGradeResponse(toolBlock.input, input.stats, {
+        availableSkills: input.availableSkills,
+        skippedSkills: input.skippedSkills,
+        sessionTemplate: input.sessionTemplate,
+      });
     }
 
     const text = response.content
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('');
 
-    return parseSessionGradeResponse(text, input.stats);
+    return parseSessionGradeResponse(text, input.stats, {
+      availableSkills: input.availableSkills,
+      skippedSkills: input.skippedSkills,
+      sessionTemplate: input.sessionTemplate,
+    });
   }
 
   /** Pick ordered follow-up catalog ids for a finished session. */

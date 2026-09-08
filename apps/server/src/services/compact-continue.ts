@@ -2,6 +2,12 @@ import fs from 'node:fs/promises';
 import type { Response } from 'express';
 import type { ChatSession } from '@agent-orchestrator/shared';
 import { buildCompactContinuePrompt, uniqueSessionTitle } from '@agent-orchestrator/shared';
+import { collectCompactFilePaths, parseCompactLearnResponse } from './compact-session.js';
+import {
+  getInstructionDraftOffer,
+  publishInstructionDraftOffer,
+} from './instruction-offers.js';
+import { nowIso } from './app-context.js';
 import {
   createSessionForAgent,
   getAgentDetail,
@@ -13,7 +19,6 @@ import {
   type AppContext,
 } from './app.js';
 import { clearSessionQueue } from './chat-queue.js';
-import { collectCompactFilePaths } from './compact-session.js';
 import { buildSessionTranscript } from './session-transcript.js';
 
 async function readLogText(logPath: string | null | undefined): Promise<string> {
@@ -56,10 +61,11 @@ export async function compactAndContinueSession(
   }
 
   // Summarize before touching the session so a failure leaves everything as is.
-  const summary = await ctx.anthropic.summarizeSessionForContinuation({
+  const rawSummary = await ctx.anthropic.summarizeSessionForContinuation({
     title: session.title,
     transcript,
   });
+  const { summary, lessons } = parseCompactLearnResponse(rawSummary);
 
   const runLogPath =
     ctx.claude.getRunningProcess(session.id)?.logPath ?? session.runLogPath ?? null;
@@ -97,13 +103,26 @@ export async function compactAndContinueSession(
       sessionId: continuation.id,
       summaryLength: summary.length,
       fileCount: filePaths.length,
+      lessonCount: lessons.length,
     }),
   );
+
+  if (lessons.length > 0 && !getInstructionDraftOffer(ctx, agentId)) {
+    publishInstructionDraftOffer(ctx, agentId, {
+      sessionId: session.id,
+      gradedAt: nowIso(),
+      findingTitles: lessons.slice(0, 5),
+      kind: 'skill',
+      scope: 'personal',
+      extraNotes: lessons.map((lesson) => `- ${lesson}`).join('\n'),
+      draft: null,
+    });
+  }
 
   await streamAgentChat(
     ctx,
     agentId,
-    { message: buildCompactContinuePrompt(summary, filePaths), force: true },
+    { message: buildCompactContinuePrompt(summary, filePaths, lessons), force: true },
     res,
     continuation.id,
     { createdSession: continuation },
