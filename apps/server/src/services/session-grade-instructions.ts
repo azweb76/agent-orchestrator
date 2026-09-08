@@ -7,13 +7,13 @@ import type {
 } from '@agent-orchestrator/shared';
 import {
   buildSessionContextUsage,
-  instructionGradeFindings,
   isPhaseSkillSlug,
   parseSkillVersion,
   phaseSkillRelativePath,
   resolveInstructionScope,
   setSkillFrontmatterVersion,
   shouldOfferInstructionDraft,
+  SKILL_GAP_CLUSTER_LOOKBACK,
 } from '@agent-orchestrator/shared';
 import { buildSessionTranscript } from './session-transcript.js';
 import {
@@ -33,7 +33,7 @@ import {
   clearInstructionDraftOffer,
   publishInstructionDraftOffer,
 } from './instruction-offers.js';
-import { seedInstructionOfferFromFindings } from './instruction-offer-seed.js';
+import { buildInstructionOfferSeed } from './instruction-offer-seed.js';
 import { recordSkillGradeMetrics } from './skill-metrics.js';
 import { recordGradeMemoriesFromFindings } from './grade-memories.js';
 import { mergePromptAttribution } from './session-context-usage.js';
@@ -52,8 +52,8 @@ async function offerInstructionDraftAfterGrade(
 ): Promise<void> {
   if (!shouldOfferInstructionDraft(session)) return;
 
-  const findings = instructionGradeFindings(session.grade);
-  const seed = seedInstructionOfferFromFindings(session, findings);
+  const recent = ctx.repos.sessions.listRecentlyGraded(SKILL_GAP_CLUSTER_LOOKBACK);
+  const { seed } = buildInstructionOfferSeed(session, recent);
   const request: GenerateInstructionDraftRequest = {
     kind: seed.kind,
     scope: seed.scope,
@@ -117,6 +117,15 @@ async function offerInstructionDraftAfterGrade(
     extraNotes: seed.extraNotes || undefined,
     preferredSkillSlug: seed.preferredSkillSlug,
     metricsComparison,
+    cluster: seed.cluster
+      ? {
+          key: seed.cluster.key,
+          theme: seed.cluster.theme,
+          skillSlug: seed.cluster.skillSlug,
+          count: seed.cluster.count,
+          sessionIds: seed.cluster.sessionIds,
+        }
+      : null,
   });
 }
 

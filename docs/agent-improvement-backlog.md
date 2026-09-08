@@ -4,11 +4,10 @@ Ideas for a closed loop where every session makes the next one cheaper, faster, 
 
 ## Now (shipped in this change)
 
-- **Attribution inside context** — Session insights splits occupancy into conversation, tool results, skills, CLAUDE.md/AGENTS.md, and memory. Analysis names the largest bucket and suggests a cut (trim a skill, stop re-reading a file, compact earlier).
+- **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After 3 similar grades, the instruction-draft offer is one personal skill instead of N one-off drafts.
 
 ## Next (high leverage)
 
-1. **Skill-gap clustering** — Across agents, group repeated findings (“never ran tests”, “re-explored instead of using Explore”). After N similar grades, auto-offer one personal skill instead of N one-off drafts.
 2. **Used vs skipped skills** — Compare `availableSkills` to Skill-tool / slash use. If `/code-review` or `plan-work` existed and was ignored, the skills finding should say so and prefer *update that skill* over a new slug.
 3. **Correction mining** — Treat rewind, user “no, do X”, and permission denials as labeled failures. Fold those into analysis notes automatically so skills capture the human fix, not just token waste.
 4. **Memory vs skill vs CLAUDE.md routing** — A small classifier: situational fact → memory; reusable habit → personal skill; repo convention → CLAUDE.md/AGENTS.md; phase tactic → project phase skill. Analysis already has `action.kind`/`scope`; make the UI and offers follow the same rules every time.
