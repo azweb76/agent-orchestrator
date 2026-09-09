@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { Box } from '@mui/material';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import type { Message, PermissionRequest } from '@agent-orchestrator/shared';
+import type { ChatTurn, PermissionPrompt } from './types';
 
 export const CHAT_COLUMN_MAX_WIDTH = 780;
 
@@ -24,15 +24,15 @@ export type ChatTranscriptHandle = {
 };
 
 type ChatTranscriptListProps = {
-  messages: Message[];
-  permissionRequests: PermissionRequest[];
+  messages: ChatTurn[];
+  permissionRequests: PermissionPrompt[];
   scrollerRef: (element: HTMLDivElement | null) => void;
   bottomSentinelRef: Ref<HTMLDivElement | null>;
   stickToBottomRef: React.MutableRefObject<boolean>;
   onShowJumpToLatestChange: (show: boolean) => void;
   onScroll: () => void;
-  renderMessage: (message: Message, index: number) => ReactNode;
-  renderPermissionRequest: (request: PermissionRequest) => ReactNode;
+  renderMessage: (message: ChatTurn, index: number) => ReactNode;
+  renderPermissionRequest: (request: PermissionPrompt) => ReactNode;
 };
 
 /** Extra pixels below the fold so tall permission cards stay scrollable in Virtuoso. */
@@ -42,8 +42,8 @@ type TranscriptListBridge = {
   scrollerRef: (element: HTMLDivElement | null) => void;
   onScroll: () => void;
   bottomSentinelRef: Ref<HTMLDivElement | null>;
-  permissionRequests: PermissionRequest[];
-  renderPermissionRequest: (request: PermissionRequest) => ReactNode;
+  permissionRequests: PermissionPrompt[];
+  renderPermissionRequest: (request: PermissionPrompt) => ReactNode;
 };
 
 const TranscriptListBridgeContext = createContext<TranscriptListBridge | null>(null);
@@ -90,8 +90,8 @@ const TranscriptMessageRow = memo(function TranscriptMessageRow({
   renderMessage,
 }: {
   index: number;
-  message: Message;
-  renderMessage: (message: Message, index: number) => ReactNode;
+  message: ChatTurn;
+  renderMessage: (message: ChatTurn, index: number) => ReactNode;
 }) {
   return (
     <Box
@@ -150,7 +150,7 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
     );
 
     const itemContent = useCallback(
-      (index: number, message: Message) => (
+      (index: number, message: ChatTurn) => (
         <TranscriptMessageRow index={index} message={message} renderMessage={renderMessage} />
       ),
       [renderMessage],

@@ -8,7 +8,7 @@ import { ComposerPendingAttachments } from './ComposerPendingAttachments';
 import { ComposerToolbar } from './ComposerToolbar';
 import type { ChatComposerProps } from './composerTypes';
 import { MentionMenu } from './MentionMenu';
-import { SlashCommandMenu } from './SlashCommandMenu';
+import { SlashCommandMenu } from '../claude-chat/composer/SlashCommandMenu';
 import { useComposerImages } from './useComposerImages';
 import { createComposerKeyDownHandler } from './useComposerKeyboard';
 import { useComposerMentions } from './useComposerMentions';
@@ -145,10 +145,20 @@ export function ChatComposer({
 
       {showSlashMenu && (
         <SlashCommandMenu
-          commands={slashMatch}
+          commands={slashMatch.map((item) => ({
+            id: `${item.command}-${item.source ?? 'app'}`,
+            command: item.command,
+            description: item.description,
+            aliases: item.aliases,
+            prompt: item.prompt,
+            kind: item.kind,
+          }))}
           highlight={highlight}
           onHighlight={setHighlight}
-          onSelect={applySlashSelection}
+          onSelect={(item) => {
+            const match = slashMatch.find((command) => command.command === item.command);
+            if (match) applySlashSelection(match);
+          }}
         />
       )}
 

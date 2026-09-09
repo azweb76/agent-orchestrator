@@ -7,10 +7,12 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import type { ReactNode } from 'react';
-import { type ToolActivityItem } from '@agent-orchestrator/shared';
+import type { ChatBlock } from './types';
 import { formatDurationMs, subagentTypeLabel, toolActionLabel } from './toolPresentation';
 
-function pickActive(items: ToolActivityItem[]): ToolActivityItem | undefined {
+type ToolRow = Extract<ChatBlock, { type: 'tool_use' }>;
+
+function pickActive(items: ToolRow[]): ToolRow | undefined {
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const item = items[i]!;
     if (item.status === 'running') return item;
@@ -43,7 +45,7 @@ function toolIcon(name: string, taskType?: string): ReactNode {
   }
 }
 
-function subagentTitle(item: ToolActivityItem): string {
+function subagentTitle(item: ToolRow): string {
   const description = item.task?.description?.trim();
   if (description) return description;
   const typeLabel = subagentTypeLabel(item.task?.subagentType);
@@ -52,7 +54,7 @@ function subagentTitle(item: ToolActivityItem): string {
   return toolActionLabel(item.name);
 }
 
-function subagentActivity(item: ToolActivityItem): string | undefined {
+function subagentActivity(item: ToolRow): string | undefined {
   const lastTool = item.task?.lastToolName;
   const detail = item.detail?.trim();
   const title = item.task?.description?.trim();
@@ -61,7 +63,7 @@ function subagentActivity(item: ToolActivityItem): string | undefined {
   return undefined;
 }
 
-function subagentMeta(item: ToolActivityItem): string | undefined {
+function subagentMeta(item: ToolRow): string | undefined {
   const parts: string[] = [];
   const duration = formatDurationMs(item.task?.durationMs);
   if (duration) parts.push(duration);
@@ -138,7 +140,7 @@ function ActivityIcon({
  * Single in-place activity card for the active (non-subagent) tool.
  * Does not accumulate a list of past tool events in the chat log.
  */
-export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
+export function ToolProgressBar({ items }: { items: ToolRow[] }) {
   const active = pickActive(items);
   const doneCount = items.filter((item) => item.status === 'done').length;
   const label = active ? toolActionLabel(active.name, active.detail) : 'Working';
@@ -208,7 +210,7 @@ export function ToolProgressBar({ items }: { items: ToolActivityItem[] }) {
   );
 }
 
-function SubagentRow({ item }: { item: ToolActivityItem }) {
+function SubagentRow({ item }: { item: ToolRow }) {
   const running = item.status === 'running';
   const title = subagentTitle(item);
   const activity = subagentActivity(item);
@@ -316,7 +318,7 @@ function SubagentRow({ item }: { item: ToolActivityItem }) {
  * during the turn, including Done/Failed siblings while another is still running.
  * The chat timeline hides this list once the turn is finished.
  */
-export function SubagentActivityList({ items }: { items: ToolActivityItem[] }) {
+export function SubagentActivityList({ items }: { items: ToolRow[] }) {
   if (items.length === 0) return null;
   const runningCount = items.filter((item) => item.status === 'running').length;
 

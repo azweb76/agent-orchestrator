@@ -1,5 +1,5 @@
 import { TextField } from '@mui/material';
-import { ControlTooltip } from '../ui/ControlTooltip';
+import { ControlTooltip } from '../../ui/ControlTooltip';
 
 interface ComposerInputProps {
   archived: boolean;
@@ -8,6 +8,7 @@ interface ComposerInputProps {
   onPaste: (files: File[]) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   onDraftInput: () => void;
+  placeholder?: string;
 }
 
 export function ComposerInput({
@@ -17,6 +18,7 @@ export function ComposerInput({
   onPaste,
   onKeyDown,
   onDraftInput,
+  placeholder,
 }: ComposerInputProps) {
   return (
     <ControlTooltip title="Message Claude — Enter to send, Shift+Enter for newline">
@@ -25,7 +27,7 @@ export function ComposerInput({
         multiline
         minRows={1}
         maxRows={8}
-        placeholder={archived ? 'This agent is archived' : 'Message Claude…'}
+        placeholder={placeholder ?? (archived ? 'This agent is archived' : 'Message Claude…')}
         value={draft}
         disabled={archived}
         variant="standard"
