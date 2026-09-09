@@ -12,6 +12,8 @@ const TOOL_LABELS: Record<string, string> = {
   NotebookEdit: 'Editing notebook',
   Skill: 'Using skill',
   AskUserQuestion: 'Asking a question',
+  ask_user: 'Asking a question',
+  propose_brain_draft: 'Proposing Brain draft',
   ExitPlanMode: 'Proposing a plan',
   TodoWrite: 'Updating tasks',
   BashOutput: 'Checking command output',

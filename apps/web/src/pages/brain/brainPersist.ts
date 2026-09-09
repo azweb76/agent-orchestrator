@@ -1,4 +1,4 @@
-import type { AgentTask, BrainDraft, TaskFollowUp } from '@agent-orchestrator/shared';
+import { brainDraftIdentity, type AgentTask, type BrainChangeFile, type BrainDraft, type TaskFollowUp } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 
 export function taskToDraft(task: AgentTask): BrainDraft {
@@ -75,37 +75,48 @@ export async function saveCatalogDraft(
   return api.createTaskFollowUp(body);
 }
 
-export async function acceptLibraryFiles(
-  files: Array<{
-    id: string;
-    kind: 'skill' | 'agent';
-    slug?: string;
-    name: string;
-    description: string;
-    content: string;
-  }>,
+export async function acceptChangeFiles(
+  files: BrainChangeFile[],
+  catalogs: { tasks?: AgentTask[]; followUps?: TaskFollowUp[] },
 ): Promise<{ failed: string[]; succeededIds: string[] }> {
   const failed: string[] = [];
   const succeededIds: string[] = [];
   for (const file of files) {
-    const body = {
-      name: file.name.trim(),
-      description: file.description.trim(),
-      content: file.content.trim(),
-    };
     try {
-      if (file.kind === 'skill') {
-        if (file.slug) await api.updatePersonalSkill(file.slug, body);
-        else await api.createPersonalSkill(body);
-      } else if (file.slug) {
-        await api.updatePersonalAgent(file.slug, body);
+      if (file.kind === 'skill' || file.kind === 'agent') {
+        await persistMarkdownFile(file);
+      } else if (file.draft.kind === 'task') {
+        const taskId = file.draft.id;
+        const editing = catalogs.tasks?.find((item) => item.id === taskId);
+        await saveCatalogDraft(file.draft, editing, undefined);
+      } else if (file.draft.kind === 'follow-up') {
+        const followUpId = file.draft.id;
+        const editing = catalogs.followUps?.find((item) => item.id === followUpId);
+        await saveCatalogDraft(file.draft, undefined, editing);
       } else {
-        await api.createPersonalAgent(body);
+        continue;
       }
       succeededIds.push(file.id);
     } catch (error) {
-      failed.push(`${file.kind}:${file.slug ?? file.name}: ${error instanceof Error ? error.message : String(error)}`);
+      const identity = brainDraftIdentity(file.draft) ?? file.draft.name;
+      failed.push(`${file.kind}:${identity}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return { failed, succeededIds };
+}
+
+async function persistMarkdownFile(file: BrainChangeFile): Promise<void> {
+  if (file.draft.kind !== 'skill' && file.draft.kind !== 'agent') return;
+  const body = {
+    name: file.draft.name.trim(),
+    description: file.draft.description.trim(),
+    content: file.draft.content.trim(),
+  };
+  if (file.kind === 'skill') {
+    if (file.draft.slug) await api.updatePersonalSkill(file.draft.slug, body);
+    else await api.createPersonalSkill(body);
+    return;
+  }
+  if (file.draft.slug) await api.updatePersonalAgent(file.draft.slug, body);
+  else await api.createPersonalAgent(body);
 }

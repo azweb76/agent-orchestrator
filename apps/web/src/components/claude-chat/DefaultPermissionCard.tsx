@@ -33,7 +33,7 @@ export function DefaultPermissionCard({
   onDenyPlan?: ClaudeChatProps['onDenyPlan'];
 }) {
   const card =
-    prompt.toolName === 'AskUserQuestion' ? (
+    prompt.toolName === 'AskUserQuestion' || prompt.toolName === 'ask_user' ? (
       <AskUserQuestionCard
         questions={parseQuestions(prompt.input)}
         submitting={busy}

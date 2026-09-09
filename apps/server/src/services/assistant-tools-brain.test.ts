@@ -171,6 +171,34 @@ test('get_session_grade returns analysis for a graded session', async () => {
   assert.match(body.comment, /Skipped tests/);
 });
 
+test('propose_brain_draft returns task and follow-up files', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-brain-tool-'));
+  const ctx = makeCtx(tmp);
+  const result = await executeAssistantTool(ctx, 'propose_brain_draft', {
+    files: [
+      {
+        kind: 'task',
+        name: 'plan-feature',
+        title: 'Plan feature',
+        purpose: 'plan',
+        promptTemplate: 'Plan {{goal}}',
+      },
+      {
+        kind: 'follow-up',
+        name: 'create-pr',
+        title: 'Create PR',
+        prompt: 'Open a draft PR',
+        kindValue: 'prompt',
+      },
+    ],
+  });
+  assert.equal(result.isError, undefined);
+  const body = JSON.parse(result.content) as { files?: Array<{ kind: string }> };
+  assert.equal(body.files?.length, 2);
+  assert.equal(body.files?.[0]?.kind, 'task');
+  assert.equal(body.files?.[1]?.kind, 'follow-up');
+});
+
 test('propose_brain_draft returns a skill draft', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-brain-tool-'));
   const ctx = makeCtx(tmp);

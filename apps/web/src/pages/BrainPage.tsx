@@ -16,9 +16,9 @@ const TAB_COPY: Record<BrainTab, string> = {
   agents:
     'Personal Claude Code subagents live in ~/.claude/agents. Draft them with skills in the same changeset, then Accept.',
   tasks:
-    'Agent kickoff templates: purpose, prompts, model, effort, permissions, and tools. From goal can Auto-select using purpose.',
+    'Agent kickoff templates: purpose, prompts, model, effort, permissions, and tools. Draft them in the same changeset as skills and follow-ups, then Accept. From goal can Auto-select using purpose.',
   'follow-ups':
-    'Post-session chips. After a session finishes, AI picks which enabled entries to show from this catalog.',
+    'Post-session chips. Draft them in the changeset with tasks and skills; after a session finishes, AI picks which enabled entries to show.',
 };
 
 export function BrainPage() {
@@ -34,7 +34,7 @@ export function BrainPage() {
       <PageHeader
         eyebrow="Library"
         title="Brain"
-        description="User-level skills and Claude Code subagents, plus kickoff tasks and follow-up chips. Ask the copilot to draft one or more skills and agents, edit or chat to refine, undo files you do not want, then Accept to write your user library."
+        description="User-level skills, Claude Code subagents, kickoff tasks, and follow-up chips. Ask the copilot to draft one or more items, edit or chat to refine, undo what you do not want, then Accept."
       />
 
       <BrainSyncBar />

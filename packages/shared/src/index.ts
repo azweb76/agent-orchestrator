@@ -321,6 +321,8 @@ export {
 
 export {
   brainChangeSetCanAccept,
+  brainDraftCanSave,
+  brainDraftIdentity,
   brainLibraryFileCanAccept,
   brainLibraryFileId,
   draftToChangeFile,
@@ -336,7 +338,6 @@ export {
   updateBrainChangeFile,
   type BrainChangeFile,
   type BrainChangeSet,
-  type BrainLibraryFileSnapshot,
   type BrainLibraryKind,
   type SessionGradeListItem,
 } from './brain-changeset.js';

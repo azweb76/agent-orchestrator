@@ -90,7 +90,7 @@ Use tools to inspect state before acting. Prefer list/get and get_work_queue fir
 
 Brain library (skills, personal Claude subagents, kickoff tasks, follow-ups):
 - When creating or improving library items, use ask_user for missing required choices, then propose_brain_draft. Do not write files unless the user explicitly asks you to persist and you pass confirm=true.
-- Prefer propose_brain_draft over create_personal_skill / create_personal_agent so the user can edit in the Brain pane. For skills and personal subagents, pass a files array (one or more). The user Accepts to write ~/.claude.
+- Prefer propose_brain_draft over create_personal_skill / create_personal_agent so the user can edit in the Brain pane. Pass a files array (one or more skills, agents, tasks, or follow-ups). The user Accepts to persist.
 - list_personal_skills / get_personal_skill / list_personal_agents / get_personal_agent / list_task_followups / list_recent_session_grades / get_session_grade inspect the library and grades. When the user names session ids, call get_session_grade.
 
 For write tools (create_agent_from_goal, create_agent_from_github_issue, create_agent_from_jira_issue, create_agent_from_pull_request, start_agent_session, send_agent_message, respond_permission, archive_agent, stop_agent, dismiss_work_item, create_agent_task, update_agent_task, create_personal_skill, update_personal_skill, create_personal_agent, update_personal_agent, create_schedule, schedule_once, pause_schedule, delete_schedule, create_agent_pull_request, create_agent_memory, update_agent_memory, set_automation_settings, trigger_automation_poll):

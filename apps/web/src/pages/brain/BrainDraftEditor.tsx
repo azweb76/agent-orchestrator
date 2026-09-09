@@ -5,7 +5,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { BrainDraft, BrainMarkdownDraft } from '@agent-orchestrator/shared';
+import { brainDraftCanSave, type BrainDraft, type BrainMarkdownDraft } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 import { BrainFollowUpFields, BrainTaskFields } from './BrainCatalogFields';
 
@@ -67,22 +67,6 @@ export function MarkdownFields({
         slotProps={{ htmlInput: { sx: { fontFamily: '"IBM Plex Mono", monospace' } } }}
       />
     </>
-  );
-}
-
-export function brainDraftCanSave(draft: BrainDraft, builtInFollowUp?: boolean): boolean {
-  if (draft.kind === 'skill' || draft.kind === 'agent') {
-    return draft.name.trim().length > 0 && draft.content.trim().length > 0;
-  }
-  if (draft.kind === 'task') {
-    return Boolean(draft.title.trim() && (draft.id || draft.name.trim()));
-  }
-  if (draft.kind !== 'follow-up') return false;
-  return (
-    draft.title.trim().length > 0 &&
-    draft.prompt.trim().length > 0 &&
-    (Boolean(draft.id) || draft.name.trim().length > 0 || Boolean(builtInFollowUp)) &&
-    (draft.kindValue !== 'start-template' || Boolean(draft.template))
   );
 }
 

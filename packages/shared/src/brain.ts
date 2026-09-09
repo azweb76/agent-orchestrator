@@ -292,9 +292,7 @@ export function brainCreatePrompt(kind: BrainDraftKind, extra?: string): string 
   const parts = [
     `Help me create ${noun}.`,
     'Ask clarifying questions with the ask_user tool before you guess required fields.',
-    kind === 'skill' || kind === 'agent'
-      ? 'Then call propose_brain_draft with a files array of one or more skill/agent drafts. I will edit and Accept them in the Brain pane — do not write files yourself.'
-      : 'Then call propose_brain_draft with the filled draft. I will edit and save it in the Brain pane — do not write files yourself.',
+    'Then call propose_brain_draft with a files array of one or more drafts (skills, agents, tasks, follow-ups). I will edit and Accept them in the Brain pane — do not write them yourself.',
   ];
   if (extra?.trim()) parts.push(extra.trim());
   return parts.join(' ');
@@ -304,9 +302,7 @@ export function brainImprovePrompt(kind: BrainDraftKind, identity: string, extra
   const parts = [
     `Help me improve this Brain ${kind}: ${identity}.`,
     'Load it with list/get tools, ask clarifying questions with ask_user if the goal is unclear, then propose_brain_draft.',
-    kind === 'skill' || kind === 'agent'
-      ? 'You may include related skills or personal subagents in the same files array. I will edit and Accept in the Brain pane — do not write files yourself.'
-      : 'I will edit and save in the Brain pane — do not write files yourself.',
+    'You may include related skills, personal subagents, tasks, or follow-ups in the same files array. I will edit and Accept in the Brain pane — do not write them yourself.',
   ];
   if (extra?.trim()) parts.push(extra.trim());
   return parts.join(' ');

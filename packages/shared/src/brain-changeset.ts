@@ -1,29 +1,21 @@
 import type { AssistantMessage } from './assistant.js';
 import type { ChatSession, ChatSessionTemplateId, SessionGradeScore } from './chat-session.js';
 import {
+  isBrainDraftKind,
   mergeBrainDraft,
   parseBrainDraft,
-  type BrainMarkdownDraft,
+  type BrainDraft,
+  type BrainDraftKind,
 } from './brain.js';
 
-export type BrainLibraryKind = 'skill' | 'agent';
-
-export interface BrainLibraryFileSnapshot {
-  name: string;
-  description: string;
-  content: string;
-}
+export type BrainLibraryKind = BrainDraftKind;
 
 export interface BrainChangeFile {
   id: string;
-  kind: BrainLibraryKind;
+  kind: BrainDraftKind;
   action: 'create' | 'update';
-  slug?: string;
-  name: string;
-  description: string;
-  content: string;
-  rationale?: string;
-  baseline: BrainLibraryFileSnapshot;
+  draft: BrainDraft;
+  baseline: BrainDraft;
   dirtyKeys: string[];
 }
 
@@ -61,7 +53,13 @@ export function toSessionGradeListItem(session: ChatSession): SessionGradeListIt
   };
 }
 
-export function brainLibraryFileId(kind: BrainLibraryKind, slug?: string, name?: string): string {
+export function brainDraftIdentity(draft: BrainDraft): string | undefined {
+  if (draft.kind === 'skill' || draft.kind === 'agent') return draft.slug;
+  if (draft.kind === 'task' || draft.kind === 'follow-up') return draft.id;
+  return undefined;
+}
+
+export function brainLibraryFileId(kind: BrainDraftKind, slug?: string, name?: string): string {
   if (slug?.trim()) return `${kind}:${slug.trim()}`;
   const normalized = (name ?? '')
     .trim()
@@ -72,52 +70,59 @@ export function brainLibraryFileId(kind: BrainLibraryKind, slug?: string, name?:
 }
 
 export function isBrainLibraryKind(value: unknown): value is BrainLibraryKind {
-  return value === 'skill' || value === 'agent';
+  return isBrainDraftKind(value);
 }
 
-export function brainLibraryFileCanAccept(file: BrainChangeFile): boolean {
-  return file.name.trim().length > 0 && file.content.trim().length > 0;
+export function brainDraftCanSave(draft: BrainDraft, builtInFollowUp?: boolean): boolean {
+  if (draft.kind === 'skill' || draft.kind === 'agent') {
+    return draft.name.trim().length > 0 && draft.content.trim().length > 0;
+  }
+  if (draft.kind === 'task') {
+    return Boolean(draft.title.trim() && (draft.id || draft.name.trim()));
+  }
+  if (draft.kind !== 'follow-up') return false;
+  return (
+    draft.title.trim().length > 0 &&
+    draft.prompt.trim().length > 0 &&
+    (Boolean(draft.id) || draft.name.trim().length > 0 || Boolean(builtInFollowUp)) &&
+    (draft.kindValue !== 'start-template' || Boolean(draft.template))
+  );
+}
+
+export function brainLibraryFileCanAccept(file: BrainChangeFile, builtInFollowUp?: boolean): boolean {
+  return brainDraftCanSave(file.draft, builtInFollowUp);
 }
 
 export function brainChangeSetCanAccept(set: BrainChangeSet): boolean {
   return set.files.some((file) => brainLibraryFileCanAccept(file));
 }
 
-export function draftToChangeFile(
-  draft: BrainMarkdownDraft,
-  baseline?: BrainLibraryFileSnapshot,
-): BrainChangeFile {
-  const action = draft.slug ? 'update' : 'create';
-  const snapshot: BrainLibraryFileSnapshot = baseline ?? {
-    name: action === 'update' ? draft.name : '',
-    description: action === 'update' ? draft.description : '',
-    content: action === 'update' ? draft.content : '',
-  };
+function changeAction(draft: BrainDraft): 'create' | 'update' {
+  return brainDraftIdentity(draft) ? 'update' : 'create';
+}
+
+export function draftToChangeFile(draft: BrainDraft, baseline?: BrainDraft): BrainChangeFile {
+  const action = changeAction(draft);
   return {
-    id: brainLibraryFileId(draft.kind, draft.slug, draft.name),
+    id: brainLibraryFileId(draft.kind, brainDraftIdentity(draft), draft.name),
     kind: draft.kind,
     action,
-    slug: draft.slug,
-    name: draft.name,
-    description: draft.description,
-    content: draft.content,
-    rationale: draft.rationale,
-    baseline: snapshot,
+    draft,
+    baseline: baseline ?? draft,
     dirtyKeys: [],
   };
 }
 
-function fileMatchesDraft(file: BrainChangeFile, draft: BrainMarkdownDraft): boolean {
+function fileMatchesDraft(file: BrainChangeFile, draft: BrainDraft): boolean {
   if (file.kind !== draft.kind) return false;
-  if (draft.slug && file.slug) return file.slug === draft.slug;
-  if (draft.slug) return file.id === brainLibraryFileId(draft.kind, draft.slug, draft.name);
-  return file.id === brainLibraryFileId(draft.kind, file.slug, draft.name) || file.name === draft.name;
+  const proposedId = brainDraftIdentity(draft);
+  const existingId = brainDraftIdentity(file.draft);
+  if (proposedId && existingId) return proposedId === existingId;
+  if (proposedId) return file.id === brainLibraryFileId(draft.kind, proposedId, draft.name);
+  return file.id === brainLibraryFileId(draft.kind, existingId, draft.name) || file.draft.name === draft.name;
 }
 
-export function mergeProposedLibraryFiles(
-  current: BrainChangeSet,
-  proposed: BrainMarkdownDraft[],
-): BrainChangeSet {
+export function mergeProposedLibraryFiles(current: BrainChangeSet, proposed: BrainDraft[]): BrainChangeSet {
   if (proposed.length === 0) return current;
   const files = [...current.files];
   let selectedId = current.selectedId;
@@ -126,23 +131,12 @@ export function mergeProposedLibraryFiles(
     if (index >= 0) {
       const existing = files[index];
       if (!existing) continue;
-      const currentDraft: BrainMarkdownDraft = {
-        kind: existing.kind,
-        slug: existing.slug,
-        name: existing.name,
-        description: existing.description,
-        content: existing.content,
-      };
-      const merged = mergeBrainDraft(currentDraft, draft, new Set(existing.dirtyKeys));
-      if (merged.kind !== 'skill' && merged.kind !== 'agent') continue;
+      const merged = mergeBrainDraft(existing.draft, draft, new Set(existing.dirtyKeys));
       files[index] = {
         ...existing,
-        name: merged.name,
-        description: merged.description,
-        content: merged.content,
-        rationale: merged.rationale ?? existing.rationale,
-        slug: merged.slug ?? existing.slug,
-        action: merged.slug ? 'update' : existing.action,
+        kind: merged.kind,
+        draft: merged,
+        action: changeAction(merged) === 'update' ? 'update' : existing.action,
       };
       selectedId = files[index]?.id ?? selectedId;
       continue;
@@ -154,7 +148,7 @@ export function mergeProposedLibraryFiles(
   return { files, selectedId: selectedId ?? files[0]?.id ?? null };
 }
 
-/** Drop a new file, or discard a pending update (does not write disk). */
+/** Drop a pending file (does not write disk or the catalog). */
 export function undoBrainChangeFile(set: BrainChangeSet, fileId: string): BrainChangeSet {
   const remaining = set.files.filter((file) => file.id !== fileId);
   const keepSelected = set.selectedId && remaining.some((file) => file.id === set.selectedId);
@@ -164,7 +158,7 @@ export function undoBrainChangeFile(set: BrainChangeSet, fileId: string): BrainC
 export function updateBrainChangeFile(
   set: BrainChangeSet,
   fileId: string,
-  patch: Partial<Pick<BrainChangeFile, 'name' | 'description' | 'content' | 'rationale'>>,
+  draft?: BrainDraft,
   dirtyKey?: string,
 ): BrainChangeSet {
   return {
@@ -172,7 +166,7 @@ export function updateBrainChangeFile(
     files: set.files.map((file) => {
       if (file.id !== fileId) return file;
       const dirtyKeys = dirtyKey && !file.dirtyKeys.includes(dirtyKey) ? [...file.dirtyKeys, dirtyKey] : file.dirtyKeys;
-      return { ...file, ...patch, dirtyKeys };
+      return { ...file, draft: draft ?? file.draft, kind: (draft ?? file.draft).kind, dirtyKeys };
     }),
   };
 }
@@ -195,15 +189,15 @@ function unwrapToolObject(input: unknown): Record<string, unknown> | null {
   return null;
 }
 
-export function parseBrainLibraryFiles(input: unknown): BrainMarkdownDraft[] {
+export function parseBrainLibraryFiles(input: unknown): BrainDraft[] {
   const obj = unwrapToolObject(input);
   if (!obj) return [];
-  const files: BrainMarkdownDraft[] = [];
+  const files: BrainDraft[] = [];
   const seen = new Set<string>();
   const pushDraft = (value: unknown) => {
     const draft = parseBrainDraft(value);
-    if (!draft || (draft.kind !== 'skill' && draft.kind !== 'agent')) return;
-    const key = brainLibraryFileId(draft.kind, draft.slug, draft.name);
+    if (!draft) return;
+    const key = brainLibraryFileId(draft.kind, brainDraftIdentity(draft), draft.name);
     if (seen.has(key)) return;
     seen.add(key);
     files.push(draft);
@@ -218,7 +212,7 @@ export function parseBrainLibraryFiles(input: unknown): BrainMarkdownDraft[] {
   return files;
 }
 
-export function latestBrainLibraryFilesFromMessages(messages: AssistantMessage[]): BrainMarkdownDraft[] | null {
+export function latestBrainLibraryFilesFromMessages(messages: AssistantMessage[]): BrainDraft[] | null {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const msg = messages[i];
     if (!msg || msg.role !== 'tool' || msg.toolResult?.toolName !== 'propose_brain_draft') continue;
@@ -240,7 +234,7 @@ export function formatReferencedSessionPrompt(sessions: SessionGradeListItem[], 
   return [
     'Referenced analyzed sessions:',
     ...lines,
-    'Load each with get_session_grade before drafting. Propose personal skill and/or agent file changes with propose_brain_draft (files array). Do not write files yourself.',
+    'Load each with get_session_grade before drafting. Propose skill, agent, task, and/or follow-up changes with propose_brain_draft (files array). Do not write them yourself.',
     '',
     trimmed,
   ].join('\n');
