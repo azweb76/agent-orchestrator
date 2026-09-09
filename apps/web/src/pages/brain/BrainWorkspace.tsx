@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Box, Stack } from '@mui/material';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   brainCreatePrompt,
+  brainDraftIdentity,
   brainImprovePrompt,
+  brainLibraryFileCanAccept,
   draftToChangeFile,
   emptyBrainChangeSet,
-  emptyBrainDraft,
-  latestBrainDraftFromMessages,
   latestBrainLibraryFilesFromMessages,
-  mergeBrainDraft,
   mergeProposedLibraryFiles,
   selectBrainChangeFile,
   stripMarkdownFrontmatter,
@@ -26,9 +25,8 @@ import {
 } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { BrainCopilot } from './BrainCopilot';
-import { BrainDraftEditor } from './BrainDraftEditor';
 import { BrainLibraryChangePanel } from './BrainLibraryChangePanel';
-import { acceptLibraryFiles, followUpToDraft, saveCatalogDraft, taskToDraft } from './brainPersist';
+import { acceptChangeFiles, followUpToDraft, taskToDraft } from './brainPersist';
 import type { BrainTab } from './brainTabs';
 
 function tabToKind(tab: BrainTab): BrainDraftKind {
@@ -81,11 +79,6 @@ export function BrainWorkspace({
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const kind = tabToKind(tab);
-  const libraryTab = kind === 'skill' || kind === 'agent';
-  const [draft, setDraft] = useState<BrainDraft>(() => emptyBrainDraft(kind));
-  const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(() => new Set());
-  const dirtyRef = useRef(dirtyKeys);
-  dirtyRef.current = dirtyKeys;
   const [changeSet, setChangeSet] = useState(emptyBrainChangeSet);
   const [appliedToolId, setAppliedToolId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -97,6 +90,8 @@ export function BrainWorkspace({
     queryFn: () => api.getAssistantMessages(),
   });
   const messages = messagesQuery.data?.messages ?? [];
+  const tasksQuery = useQuery({ queryKey: ['agent-tasks'], queryFn: api.listAgentTasks });
+  const followUpsQuery = useQuery({ queryKey: ['task-followups'], queryFn: api.listTaskFollowUps });
 
   useEffect(() => {
     const last = [...messages].reverse().find(
@@ -105,24 +100,11 @@ export function BrainWorkspace({
     if (!last || last.id === appliedToolId) return;
     setAppliedToolId(last.id);
     const files = latestBrainLibraryFilesFromMessages(messages);
-    if (files && files.length > 0) {
-      setChangeSet((prev) => mergeProposedLibraryFiles(prev, files));
-      setSaveError(null);
-      onTabKind(files[0]?.kind ?? 'skill');
-    }
-    const proposed = latestBrainDraftFromMessages(messages);
-    if (proposed && (proposed.kind === 'task' || proposed.kind === 'follow-up')) {
-      setDraft((prev) => mergeBrainDraft(prev, proposed, dirtyRef.current));
-      if (dirtyRef.current.size === 0) onTabKind(proposed.kind);
-    }
-  }, [appliedToolId, messages, onTabKind]);
-
-  useEffect(() => {
-    if (libraryTab) return;
-    setDraft((prev) => (prev.kind === kind ? prev : emptyBrainDraft(kind)));
-    setDirtyKeys(new Set());
+    if (!files || files.length === 0) return;
+    setChangeSet((prev) => mergeProposedLibraryFiles(prev, files));
     setSaveError(null);
-  }, [kind, libraryTab]);
+    onTabKind(files[0]?.kind ?? 'skill');
+  }, [appliedToolId, messages, onTabKind]);
 
   const selectedFile = useMemo(
     () => changeSet.files.find((file) => file.id === changeSet.selectedId) ?? changeSet.files[0],
@@ -130,40 +112,22 @@ export function BrainWorkspace({
   );
 
   const selectedKey = useMemo(() => {
-    if (libraryTab) {
-      return selectedFile?.kind === kind ? (selectedFile.slug ?? null) : null;
-    }
-    if (draft.kind === 'task' || draft.kind === 'follow-up') return draft.id ?? null;
-    return null;
-  }, [draft, kind, libraryTab, selectedFile]);
+    if (!selectedFile || selectedFile.kind !== kind) return null;
+    return brainDraftIdentity(selectedFile.draft) ?? null;
+  }, [kind, selectedFile]);
 
-  const markDirty = (key: string) => {
-    setDirtyKeys((prev) => new Set(prev).add(key));
-  };
-
-  const seedLibrary = (markdown: BrainMarkdownDraft, improve?: boolean) => {
-    const baseline = {
-      name: markdown.name,
-      description: markdown.description,
-      content: markdown.content,
-    };
-    const file = draftToChangeFile(markdown, baseline);
+  const seedDraft = (draft: BrainDraft, improve?: boolean) => {
+    const file = draftToChangeFile(draft, draft);
     setChangeSet((prev) => {
       const files = [...prev.files.filter((item) => item.id !== file.id), file];
       return { files, selectedId: file.id };
     });
     setSaveError(null);
-    if (improve) setPendingSend(brainImprovePrompt(markdown.kind, markdown.slug ?? markdown.name));
+    if (improve) setPendingSend(brainImprovePrompt(draft.kind, brainDraftIdentity(draft) ?? draft.name));
   };
 
   const beginCreate = () => {
     setSaveError(null);
-    if (libraryTab) {
-      setPendingSend(brainCreatePrompt(kind));
-      return;
-    }
-    setDraft(emptyBrainDraft(kind));
-    setDirtyKeys(new Set());
     setPendingSend(brainCreatePrompt(kind));
   };
 
@@ -175,54 +139,34 @@ export function BrainWorkspace({
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  const tasksQuery = useQuery({ queryKey: ['agent-tasks'], queryFn: api.listAgentTasks });
-  const followUpsQuery = useQuery({ queryKey: ['task-followups'], queryFn: api.listTaskFollowUps });
-  const editingTask = draft.kind === 'task' ? tasksQuery.data?.find((item) => item.id === draft.id) : undefined;
-  const editingFollowUp =
-    draft.kind === 'follow-up' ? followUpsQuery.data?.find((item) => item.id === draft.id) : undefined;
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      setSaveError(null);
-      return saveCatalogDraft(draft, editingTask, editingFollowUp);
-    },
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['agent-tasks'] }),
-        queryClient.invalidateQueries({ queryKey: ['task-followups'] }),
-        queryClient.invalidateQueries({ queryKey: ['brain-sync'] }),
-      ]);
-      setDirtyKeys(new Set());
-    },
-    onError: (error) => {
-      setSaveError(error instanceof Error ? error.message : String(error));
-    },
-  });
-
   const acceptMutation = useMutation({
     mutationFn: async () => {
       setSaveError(null);
-      const writable = changeSet.files.filter(
-        (file) => file.name.trim().length > 0 && file.content.trim().length > 0,
-      );
-      return acceptLibraryFiles(writable);
+      const writable = changeSet.files.filter((file) => {
+        const followUpId = file.draft.kind === 'follow-up' ? file.draft.id : undefined;
+        return brainLibraryFileCanAccept(
+          file,
+          Boolean(followUpId && followUpsQuery.data?.find((item) => item.id === followUpId)?.builtIn),
+        );
+      });
+      return acceptChangeFiles(writable, {
+        tasks: tasksQuery.data,
+        followUps: followUpsQuery.data,
+      });
     },
     onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['personal-skills'] }),
         queryClient.invalidateQueries({ queryKey: ['personal-agents'] }),
+        queryClient.invalidateQueries({ queryKey: ['agent-tasks'] }),
+        queryClient.invalidateQueries({ queryKey: ['task-followups'] }),
         queryClient.invalidateQueries({ queryKey: ['brain-sync'] }),
       ]);
       setChangeSet((prev) => {
         const remaining = prev.files.filter((file) => !result.succeededIds.includes(file.id));
-        return {
-          files: remaining,
-          selectedId: remaining[0]?.id ?? null,
-        };
+        return { files: remaining, selectedId: remaining[0]?.id ?? null };
       });
-      if (result.failed.length > 0) {
-        setSaveError(result.failed.join('\n'));
-      }
+      if (result.failed.length > 0) setSaveError(result.failed.join('\n'));
     },
     onError: (error) => {
       setSaveError(error instanceof Error ? error.message : String(error));
@@ -232,30 +176,14 @@ export function BrainWorkspace({
   const listApi = {
     selectedKey,
     onNew: beginCreate,
-    onSelectSkill: (skill: PersonalSkill) => seedLibrary(skillToMarkdown(skill)),
-    onImproveSkill: (skill: PersonalSkill) => seedLibrary(skillToMarkdown(skill), true),
-    onSelectAgent: (agent: PersonalAgent) => seedLibrary(agentToMarkdown(agent)),
-    onImproveAgent: (agent: PersonalAgent) => seedLibrary(agentToMarkdown(agent), true),
-    onSelectTask: (task: AgentTask) => {
-      setDraft(taskToDraft(task));
-      setDirtyKeys(new Set());
-      setSaveError(null);
-    },
-    onImproveTask: (task: AgentTask) => {
-      setDraft(taskToDraft(task));
-      setDirtyKeys(new Set());
-      setPendingSend(brainImprovePrompt('task', task.name));
-    },
-    onSelectFollowUp: (followUp: TaskFollowUp) => {
-      setDraft(followUpToDraft(followUp));
-      setDirtyKeys(new Set());
-      setSaveError(null);
-    },
-    onImproveFollowUp: (followUp: TaskFollowUp) => {
-      setDraft(followUpToDraft(followUp));
-      setDirtyKeys(new Set());
-      setPendingSend(brainImprovePrompt('follow-up', followUp.name));
-    },
+    onSelectSkill: (skill: PersonalSkill) => seedDraft(skillToMarkdown(skill)),
+    onImproveSkill: (skill: PersonalSkill) => seedDraft(skillToMarkdown(skill), true),
+    onSelectAgent: (agent: PersonalAgent) => seedDraft(agentToMarkdown(agent)),
+    onImproveAgent: (agent: PersonalAgent) => seedDraft(agentToMarkdown(agent), true),
+    onSelectTask: (task: AgentTask) => seedDraft(taskToDraft(task)),
+    onImproveTask: (task: AgentTask) => seedDraft(taskToDraft(task), true),
+    onSelectFollowUp: (followUp: TaskFollowUp) => seedDraft(followUpToDraft(followUp)),
+    onImproveFollowUp: (followUp: TaskFollowUp) => seedDraft(followUpToDraft(followUp), true),
   };
 
   return (
@@ -283,37 +211,29 @@ export function BrainWorkspace({
             bgcolor: 'background.paper',
           }}
         >
-          {libraryTab ? (
-            <BrainLibraryChangePanel
-              changeSet={changeSet}
-              accepting={acceptMutation.isPending}
-              error={saveError}
-              onSelect={(fileId) => setChangeSet((prev) => selectBrainChangeFile(prev, fileId))}
-              onUndo={(fileId) => setChangeSet((prev) => undoBrainChangeFile(prev, fileId))}
-              onChangeFile={(fileId, next) =>
-                setChangeSet((prev) =>
-                  updateBrainChangeFile(prev, fileId, {
-                    name: next.name,
-                    description: next.description,
-                    content: next.content,
-                  }),
-                )
-              }
-              onDirty={(fileId, key) => setChangeSet((prev) => updateBrainChangeFile(prev, fileId, {}, key))}
-              onAccept={() => acceptMutation.mutate()}
-            />
-          ) : (
-            <BrainDraftEditor
-              draft={draft}
-              lockedTaskName={Boolean(editingTask?.builtIn)}
-              builtInFollowUp={Boolean(editingFollowUp?.builtIn)}
-              saving={saveMutation.isPending}
-              error={saveError}
-              onChange={setDraft}
-              onDirty={markDirty}
-              onSave={() => saveMutation.mutate()}
-            />
-          )}
+          <BrainLibraryChangePanel
+            changeSet={changeSet}
+            accepting={acceptMutation.isPending}
+            error={saveError}
+            lockedTaskName={(file) => {
+              const id = file.draft.kind === 'task' ? file.draft.id : undefined;
+              return Boolean(id && tasksQuery.data?.find((item) => item.id === id)?.builtIn);
+            }}
+            builtInFollowUp={(file) => {
+              const id = file.draft.kind === 'follow-up' ? file.draft.id : undefined;
+              return Boolean(id && followUpsQuery.data?.find((item) => item.id === id)?.builtIn);
+            }}
+            onSelect={(fileId) => {
+              const next = selectBrainChangeFile(changeSet, fileId);
+              setChangeSet(next);
+              const file = next.files.find((item) => item.id === fileId);
+              if (file) onTabKind(file.kind);
+            }}
+            onUndo={(fileId) => setChangeSet((prev) => undoBrainChangeFile(prev, fileId))}
+            onChangeFile={(fileId, next) => setChangeSet((prev) => updateBrainChangeFile(prev, fileId, next))}
+            onDirty={(fileId, key) => setChangeSet((prev) => updateBrainChangeFile(prev, fileId, undefined, key))}
+            onAccept={() => acceptMutation.mutate()}
+          />
         </Box>
       </Stack>
     </Stack>

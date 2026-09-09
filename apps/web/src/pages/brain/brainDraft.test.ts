@@ -103,6 +103,33 @@ describe('brain library changeset', () => {
     expect(files[1]?.kind).toBe('agent');
   });
 
+  it('parses task and follow-up drafts in the files array', () => {
+    const files = parseBrainLibraryFiles({
+      files: [
+        {
+          kind: 'task',
+          name: 'plan-feature',
+          title: 'Plan feature',
+          purpose: 'plan',
+          promptTemplate: 'Plan {{goal}}',
+        },
+        {
+          kind: 'follow-up',
+          name: 'create-pr',
+          title: 'Create PR',
+          prompt: 'Open a draft PR',
+          kindValue: 'prompt',
+        },
+      ],
+    });
+    expect(files).toHaveLength(2);
+    expect(files[0]?.kind).toBe('task');
+    expect(files[1]?.kind).toBe('follow-up');
+    const set = mergeProposedLibraryFiles(emptyBrainChangeSet(), files);
+    expect(set.files).toHaveLength(2);
+    expect(brainChangeSetCanAccept(set)).toBe(true);
+  });
+
   it('merges proposals without clobbering dirty fields and undo drops a file', () => {
     const first = mergeProposedLibraryFiles(emptyBrainChangeSet(), [
       { kind: 'skill', name: 'always-run-tests', description: 'a', content: 'from-ai' },
@@ -113,15 +140,17 @@ describe('brain library changeset', () => {
     const edited = {
       ...first,
       files: first.files.map((file) =>
-        file.kind === 'skill' ? { ...file, content: 'edited', dirtyKeys: ['content'] } : file,
+        file.kind === 'skill' && file.draft.kind === 'skill'
+          ? { ...file, draft: { ...file.draft, content: 'edited' }, dirtyKeys: ['content'] }
+          : file,
       ),
     };
     const merged = mergeProposedLibraryFiles(edited, [
       { kind: 'skill', name: 'always-run-tests', description: 'updated', content: 'from-ai-2' },
     ]);
     const skill = merged.files.find((file) => file.kind === 'skill');
-    expect(skill?.content).toBe('edited');
-    expect(skill?.description).toBe('updated');
+    expect(skill?.draft.kind === 'skill' && skill.draft.content).toBe('edited');
+    expect(skill?.draft.kind === 'skill' && skill.draft.description).toBe('updated');
     const undone = undoBrainChangeFile(merged, skill?.id ?? '');
     expect(undone.files).toHaveLength(1);
     expect(undone.files[0]?.kind).toBe('agent');
@@ -151,9 +180,8 @@ describe('brain library changeset', () => {
   it('seeds an update file from a library row', () => {
     const file = draftToChangeFile(
       { kind: 'skill', slug: 'always-run-tests', name: 'Always run tests', description: '', content: 'Run them.' },
-      { name: 'Always run tests', description: '', content: 'Run them.' },
     );
     expect(file.action).toBe('update');
-    expect(file.slug).toBe('always-run-tests');
+    expect(file.draft.kind === 'skill' && file.draft.slug).toBe('always-run-tests');
   });
 });

@@ -54,25 +54,45 @@ export const ASSISTANT_BRAIN_TOOLS: AssistantToolDefinition[] = [
   {
     name: 'propose_brain_draft',
     description:
-      'Fill the Brain working pane. For personal skills and subagents, pass files (one or more). For a kickoff task or follow-up, pass kind plus fields. Does not write files. The user edits and Accepts/Saves.',
+      'Fill the Brain changeset. Pass files (one or more skills, agents, tasks, or follow-ups). Does not persist. The user edits and Accepts.',
     risk: 'read',
     inputSchema: {
       type: 'object',
       properties: {
         files: {
           type: 'array',
-          description: 'One or more personal skill or subagent drafts',
+          description: 'One or more skill, agent, task, or follow-up drafts',
           items: {
             type: 'object',
             properties: {
-              kind: { type: 'string', enum: ['skill', 'agent'] },
-              slug: { type: 'string', description: 'Existing slug when improving' },
+              kind: { type: 'string', enum: ['skill', 'agent', 'task', 'follow-up'] },
+              slug: { type: 'string', description: 'Existing skill/agent slug when improving' },
+              id: { type: 'string', description: 'Existing task or follow-up id when improving' },
               name: { type: 'string' },
+              title: { type: 'string' },
               description: { type: 'string' },
               content: { type: 'string' },
               rationale: { type: 'string' },
+              purpose: { type: 'string' },
+              promptTemplate: { type: 'string' },
+              systemPrompt: { type: 'string' },
+              allowedTools: { type: 'string' },
+              model: { type: 'string' },
+              effort: { type: 'string', enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
+              permissionMode: {
+                type: 'string',
+                enum: ['default', 'acceptEdits', 'plan', 'auto', 'dontAsk', 'bypassPermissions'],
+              },
+              listed: { type: 'boolean' },
+              prompt: { type: 'string' },
+              kindValue: {
+                type: 'string',
+                enum: ['prompt', 'commit-and-push', 'start-template', 'grade-session'],
+              },
+              template: { type: 'string' },
+              enabled: { type: 'boolean' },
             },
-            required: ['kind', 'name', 'content'],
+            required: ['kind'],
             additionalProperties: false,
           },
         },
