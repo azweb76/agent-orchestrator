@@ -319,6 +319,28 @@ export {
 } from './brain.js';
 
 export {
+  brainChangeSetCanAccept,
+  brainLibraryFileCanAccept,
+  brainLibraryFileId,
+  draftToChangeFile,
+  emptyBrainChangeSet,
+  formatReferencedSessionPrompt,
+  isBrainLibraryKind,
+  latestBrainLibraryFilesFromMessages,
+  mergeProposedLibraryFiles,
+  parseBrainLibraryFiles,
+  selectBrainChangeFile,
+  toSessionGradeListItem,
+  undoBrainChangeFile,
+  updateBrainChangeFile,
+  type BrainChangeFile,
+  type BrainChangeSet,
+  type BrainLibraryFileSnapshot,
+  type BrainLibraryKind,
+  type SessionGradeListItem,
+} from './brain-changeset.js';
+
+export {
   AUTO_WRITE_TEMPLATE_TOOLS,
   ASSISTANT_SCHEDULE_KINDS,
   ASSISTANT_SCHEDULE_PLAYBOOKS,

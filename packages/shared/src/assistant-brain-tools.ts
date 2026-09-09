@@ -54,11 +54,28 @@ export const ASSISTANT_BRAIN_TOOLS: AssistantToolDefinition[] = [
   {
     name: 'propose_brain_draft',
     description:
-      'Fill the Brain working pane with a suggested skill, personal subagent, kickoff task, or follow-up. Does not write files. The user edits and saves.',
+      'Fill the Brain working pane. For personal skills and subagents, pass files (one or more). For a kickoff task or follow-up, pass kind plus fields. Does not write files. The user edits and Accepts/Saves.',
     risk: 'read',
     inputSchema: {
       type: 'object',
       properties: {
+        files: {
+          type: 'array',
+          description: 'One or more personal skill or subagent drafts',
+          items: {
+            type: 'object',
+            properties: {
+              kind: { type: 'string', enum: ['skill', 'agent'] },
+              slug: { type: 'string', description: 'Existing slug when improving' },
+              name: { type: 'string' },
+              description: { type: 'string' },
+              content: { type: 'string' },
+              rationale: { type: 'string' },
+            },
+            required: ['kind', 'name', 'content'],
+            additionalProperties: false,
+          },
+        },
         kind: {
           type: 'string',
           enum: ['skill', 'agent', 'task', 'follow-up'],
@@ -89,7 +106,6 @@ export const ASSISTANT_BRAIN_TOOLS: AssistantToolDefinition[] = [
         template: { type: 'string' },
         enabled: { type: 'boolean' },
       },
-      required: ['kind'],
       additionalProperties: false,
     },
   },
@@ -142,6 +158,17 @@ export const ASSISTANT_BRAIN_TOOLS: AssistantToolDefinition[] = [
       properties: {
         limit: { type: 'integer', minimum: 1, maximum: 40 },
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_session_grade',
+    description: 'Full grade and analysis for one analyzed chat session.',
+    risk: 'read',
+    inputSchema: {
+      type: 'object',
+      properties: { sessionId: { type: 'string' } },
+      required: ['sessionId'],
       additionalProperties: false,
     },
   },

@@ -16,15 +16,18 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BRAIN_GARDEN_PROMPT,
   formatAskUserAnswers,
+  formatReferencedSessionPrompt,
   latestAskUserQuestionsFromMessages,
   type AssistantMessage,
   type BrainDraftKind,
+  type SessionGradeListItem,
 } from '@agent-orchestrator/shared';
 import { api, streamAssistantChat } from '../../api/client';
 import { applyAssistantStreamEvent } from '../../components/dashboard/assistantStreamReducer';
 import { AssistantBubble } from '../../components/dashboard/AssistantChatBubbles';
 import { AskUserQuestionCard } from '../../components/chat/AskUserQuestionCard';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
+import { BrainSessionPicker } from './BrainSessionPicker';
 
 const KIND_LABEL: Record<BrainDraftKind, string> = {
   skill: 'New skill',
@@ -50,6 +53,9 @@ export function BrainCopilot({
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
+  const [referenced, setReferenced] = useState<SessionGradeListItem[]>([]);
+  const referencedRef = useRef(referenced);
+  referencedRef.current = referenced;
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamingIds, setStreamingIds] = useState<Set<string>>(() => new Set());
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -79,7 +85,7 @@ export function BrainCopilot({
   }, []);
 
   const send = async (content: string) => {
-    const trimmed = content.trim();
+    const trimmed = formatReferencedSessionPrompt(referencedRef.current, content);
     if (!trimmed || streaming) return;
     setDraft('');
     setStreamError(null);
@@ -193,8 +199,8 @@ export function BrainCopilot({
       >
         {messages.length === 0 && !streaming ? (
           <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
-            Describe what to create or improve. The copilot will ask questions, then fill the draft on
-            this page for you to edit and save.
+            Describe what to create or improve. Attach analyzed sessions if they should inform the
+            draft. The copilot fills pending skill and agent files for you to edit, undo, and Accept.
           </Typography>
         ) : (
           <Stack spacing={1.75}>
@@ -234,6 +240,8 @@ export function BrainCopilot({
       ) : null}
 
       {streamError ? <Alert severity="error">{streamError}</Alert> : null}
+
+      <BrainSessionPicker selected={referenced} onChange={setReferenced} disabled={streaming} />
 
       <TextField
         size="small"
