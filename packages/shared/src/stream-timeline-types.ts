@@ -22,9 +22,26 @@ export interface ToolActivityItem {
   status: 'running' | 'done' | 'error';
   /** Present for Task/Agent tool uses and Claude `task_*` system events. */
   task?: ToolTaskInfo;
+  /** Parsed tool_use input when known. */
+  input?: Record<string, unknown>;
+  /** Accumulated `input_json_delta` payload. */
+  inputJson?: string;
+  /** tool_result body when known. */
+  result?: string;
+}
+
+export interface TimelineTodoItem {
+  content: string;
+  status: string;
+  activeForm?: string;
 }
 
 /** Ordered streaming timeline part for interleaved text + tool use. */
 export type StreamPart =
   | { type: 'text'; id: string; text: string }
-  | ({ type: 'tool' } & ToolActivityItem);
+  | { type: 'thinking'; id: string; text: string; redacted?: boolean }
+  | ({ type: 'tool' } & ToolActivityItem)
+  | { type: 'tool_result'; id: string; toolUseId: string; content: string; isError?: boolean }
+  | { type: 'diff'; id: string; path?: string; diff: string; toolUseId?: string }
+  | { type: 'todo_list'; id: string; items: TimelineTodoItem[]; toolUseId?: string }
+  | { type: 'image'; id: string; mimeType?: string; url?: string; alt?: string; data?: string };

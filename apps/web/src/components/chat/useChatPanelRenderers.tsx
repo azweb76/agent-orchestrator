@@ -66,9 +66,8 @@ export function useChatPanelRenderers({
     (request: PermissionRequest) => {
       const card =
         request.toolName === 'AskUserQuestion' ? (
-          <AskUserQuestionCard
+            <AskUserQuestionCard
             key={request.requestId}
-            request={request}
             questions={parseAskUserQuestions(request.input)}
             submitting={permissionBusy}
             onSubmit={(answers, response) =>

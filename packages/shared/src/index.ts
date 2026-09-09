@@ -32,6 +32,7 @@ export {
   visibleSubagentItems,
   type StreamPart,
   type ToolActivityItem,
+  type TimelineTodoItem,
 } from './stream-timeline.js';
 
 export {

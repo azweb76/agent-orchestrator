@@ -11,10 +11,12 @@ import { api } from '../../api/client';
 import { useSseConnectionState } from '../../api/events';
 import { SSE_FALLBACK_ACTIVE_POLL_MS } from '../../api/ssePolling';
 import type { AgentAttentionFocus } from '../../notifications';
+import { ClaudeChat } from '../claude-chat/ClaudeChat';
 import { ChatPanelDialogs } from './ChatPanelDialogs';
+import { ChatPanelEmptyState } from './ChatPanelEmptyState';
 import { ChatPanelFooter } from './ChatPanelFooter';
-import { ChatPanelTranscript } from './ChatPanelTranscript';
 import { ChatSessionBar } from './ChatSessionBar';
+import { mapMessageToChatTurn, mapPermissionPrompt } from './mapAgentChatToClaudeChat';
 import type { PendingImage } from './composerTypes';
 import type { PendingMention } from './mentionComposer';
 import { useChatScroll } from './chatScroll';
@@ -225,7 +227,7 @@ export const ChatPanel = memo(function ChatPanel({
 
   const handlePermissionError = (message: string) => setChatError(message);
 
-  const { renderPermissionRequest, renderMessage } = useChatPanelRenderers({
+  const { renderPermissionRequest } = useChatPanelRenderers({
     archived,
     focusPermissions,
     permissionBusy: permissions.permissionBusy,
@@ -245,6 +247,12 @@ export const ChatPanel = memo(function ChatPanel({
     runChat: streaming.runChat,
   });
 
+  const turns = useMemo(() => displayMessages.map(mapMessageToChatTurn), [displayMessages]);
+  const prompts = useMemo(
+    () => permissions.permissionRequests.map(mapPermissionPrompt),
+    [permissions.permissionRequests],
+  );
+
   return (
     <Box
       sx={{
@@ -255,112 +263,148 @@ export const ChatPanel = memo(function ChatPanel({
         height: '100%',
       }}
     >
-      <ChatSessionBar
-        sessions={sessions}
-        activeSessionId={activeSessionId || null}
-        disabled={archived}
-        creating={sessionActions.creatingSession}
-        onSelect={(id) => void sessionActions.selectSession(id)}
-        onCreate={(template) => void sessionActions.createSessionFromTemplate(template)}
-        onCreateTask={(task) => void sessionActions.createSessionFromTask(task.name)}
-        onDelete={archived ? undefined : (target) => sessionActions.setDeleteTarget(target)}
-        onRename={
+      <ClaudeChat
+        messages={turns}
+        pendingPermissions={prompts}
+        status={
+          sessionBusy ? 'streaming' : permissions.permissionRequests.length > 0 ? 'awaiting_input' : 'idle'
+        }
+        loading={messagesQuery.isLoading}
+        error={messagesQuery.error ? (messagesQuery.error as Error).message : null}
+        scroll={scroll}
+        highlightPermissions={focusPermissions}
+        permissionBusy={permissions.permissionBusy}
+        onRewindMessage={
           archived
             ? undefined
-            : (target, title) =>
-                sessionActions.renameSessionMutation.mutate({ sessionId: target.id, title })
-        }
-      />
-
-      <ChatPanelTranscript
-        messagesLoading={messagesQuery.isLoading}
-        messagesError={messagesQuery.error}
-        displayMessages={displayMessages}
-        permissionRequests={permissions.permissionRequests}
-        scroll={scroll}
-        renderMessage={renderMessage}
-        renderPermissionRequest={renderPermissionRequest}
-        onSlashCommand={(command) => void streaming.runChatRef.current(command, [], [], false)}
-      />
-
-      <ChatPanelFooter
-        agentId={agentId}
-        agent={
-          agentDefaults
-            ? {
-                draftPrOffer: agentDefaults.draftPrOffer,
-                taskSuggestions: agentDefaults.taskSuggestions,
-                instructionDraftOffer: agentDefaults.instructionDraftOffer,
+            : (turn) => {
+                const message = displayMessages.find((item) => item.id === turn.id);
+                if (message) sessionActions.requestRewind(message);
               }
-            : undefined
         }
-        archived={archived}
-        activeSessionId={activeSessionId}
-        session={session}
-        agentDefaults={agentDefaults}
-        sessionBusy={sessionBusy}
-        stoppedSessionId={streaming.stoppedSessionId}
-        compacting={streaming.compacting}
-        chatError={chatError}
-        lastFailed={lastFailed}
-        queue={streaming.queue}
-        draft={draft}
-        displayMessageCount={displayMessages.length}
-        clearMutation={sessionActions.clearMutation}
-        rewindMutation={sessionActions.rewindMutation}
-        deleteSessionMutation={sessionActions.deleteSessionMutation}
-        gradeMutation={sessionActions.gradeMutation}
-        onDraftChange={setDraft}
-        onModelChange={(model) => sessionActions.updateMutation.mutate({ model })}
-        onEffortChange={(effort: EffortLevel) => sessionActions.updateMutation.mutate({ effort })}
-        onPermissionModeChange={(permissionMode) =>
-          sessionActions.updateMutation.mutate({ permissionMode })
-        }
-        onSend={(text, images, mentions, force) => void streaming.runChat(text, images, mentions, force)}
-        onStop={() => void streaming.stopStreaming()}
-        onClear={sessionActions.requestClear}
-        onRewind={() => sessionActions.requestRewindLast(displayMessages)}
-        onGradeOpen={(tab?: SessionInsightsTab) => {
-          sessionActions.openInsights(tab ?? 'context', session?.grade);
-        }}
-        onImproveOpen={(offer) => {
-          if (offer) {
-            sessionActions.setImproveSeed({
-              kind: offer.kind ?? offer.draft?.kind ?? 'skill',
-              scope: offer.scope ?? offer.draft?.scope,
-              extraNotes: offer.extraNotes ?? '',
-              draft: offer.draft ?? null,
-              preferredSkillSlug: offer.preferredSkillSlug,
-              metricsComparison: offer.metricsComparison ?? null,
-            });
-          } else {
-            sessionActions.setImproveSeed(null);
-          }
-          sessionActions.setImproveOpen(true);
-        }}
-        onCompact={() => void streaming.compactAndContinue()}
-        onRemoveQueued={(id) => {
-          const sid = activeSessionId;
-          void api
-            .removeQueuedMessage(agentId, sid, id)
-            .catch(() => undefined)
-            .finally(() => {
-              queryClient.invalidateQueries({ queryKey: ['queue', agentId, sid] });
-            });
-        }}
-        onChatErrorClose={() => setChatError(null)}
-        onRetryFailed={() => {
-          if (lastFailed) {
+        onRetry={(turn) => {
+          if (lastFailed && turn.role !== 'assistant') {
             void streaming.runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true);
-          }
-        }}
-        onSelectTaskSuggestion={(suggestion, options) => {
-          const action = resolveTaskSuggestionAction(suggestion, options);
-          if (action.type === 'new-prompt') {
-            void sessionActions.createSessionFromSuggestion(action);
             return;
           }
-          void streaming.runChat(action.prompt, [], [], false);
+          const index = displayMessages.findIndex((item) => item.id === turn.id);
+          const prior = priorUserByIndex.get(index);
+          if (prior && prior.attachments.length === 0) {
+            void streaming.runChat(prior.content, [], [], true);
+          }
+        }}
+        renderPermission={(prompt, defaultEl) => {
+          const request = permissions.permissionRequests.find((item) => item.requestId === prompt.id);
+          return request ? renderPermissionRequest(request) : defaultEl;
+        }}
+        slots={{
+          header: (
+            <ChatSessionBar
+              sessions={sessions}
+              activeSessionId={activeSessionId || null}
+              disabled={archived}
+              creating={sessionActions.creatingSession}
+              onSelect={(id) => void sessionActions.selectSession(id)}
+              onCreate={(template) => void sessionActions.createSessionFromTemplate(template)}
+              onCreateTask={(task) => void sessionActions.createSessionFromTask(task.name)}
+              onDelete={archived ? undefined : (target) => sessionActions.setDeleteTarget(target)}
+              onRename={
+                archived
+                  ? undefined
+                  : (target, title) =>
+                      sessionActions.renameSessionMutation.mutate({ sessionId: target.id, title })
+              }
+            />
+          ),
+          emptyState: (
+            <ChatPanelEmptyState
+              onSlashCommand={(command) => void streaming.runChatRef.current(command, [], [], false)}
+            />
+          ),
+          footer: (
+            <ChatPanelFooter
+              agentId={agentId}
+              agent={
+                agentDefaults
+                  ? {
+                      draftPrOffer: agentDefaults.draftPrOffer,
+                      taskSuggestions: agentDefaults.taskSuggestions,
+                      instructionDraftOffer: agentDefaults.instructionDraftOffer,
+                    }
+                  : undefined
+              }
+              archived={archived}
+              activeSessionId={activeSessionId}
+              session={session}
+              agentDefaults={agentDefaults}
+              sessionBusy={sessionBusy}
+              stoppedSessionId={streaming.stoppedSessionId}
+              compacting={streaming.compacting}
+              chatError={chatError}
+              lastFailed={lastFailed}
+              queue={streaming.queue}
+              draft={draft}
+              displayMessageCount={displayMessages.length}
+              clearMutation={sessionActions.clearMutation}
+              rewindMutation={sessionActions.rewindMutation}
+              deleteSessionMutation={sessionActions.deleteSessionMutation}
+              gradeMutation={sessionActions.gradeMutation}
+              onDraftChange={setDraft}
+              onModelChange={(model) => sessionActions.updateMutation.mutate({ model })}
+              onEffortChange={(effort: EffortLevel) => sessionActions.updateMutation.mutate({ effort })}
+              onPermissionModeChange={(permissionMode) =>
+                sessionActions.updateMutation.mutate({ permissionMode })
+              }
+              onSend={(text, images, mentions, force) =>
+                void streaming.runChat(text, images, mentions, force)
+              }
+              onStop={() => void streaming.stopStreaming()}
+              onClear={sessionActions.requestClear}
+              onRewind={() => sessionActions.requestRewindLast(displayMessages)}
+              onGradeOpen={(tab?: SessionInsightsTab) => {
+                sessionActions.openInsights(tab ?? 'context', session?.grade);
+              }}
+              onImproveOpen={(offer) => {
+                if (offer) {
+                  sessionActions.setImproveSeed({
+                    kind: offer.kind ?? offer.draft?.kind ?? 'skill',
+                    scope: offer.scope ?? offer.draft?.scope,
+                    extraNotes: offer.extraNotes ?? '',
+                    draft: offer.draft ?? null,
+                    preferredSkillSlug: offer.preferredSkillSlug,
+                    metricsComparison: offer.metricsComparison ?? null,
+                  });
+                } else {
+                  sessionActions.setImproveSeed(null);
+                }
+                sessionActions.setImproveOpen(true);
+              }}
+              onCompact={() => void streaming.compactAndContinue()}
+              onRemoveQueued={(id) => {
+                const sid = activeSessionId;
+                void api
+                  .removeQueuedMessage(agentId, sid, id)
+                  .catch(() => undefined)
+                  .finally(() => {
+                    queryClient.invalidateQueries({ queryKey: ['queue', agentId, sid] });
+                  });
+              }}
+              onChatErrorClose={() => setChatError(null)}
+              onRetryFailed={() => {
+                if (lastFailed) {
+                  void streaming.runChat(lastFailed.text, lastFailed.images, lastFailed.mentions, true);
+                }
+              }}
+              onSelectTaskSuggestion={(suggestion, options) => {
+                const action = resolveTaskSuggestionAction(suggestion, options);
+                if (action.type === 'new-prompt') {
+                  void sessionActions.createSessionFromSuggestion(action);
+                  return;
+                }
+                void streaming.runChat(action.prompt, [], [], false);
+              }}
+            />
+          ),
         }}
       />
 

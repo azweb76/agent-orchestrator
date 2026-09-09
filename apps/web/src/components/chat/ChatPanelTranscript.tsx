@@ -2,21 +2,21 @@ import type { ReactNode } from 'react';
 import { Alert, Box, Chip, CircularProgress, Fab, Stack } from '@mui/material';
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import type { Message, PermissionRequest } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
-import { ChatTranscriptList, CHAT_COLUMN_MAX_WIDTH } from './ChatTranscriptList';
+import { ChatTranscriptList, CHAT_COLUMN_MAX_WIDTH } from '../claude-chat/ChatTranscriptList';
 import { CONTEXT_SLASH_CHIP_COMMANDS } from './slashComposer';
-import type { useChatScroll } from './chatScroll';
+import type { ChatTurn, PermissionPrompt } from '../claude-chat/types';
+import type { useChatScroll } from '../claude-chat/chatScroll';
 
 interface ChatPanelTranscriptProps {
   messagesLoading: boolean;
   messagesError: unknown;
-  displayMessages: Message[];
-  permissionRequests: PermissionRequest[];
+  displayMessages: ChatTurn[];
+  permissionRequests: PermissionPrompt[];
   scroll: ReturnType<typeof useChatScroll>;
-  renderMessage: (message: Message, index: number) => ReactNode;
-  renderPermissionRequest: (request: PermissionRequest) => ReactNode;
+  renderMessage: (message: ChatTurn, index: number) => ReactNode;
+  renderPermissionRequest: (request: PermissionPrompt) => ReactNode;
   onSlashCommand: (command: string) => void;
 }
 
