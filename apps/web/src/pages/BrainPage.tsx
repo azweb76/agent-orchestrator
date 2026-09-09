@@ -12,9 +12,9 @@ import { parseBrainTab, type BrainTab } from './brain/brainTabs';
 
 const TAB_COPY: Record<BrainTab, string> = {
   skills:
-    'Personal skills live in your user library and apply across workspaces. Project skills stay in each repo.',
+    'Personal skills live in your user library and apply across workspaces. Copilot can draft several skills and agents at once; Accept writes ~/.claude. Project skills stay in each repo.',
   agents:
-    'Personal Claude Code subagents live in ~/.claude/agents. Claude can spawn them as Task/Explore specialists.',
+    'Personal Claude Code subagents live in ~/.claude/agents. Draft them with skills in the same changeset, then Accept.',
   tasks:
     'Agent kickoff templates: purpose, prompts, model, effort, permissions, and tools. From goal can Auto-select using purpose.',
   'follow-ups':
@@ -34,7 +34,7 @@ export function BrainPage() {
       <PageHeader
         eyebrow="Library"
         title="Brain"
-        description="User-level skills and Claude Code subagents, plus kickoff tasks and follow-up chips. Create and improve with the copilot — edit the draft on the page, then save."
+        description="User-level skills and Claude Code subagents, plus kickoff tasks and follow-up chips. Ask the copilot to draft one or more skills and agents, edit or chat to refine, undo files you do not want, then Accept to write your user library."
       />
 
       <BrainSyncBar />

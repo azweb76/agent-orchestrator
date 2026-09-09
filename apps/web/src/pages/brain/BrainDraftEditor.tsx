@@ -9,7 +9,7 @@ import type { BrainDraft, BrainMarkdownDraft } from '@agent-orchestrator/shared'
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 import { BrainFollowUpFields, BrainTaskFields } from './BrainCatalogFields';
 
-function MarkdownFields({
+export function MarkdownFields({
   draft,
   lockedSlug,
   contentLabel,

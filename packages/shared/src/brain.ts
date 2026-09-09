@@ -292,7 +292,9 @@ export function brainCreatePrompt(kind: BrainDraftKind, extra?: string): string 
   const parts = [
     `Help me create ${noun}.`,
     'Ask clarifying questions with the ask_user tool before you guess required fields.',
-    'Then call propose_brain_draft with the filled draft. I will edit and save it in the Brain pane — do not write files yourself.',
+    kind === 'skill' || kind === 'agent'
+      ? 'Then call propose_brain_draft with a files array of one or more skill/agent drafts. I will edit and Accept them in the Brain pane — do not write files yourself.'
+      : 'Then call propose_brain_draft with the filled draft. I will edit and save it in the Brain pane — do not write files yourself.',
   ];
   if (extra?.trim()) parts.push(extra.trim());
   return parts.join(' ');
@@ -302,11 +304,13 @@ export function brainImprovePrompt(kind: BrainDraftKind, identity: string, extra
   const parts = [
     `Help me improve this Brain ${kind}: ${identity}.`,
     'Load it with list/get tools, ask clarifying questions with ask_user if the goal is unclear, then propose_brain_draft.',
-    'I will edit and save in the Brain pane — do not write files yourself.',
+    kind === 'skill' || kind === 'agent'
+      ? 'You may include related skills or personal subagents in the same files array. I will edit and Accept in the Brain pane — do not write files yourself.'
+      : 'I will edit and save in the Brain pane — do not write files yourself.',
   ];
   if (extra?.trim()) parts.push(extra.trim());
   return parts.join(' ');
 }
 
 export const BRAIN_GARDEN_PROMPT =
-  'Review recent session grades (list_recent_session_grades). If you see a repeated skill gap, ask_user which lesson to capture, then propose_brain_draft for a personal skill. Do not write files yourself.';
+  'Review recent session grades (list_recent_session_grades / get_session_grade). If you see a repeated skill or subagent gap, ask_user which lesson to capture, then propose_brain_draft with a files array of one or more personal skills and agents. Do not write files yourself.';

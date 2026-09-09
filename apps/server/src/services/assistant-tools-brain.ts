@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseBrainDraft, parseAskUserToolQuestions } from '@agent-orchestrator/shared';
+import { parseBrainDraft, parseAskUserToolQuestions, parseBrainLibraryFiles } from '@agent-orchestrator/shared';
 import type { AppContext } from './app-context.js';
 import {
   createPersonalAgent,
@@ -46,11 +46,18 @@ export async function handleBrainAssistantTool(
       };
     }
     case 'propose_brain_draft': {
+      const files = parseBrainLibraryFiles(input);
       const draft = parseBrainDraft(input);
-      if (!draft) {
+      if (!draft && files.length === 0) {
         return { content: JSON.stringify({ error: 'Invalid Brain draft' }), isError: true };
       }
-      return { content: JSON.stringify({ ok: true, draft }) };
+      return {
+        content: JSON.stringify({
+          ok: true,
+          ...(draft ? { draft } : {}),
+          ...(files.length > 0 ? { files } : {}),
+        }),
+      };
     }
     case 'list_personal_skills': {
       const skills = await listPersonalSkills();
@@ -117,6 +124,25 @@ export async function handleBrainAssistantTool(
             findingTitles: (session.grade?.analysis?.findings ?? []).map((finding) => finding.title),
           })),
         ),
+      };
+    }
+    case 'get_session_grade': {
+      const sessionId = z.string().min(1).parse(input.sessionId);
+      const session = ctx.repos.sessions.getById(sessionId);
+      if (!session?.grade) {
+        return { content: JSON.stringify({ error: 'Session not found or not graded' }), isError: true };
+      }
+      return {
+        content: JSON.stringify({
+          id: session.id,
+          agentId: session.agentId,
+          title: session.title,
+          template: session.template,
+          score: session.grade.score,
+          comment: session.grade.comment,
+          gradedAt: session.grade.gradedAt,
+          analysis: session.grade.analysis ?? null,
+        }),
       };
     }
     case 'create_personal_skill': {

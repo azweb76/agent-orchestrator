@@ -31,6 +31,7 @@ import type {
   QueuedChatMessage,
   RewindChatResponse,
   SessionContextUsage,
+  SessionGradeListItem,
   SessionSearchHit,
   SlashCommand,
   UpdateAgentMemoryRequest,
@@ -181,8 +182,10 @@ export const apiAgents = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  searchSessions: (query: string, limit = 24) =>
+    searchSessions: (query: string, limit = 24) =>
     request<SessionSearchHit[]>(
       `/sessions/search?q=${encodeURIComponent(query)}&limit=${limit}`,
     ),
+  listSessionGrades: (limit = 20) =>
+    request<SessionGradeListItem[]>(`/sessions/grades?limit=${limit}`),
 };

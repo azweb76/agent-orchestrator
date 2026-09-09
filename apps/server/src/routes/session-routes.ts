@@ -17,6 +17,7 @@ import {
   updateAgentSession,
 } from '../services/app.js';
 import { asyncHandler, param } from './helpers.js';
+import { toSessionGradeListItem } from '@agent-orchestrator/shared';
 import { sessionTemplate } from './schemas.js';
 
 export function registerSessionRoutes(router: express.Router, ctx: AppContext): void {
@@ -30,6 +31,17 @@ export function registerSessionRoutes(router: express.Router, ctx: AppContext): 
           : 24;
       const { searchSessionTranscripts } = await import('../services/session-search-index.js');
       res.json(searchSessionTranscripts(ctx, query, limit));
+    }),
+  );
+
+  router.get(
+    '/sessions/grades',
+    asyncHandler(async (req, res) => {
+      const limit =
+        typeof req.query.limit === 'string' && /^\d+$/.test(req.query.limit)
+          ? Math.min(Number(req.query.limit), 40)
+          : 20;
+      res.json(ctx.repos.sessions.listRecentlyGraded(limit).map(toSessionGradeListItem));
     }),
   );
 
