@@ -13,9 +13,7 @@ const TASK_EVENT_KINDS = new Set([
   'task_notification',
 ]);
 
-const NESTED_DETAIL_MAX = 80;
-
-function toolDetail(input: Record<string, unknown> | undefined): string | undefined {
+export function toolDetail(input: Record<string, unknown> | undefined): string | undefined {
   if (!input) return undefined;
   const subagent = typeof input.subagent_type === 'string' ? input.subagent_type.trim() : '';
   const description = typeof input.description === 'string' ? input.description.trim() : '';
@@ -31,7 +29,7 @@ function toolDetail(input: Record<string, unknown> | undefined): string | undefi
   );
 }
 
-function taskFromToolInput(
+export function taskFromToolInput(
   name: string,
   input: Record<string, unknown> | undefined,
 ): ToolTaskInfo | undefined {
@@ -77,6 +75,9 @@ export function toolItemFields(part: Extract<StreamPart, { type: 'tool' }>): Too
   };
   if (part.detail !== undefined) item.detail = part.detail;
   if (part.task) item.task = part.task;
+  if (part.input) item.input = part.input;
+  if (part.inputJson !== undefined) item.inputJson = part.inputJson;
+  if (part.result !== undefined) item.result = part.result;
   return item;
 }
 
@@ -91,7 +92,7 @@ export function completeRunningTools(parts: StreamPart[]): StreamPart[] {
   return completeTools(parts);
 }
 
-function findToolIndex(
+export function findToolIndex(
   parts: StreamPart[],
   ids: { id?: string; taskId?: string; toolUseId?: string },
 ): number {
@@ -104,41 +105,13 @@ function findToolIndex(
   });
 }
 
-function clipToolDetail(text: string): string {
-  const compact = text.replace(/\s+/g, ' ').trim();
-  if (compact.length <= NESTED_DETAIL_MAX) return compact;
-  return `${compact.slice(0, NESTED_DETAIL_MAX - 1)}…`;
-}
-
-function nestedEventText(event: Record<string, unknown>): string | undefined {
-  const type = String(event.type ?? '');
-  if (type === 'result' && typeof event.result === 'string' && event.result.trim()) {
-    return event.result;
-  }
-  const nested = recordField(event.event);
-  const delta = recordField(nested?.delta);
-  if (delta?.type === 'text_delta') return stringField(delta.text);
-  const content = recordField(event.message)?.content ?? event.content;
-  if (Array.isArray(content)) {
-    const texts = content
-      .map((block) => {
-        if (!block || typeof block !== 'object') return '';
-        const item = block as Record<string, unknown>;
-        return item.type === 'text' && typeof item.text === 'string' ? item.text : '';
-      })
-      .filter(Boolean);
-    if (texts.length > 0) return texts.join('');
-  }
-  if (typeof content === 'string' && content.trim()) return content;
-  return undefined;
-}
-
 export function pushTool(
   parts: StreamPart[],
   name: string,
   detail: string | undefined,
   toolId?: string,
   task?: ToolTaskInfo,
+  input?: Record<string, unknown>,
 ): StreamPart[] {
   const id = toolId || `${name}-${detail ?? ''}-${parts.length}`;
   const existingIndex = parts.findIndex((part) => {
@@ -161,6 +134,7 @@ export function pushTool(
       detail: detail ?? prev.detail,
       status: 'running',
       task: mergeTask(prev.task, task),
+      input: input ?? prev.input,
     };
     return next;
   }
@@ -172,10 +146,11 @@ export function pushTool(
   };
   if (detail !== undefined) item.detail = detail;
   if (task) item.task = task;
+  if (input) item.input = input;
   return [...parts, item];
 }
 
-function patchTool(
+export function patchTool(
   parts: StreamPart[],
   index: number,
   patch: {
@@ -183,6 +158,9 @@ function patchTool(
     detail?: string;
     status?: 'running' | 'done' | 'error';
     task?: ToolTaskInfo;
+    input?: Record<string, unknown>;
+    inputJson?: string;
+    result?: string;
   },
 ): StreamPart[] {
   const prev = parts[index];
@@ -194,83 +172,29 @@ function patchTool(
     detail: patch.detail ?? prev.detail,
     status: patch.status ?? prev.status,
     task: mergeTask(prev.task, patch.task),
+    input: patch.input ?? prev.input,
+    inputJson: patch.inputJson ?? prev.inputJson,
+    result: patch.result ?? prev.result,
   };
   return next;
 }
 
-function updateParentActivity(
+export function patchToolById(
   parts: StreamPart[],
-  parentId: string,
-  lastToolName: string | undefined,
-  detail: string | undefined,
+  toolId: string,
+  patch: {
+    name?: string;
+    detail?: string;
+    status?: 'running' | 'done' | 'error';
+    task?: ToolTaskInfo;
+    input?: Record<string, unknown>;
+    inputJson?: string;
+    result?: string;
+  },
 ): StreamPart[] {
-  const index = findToolIndex(parts, { toolUseId: parentId, id: parentId });
+  const index = findToolIndex(parts, { toolUseId: toolId, id: toolId });
   if (index < 0) return parts;
-  return patchTool(parts, index, {
-    detail,
-    task: lastToolName ? { lastToolName } : undefined,
-  });
-}
-
-export function applyNestedSubagentEvent(
-  parts: StreamPart[],
-  event: Record<string, unknown>,
-  parentId: string,
-): StreamPart[] {
-  const type = String(event.type ?? '');
-  const nested = recordField(event.event);
-  const content = recordField(event.message)?.content ?? nested?.content ?? event.content;
-  let next = parts;
-  let usedToolUse = false;
-
-  if (type === 'assistant' && Array.isArray(content)) {
-    for (const block of content) {
-      if (!block || typeof block !== 'object') continue;
-      const b = block as Record<string, unknown>;
-      if (b.type === 'tool_use') {
-        usedToolUse = true;
-        next = updateParentActivity(
-          next,
-          parentId,
-          stringField(b.name),
-          toolDetail(recordField(b.input)),
-        );
-      }
-    }
-  }
-
-  if (type === 'stream_event' && nested?.type === 'content_block_start') {
-    const block = recordField(nested.content_block);
-    if (block?.type === 'tool_use') {
-      usedToolUse = true;
-      next = updateParentActivity(
-        next,
-        parentId,
-        stringField(block.name),
-        toolDetail(recordField(block.input)),
-      );
-    }
-  }
-
-  const text = nestedEventText(event);
-  if (text && type !== 'result' && !usedToolUse) {
-    const index = findToolIndex(next, { toolUseId: parentId, id: parentId });
-    if (index >= 0) {
-      next = patchTool(next, index, { detail: clipToolDetail(text), status: 'running' });
-    }
-  }
-
-  if (type === 'result') {
-    const index = findToolIndex(next, { toolUseId: parentId, id: parentId });
-    if (index >= 0) {
-      next = patchTool(next, index, {
-        detail: text ? clipToolDetail(text) : undefined,
-        status: 'done',
-      });
-    }
-  }
-
-  return next;
+  return patchTool(parts, index, patch);
 }
 
 export function taskEventKind(event: Record<string, unknown>): string | undefined {
@@ -385,5 +309,3 @@ export function applyTaskEvent(parts: StreamPart[], event: Record<string, unknow
 
   return parts;
 }
-
-export { taskFromToolInput, toolDetail };

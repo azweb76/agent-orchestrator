@@ -351,4 +351,58 @@ describe('task events', () => {
       undefined,
     );
   });
+
+  it('appends thinking deltas and TodoWrite checklists', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Hmm. ' } },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'todo_1',
+            name: 'TodoWrite',
+            input: { todos: [{ content: 'Ship chat kit', status: 'in_progress' }] },
+          },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'todo_1', content: 'ok' }],
+      },
+    });
+    const thinking = parts.find((part) => part.type === 'thinking');
+    const todos = parts.find((part) => part.type === 'todo_list');
+    const result = parts.find((part) => part.type === 'tool' && part.id === 'todo_1');
+    assert.equal(thinking?.type === 'thinking' && thinking.text, 'Hmm. ');
+    assert.equal(todos?.type === 'todo_list' && todos.items[0]?.content, 'Ship chat kit');
+    assert.equal(result?.type === 'tool' && result.result, 'ok');
+  });
+
+  it('records Edit diffs from tool input', () => {
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'edit_1',
+            name: 'Edit',
+            input: { file_path: 'a.ts', old_string: 'foo', new_string: 'bar' },
+          },
+        ],
+      },
+    });
+    const diff = parts.find((part) => part.type === 'diff');
+    assert.equal(diff?.type === 'diff' && diff.path, 'a.ts');
+    assert.equal(diff?.type === 'diff' && diff.diff.includes('-foo'), true);
+    assert.equal(diff?.type === 'diff' && diff.diff.includes('+bar'), true);
+  });
 });
