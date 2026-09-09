@@ -39,11 +39,13 @@ describe('stream timeline ordering', () => {
     parts = appendStreamText(parts, 'Done.');
 
     assert.deepEqual(
-      parts.map((part) =>
-        part.type === 'text'
-          ? { type: 'text', text: part.text }
-          : { type: 'tool', name: part.name, detail: part.detail, status: part.status },
-      ),
+      parts.map((part) => {
+        if (part.type === 'text') return { type: 'text', text: part.text };
+        if (part.type === 'tool') {
+          return { type: 'tool', name: part.name, detail: part.detail, status: part.status };
+        }
+        throw new Error(`unexpected part type: ${part.type}`);
+      }),
       [
         { type: 'text', text: 'Looking at the file. ' },
         { type: 'tool', name: 'Read', detail: undefined, status: 'running' },
