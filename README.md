@@ -11,7 +11,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
 - **Agents** — one Claude Code agent per git worktree. Create one **From goal** (pick a **task** or **Auto** via purpose; optional model/effort override task defaults), **From branch**, or **From PR**. Each agent page has two tabs: **Chat** and **Changes**.
 - **Chat** — streaming conversations with follow-up support via Claude session resume:
   - Sessions start in **plan mode**; Claude can ask clarifying questions (`AskUserQuestion`) and present a plan (`ExitPlanMode`) with a **Build** action that stashes the plan session and starts a new auto-mode session to implement.
-  - Multiple sessions per agent, created from templates (**New chat**, **Review**, **Create draft PR**, **Address review**, **Fix CI**). Git-mutating sessions take a per-worktree lock; a queued session shows **Waiting** until the worktree is free.
+  - Multiple sessions per agent appear one after another in the same chat (plan, then **Build**, compact-and-continue, **Fix CI**, and other kickoffs). Click a session heading to continue that session. Git-mutating sessions take a per-worktree lock; a queued session shows **Waiting** until the worktree is free.
   - Queue follow-ups or force-send (interrupts the current run); stop generation; clear history (`/clear`); rewind to any user message (`/rewind` or the history button on a bubble).
   - Slash commands with real gathered context: `/diff` attaches the current diff, `/test` runs the project's tests and attaches the output, `/pr` pulls the PR and its checks, `/review` opens a Review session — plus autocomplete for project, personal, and bundled skills.
   - `@` mentions in the composer attach context: `@diff` for the current worktree patch, `@path/to/file` for any file in the worktree.
@@ -19,7 +19,7 @@ Local web app for managing GitHub workspaces, git worktrees, and one Claude Code
   - Model, effort, and permission-mode controls; manual/plan modes prompt in the UI for tool permissions. `AskUserQuestion` and `ExitPlanMode` always prompt and are never auto-approved.
   - Image attachments (paste or upload), markdown replies, compact tool-use progress bar.
   - After analysis, you can draft a skill (personal/user library by default, project only when the lesson is repo-specific), `CLAUDE.md`, or `AGENTS.md`. After a graded Build or Fix CI session, the app may also offer an instruction-file draft — review and apply it, or dismiss; nothing is written until you apply.
-  - New chats are auto-named from the first prompt via the Anthropic API; rename from the session bar.
+  - New chats are auto-named from the first prompt via the Anthropic API; rename or delete from the session heading in the transcript.
 - **Changes** — file-tree diff of the agent's worktree, scoped to pending changes or all PR changes; **Commit & push** from the UI; create or view the pull request on GitHub.
 - **Notifications** — optional browser notifications (bell in the app bar) when a run finishes or an agent needs your input.
 - **Unlock screen** — when `AUTH_TOKEN` is set, the UI asks for the token once and stores it locally.
