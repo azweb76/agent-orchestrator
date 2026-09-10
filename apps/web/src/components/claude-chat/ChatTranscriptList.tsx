@@ -96,7 +96,8 @@ const ChatTranscriptFooter = memo(function ChatTranscriptFooter() {
         maxWidth: CHAT_COLUMN_MAX_WIDTH,
         mx: 'auto',
         px: { xs: 1.5, sm: 2.5 },
-        pb: { xs: 1.5, sm: 2 },
+        pt: bridge.showEmptyState ? 1 : 0,
+        pb: { xs: 3, sm: 4 },
       }}
     >
       {bridge.showEmptyState ? bridge.emptyState : null}

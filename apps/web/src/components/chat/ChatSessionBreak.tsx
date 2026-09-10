@@ -36,9 +36,9 @@ export function ChatSessionBreak({
       data-session-break={session.id}
       sx={{
         pt: 1.25,
-        pb: 1,
+        pb: 1.5,
         px: 1,
-        mb: 0.5,
+        mb: 1.25,
         borderRadius: 1,
         borderLeft: 3,
         borderColor: active ? 'primary.main' : 'transparent',
