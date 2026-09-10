@@ -86,52 +86,6 @@ export function DiffBlock({ block }: { block: Extract<ChatBlock, { type: 'diff' 
   );
 }
 
-export function ToolResultBlock({ block }: { block: Extract<ChatBlock, { type: 'tool_result' }> }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Box sx={{ mb: 1 }}>
-      <Typography
-        component="button"
-        variant="caption"
-        onClick={() => setOpen((value) => !value)}
-        sx={{
-          display: 'block',
-          border: 0,
-          background: 'none',
-          color: block.isError ? 'error.main' : 'text.secondary',
-          cursor: 'pointer',
-          px: 0,
-          fontWeight: 600,
-        }}
-      >
-        {open ? 'Hide tool result' : block.isError ? 'Show tool error' : 'Show tool result'}
-      </Typography>
-      <Collapse in={open}>
-        <Box
-          component="pre"
-          sx={{
-            mt: 0.5,
-            mb: 0,
-            p: 1.25,
-            overflow: 'auto',
-            maxHeight: 240,
-            borderRadius: 1.5,
-            bgcolor: 'ao.surface.overlay',
-            border: 1,
-            borderColor: 'divider',
-            fontFamily: '"IBM Plex Mono", monospace',
-            fontSize: 12,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}
-        >
-          {block.content}
-        </Box>
-      </Collapse>
-    </Box>
-  );
-}
-
 export function ImageBlock({ block }: { block: Extract<ChatBlock, { type: 'image' }> }) {
   const src =
     block.url ??
