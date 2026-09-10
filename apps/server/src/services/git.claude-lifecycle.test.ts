@@ -145,7 +145,13 @@ test('AskUserQuestion survives releaseAll and can be answered after reattach', a
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
-test('reattach does not kill a run whose log already contains an answered control_request', async () => {
+test('reattach keeps an unresolved control_request pending across unrelated log traffic, without killing the still-running agent', async () => {
+  // Unrelated stream traffic that follows a control_request (a sibling
+  // parallel tool_use's stream_event, background task_progress, ...) is not
+  // proof the request was ever answered — Claude can keep talking while a
+  // *different* pending request blocks it. Only direct evidence (a matching
+  // control_response, or a tool_result/tool_use for the same tool_use_id)
+  // may drop it from the replayed pending set; see claude-permission-resolution.ts.
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-replay-cr-'));
   const binPath = path.join(tmp, 'fake-claude');
   const runsDir = path.join(tmp, 'runs');
@@ -160,7 +166,7 @@ process.stdout.write(JSON.stringify({
 }) + '\\n');
 process.stdout.write(JSON.stringify({
   type: 'stream_event',
-  event: { delta: { type: 'text_delta', text: 'already answered' } },
+  event: { delta: { type: 'text_delta', text: 'unrelated chatter' } },
 }) + '\\n');
 setInterval(() => {
   process.stdout.write(JSON.stringify({ type: 'ping' }) + '\\n');
@@ -183,7 +189,7 @@ setInterval(() => {
   await waitFor(() => startedPid != null && startedLog != null);
   await waitFor(() => {
     try {
-      return readFileSync(startedLog!, 'utf8').includes('already answered');
+      return readFileSync(startedLog!, 'utf8').includes('unrelated chatter');
     } catch {
       return false;
     }
@@ -198,16 +204,16 @@ setInterval(() => {
     logPath: startedLog!,
   });
 
-  await new Promise((r) => setTimeout(r, 200));
+  await waitFor(() => serviceB.listPendingPermissions('agent-1').length === 1);
   assert.equal(
     isPidAlive(startedPid!),
     true,
-    'historical AskUserQuestion in the log must not stop a still-running agent',
+    'a still-pending AskUserQuestion in the log must not stop a still-running agent',
   );
   assert.equal(
-    serviceB.listPendingPermissions('agent-1').length,
-    0,
-    'answered control_request should not be restored as pending',
+    serviceB.listPendingPermissions('agent-1')[0]?.requestId,
+    'req-old',
+    'the unresolved control_request must be restored as pending, not dropped',
   );
 
   serviceB.stop('agent-1', startedPid, startedLog);
