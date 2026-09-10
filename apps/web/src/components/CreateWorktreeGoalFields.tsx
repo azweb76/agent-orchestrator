@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import {
   Alert,
+  CircularProgress,
   FormControl,
   IconButton,
   InputLabel,
@@ -11,6 +12,7 @@ import {
   Typography,
 } from '@mui/material';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import {
   CLAUDE_EFFORT_LEVELS,
   CLAUDE_MODELS,
@@ -36,6 +38,9 @@ type CreateWorktreeGoalFieldsProps = {
   mentionOptions: MentionMenuOption[];
   mentionHighlight: number;
   showMentionMenu: boolean;
+  picking: boolean;
+  pickNoMatch: boolean;
+  pickError: unknown;
   fileInputRef: RefObject<HTMLInputElement | null>;
   onGoalTextChange: (value: string) => void;
   onClearMentionDismissed: () => void;
@@ -48,6 +53,7 @@ type CreateWorktreeGoalFieldsProps = {
   onTaskChange: (taskName: string) => void;
   onModelChange: (model: string) => void;
   onEffortChange: (effort: EffortLevel | typeof TASK_DEFAULT_SENTINEL) => void;
+  onPickTask: () => void;
 };
 
 export function CreateWorktreeGoalFields({
@@ -61,6 +67,9 @@ export function CreateWorktreeGoalFields({
   mentionOptions,
   mentionHighlight,
   showMentionMenu,
+  picking,
+  pickNoMatch,
+  pickError,
   fileInputRef,
   onGoalTextChange,
   onClearMentionDismissed,
@@ -73,9 +82,18 @@ export function CreateWorktreeGoalFields({
   onTaskChange,
   onModelChange,
   onEffortChange,
+  onPickTask,
 }: CreateWorktreeGoalFieldsProps) {
   const selectedGoalTask =
     goalTask === 'auto' ? null : (agentTasks.find((item) => item.name === goalTask) ?? null);
+  const pickDisabled = picking || !goalText.trim() || agentTasks.length === 0;
+  const pickTooltip = picking
+    ? 'Asking AI which task fits your goal…'
+    : agentTasks.length === 0
+      ? 'Create a task with a purpose under Tasks first'
+      : !goalText.trim()
+        ? 'Describe your goal first'
+        : 'Let AI pick a task that fits your goal';
 
   return (
     <Stack spacing={1.5}>
@@ -187,6 +205,17 @@ export function CreateWorktreeGoalFields({
             </Select>
           </FormControl>
         </ControlTooltip>
+        <ControlTooltip title={pickTooltip} disabled={pickDisabled}>
+          <IconButton
+            size="small"
+            onClick={onPickTask}
+            disabled={pickDisabled}
+            aria-label="Pick a task with AI"
+            sx={{ alignSelf: 'center' }}
+          >
+            {picking ? <CircularProgress size={16} /> : <AutoAwesomeIcon fontSize="small" />}
+          </IconButton>
+        </ControlTooltip>
         <ControlTooltip title="Claude model for the first session">
           <FormControl size="small" sx={{ minWidth: 160, flex: 1 }}>
             <InputLabel>Model</InputLabel>
@@ -220,6 +249,13 @@ export function CreateWorktreeGoalFields({
           </FormControl>
         </ControlTooltip>
       </Stack>
+      {pickNoMatch ? (
+        <Alert severity="info">
+          No task purpose fits this goal — Auto will fail too; pick one manually or add a purpose
+          under Tasks.
+        </Alert>
+      ) : null}
+      {pickError ? <Alert severity="error">{(pickError as Error).message}</Alert> : null}
       {agentTasks.length === 0 ? (
         <Alert severity="info">
           No tasks yet. Create one under Tasks so From goal can run (Auto needs a purpose).

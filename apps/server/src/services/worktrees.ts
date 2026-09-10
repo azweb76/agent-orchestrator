@@ -210,21 +210,11 @@ async function suggestBranchNameForWorkspace(
   return ensureUniqueBranchName(ctx, workspace, suggested);
 }
 
-/**
- * Resolve an AgentTask for From goal: explicit slug, or Auto via purpose matching.
- */
-export async function resolveAgentTaskForGoal(
+/** Auto-match a goal to an AgentTask by purpose. Returns null when no purpose fits. */
+export async function selectAgentTaskForGoalOrNull(
   ctx: AppContext,
   goal: string,
-  taskRef: string,
-): Promise<AgentTask> {
-  const ref = taskRef.trim().toLowerCase();
-  if (!ref) throw new Error('Task is required');
-
-  if (ref !== 'auto') {
-    return requireAgentTaskByName(ctx, ref);
-  }
-
+): Promise<AgentTask | null> {
   const candidates = ctx.repos.agentTasks
     .list()
     .filter((item) => item.purpose.trim().length > 0)
@@ -246,11 +236,32 @@ export async function resolveAgentTaskForGoal(
     throw new Error(`Could not match goal to a task: ${message}`, { cause: err });
   }
 
-  if (!selected) {
+  if (!selected) return null;
+
+  return requireAgentTaskByName(ctx, selected);
+}
+
+/**
+ * Resolve an AgentTask for From goal: explicit slug, or Auto via purpose matching.
+ */
+export async function resolveAgentTaskForGoal(
+  ctx: AppContext,
+  goal: string,
+  taskRef: string,
+): Promise<AgentTask> {
+  const ref = taskRef.trim().toLowerCase();
+  if (!ref) throw new Error('Task is required');
+
+  if (ref !== 'auto') {
+    return requireAgentTaskByName(ctx, ref);
+  }
+
+  const task = await selectAgentTaskForGoalOrNull(ctx, goal);
+  if (!task) {
     throw new Error('Could not match goal to a task');
   }
 
-  return requireAgentTaskByName(ctx, selected);
+  return task;
 }
 
 /**
