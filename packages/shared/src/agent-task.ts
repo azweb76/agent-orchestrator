@@ -100,3 +100,47 @@ export function sanitizeAgentTaskAllowedTools(
 export function isValidAgentTaskName(name: string): boolean {
   return AGENT_TASK_NAME_PATTERN.test(name.trim());
 }
+
+/**
+ * Permission modes an imported task file may select.
+ *
+ * A synced library repository decides the mode of future runs on the user's real
+ * worktrees, so the modes that auto-approve tools without prompting
+ * (`auto`, `dontAsk`, `bypassPermissions`) are not available to it. Anything
+ * else is clamped to `plan`, which is what a new session starts in anyway; a
+ * user who wants a stronger mode can set it locally after review.
+ */
+const IMPORTABLE_PERMISSION_MODES = new Set(['default', 'acceptEdits', 'plan']);
+
+export function clampImportedPermissionMode(mode: string): {
+  mode: 'default' | 'acceptEdits' | 'plan';
+  clamped: boolean;
+} {
+  if (IMPORTABLE_PERMISSION_MODES.has(mode)) {
+    return { mode: mode as 'default' | 'acceptEdits' | 'plan', clamped: false };
+  }
+  return { mode: 'plan', clamped: true };
+}
+
+/**
+ * Restrict an imported `allowedTools` list to entries naming a real,
+ * non-interactive tool from the catalog.
+ *
+ * `sanitizeAgentTaskAllowedTools` only drops interactive tools, so an imported
+ * file could otherwise auto-approve an invented tool name. Scoped entries such
+ * as `Bash(git:*)` stay valid — only the base name is checked.
+ */
+export function sanitizeImportedAllowedTools(
+  tools: string | null | undefined,
+  selectableToolIds: readonly string[],
+): string | null {
+  const sanitized = sanitizeAgentTaskAllowedTools(tools);
+  if (sanitized == null) return null;
+  const allowed = new Set(selectableToolIds);
+  const kept = sanitized
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => allowed.has(part.split('(')[0]!.trim()));
+  return kept.length > 0 ? kept.join(',') : null;
+}

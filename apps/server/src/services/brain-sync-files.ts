@@ -5,9 +5,11 @@ import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import type { AgentTask, TaskFollowUp } from '@agent-orchestrator/shared';
 import {
+  clampImportedPermissionMode,
   isValidAgentTaskName,
   isValidTaskFollowUpName,
-  sanitizeAgentTaskAllowedTools,
+  sanitizeImportedAllowedTools,
+  SELECTABLE_CLAUDE_TOOL_IDS,
 } from '@agent-orchestrator/shared';
 import { type AppContext, nowIso } from './app-context.js';
 import { applyInstructionFile, sanitizeSkillSlug } from './instruction-files.js';
@@ -119,6 +121,9 @@ export function parseTaskFile(raw: unknown): BrainTaskFile | null {
   const effort = asString(raw.effort, 'high');
   const permissionMode = asString(raw.permissionMode, 'plan');
   if (!EFFORTS.has(effort) || !PERMISSION_MODES.has(permissionMode)) return null;
+  // The file comes from a synced repository, so it does not get to pick a mode
+  // that auto-approves tools, nor to name a tool outside the catalog.
+  const { mode: clampedMode } = clampImportedPermissionMode(permissionMode);
   return {
     name,
     title,
@@ -126,10 +131,13 @@ export function parseTaskFile(raw: unknown): BrainTaskFile | null {
     purpose: asString(raw.purpose),
     promptTemplate: asNullableString(raw.promptTemplate),
     systemPrompt: asNullableString(raw.systemPrompt),
-    allowedTools: sanitizeAgentTaskAllowedTools(asNullableString(raw.allowedTools)),
+    allowedTools: sanitizeImportedAllowedTools(
+      asNullableString(raw.allowedTools),
+      SELECTABLE_CLAUDE_TOOL_IDS,
+    ),
     model: asString(raw.model, 'sonnet').trim() || 'sonnet',
     effort: effort as BrainTaskFile['effort'],
-    permissionMode: permissionMode as BrainTaskFile['permissionMode'],
+    permissionMode: clampedMode,
     listed: asBool(raw.listed, false),
     builtIn: asBool(raw.builtIn, false),
   };
