@@ -16,6 +16,7 @@ import type { AppRepositories } from '../db/index.js';
 import type { GitService } from './git.js';
 import type { GitHubService } from './github.js';
 import { resolveChatMentions } from './chat-mentions.js';
+import { childEnv } from './child-env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -128,32 +129,42 @@ async function resolveDiffContext(
   };
 }
 
-async function discoverTestCommand(worktreePath: string): Promise<string | null> {
+/** A fixed test invocation: never assembled from repository content. */
+export interface WorktreeTestCommand {
+  file: string;
+  args: string[];
+}
+
+export function formatTestCommand(command: WorktreeTestCommand): string {
+  return [command.file, ...command.args].join(' ');
+}
+
+/**
+ * Pick the test command for a worktree from its lockfile and package.json only.
+ *
+ * A previous version also scanned the worktree's AGENTS.md for a line matching
+ * /test/ inside a fenced block and executed it verbatim through a shell. That
+ * made whoever last wrote that file — a cloned third-party repo, a fetched PR
+ * head, or the agent itself — the author of a command run with the
+ * orchestrator's environment, on a keystroke the user reasonably reads as
+ * inspect-only. Only the fixed package-manager forms remain.
+ */
+async function discoverTestCommand(worktreePath: string): Promise<WorktreeTestCommand | null> {
   const pkgPath = path.join(worktreePath, 'package.json');
   try {
     const raw = await fs.readFile(pkgPath, 'utf8');
     const pkg = JSON.parse(raw) as { scripts?: Record<string, string> };
     if (pkg.scripts?.test?.trim()) {
-      if (existsSync(path.join(worktreePath, 'pnpm-lock.yaml'))) return 'pnpm test';
-      if (existsSync(path.join(worktreePath, 'yarn.lock'))) return 'yarn test';
-      return 'npm test';
+      if (existsSync(path.join(worktreePath, 'pnpm-lock.yaml'))) {
+        return { file: 'pnpm', args: ['test'] };
+      }
+      if (existsSync(path.join(worktreePath, 'yarn.lock'))) {
+        return { file: 'yarn', args: ['test'] };
+      }
+      return { file: 'npm', args: ['test'] };
     }
   } catch {
     // ignore missing or invalid package.json
-  }
-
-  const agentsPath = path.join(worktreePath, 'AGENTS.md');
-  try {
-    const content = await fs.readFile(agentsPath, 'utf8');
-    for (const match of content.matchAll(/```(?:bash|sh)?\n([\s\S]*?)```/g)) {
-      for (const line of match[1]!.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        if (/\btest\b/i.test(trimmed)) return trimmed;
-      }
-    }
-  } catch {
-    // ignore missing AGENTS.md
   }
 
   return null;
@@ -161,15 +172,16 @@ async function discoverTestCommand(worktreePath: string): Promise<string | null>
 
 async function runWorktreeTestCommand(
   worktreePath: string,
-  command: string,
+  command: WorktreeTestCommand,
 ): Promise<{ exitCode: number | null; output: string }> {
   try {
-    const { stdout, stderr } = await execFileAsync(command, {
+    // No shell: the argv form means nothing in the worktree can inject a
+    // metacharacter, and the command itself is one of three fixed values.
+    const { stdout, stderr } = await execFileAsync(command.file, command.args, {
       cwd: worktreePath,
-      shell: true,
       timeout: SLASH_TEST_TIMEOUT_MS,
       maxBuffer: SLASH_TEST_OUTPUT_MAX_BYTES + 4_096,
-      env: { ...process.env, CI: 'true' },
+      env: childEnv({ CI: 'true' }),
     });
     const combined = [stdout, stderr].filter(Boolean).join('\n').trim();
     return { exitCode: 0, output: combined || '(no output)' };
@@ -193,10 +205,7 @@ async function resolveTestContext(
     return {
       handled: true,
       displayMessage: args ? `/test ${args}` : '/test',
-      prompt: appendArgs(
-        'No workspace test script was found (package.json scripts.test or AGENTS.md test command).',
-        args,
-      ),
+      prompt: appendArgs('No workspace test script was found (package.json scripts.test).', args),
     };
   }
 
@@ -209,7 +218,7 @@ async function resolveTestContext(
   const body = [
     TEST_PROMPT,
     '',
-    `Ran: \`${command}\``,
+    `Ran: \`${formatTestCommand(command)}\``,
     status,
     '',
     '### Test output',

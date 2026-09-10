@@ -16,7 +16,6 @@ import {
 } from '../automation/settings';
 import { getSettings, updateSettings } from '../settings/api';
 
-export { setAuthToken } from './request';
 export type { ChatStreamHandlers, SetupInfo, SystemStatus } from './types';
 export {
   streamBuildPlan,

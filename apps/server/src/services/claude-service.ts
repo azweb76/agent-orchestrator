@@ -39,6 +39,7 @@ import type {
   RunHealthSnapshot,
   TrackedRun,
 } from './claude-types.js';
+import { childEnv } from './child-env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -263,7 +264,7 @@ export class ClaudeService implements ClaudeRunMonitorHost {
     try {
       proc = spawn(this.claudeBin, args, {
         cwd: options.cwd,
-        env: process.env,
+        env: childEnv(),
         detached: true,
         stdio: [stdinReadFd, outFd, outFd],
       });

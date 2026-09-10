@@ -243,8 +243,6 @@ export interface DenyPermissionRequest {
 
 export interface AllowPermissionRequest {
   requestId: string;
-  /** Optional override of tool input when allowing (defaults to pending input). */
-  updatedInput?: Record<string, unknown>;
 }
 
 export interface BuildPlanRequest {

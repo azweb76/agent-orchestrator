@@ -60,6 +60,31 @@ export async function previewRepoSkills(
   };
 }
 
+/**
+ * Extensions a synced skill directory may write into ~/.claude/skills.
+ *
+ * The containment check below is sound, but the *set* of writable filenames was
+ * unrestricted, so a repository could drop executables or shell profiles beside
+ * a skill. Skills are markdown plus small data files.
+ */
+const ALLOWED_SKILL_EXTENSIONS = new Set([
+  '.md',
+  '.markdown',
+  '.txt',
+  '.json',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.csv',
+]);
+
+export function isAllowedSkillFile(filePath: string): boolean {
+  const basename = path.posix.basename(filePath);
+  // No dotfiles: .bashrc, .npmrc and friends are not skill content.
+  if (!basename || basename.startsWith('.')) return false;
+  return ALLOWED_SKILL_EXTENSIONS.has(path.posix.extname(basename).toLowerCase());
+}
+
 function destPathFor(homeDir: string | undefined, slug: string, dirPath: string, filePath: string): string {
   const root = path.join(personalSkillsRoot(homeDir), slug);
   const prefix = dirPath ? `${dirPath.replace(/\/$/, '')}/` : '';
@@ -112,6 +137,7 @@ export async function installRepoSkills(
     try {
       await fs.rm(destRoot, { recursive: true, force: true });
       for (const filePath of files) {
+        if (!isAllowedSkillFile(filePath)) continue;
         const content = await resolved.readFile(filePath);
         const dest = destPathFor(homeDir, slug, dir.dirPath, filePath);
         await fs.mkdir(path.dirname(dest), { recursive: true });

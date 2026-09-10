@@ -134,14 +134,22 @@ export function resolveSchedulePrompt(
   return custom;
 }
 
-/** Write tools auto-confirmable under auto_write_templates policy. */
+/**
+ * Write tools auto-confirmable under the auto_write_templates policy.
+ *
+ * `respond_permission` is deliberately absent. Under this policy the server
+ * pre-sets confirm=true, so including it let an unattended scheduled run approve
+ * a pending Bash or Write permission with no human present — and the only
+ * remaining judgement would be the model's, which reads untrusted GitHub, Jira
+ * and repository text. The reserved interactive tools are already protected,
+ * which is exactly the signal that a human belongs in this loop.
+ */
 export const AUTO_WRITE_TEMPLATE_TOOLS = new Set([
   'start_agent_session',
   'create_agent_from_github_issue',
   'create_agent_from_jira_issue',
   'create_agent_from_pull_request',
   'send_agent_message',
-  'respond_permission',
   'dismiss_work_item',
   'create_agent_pull_request',
 ]);

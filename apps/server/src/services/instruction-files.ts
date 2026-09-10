@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { isRealPathContained, isSymlink } from './path-containment.js';
 import {
   resolveInstructionScope,
   type ApplyInstructionFileRequest,
@@ -248,6 +249,19 @@ export async function applyInstructionFile(
   if (!content) throw new Error('Instruction file content is required');
 
   const { absolutePath, relativePath, scope } = resolveInstructionWritePath(roots, body);
+
+  // resolveInstructionWritePath / assertInside are lexical. A symlink already in
+  // place — say .claude/skills/<slug> pointing elsewhere — would redirect this
+  // write outside the allowlisted tree, so refuse symlinks and re-check
+  // containment against real paths before writing.
+  const writeRoot = scope === 'personal' ? homeDirOf(roots) : roots.worktreePath;
+  if (await isSymlink(absolutePath)) {
+    throw new Error('Refusing to write through a symlink');
+  }
+  if (!(await isRealPathContained(writeRoot, absolutePath))) {
+    throw new Error('Path escapes allowed directory');
+  }
+
   const existed = (await readOptional(absolutePath)) != null;
   await fs.mkdir(path.dirname(absolutePath), { recursive: true });
   await fs.writeFile(absolutePath, content.endsWith('\n') ? content : `${content}\n`, 'utf8');

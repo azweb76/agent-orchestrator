@@ -91,6 +91,43 @@ test('parseBrainRepoRef accepts owner/repo and GitHub URLs', () => {
   assert.equal(local.cloneUrl, 'file:///tmp/demo.git');
 });
 
+test('parseTaskFile clamps an imported permission mode that auto-approves tools', () => {
+  for (const mode of ['bypassPermissions', 'dontAsk', 'auto']) {
+    const parsed = parseTaskFile({ name: 'imported', title: 'Imported', permissionMode: mode });
+    assert.notEqual(parsed, null, mode);
+    assert.equal(parsed!.permissionMode, 'plan', mode);
+  }
+});
+
+test('parseTaskFile keeps permission modes an import may legitimately pick', () => {
+  for (const mode of ['default', 'acceptEdits', 'plan']) {
+    const parsed = parseTaskFile({ name: 'imported', title: 'Imported', permissionMode: mode });
+    assert.equal(parsed!.permissionMode, mode, mode);
+  }
+});
+
+test('parseTaskFile drops imported tools outside the catalog but keeps scoped ones', () => {
+  const parsed = parseTaskFile({
+    name: 'imported',
+    title: 'Imported',
+    allowedTools: 'Bash(git:*),Read,NotARealTool,Edit',
+  });
+  const tools = (parsed!.allowedTools ?? '').split(',');
+  assert.ok(tools.includes('Bash(git:*)'), 'scoped Bash entry should survive');
+  assert.ok(tools.includes('Read'));
+  assert.ok(tools.includes('Edit'));
+  assert.equal(tools.includes('NotARealTool'), false, 'invented tool must be dropped');
+});
+
+test('parseTaskFile still refuses interactive tools in an import', () => {
+  const parsed = parseTaskFile({
+    name: 'imported',
+    title: 'Imported',
+    allowedTools: 'AskUserQuestion,ExitPlanMode,Read',
+  });
+  assert.equal(parsed!.allowedTools, 'Read');
+});
+
 test('parseTaskFile rejects invalid slugs', () => {
   assert.equal(parseTaskFile({ name: '1nope', title: 'x' }), null);
   const parsed = parseTaskFile({

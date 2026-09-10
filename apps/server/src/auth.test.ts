@@ -1,30 +1,37 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { optionalBearerAuth, readPresentedAuthToken } from './auth.js';
+import { authCookieHeader, optionalBearerAuth, readPresentedAuthToken, tokensMatch } from './auth.js';
 
 test('readPresentedAuthToken prefers the Bearer header', () => {
   const token = readPresentedAuthToken({
     headers: { authorization: 'Bearer secret', cookie: 'ao_token=cookie' },
-    query: { access_token: 'query' },
   });
   assert.equal(token, 'secret');
 });
 
-test('readPresentedAuthToken falls back to access_token then cookie', () => {
-  assert.equal(
-    readPresentedAuthToken({
-      headers: {},
-      query: { access_token: 'query' },
-    }),
-    'query',
-  );
+test('readPresentedAuthToken falls back to the cookie', () => {
   assert.equal(
     readPresentedAuthToken({
       headers: { cookie: 'other=1; ao_token=from-cookie' },
-      query: {},
     }),
     'from-cookie',
   );
+  assert.equal(readPresentedAuthToken({ headers: {} }), undefined);
+});
+
+test('tokensMatch compares without leaking length or prefix', () => {
+  assert.equal(tokensMatch('expected', 'expected'), true);
+  assert.equal(tokensMatch('expecteX', 'expected'), false);
+  assert.equal(tokensMatch('short', 'expected'), false);
+  assert.equal(tokensMatch('expected-and-then-some', 'expected'), false);
+  assert.equal(tokensMatch(undefined, 'expected'), false);
+  assert.equal(tokensMatch('', 'expected'), false);
+});
+
+test('authCookieHeader is HttpOnly and adds Secure only over TLS', () => {
+  const plain = authCookieHeader('tok en', false);
+  assert.match(plain, /^ao_token=tok%20en; Path=\/; SameSite=Lax; HttpOnly$/);
+  assert.match(authCookieHeader('t', true), /; Secure$/);
 });
 
 test('optionalBearerAuth is a no-op when AUTH_TOKEN is unset', () => {

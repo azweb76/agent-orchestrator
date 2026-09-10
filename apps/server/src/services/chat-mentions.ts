@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { ChatMention } from '@agent-orchestrator/shared';
 import type { GitService } from './git.js';
+import { isRealPathContained } from './path-containment.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -128,6 +129,13 @@ export async function resolveChatMentions(
     const absPath = resolveWorktreeFilePath(worktreePath, relativePath);
     if (!absPath) {
       notes.push({ token, note: 'skipped (invalid path)' });
+      continue;
+    }
+
+    // The lexical guard above cannot see a symlink inside the worktree that
+    // points outside it, and fs.stat/readFile both follow symlinks.
+    if (!(await isRealPathContained(worktreePath, absPath))) {
+      notes.push({ token, note: 'skipped (path escapes the worktree)' });
       continue;
     }
 

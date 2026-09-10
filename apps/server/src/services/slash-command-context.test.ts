@@ -153,6 +153,33 @@ describe('slash-command-context', () => {
     assert.match(result.prompt, /ok/);
   });
 
+  it('/test never runs a command taken from the worktree AGENTS.md', async () => {
+    const agentsRoot = path.join(tmp, 'agents-md-only');
+    await fs.mkdir(agentsRoot, { recursive: true });
+    const marker = path.join(agentsRoot, 'pwned.txt');
+    // A repo-authored "test" command. With no package.json there is no test
+    // script, so /test must report that rather than execute this line.
+    await fs.writeFile(
+      path.join(agentsRoot, 'AGENTS.md'),
+      ['# Repo', '', '```bash', `pnpm test && touch ${marker}`, '```', ''].join('\n'),
+    );
+    const deps = seedDeps(path.join(tmp, 'db-agents-md'), agentsRoot);
+    const agent = deps.repos.agents.getById('ag-1')!;
+    const result = await resolveSlashCommandContext(deps, agent, agentsRoot, null, null, '/test');
+
+    assert.equal(result.handled, true);
+    assert.match(result.prompt, /No workspace test script was found/);
+    assert.doesNotMatch(result.prompt, /Ran: `/);
+    assert.equal(
+      await fs
+        .access(marker)
+        .then(() => true)
+        .catch(() => false),
+      false,
+      'AGENTS.md command must not have executed',
+    );
+  });
+
   it('/test reports when no test script exists', async () => {
     const emptyRoot = path.join(tmp, 'no-test');
     await fs.mkdir(emptyRoot, { recursive: true });

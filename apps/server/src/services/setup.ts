@@ -91,9 +91,37 @@ export async function configureGithubToken(
   return { githubLogin };
 }
 
+/** Shell metacharacters and globs have no place in an executable path. */
+const CLAUDE_BIN_DISALLOWED = /[;&|`$(){}<>\n\r"'\\*?~\s]/;
+
+/**
+ * Decide whether a requested Claude binary may be configured, *before* running
+ * it. Setting this persists a path that every future agent run then spawns
+ * detached, surviving restarts, so an unvalidated value made one request both
+ * execute an arbitrary local file and make it the permanent spawn target.
+ *
+ * Detected candidates are accepted as-is. Anything else must be an absolute path
+ * with no shell metacharacters — which keeps a custom install location usable
+ * while rejecting relative paths resolved against the server's cwd.
+ */
+export function assertConfigurableClaudeBin(candidate: string, detected: readonly string[]): void {
+  if (detected.includes(candidate)) return;
+  if (CLAUDE_BIN_DISALLOWED.test(candidate)) {
+    throw new Error('Claude binary path contains unsupported characters');
+  }
+  if (!path.isAbsolute(candidate)) {
+    throw new Error(
+      'Claude binary must be an absolute path, or one of the detected candidates',
+    );
+  }
+}
+
 export async function configureClaudeBin(ctx: AppContext, claudeBin: string): Promise<void> {
   const trimmed = claudeBin.trim();
   if (!trimmed) throw new Error('Claude binary path is required');
+
+  const detected = await detectClaudeCandidates(ctx.claude.getBin());
+  assertConfigurableClaudeBin(trimmed, detected);
 
   try {
     await execFileAsync(trimmed, ['--version']);

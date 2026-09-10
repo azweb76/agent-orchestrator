@@ -7,7 +7,7 @@ import {
   getSetupInfo,
   getSystemStatus,
 } from '../services/app.js';
-import { authCookieName } from '../auth.js';
+import { authCookieHeader, tokensMatch } from '../auth.js';
 import { asyncHandler } from './helpers.js';
 import { checkClaudeAuth } from '../services/claude-auth.js';
 import { invalidateStatusCache } from '../services/status-cache.js';
@@ -20,14 +20,12 @@ export function registerAuthRoutes(router: express.Router, ctx: AppContext): voi
       return;
     }
     const body = z.object({ token: z.string().min(1) }).parse(req.body ?? {});
-    if (body.token !== expected) {
+    if (!tokensMatch(body.token, expected)) {
       res.status(401).json({ error: 'Unauthorized', authRequired: true });
       return;
     }
-    res.setHeader(
-      'Set-Cookie',
-      `${authCookieName()}=${encodeURIComponent(body.token)}; Path=/; SameSite=Lax; HttpOnly`,
-    );
+    const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.setHeader('Set-Cookie', authCookieHeader(body.token, secure));
     res.json({ ok: true });
   });
 
@@ -56,7 +54,7 @@ export function registerAuthRoutes(router: express.Router, ctx: AppContext): voi
   router.post(
     '/setup/claude-bin',
     asyncHandler(async (req, res) => {
-      const body = z.object({ claudeBin: z.string().min(1) }).parse(req.body ?? {});
+      const body = z.object({ claudeBin: z.string().min(1).max(512) }).parse(req.body ?? {});
       await configureClaudeBin(ctx, body.claudeBin);
       res.json({ ok: true });
     }),
