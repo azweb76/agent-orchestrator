@@ -9,7 +9,11 @@ const execFileAsync = promisify(execFile);
 export class GitService {
   async clone(url: string, targetPath: string): Promise<string> {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    await execFileAsync('git', ['clone', url, targetPath], { maxBuffer: 10 * 1024 * 1024 });
+    // `--` so a URL or path can never be read as an option, even if a caller
+    // upstream fails to reject a leading dash.
+    await execFileAsync('git', ['clone', '--', url, targetPath], {
+      maxBuffer: 10 * 1024 * 1024,
+    });
     return targetPath;
   }
 

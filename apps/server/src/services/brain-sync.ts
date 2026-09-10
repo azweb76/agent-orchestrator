@@ -40,6 +40,9 @@ export function parseBrainRepoRef(repoUrl: string): {
 } {
   const trimmed = repoUrl.trim();
   if (!trimmed) throw new Error('Repository URL is required');
+  // A leading dash would reach git as an option rather than an operand.
+  if (trimmed.startsWith('-')) throw new Error('Invalid repository URL');
+
   const short = trimmed.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/);
   if (short && !trimmed.includes(':') && !trimmed.includes('\\')) {
     const owner = short[1]!;
@@ -55,7 +58,19 @@ export function parseBrainRepoRef(repoUrl: string): {
     const { owner, repo } = parseGitHubUrl(trimmed);
     return { cloneUrl: trimmed, githubOwner: owner, githubRepo: repo, isGitHub: true };
   } catch {
-    const base = trimmed.replace(/\.git$/, '').split(/[/\\]/).filter(Boolean).pop() || 'brain';
+    // Previously any unparseable string became the clone URL verbatim. git reads
+    // some operand values as transports that run a helper command rather than as
+    // network URLs, so a non-GitHub value must be an explicit local repository:
+    // a file:// URL or an absolute path, and nothing else.
+    const fileUrl = /^file:\/\//i.test(trimmed);
+    if (!fileUrl && !path.isAbsolute(trimmed)) {
+      throw new Error(
+        'Repository must be a GitHub URL (owner/repo, https://github.com/…, ' +
+          'git@github.com:…), a file:// URL, or an absolute local path',
+      );
+    }
+    const localPath = fileUrl ? new URL(trimmed).pathname : trimmed;
+    const base = path.basename(localPath).replace(/\.git$/, '') || 'brain';
     return { cloneUrl: trimmed, githubOwner: 'local', githubRepo: base, isGitHub: false };
   }
 }
