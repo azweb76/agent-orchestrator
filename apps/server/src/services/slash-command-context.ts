@@ -16,6 +16,7 @@ import type { AppRepositories } from '../db/index.js';
 import type { GitService } from './git.js';
 import type { GitHubService } from './github.js';
 import { resolveChatMentions } from './chat-mentions.js';
+import { childEnv } from './child-env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -180,7 +181,7 @@ async function runWorktreeTestCommand(
       cwd: worktreePath,
       timeout: SLASH_TEST_TIMEOUT_MS,
       maxBuffer: SLASH_TEST_OUTPUT_MAX_BYTES + 4_096,
-      env: { ...process.env, CI: 'true' },
+      env: childEnv({ CI: 'true' }),
     });
     const combined = [stdout, stderr].filter(Boolean).join('\n').trim();
     return { exitCode: 0, output: combined || '(no output)' };
