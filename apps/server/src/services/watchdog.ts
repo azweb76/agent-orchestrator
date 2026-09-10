@@ -111,15 +111,19 @@ export function runWatchdogTick(ctx: AppContext): void {
   const streamIdleMs = settings.watchdogStreamIdleMinutes * 60_000;
   const now = Date.now();
 
+  const agentStallState = new Map<string, boolean>();
+
   for (const session of ctx.repos.sessions.listRunning()) {
     const agentId = session.agentId;
     const sessionId = session.id;
     let anyStall = false;
 
     const health = ctx.claude.getRunHealth(sessionId);
+    let anyPendingStale = false;
     for (const pending of health.pendingPermissions) {
       const age = now - pending.requestedAt;
       if (age >= permissionMs) {
+        anyPendingStale = true;
         anyStall = true;
         emitWatchdogAlert(
           ctx,
@@ -128,9 +132,10 @@ export function runWatchdogTick(ctx: AppContext): void {
           'permission_stale',
           `Pending ${pending.toolName} for ${Math.floor(age / 60_000)} minutes.`,
         );
-      } else {
-        clearAlertIfResolved(sessionId, 'permission_stale');
       }
+    }
+    if (!anyPendingStale) {
+      clearAlertIfResolved(sessionId, 'permission_stale');
     }
 
     if (session.pid != null && isPidAlive(session.pid)) {
@@ -161,13 +166,21 @@ export function runWatchdogTick(ctx: AppContext): void {
           'stale_run',
           'Claude process exited but the session was still marked running; status corrected.',
         );
+        // The session is now idle, so it will drop out of listRunning() and this
+        // branch won't run again for it — clear the dedup key now so a future
+        // stale_run on the same session (after it runs again) can alert again.
+        clearAlertIfResolved(sessionId, 'stale_run');
         anyStall = true;
       } else if (session.pid != null && isPidAlive(session.pid)) {
         clearAlertIfResolved(sessionId, 'stale_run');
       }
     }
 
-    if (!anyStall) clearStalled(agentId);
+    agentStallState.set(agentId, (agentStallState.get(agentId) ?? false) || anyStall);
+  }
+
+  for (const [agentId, stalled] of agentStallState) {
+    if (!stalled) clearStalled(agentId);
   }
 }
 
