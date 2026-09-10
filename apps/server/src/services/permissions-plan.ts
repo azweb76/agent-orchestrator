@@ -112,9 +112,12 @@ export async function allowPermissionRequest(
     throw new Error('Use Build to approve ExitPlanMode (avoids CLI stdio hang)');
   }
 
+  // Approve exactly the input the user was shown. Honouring a caller-supplied
+  // updatedInput here meant an approval could also silently rewrite the tool's
+  // arguments — so what ran was not what was displayed and consented to.
   const ok = ctx.claude.respondToPermission(session.id, body.requestId, {
     behavior: 'allow',
-    updatedInput: body.updatedInput ?? pending.input,
+    updatedInput: pending.input,
   });
   if (!ok) throw new Error('Permission request not found or Claude stdin unavailable');
 

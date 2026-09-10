@@ -55,7 +55,6 @@ export function registerChatRoutes(router: express.Router, ctx: AppContext): voi
       const body = z
         .object({
           requestId: z.string().min(1),
-          updatedInput: z.record(z.string(), z.unknown()).optional(),
         })
         .parse(req.body);
       res.json(
@@ -233,7 +232,6 @@ export function registerChatRoutes(router: express.Router, ctx: AppContext): voi
       const body = z
         .object({
           requestId: z.string().min(1),
-          updatedInput: z.record(z.string(), z.unknown()).optional(),
         })
         .parse(req.body);
       res.json(await allowPermissionRequest(ctx, param(req.params.agentId), body));
