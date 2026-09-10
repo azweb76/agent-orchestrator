@@ -1,50 +1,58 @@
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
 import { ControlTooltip } from '../../ui/ControlTooltip';
 import { MarkdownContent } from '../MarkdownContent';
 import { ChatPromptCard } from './ChatPromptCard';
+import type { PlanFollowUp } from '../types';
 
 interface ExitPlanModeCardProps {
   plan: string;
   submitting?: boolean;
-  onApprove: () => void;
-  onKeepPlanning: () => void;
-  onDeny?: () => void;
+  followUps: PlanFollowUp[];
+  followUpsLoading?: boolean;
+  onSelectFollowUp: (followUp: PlanFollowUp) => void;
 }
 
 export function ExitPlanModeCard({
   plan,
   submitting,
-  onApprove,
-  onKeepPlanning,
-  onDeny,
+  followUps,
+  followUpsLoading,
+  onSelectFollowUp,
 }: ExitPlanModeCardProps) {
   return (
     <ChatPromptCard
       accent="success"
       icon={<AssignmentTurnedInOutlinedIcon />}
       title="Ready to leave plan mode?"
-      description="Review the plan below. Approve to continue, or keep planning to refine it."
+      description="Review the plan below, then choose how to proceed."
       actions={
-        <>
-          <ControlTooltip title="Approve this plan and continue" disabled={submitting}>
-            <Button variant="contained" color="success" disabled={submitting} onClick={onApprove}>
-              Approve
-            </Button>
-          </ControlTooltip>
-          <ControlTooltip title="Stay in plan mode and refine" disabled={submitting}>
-            <Button variant="outlined" disabled={submitting} onClick={onKeepPlanning}>
-              Keep planning
-            </Button>
-          </ControlTooltip>
-          {onDeny ? (
-            <ControlTooltip title="Reject this plan" disabled={submitting}>
-              <Button variant="text" color="inherit" disabled={submitting} onClick={onDeny}>
-                Deny
+        followUpsLoading ? (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2" color="text.secondary">
+              Preparing next steps…
+            </Typography>
+          </Stack>
+        ) : followUps.length > 0 ? (
+          followUps.map((followUp) => (
+            <ControlTooltip key={followUp.id} title={followUp.description ?? followUp.label} disabled={submitting}>
+              <Button
+                variant="outlined"
+                color="inherit"
+                size="small"
+                disabled={submitting}
+                onClick={() => onSelectFollowUp(followUp)}
+              >
+                {followUp.label}
               </Button>
             </ControlTooltip>
-          ) : null}
-        </>
+          ))
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            No follow-up actions available.
+          </Typography>
+        )
       }
     >
       <Box

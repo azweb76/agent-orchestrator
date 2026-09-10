@@ -17,6 +17,7 @@ import {
 import type {
   CreateTaskFollowUpRequest,
   TaskFollowUp,
+  TaskFollowUpTrigger,
   TaskSuggestionKind,
   UpdateTaskFollowUpRequest,
   ChatSessionTemplateId,
@@ -32,6 +33,7 @@ type FollowUpFormValues = {
   kind: TaskSuggestionKind;
   template: ChatSessionTemplateId | '';
   enabled: boolean;
+  trigger: TaskFollowUpTrigger;
 };
 
 const TEMPLATE_OPTIONS: Array<{ id: ChatSessionTemplateId; label: string }> = [
@@ -52,6 +54,7 @@ const emptyValues = (): FollowUpFormValues => ({
   kind: 'prompt',
   template: '',
   enabled: true,
+  trigger: 'session-complete',
 });
 
 function valuesFromFollowUp(followUp: TaskFollowUp): FollowUpFormValues {
@@ -63,6 +66,7 @@ function valuesFromFollowUp(followUp: TaskFollowUp): FollowUpFormValues {
     kind: followUp.kind,
     template: followUp.template ?? '',
     enabled: followUp.enabled,
+    trigger: followUp.trigger,
   };
 }
 
@@ -75,6 +79,7 @@ function toCreateBody(values: FollowUpFormValues): CreateTaskFollowUpRequest {
     kind: values.kind,
     template: values.kind === 'start-template' ? values.template || null : null,
     enabled: values.enabled,
+    trigger: values.trigger,
   };
 }
 
@@ -166,6 +171,21 @@ export function TaskFollowUpDialog({
             minRows={3}
             helperText="Message sent into the current chat. Cmd/Ctrl-click on the chip opens a new chat with the same prompt."
           />
+          <FormControl fullWidth>
+            <InputLabel id="followup-trigger-label">Trigger</InputLabel>
+            <Select
+              labelId="followup-trigger-label"
+              label="Trigger"
+              value={values.trigger}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, trigger: e.target.value as TaskFollowUpTrigger }))
+              }
+              disabled={saving}
+            >
+              <MenuItem value="session-complete">After session completes</MenuItem>
+              <MenuItem value="exit-plan-mode">When exiting plan mode</MenuItem>
+            </Select>
+          </FormControl>
           {!builtIn ? (
             <FormControl fullWidth>
               <InputLabel id="followup-kind-label">Kind</InputLabel>

@@ -15,6 +15,7 @@ import type {
   SessionGradeScore,
   AgentTask,
   TaskFollowUp,
+  TaskFollowUpTrigger,
   TaskSuggestionKind,
   Worktree,
   Workspace,
@@ -202,6 +203,10 @@ function parseTaskSuggestionKind(value: unknown): TaskSuggestionKind {
   return 'prompt';
 }
 
+function parseTaskFollowUpTrigger(value: unknown): TaskFollowUpTrigger {
+  return value === 'exit-plan-mode' ? 'exit-plan-mode' : 'session-complete';
+}
+
 export function rowToTaskFollowUp(row: unknown): TaskFollowUp {
   const r = row as Record<string, unknown>;
   return {
@@ -211,6 +216,7 @@ export function rowToTaskFollowUp(row: unknown): TaskFollowUp {
     description: r.description == null ? '' : String(r.description),
     prompt: String(r.prompt ?? ''),
     kind: parseTaskSuggestionKind(r.kind),
+    trigger: parseTaskFollowUpTrigger(r.trigger),
     template:
       r.template == null || r.template === ''
         ? null

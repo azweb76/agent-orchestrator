@@ -184,3 +184,48 @@ test('POST review with a missing body for REQUEST_CHANGES is a 400', async () =>
     assert.equal(body.error, 'Validation error');
   });
 });
+
+test('PUT /api/task-followups accepts the built-in grade-session kind', async () => {
+  await withServer(async (url) => {
+    // Listing seeds the built-in catalog, which includes a grade-session follow-up.
+    const listRes = await fetch(`${url}/api/task-followups`);
+    assert.equal(listRes.status, 200);
+    const followUps = (await listRes.json()) as Array<{ id: string; name: string; kind: string }>;
+    const gradeSession = followUps.find((item) => item.name === 'grade-session');
+    assert.ok(gradeSession, 'expected a seeded grade-session follow-up');
+
+    // The Brain edit form always sends `kind`, so this is the exact shape it PUTs.
+    const res = await fetch(`${url}/api/task-followups/${gradeSession.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Grade this session', kind: 'grade-session' }),
+    });
+    assert.equal(res.status, 200);
+    const updated = (await res.json()) as { title: string; kind: string };
+    assert.equal(updated.title, 'Grade this session');
+    assert.equal(updated.kind, 'grade-session');
+  });
+});
+
+test('PUT /api/task-followups persists the exit-plan-mode trigger', async () => {
+  await withServer(async (url) => {
+    const followUps = (await (await fetch(`${url}/api/task-followups`)).json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+    const target = followUps.find((item) => item.name === 'continue');
+    assert.ok(target, 'expected a seeded continue follow-up');
+
+    const res = await fetch(`${url}/api/task-followups/${target.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger: 'exit-plan-mode' }),
+    });
+    assert.equal(res.status, 200);
+
+    const reread = (await (await fetch(`${url}/api/task-followups/${target.id}`)).json()) as {
+      trigger: string;
+    };
+    assert.equal(reread.trigger, 'exit-plan-mode');
+  });
+});

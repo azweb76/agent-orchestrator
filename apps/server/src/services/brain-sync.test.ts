@@ -17,7 +17,13 @@ import {
   parseBrainRepoRef,
   pullBrainRepo,
 } from './brain-sync.js';
-import { parseTaskFile, stringifyBrainJson, taskToFile } from './brain-sync-files.js';
+import {
+  followUpToFile,
+  parseFollowUpFile,
+  parseTaskFile,
+  stringifyBrainJson,
+  taskToFile,
+} from './brain-sync-files.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -95,6 +101,53 @@ test('parseTaskFile rejects invalid slugs', () => {
   });
   assert.equal(parsed?.name, 'review-deep');
   assert.equal(parsed?.title, 'Review');
+});
+
+test('follow-up files round-trip the trigger', () => {
+  const file = followUpToFile({
+    id: 'followup-1',
+    name: 'plan-check',
+    title: 'Plan check',
+    description: 'Review the plan.',
+    prompt: 'Review the plan before building.',
+    kind: 'prompt',
+    template: null,
+    enabled: true,
+    trigger: 'exit-plan-mode',
+    builtIn: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
+  assert.equal(file.trigger, 'exit-plan-mode');
+  assert.equal(parseFollowUpFile(file)?.trigger, 'exit-plan-mode');
+});
+
+test('parseFollowUpFile defaults a missing trigger instead of rejecting the file', () => {
+  // Library files written before triggers existed must still import.
+  const parsed = parseFollowUpFile({
+    name: 'legacy-followup',
+    title: 'Legacy',
+    prompt: 'Do the thing.',
+    kind: 'prompt',
+  });
+  assert.equal(parsed?.trigger, 'session-complete');
+  const unknown = parseFollowUpFile({
+    name: 'legacy-followup',
+    title: 'Legacy',
+    prompt: 'Do the thing.',
+    trigger: 'not-a-trigger',
+  });
+  assert.equal(unknown?.trigger, 'session-complete');
+});
+
+test('parseFollowUpFile accepts the grade-session kind', () => {
+  const parsed = parseFollowUpFile({
+    name: 'grade-session',
+    title: 'Grade session',
+    prompt: 'Open the session grade dialog.',
+    kind: 'grade-session',
+  });
+  assert.equal(parsed?.kind, 'grade-session');
 });
 
 test('brain sync reports modified files and can pull remote catalog updates', async () => {

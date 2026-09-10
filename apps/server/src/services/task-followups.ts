@@ -67,6 +67,7 @@ export function createTaskFollowUp(
     kind,
     template: normalizeTemplate(kind, body.template ?? null),
     enabled: body.enabled ?? true,
+    trigger: body.trigger ?? 'session-complete',
     builtIn: false,
     createdAt: now,
     updatedAt: now,
@@ -112,6 +113,7 @@ export function updateTaskFollowUp(
     kind,
     template,
     enabled: body.enabled ?? current.enabled,
+    trigger: body.trigger ?? current.trigger,
     updatedAt: nowIso(),
   });
 }
@@ -138,6 +140,7 @@ export function ensureBuiltInTaskFollowUps(ctx: AppContext): void {
       kind: seed.kind,
       template: seed.template ?? null,
       enabled: true,
+      trigger: seed.trigger,
       builtIn: true,
       createdAt: now,
       updatedAt: now,

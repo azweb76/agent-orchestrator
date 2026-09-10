@@ -101,6 +101,12 @@ export interface PermissionPrompt {
   createdAt?: string;
 }
 
+export interface PlanFollowUp {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 export interface ContextUsage {
   percent?: number;
   usedTokens?: number;
@@ -225,7 +231,7 @@ export interface ClaudeChatProps {
     response?: string,
   ) => void;
   onSkipQuestions?: (prompt: PermissionPrompt) => void;
-  onApprovePlan?: (prompt: PermissionPrompt) => void;
-  onKeepPlanning?: (prompt: PermissionPrompt) => void;
-  onDenyPlan?: (prompt: PermissionPrompt) => void;
+  planFollowUps?: PlanFollowUp[];
+  planFollowUpsLoading?: boolean;
+  onSelectPlanFollowUp?: (prompt: PermissionPrompt, followUp: PlanFollowUp) => void;
 }

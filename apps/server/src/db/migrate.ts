@@ -139,6 +139,7 @@ function migrateSchema(db: Database.Database): void {
       description TEXT NOT NULL DEFAULT '',
       prompt TEXT NOT NULL,
       kind TEXT NOT NULL DEFAULT 'prompt',
+      trigger TEXT NOT NULL DEFAULT 'session-complete',
       template TEXT,
       enabled INTEGER NOT NULL DEFAULT 1,
       built_in INTEGER NOT NULL DEFAULT 0,
@@ -147,6 +148,7 @@ function migrateSchema(db: Database.Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_task_followups_name ON task_followups(name);
   `);
+  ensureColumn(db, 'task_followups', 'trigger', "TEXT NOT NULL DEFAULT 'session-complete'");
   db.exec(`
     CREATE TABLE IF NOT EXISTS agent_memories (
       id TEXT PRIMARY KEY,

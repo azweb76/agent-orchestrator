@@ -6,7 +6,7 @@ import { parseQuestions } from './parseQuestions';
 import type { ClaudeChatProps, PermissionPrompt } from './types';
 
 function extractPlan(input: Record<string, unknown>): string {
-  return typeof input.plan === 'string' ? input.plan : '';
+  return typeof input.plan === 'string' ? input.plan.trim() : '';
 }
 
 export function DefaultPermissionCard({
@@ -17,9 +17,9 @@ export function DefaultPermissionCard({
   onDeny,
   onAnswer,
   onSkip,
-  onApprovePlan,
-  onKeepPlanning,
-  onDenyPlan,
+  planFollowUps,
+  planFollowUpsLoading,
+  onSelectPlanFollowUp,
 }: {
   prompt: PermissionPrompt;
   busy?: boolean;
@@ -28,9 +28,9 @@ export function DefaultPermissionCard({
   onDeny?: ClaudeChatProps['onDenyPermission'];
   onAnswer?: ClaudeChatProps['onAnswerQuestions'];
   onSkip?: ClaudeChatProps['onSkipQuestions'];
-  onApprovePlan?: ClaudeChatProps['onApprovePlan'];
-  onKeepPlanning?: ClaudeChatProps['onKeepPlanning'];
-  onDenyPlan?: ClaudeChatProps['onDenyPlan'];
+  planFollowUps?: ClaudeChatProps['planFollowUps'];
+  planFollowUpsLoading?: ClaudeChatProps['planFollowUpsLoading'];
+  onSelectPlanFollowUp?: ClaudeChatProps['onSelectPlanFollowUp'];
 }) {
   const card =
     prompt.toolName === 'AskUserQuestion' || prompt.toolName === 'ask_user' ? (
@@ -44,9 +44,9 @@ export function DefaultPermissionCard({
       <ExitPlanModeCard
         plan={extractPlan(prompt.input)}
         submitting={busy}
-        onApprove={() => onApprovePlan?.(prompt)}
-        onKeepPlanning={() => onKeepPlanning?.(prompt)}
-        onDeny={onDenyPlan ? () => onDenyPlan(prompt) : undefined}
+        followUps={planFollowUps ?? []}
+        followUpsLoading={planFollowUpsLoading}
+        onSelectFollowUp={(followUp) => onSelectPlanFollowUp?.(prompt, followUp)}
       />
     ) : (
       <ToolPermissionCard

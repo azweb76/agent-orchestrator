@@ -3,6 +3,7 @@ import type {
   SessionSearchHit,
   SidebarWorkspace,
 } from '@agent-orchestrator/shared';
+import { brainPath } from '../../pages/brain/brainTabs';
 import { pullRequestPath } from '../../utils/paths';
 import type { FleetBulkActionId, FleetBulkCounts } from './fleetBulkActions';
 import { fleetBulkActionLabel } from './fleetBulkActions';
@@ -70,28 +71,35 @@ export function buildPaletteCommands(
       group: 'Actions',
       label: 'Go to Brain',
       keywords: 'skills personal library user agent tasks templates follow-ups subagents',
-      action: { kind: 'navigate', to: '/brain' },
+      action: { kind: 'navigate', to: brainPath('skills') },
     },
     {
       id: 'action:go-brain-agents',
       group: 'Actions',
       label: 'Go to personal agents',
       keywords: 'personal subagents claude agents library brain',
-      action: { kind: 'navigate', to: '/brain?tab=agents' },
+      action: { kind: 'navigate', to: brainPath('agents') },
     },
     {
       id: 'action:go-tasks',
       group: 'Actions',
       label: 'Go to tasks',
       keywords: 'agent tasks templates prompt system model effort permissions purpose from-goal brain',
-      action: { kind: 'navigate', to: '/brain?tab=tasks' },
+      action: { kind: 'navigate', to: brainPath('tasks') },
     },
     {
       id: 'action:go-follow-ups',
       group: 'Actions',
       label: 'Go to follow-ups',
       keywords: 'suggestions chips catalog prompt description post-session brain',
-      action: { kind: 'navigate', to: '/brain?tab=follow-ups' },
+      action: { kind: 'navigate', to: brainPath('follow-ups') },
+    },
+    {
+      id: 'action:go-brain-copilot',
+      group: 'Actions',
+      label: 'Go to Brain copilot',
+      keywords: 'copilot draft ai brain skills agents tasks follow-ups changeset accept garden',
+      action: { kind: 'navigate', to: brainPath('copilot') },
     },
     {
       id: 'action:go-dashboard',

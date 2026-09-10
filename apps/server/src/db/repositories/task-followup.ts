@@ -9,10 +9,10 @@ export class TaskFollowUpRepository {
     this.db
       .prepare(
         `INSERT INTO task_followups (
-           id, name, title, description, prompt, kind, template,
+           id, name, title, description, prompt, kind, trigger, template,
            enabled, built_in, created_at, updated_at
          ) VALUES (
-           @id, @name, @title, @description, @prompt, @kind, @template,
+           @id, @name, @title, @description, @prompt, @kind, @trigger, @template,
            @enabled, @builtIn, @createdAt, @updatedAt
          )`,
       )
@@ -23,6 +23,7 @@ export class TaskFollowUpRepository {
         description: followUp.description,
         prompt: followUp.prompt,
         kind: followUp.kind,
+        trigger: followUp.trigger,
         template: followUp.template,
         enabled: followUp.enabled ? 1 : 0,
         builtIn: followUp.builtIn ? 1 : 0,
@@ -63,7 +64,7 @@ export class TaskFollowUpRepository {
       .prepare(
         `UPDATE task_followups SET
            name = @name, title = @title, description = @description, prompt = @prompt,
-           kind = @kind, template = @template, enabled = @enabled, built_in = @builtIn,
+           kind = @kind, trigger = @trigger, template = @template, enabled = @enabled, built_in = @builtIn,
            updated_at = @updatedAt
          WHERE id = @id`,
       )
@@ -74,6 +75,7 @@ export class TaskFollowUpRepository {
         description: followUp.description,
         prompt: followUp.prompt,
         kind: followUp.kind,
+        trigger: followUp.trigger,
         template: followUp.template,
         enabled: followUp.enabled ? 1 : 0,
         builtIn: followUp.builtIn ? 1 : 0,

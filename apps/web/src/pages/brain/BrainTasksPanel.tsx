@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Alert,
   Box,
@@ -12,55 +11,59 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import TuneOutlinedIcon from '@mui/icons-material/TuneOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentTask } from '@agent-orchestrator/shared';
+import { useQuery } from '@tanstack/react-query';
+import type {
+  AgentTask,
+  CreateAgentTaskRequest,
+  UpdateAgentTaskRequest,
+} from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { AgentTaskDialog } from '../../components/AgentTaskDialog';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
+import { useBrainCrud } from './useBrainCrud';
 
 export function BrainTasksPanel({
-  selectedKey,
-  onNew,
-  onSelect,
+  onDraftWithAi,
   onImprove,
 }: {
-  selectedKey: string | null;
-  onNew: () => void;
-  onSelect: (task: AgentTask) => void;
+  onDraftWithAi: () => void;
   onImprove: (task: AgentTask) => void;
 }) {
-  const queryClient = useQueryClient();
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
-
   const { data: tasks, isLoading, error } = useQuery({
     queryKey: ['agent-tasks'],
     queryFn: api.listAgentTasks,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteAgentTask(id),
-    onSuccess: async () => {
-      setPendingDelete(null);
-      await queryClient.invalidateQueries({ queryKey: ['agent-tasks'] });
-    },
+  const crud = useBrainCrud<AgentTask, CreateAgentTaskRequest, UpdateAgentTaskRequest>({
+    queryKey: ['agent-tasks'],
+    identify: (task) => task.id,
+    create: api.createAgentTask,
+    update: api.updateAgentTask,
+    remove: api.deleteAgentTask,
   });
 
   return (
     <Stack spacing={2}>
-      <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-        <ControlTooltip title="Create a task with AI">
-          <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <ControlTooltip title="Ask the copilot to draft one or more tasks">
+          <Button variant="outlined" startIcon={<AutoAwesomeOutlinedIcon />} onClick={onDraftWithAi}>
+            Draft with AI
+          </Button>
+        </ControlTooltip>
+        <ControlTooltip title="Create a kickoff task">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
             New task
           </Button>
         </ControlTooltip>
       </Stack>
 
       {error ? <Alert severity="error">{(error as Error).message}</Alert> : null}
-      {deleteMutation.error ? (
-        <Alert severity="error">{(deleteMutation.error as Error).message}</Alert>
-      ) : null}
+      {crud.deleteError ? <Alert severity="error">{crud.deleteError}</Alert> : null}
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -69,10 +72,10 @@ export function BrainTasksPanel({
       ) : tasks?.length === 0 ? (
         <EmptyState
           icon={<TuneOutlinedIcon />}
-          title="No tasks"
-          description="Create a task to reuse kickoff settings and enable From goal Auto matching."
+          title="No agent tasks"
+          description="Tasks define the prompt, model, effort, permissions, and tools a new agent session starts with."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
               New task
             </Button>
           }
@@ -82,40 +85,33 @@ export function BrainTasksPanel({
           {tasks?.map((task) => (
             <ListRow
               key={task.id}
-              selected={selectedKey === task.id}
-              onClick={() => onSelect(task)}
+              onClick={() => crud.openEdit(task)}
               secondaryAction={
                 <Stack direction="row" spacing={0.5} onClick={(event) => event.stopPropagation()}>
+                  <ControlTooltip title="Edit task">
+                    <IconButton aria-label={`Edit ${task.title}`} onClick={() => crud.openEdit(task)}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </ControlTooltip>
                   <ControlTooltip title="Improve with AI">
                     <IconButton aria-label={`Improve ${task.title}`} onClick={() => onImprove(task)}>
                       <AutoAwesomeOutlinedIcon fontSize="small" />
                     </IconButton>
                   </ControlTooltip>
-                  {pendingDelete === task.id ? (
-                    <>
-                      <Button size="small" color="error" onClick={() => deleteMutation.mutate(task.id)}>
-                        Confirm
-                      </Button>
-                      <Button size="small" onClick={() => setPendingDelete(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <ControlTooltip
-                      title={task.builtIn ? 'Built-in tasks cannot be deleted' : 'Delete task'}
-                      disabled={task.builtIn || deleteMutation.isPending}
-                    >
-                      <span>
-                        <IconButton
-                          aria-label={`Delete ${task.title}`}
-                          disabled={task.builtIn || deleteMutation.isPending}
-                          onClick={() => setPendingDelete(task.id)}
-                        >
-                          <DeleteOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </ControlTooltip>
-                  )}
+                  <ControlTooltip
+                    title={task.builtIn ? 'Built-in tasks cannot be deleted' : 'Delete task'}
+                    disabled={task.builtIn || crud.deleting}
+                  >
+                    <span>
+                      <IconButton
+                        aria-label={`Delete ${task.title}`}
+                        disabled={task.builtIn || crud.deleting}
+                        onClick={() => crud.askDelete(task)}
+                      >
+                        <DeleteOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </ControlTooltip>
                 </Stack>
               }
             >
@@ -142,6 +138,25 @@ export function BrainTasksPanel({
           ))}
         </ListPanel>
       )}
+
+      <AgentTaskDialog
+        open={crud.formOpen}
+        task={crud.editing}
+        saving={crud.saving}
+        error={crud.saveError}
+        onClose={crud.closeForm}
+        onSave={crud.save}
+      />
+
+      <ConfirmDialog
+        open={Boolean(crud.deleteTarget)}
+        title="Delete task?"
+        description={`This deletes the "${crud.deleteTarget?.title ?? ''}" kickoff task and cannot be undone.`}
+        confirmLabel="Delete"
+        loading={crud.deleting}
+        onCancel={crud.cancelDelete}
+        onConfirm={crud.confirmDelete}
+      />
     </Stack>
   );
 }

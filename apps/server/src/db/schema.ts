@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS task_followups (
   description TEXT NOT NULL DEFAULT '',
   prompt TEXT NOT NULL,
   kind TEXT NOT NULL DEFAULT 'prompt',
+  trigger TEXT NOT NULL DEFAULT 'session-complete',
   template TEXT,
   enabled INTEGER NOT NULL DEFAULT 1,
   built_in INTEGER NOT NULL DEFAULT 0,

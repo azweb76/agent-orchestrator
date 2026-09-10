@@ -28,7 +28,8 @@ const PERMISSION_MODES = new Set([
   'dontAsk',
   'bypassPermissions',
 ]);
-const FOLLOW_UP_KINDS = new Set(['prompt', 'commit-and-push', 'start-template']);
+const FOLLOW_UP_KINDS = new Set(['prompt', 'commit-and-push', 'start-template', 'grade-session']);
+const FOLLOW_UP_TRIGGERS = new Set(['session-complete', 'exit-plan-mode']);
 
 export interface BrainTaskFile {
   name: string;
@@ -53,6 +54,7 @@ export interface BrainFollowUpFile {
   kind: TaskFollowUp['kind'];
   template: TaskFollowUp['template'];
   enabled: boolean;
+  trigger: TaskFollowUp['trigger'];
   builtIn: boolean;
 }
 
@@ -82,6 +84,7 @@ export function followUpToFile(followUp: TaskFollowUp): BrainFollowUpFile {
     kind: followUp.kind,
     template: followUp.template,
     enabled: followUp.enabled,
+    trigger: followUp.trigger,
     builtIn: followUp.builtIn,
   };
 }
@@ -142,6 +145,9 @@ export function parseFollowUpFile(raw: unknown): BrainFollowUpFile | null {
   const kind = asString(raw.kind, 'prompt');
   if (!FOLLOW_UP_KINDS.has(kind)) return null;
   const template = raw.template == null ? null : asString(raw.template);
+  // Library files written before triggers existed have no `trigger`; default rather than
+  // reject so an older repo still imports.
+  const trigger = asString(raw.trigger, 'session-complete');
   return {
     name,
     title,
@@ -150,6 +156,9 @@ export function parseFollowUpFile(raw: unknown): BrainFollowUpFile | null {
     kind: kind as BrainFollowUpFile['kind'],
     template: kind === 'start-template' ? (template as TaskFollowUp['template']) : null,
     enabled: asBool(raw.enabled, true),
+    trigger: FOLLOW_UP_TRIGGERS.has(trigger)
+      ? (trigger as BrainFollowUpFile['trigger'])
+      : 'session-complete',
     builtIn: asBool(raw.builtIn, false),
   };
 }

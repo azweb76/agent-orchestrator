@@ -232,7 +232,7 @@ export async function suggestFollowUpTasks(
 ): Promise<TaskSuggestionsOffer> {
   ensureBuiltInTaskFollowUps(ctx);
   const changeStatus = await gatherTaskSuggestionChangeStatus(ctx, session.agentId);
-  const catalog = listEnabledTaskFollowUps(ctx);
+  const catalog = listEnabledTaskFollowUps(ctx).filter((f) => f.trigger === 'session-complete');
 
   let suggestions: TaskSuggestion[] = [];
   const selectionContext = buildSelectionContext(ctx, session, changeStatus, catalog);

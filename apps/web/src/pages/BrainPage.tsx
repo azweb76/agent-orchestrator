@@ -1,32 +1,29 @@
-import { useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Stack, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { PageHeader } from '../components/ui/PageHeader';
 import { BrainAgentsPanel } from './brain/BrainAgentsPanel';
+import { BrainCopilotPanel } from './brain/BrainCopilotPanel';
 import { BrainFollowUpsPanel } from './brain/BrainFollowUpsPanel';
 import { BrainSkillsPanel } from './brain/BrainSkillsPanel';
 import { BrainSyncBar } from './brain/BrainSyncBar';
+import { BrainTabStrip } from './brain/BrainTabStrip';
 import { BrainTasksPanel } from './brain/BrainTasksPanel';
-import { BrainWorkspace } from './brain/BrainWorkspace';
-import { parseBrainTab, type BrainTab } from './brain/brainTabs';
-
-const TAB_COPY: Record<BrainTab, string> = {
-  skills:
-    'Personal skills live in your user library and apply across workspaces. Copilot can draft several skills and agents at once; Accept writes ~/.claude. Project skills stay in each repo.',
-  agents:
-    'Personal Claude Code subagents live in ~/.claude/agents. Draft them with skills in the same changeset, then Accept.',
-  tasks:
-    'Agent kickoff templates: purpose, prompts, model, effort, permissions, and tools. Draft them in the same changeset as skills and follow-ups, then Accept. From goal can Auto-select using purpose.',
-  'follow-ups':
-    'Post-session chips. Draft them in the changeset with tasks and skills; after a session finishes, AI picks which enabled entries to show.',
-};
+import { BRAIN_TAB_COPY } from './brain/brainTabs';
+import { agentToDraft, followUpToDraft, skillToDraft, taskToDraft } from './brain/brainDrafts';
+import { useBrainChangeSet } from './brain/useBrainChangeSet';
+import { useBrainTab } from './brain/useBrainTab';
 
 export function BrainPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const tab = useMemo(() => parseBrainTab(searchParams.get('tab')), [searchParams]);
+  const { tab, setTab } = useBrainTab();
+  const copilot = useBrainChangeSet();
 
-  const onTabChange = (_event: unknown, value: BrainTab) => {
-    setSearchParams(value === 'skills' ? {} : { tab: value }, { replace: true });
+  const draftWithAi = (kind: Parameters<typeof copilot.draftWithAi>[0]) => {
+    copilot.draftWithAi(kind);
+    setTab('copilot');
+  };
+
+  const improve = (draft: Parameters<typeof copilot.improve>[0]) => {
+    copilot.improve(draft);
+    setTab('copilot');
   };
 
   return (
@@ -34,73 +31,50 @@ export function BrainPage() {
       <PageHeader
         eyebrow="Library"
         title="Brain"
-        description="User-level skills, Claude Code subagents, kickoff tasks, and follow-up chips. Ask the copilot to draft one or more items, edit or chat to refine, undo what you do not want, then Accept."
+        description="User-level skills, Claude Code subagents, kickoff tasks, and follow-up chips. Create and edit them directly, or hand the work to the copilot and accept its drafts."
       />
 
       <BrainSyncBar />
 
-      <Tabs
-        value={tab}
-        onChange={onTabChange}
-        variant="scrollable"
-        allowScrollButtonsMobile
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Tab value="skills" label="Skills" />
-        <Tab value="agents" label="Agents" />
-        <Tab value="tasks" label="Tasks" />
-        <Tab value="follow-ups" label="Follow-ups" />
-      </Tabs>
+      <BrainTabStrip tab={tab} pendingCount={copilot.pendingCount} onChange={setTab} />
 
       <Typography color="text.secondary" sx={{ lineHeight: 1.5 }}>
-        {TAB_COPY[tab]}
+        {BRAIN_TAB_COPY[tab]}
       </Typography>
 
-      <BrainWorkspace
-        tab={tab}
-        onTabKind={(kind) => {
-          const next: BrainTab =
-            kind === 'follow-up' ? 'follow-ups' : kind === 'agent' ? 'agents' : kind === 'task' ? 'tasks' : 'skills';
-          setSearchParams(next === 'skills' ? {} : { tab: next }, { replace: true });
-        }}
-      >
-        {(api) => (
-          <>
-            {tab === 'skills' ? (
-              <BrainSkillsPanel
-                selectedKey={api.selectedKey}
-                onNew={api.onNew}
-                onSelect={api.onSelectSkill}
-                onImprove={api.onImproveSkill}
-              />
-            ) : null}
-            {tab === 'agents' ? (
-              <BrainAgentsPanel
-                selectedKey={api.selectedKey}
-                onNew={api.onNew}
-                onSelect={api.onSelectAgent}
-                onImprove={api.onImproveAgent}
-              />
-            ) : null}
-            {tab === 'tasks' ? (
-              <BrainTasksPanel
-                selectedKey={api.selectedKey}
-                onNew={api.onNew}
-                onSelect={api.onSelectTask}
-                onImprove={api.onImproveTask}
-              />
-            ) : null}
-            {tab === 'follow-ups' ? (
-              <BrainFollowUpsPanel
-                selectedKey={api.selectedKey}
-                onNew={api.onNew}
-                onSelect={api.onSelectFollowUp}
-                onImprove={api.onImproveFollowUp}
-              />
-            ) : null}
-          </>
-        )}
-      </BrainWorkspace>
+      {tab === 'skills' ? (
+        <BrainSkillsPanel
+          onDraftWithAi={() => draftWithAi('skill')}
+          onImprove={(skill) => improve(skillToDraft(skill))}
+        />
+      ) : null}
+      {tab === 'agents' ? (
+        <BrainAgentsPanel
+          onDraftWithAi={() => draftWithAi('agent')}
+          onImprove={(agent) => improve(agentToDraft(agent))}
+        />
+      ) : null}
+      {tab === 'tasks' ? (
+        <BrainTasksPanel
+          onDraftWithAi={() => draftWithAi('task')}
+          onImprove={(task) => improve(taskToDraft(task))}
+        />
+      ) : null}
+      {tab === 'follow-ups' ? (
+        <BrainFollowUpsPanel
+          onDraftWithAi={() => draftWithAi('follow-up')}
+          onImprove={(followUp) => improve(followUpToDraft(followUp))}
+        />
+      ) : null}
+
+      {/*
+        Kept mounted on every tab: unmounting BrainCopilot aborts its SSE request, and the
+        server aborts the turn when the response closes, which would silently cancel an
+        in-flight generation whenever the user switched tabs.
+      */}
+      <Box sx={{ display: tab === 'copilot' ? 'block' : 'none' }}>
+        <BrainCopilotPanel copilot={copilot} />
+      </Box>
     </Stack>
   );
 }

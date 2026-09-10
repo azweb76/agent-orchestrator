@@ -11,41 +11,44 @@ import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PersonalAgent } from '@agent-orchestrator/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  CreatePersonalAgentRequest,
+  PersonalAgent,
+  UpdatePersonalAgentRequest,
+} from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 import { InstallAgentsFromRepoDialog } from './InstallAgentsFromRepoDialog';
+import { PersonalAgentDialog } from './PersonalAgentDialog';
+import { useBrainCrud } from './useBrainCrud';
 
 export function BrainAgentsPanel({
-  selectedKey,
-  onNew,
-  onSelect,
+  onDraftWithAi,
   onImprove,
 }: {
-  selectedKey: string | null;
-  onNew: () => void;
-  onSelect: (agent: PersonalAgent) => void;
+  onDraftWithAi: () => void;
   onImprove: (agent: PersonalAgent) => void;
 }) {
   const queryClient = useQueryClient();
   const [installOpen, setInstallOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const { data: agents, isLoading, error } = useQuery({
     queryKey: ['personal-agents'],
     queryFn: api.listPersonalAgents,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (slug: string) => api.deletePersonalAgent(slug),
-    onSuccess: async () => {
-      setPendingDelete(null);
-      await queryClient.invalidateQueries({ queryKey: ['personal-agents'] });
-    },
+  const crud = useBrainCrud<PersonalAgent, CreatePersonalAgentRequest, UpdatePersonalAgentRequest>({
+    queryKey: ['personal-agents'],
+    identify: (agent) => agent.slug,
+    create: api.createPersonalAgent,
+    update: api.updatePersonalAgent,
+    remove: api.deletePersonalAgent,
   });
 
   return (
@@ -56,8 +59,13 @@ export function BrainAgentsPanel({
             Install from repo
           </Button>
         </ControlTooltip>
-        <ControlTooltip title="Create a personal subagent with AI">
-          <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
+        <ControlTooltip title="Ask the copilot to draft one or more subagents">
+          <Button variant="outlined" startIcon={<AutoAwesomeOutlinedIcon />} onClick={onDraftWithAi}>
+            Draft with AI
+          </Button>
+        </ControlTooltip>
+        <ControlTooltip title="Create a personal subagent">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
             New agent
           </Button>
         </ControlTooltip>
@@ -76,9 +84,7 @@ export function BrainAgentsPanel({
       ) : null}
 
       {error ? <Alert severity="error">{(error as Error).message}</Alert> : null}
-      {deleteMutation.error ? (
-        <Alert severity="error">{(deleteMutation.error as Error).message}</Alert>
-      ) : null}
+      {crud.deleteError ? <Alert severity="error">{crud.deleteError}</Alert> : null}
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -90,7 +96,7 @@ export function BrainAgentsPanel({
           title="No personal agents"
           description="Subagents in your user library (~/.claude/agents) are available to Claude across every workspace."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
               New agent
             </Button>
           }
@@ -100,37 +106,30 @@ export function BrainAgentsPanel({
           {agents?.map((agent) => (
             <ListRow
               key={agent.slug}
-              selected={selectedKey === agent.slug}
-              onClick={() => onSelect(agent)}
+              onClick={() => crud.openEdit(agent)}
               secondaryAction={
                 <Stack direction="row" spacing={0.5} onClick={(event) => event.stopPropagation()}>
+                  <ControlTooltip title="Edit agent">
+                    <IconButton aria-label={`Edit ${agent.name}`} onClick={() => crud.openEdit(agent)}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </ControlTooltip>
                   <ControlTooltip title="Improve with AI">
                     <IconButton aria-label={`Improve ${agent.name}`} onClick={() => onImprove(agent)}>
                       <AutoAwesomeOutlinedIcon fontSize="small" />
                     </IconButton>
                   </ControlTooltip>
-                  {pendingDelete === agent.slug ? (
-                    <>
-                      <Button size="small" color="error" onClick={() => deleteMutation.mutate(agent.slug)}>
-                        Confirm
-                      </Button>
-                      <Button size="small" onClick={() => setPendingDelete(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <ControlTooltip title="Delete agent" disabled={deleteMutation.isPending}>
-                      <span>
-                        <IconButton
-                          aria-label={`Delete ${agent.name}`}
-                          disabled={deleteMutation.isPending}
-                          onClick={() => setPendingDelete(agent.slug)}
-                        >
-                          <DeleteOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </ControlTooltip>
-                  )}
+                  <ControlTooltip title="Delete agent" disabled={crud.deleting}>
+                    <span>
+                      <IconButton
+                        aria-label={`Delete ${agent.name}`}
+                        disabled={crud.deleting}
+                        onClick={() => crud.askDelete(agent)}
+                      >
+                        <DeleteOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </ControlTooltip>
                 </Stack>
               }
             >
@@ -145,6 +144,25 @@ export function BrainAgentsPanel({
           ))}
         </ListPanel>
       )}
+
+      <PersonalAgentDialog
+        open={crud.formOpen}
+        agent={crud.editing}
+        saving={crud.saving}
+        error={crud.saveError}
+        onClose={crud.closeForm}
+        onSave={crud.save}
+      />
+
+      <ConfirmDialog
+        open={Boolean(crud.deleteTarget)}
+        title="Delete agent?"
+        description={`This permanently deletes ~/.claude/agents/${crud.deleteTarget?.slug ?? ''}.md and cannot be undone.`}
+        confirmLabel="Delete"
+        loading={crud.deleting}
+        onCancel={crud.cancelDelete}
+        onConfirm={crud.confirmDelete}
+      />
     </Stack>
   );
 }

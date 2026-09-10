@@ -1,38 +1,6 @@
 import { brainDraftIdentity, type AgentTask, type BrainChangeFile, type BrainDraft, type TaskFollowUp } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 
-export function taskToDraft(task: AgentTask): BrainDraft {
-  return {
-    kind: 'task',
-    id: task.id,
-    name: task.name,
-    title: task.title,
-    description: task.description,
-    purpose: task.purpose,
-    promptTemplate: task.promptTemplate ?? '',
-    systemPrompt: task.systemPrompt ?? '',
-    allowedTools: task.allowedTools ?? '',
-    model: task.model,
-    effort: task.effort,
-    permissionMode: task.permissionMode,
-    listed: task.listed,
-  };
-}
-
-export function followUpToDraft(followUp: TaskFollowUp): BrainDraft {
-  return {
-    kind: 'follow-up',
-    id: followUp.id,
-    name: followUp.name,
-    title: followUp.title,
-    description: followUp.description,
-    prompt: followUp.prompt,
-    kindValue: followUp.kind,
-    template: followUp.template ?? '',
-    enabled: followUp.enabled,
-  };
-}
-
 export async function saveCatalogDraft(
   draft: BrainDraft,
   editingTask?: AgentTask,

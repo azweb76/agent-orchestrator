@@ -4,6 +4,8 @@ import type { TaskSuggestionKind } from './types/views.js';
 /** Follow-up slug: lowercase, max 63 chars. */
 export const TASK_FOLLOWUP_NAME_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
 
+export type TaskFollowUpTrigger = 'session-complete' | 'exit-plan-mode';
+
 /**
  * User-managed catalog entry for post-session follow-up chips.
  * Built-ins cannot be deleted; name is locked when `builtIn` is true.
@@ -23,6 +25,11 @@ export interface TaskFollowUp {
   template: ChatSessionTemplateId | null;
   /** When false, excluded from the AI selection catalog. */
   enabled: boolean;
+  /**
+   * When this follow-up is eligible for AI selection: after a session run
+   * completes, or when a plan is presented via ExitPlanMode.
+   */
+  trigger: TaskFollowUpTrigger;
   /** Seeded by the app; name is locked and delete is blocked. */
   builtIn: boolean;
   createdAt: string;
@@ -37,6 +44,7 @@ export interface CreateTaskFollowUpRequest {
   kind?: TaskSuggestionKind;
   template?: ChatSessionTemplateId | null;
   enabled?: boolean;
+  trigger?: TaskFollowUpTrigger;
 }
 
 export interface UpdateTaskFollowUpRequest {
@@ -46,6 +54,7 @@ export interface UpdateTaskFollowUpRequest {
   kind?: TaskSuggestionKind;
   template?: ChatSessionTemplateId | null;
   enabled?: boolean;
+  trigger?: TaskFollowUpTrigger;
   /** Only allowed for non-built-in follow-ups; ignored for built-in. */
   name?: string;
 }
@@ -58,6 +67,7 @@ export interface BuiltInTaskFollowUpSeed {
   prompt: string;
   kind: TaskSuggestionKind;
   template?: ChatSessionTemplateId;
+  trigger: TaskFollowUpTrigger;
 }
 
 const CREATE_PR_PROMPT = [
@@ -74,6 +84,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     prompt:
       'Commit all local changes with a clear conventional-commit message and push the branch.',
     kind: 'commit-and-push',
+    trigger: 'session-complete',
   },
   {
     name: 'create-draft-pr',
@@ -82,6 +93,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     prompt: CREATE_PR_PROMPT,
     kind: 'start-template',
     template: 'create-draft-pr',
+    trigger: 'session-complete',
   },
   {
     name: 'resolve-conflicts',
@@ -91,6 +103,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
       'Merge or rebase onto the base branch, resolve every conflict carefully, and push the result.',
     kind: 'start-template',
     template: 'resolve-conflicts',
+    trigger: 'session-complete',
   },
   {
     name: 'fix-ci',
@@ -99,6 +112,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     prompt: 'Fix the failing CI checks on the current branch.',
     kind: 'start-template',
     template: 'fix-ci',
+    trigger: 'session-complete',
   },
   {
     name: 'address-review',
@@ -107,6 +121,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     prompt: 'Address the pull request review feedback on the current branch.',
     kind: 'start-template',
     template: 'address-review',
+    trigger: 'session-complete',
   },
   {
     name: 'review-changes',
@@ -116,6 +131,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
       'Review the current uncommitted and branch changes for bugs, edge cases, missing tests, and regressions.',
     kind: 'start-template',
     template: 'review',
+    trigger: 'session-complete',
   },
   {
     name: 'continue',
@@ -123,6 +139,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     description: 'Keep going from the last reply.',
     prompt: 'Continue from where we left off. Propose the next concrete step and start on it.',
     kind: 'prompt',
+    trigger: 'session-complete',
   },
   {
     name: 'grade-session',
@@ -131,6 +148,7 @@ export const BUILTIN_TASK_FOLLOWUPS: BuiltInTaskFollowUpSeed[] = [
     prompt:
       'Open the session grade dialog to analyze efficiency (turns, tokens, context) and instruction quality.',
     kind: 'grade-session',
+    trigger: 'session-complete',
   },
 ];
 

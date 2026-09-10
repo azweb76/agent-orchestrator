@@ -10,7 +10,9 @@ import {
   updateTaskFollowUp,
 } from '../services/task-followups.js';
 
-const suggestionKind = z.enum(['prompt', 'commit-and-push', 'start-template']);
+const suggestionKind = z.enum(['prompt', 'commit-and-push', 'start-template', 'grade-session']);
+
+const followUpTrigger = z.enum(['session-complete', 'exit-plan-mode']);
 
 const templateId = z.enum([
   'chat',
@@ -30,6 +32,7 @@ const createBody = z.object({
   kind: suggestionKind.optional(),
   template: templateId.nullable().optional(),
   enabled: z.boolean().optional(),
+  trigger: followUpTrigger.optional(),
 });
 
 const updateBody = z.object({
@@ -40,6 +43,7 @@ const updateBody = z.object({
   kind: suggestionKind.optional(),
   template: templateId.nullable().optional(),
   enabled: z.boolean().optional(),
+  trigger: followUpTrigger.optional(),
 });
 
 export function registerTaskFollowUpRoutes(router: express.Router, ctx: AppContext): void {

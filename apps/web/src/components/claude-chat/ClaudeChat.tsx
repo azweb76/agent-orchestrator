@@ -31,9 +31,9 @@ export function ClaudeChat({
   onDenyPermission,
   onAnswerQuestions,
   onSkipQuestions,
-  onApprovePlan,
-  onKeepPlanning,
-  onDenyPlan,
+  planFollowUps,
+  planFollowUpsLoading,
+  onSelectPlanFollowUp,
   scroll,
 }: ClaudeChatProps & { scroll?: ReturnType<typeof useChatScroll> }) {
   const streaming = status === 'streaming';
@@ -48,9 +48,9 @@ export function ClaudeChat({
         onDeny={onDenyPermission}
         onAnswer={onAnswerQuestions}
         onSkip={onSkipQuestions}
-        onApprovePlan={onApprovePlan}
-        onKeepPlanning={onKeepPlanning}
-        onDenyPlan={onDenyPlan}
+        planFollowUps={planFollowUps}
+        planFollowUpsLoading={planFollowUpsLoading}
+        onSelectPlanFollowUp={onSelectPlanFollowUp}
       />
     );
     return renderPermission ? renderPermission(prompt, defaultEl) : defaultEl;

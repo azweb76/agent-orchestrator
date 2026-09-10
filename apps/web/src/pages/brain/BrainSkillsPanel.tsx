@@ -11,41 +11,44 @@ import AddIcon from '@mui/icons-material/Add';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PersonalSkill } from '@agent-orchestrator/shared';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  CreatePersonalSkillRequest,
+  PersonalSkill,
+  UpdatePersonalSkillRequest,
+} from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../../components/ui/ListPanel';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
 import { InstallSkillsFromRepoDialog } from './InstallSkillsFromRepoDialog';
+import { PersonalSkillDialog } from './PersonalSkillDialog';
+import { useBrainCrud } from './useBrainCrud';
 
 export function BrainSkillsPanel({
-  selectedKey,
-  onNew,
-  onSelect,
+  onDraftWithAi,
   onImprove,
 }: {
-  selectedKey: string | null;
-  onNew: () => void;
-  onSelect: (skill: PersonalSkill) => void;
+  onDraftWithAi: () => void;
   onImprove: (skill: PersonalSkill) => void;
 }) {
   const queryClient = useQueryClient();
   const [installOpen, setInstallOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const { data: skills, isLoading, error } = useQuery({
     queryKey: ['personal-skills'],
     queryFn: api.listPersonalSkills,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (slug: string) => api.deletePersonalSkill(slug),
-    onSuccess: async () => {
-      setPendingDelete(null);
-      await queryClient.invalidateQueries({ queryKey: ['personal-skills'] });
-    },
+  const crud = useBrainCrud<PersonalSkill, CreatePersonalSkillRequest, UpdatePersonalSkillRequest>({
+    queryKey: ['personal-skills'],
+    identify: (skill) => skill.slug,
+    create: api.createPersonalSkill,
+    update: api.updatePersonalSkill,
+    remove: api.deletePersonalSkill,
   });
 
   return (
@@ -56,8 +59,13 @@ export function BrainSkillsPanel({
             Install from repo
           </Button>
         </ControlTooltip>
-        <ControlTooltip title="Create a personal skill with AI">
-          <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
+        <ControlTooltip title="Ask the copilot to draft one or more skills">
+          <Button variant="outlined" startIcon={<AutoAwesomeOutlinedIcon />} onClick={onDraftWithAi}>
+            Draft with AI
+          </Button>
+        </ControlTooltip>
+        <ControlTooltip title="Create a personal skill">
+          <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
             New skill
           </Button>
         </ControlTooltip>
@@ -76,9 +84,7 @@ export function BrainSkillsPanel({
       ) : null}
 
       {error ? <Alert severity="error">{(error as Error).message}</Alert> : null}
-      {deleteMutation.error ? (
-        <Alert severity="error">{(deleteMutation.error as Error).message}</Alert>
-      ) : null}
+      {crud.deleteError ? <Alert severity="error">{crud.deleteError}</Alert> : null}
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -90,7 +96,7 @@ export function BrainSkillsPanel({
           title="No personal skills"
           description="Skills in your user library (~/.claude/skills) apply across every workspace."
           action={
-            <Button variant="contained" startIcon={<AddIcon />} onClick={onNew}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={crud.openCreate}>
               New skill
             </Button>
           }
@@ -100,37 +106,30 @@ export function BrainSkillsPanel({
           {skills?.map((skill) => (
             <ListRow
               key={skill.slug}
-              selected={selectedKey === skill.slug}
-              onClick={() => onSelect(skill)}
+              onClick={() => crud.openEdit(skill)}
               secondaryAction={
                 <Stack direction="row" spacing={0.5} onClick={(event) => event.stopPropagation()}>
+                  <ControlTooltip title="Edit skill">
+                    <IconButton aria-label={`Edit ${skill.name}`} onClick={() => crud.openEdit(skill)}>
+                      <EditOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </ControlTooltip>
                   <ControlTooltip title="Improve with AI">
                     <IconButton aria-label={`Improve ${skill.name}`} onClick={() => onImprove(skill)}>
                       <AutoAwesomeOutlinedIcon fontSize="small" />
                     </IconButton>
                   </ControlTooltip>
-                  {pendingDelete === skill.slug ? (
-                    <>
-                      <Button size="small" color="error" onClick={() => deleteMutation.mutate(skill.slug)}>
-                        Confirm
-                      </Button>
-                      <Button size="small" onClick={() => setPendingDelete(null)}>
-                        Cancel
-                      </Button>
-                    </>
-                  ) : (
-                    <ControlTooltip title="Delete skill" disabled={deleteMutation.isPending}>
-                      <span>
-                        <IconButton
-                          aria-label={`Delete ${skill.name}`}
-                          disabled={deleteMutation.isPending}
-                          onClick={() => setPendingDelete(skill.slug)}
-                        >
-                          <DeleteOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </span>
-                    </ControlTooltip>
-                  )}
+                  <ControlTooltip title="Delete skill" disabled={crud.deleting}>
+                    <span>
+                      <IconButton
+                        aria-label={`Delete ${skill.name}`}
+                        disabled={crud.deleting}
+                        onClick={() => crud.askDelete(skill)}
+                      >
+                        <DeleteOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </ControlTooltip>
                 </Stack>
               }
             >
@@ -145,6 +144,25 @@ export function BrainSkillsPanel({
           ))}
         </ListPanel>
       )}
+
+      <PersonalSkillDialog
+        open={crud.formOpen}
+        skill={crud.editing}
+        saving={crud.saving}
+        error={crud.saveError}
+        onClose={crud.closeForm}
+        onSave={crud.save}
+      />
+
+      <ConfirmDialog
+        open={Boolean(crud.deleteTarget)}
+        title="Delete skill?"
+        description={`This permanently deletes ~/.claude/skills/${crud.deleteTarget?.slug ?? ''} and cannot be undone.`}
+        confirmLabel="Delete"
+        loading={crud.deleting}
+        onCancel={crud.cancelDelete}
+        onConfirm={crud.confirmDelete}
+      />
     </Stack>
   );
 }
