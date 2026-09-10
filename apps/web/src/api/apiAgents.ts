@@ -34,6 +34,7 @@ import type {
   SessionGradeListItem,
   SessionSearchHit,
   SlashCommand,
+  TaskFollowUp,
   UpdateAgentMemoryRequest,
   UpdateChatSessionRequest,
   WorktreeDirEntry,
@@ -188,4 +189,5 @@ export const apiAgents = {
     ),
   listSessionGrades: (limit = 20) =>
     request<SessionGradeListItem[]>(`/sessions/grades?limit=${limit}`),
+  listPlanFollowUps: () => request<TaskFollowUp[]>('/sessions/plan-follow-ups'),
 };

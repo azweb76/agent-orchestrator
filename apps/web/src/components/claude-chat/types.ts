@@ -105,6 +105,7 @@ export interface PlanFollowUp {
   id: string;
   label: string;
   description?: string;
+  prompt: string;
 }
 
 export interface ContextUsage {
@@ -234,4 +235,6 @@ export interface ClaudeChatProps {
   planFollowUps?: PlanFollowUp[];
   planFollowUpsLoading?: boolean;
   onSelectPlanFollowUp?: (prompt: PermissionPrompt, followUp: PlanFollowUp) => void;
+  /** Approve the plan via Build. Never wire this to a raw permission allow. */
+  onApprovePlan?: (prompt: PermissionPrompt) => void;
 }

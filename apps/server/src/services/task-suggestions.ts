@@ -55,6 +55,12 @@ export function clearTaskSuggestionsOffer(ctx: AppContext, agentId: string): voi
   ctx.repos.automationState.delete(OFFER_KEY(agentId));
 }
 
+/** Enabled follow-ups offered when the agent presents a plan (ExitPlanMode). */
+export function listPlanFollowUpCatalog(ctx: AppContext): TaskFollowUp[] {
+  ensureBuiltInTaskFollowUps(ctx);
+  return listEnabledTaskFollowUps(ctx).filter((f) => f.trigger === 'exit-plan-mode');
+}
+
 async function branchHasOpenPr(
   ctx: AppContext,
   workspace: { githubOwner: string; githubRepo: string },

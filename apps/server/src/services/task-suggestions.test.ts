@@ -5,12 +5,13 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   getTaskSuggestionsOffer,
+  listPlanFollowUpCatalog,
   maybeSuggestFollowUpTasks,
   parseTaskFollowUpSelection,
   recentAssistantMessagesFromSession,
   refreshTaskSuggestionsForSession,
 } from './task-suggestions.js';
-import { ensureBuiltInTaskFollowUps } from './task-followups.js';
+import { ensureBuiltInTaskFollowUps, updateTaskFollowUp } from './task-followups.js';
 import { seedAgent } from './chat-sessions.test-helpers.js';
 import type { GitService } from './git.js';
 
@@ -20,6 +21,31 @@ test('parseTaskFollowUpSelection keeps known ids in order', () => {
     new Set(['a', 'b', 'c']),
   );
   assert.deepEqual(ids, ['a', 'b']);
+});
+
+test('listPlanFollowUpCatalog returns only exit-plan-mode follow-ups, never session-complete ones', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-task-suggestions-plan-catalog-'));
+  try {
+    const { ctx } = await seedAgent(tmp);
+    ensureBuiltInTaskFollowUps(ctx);
+
+    const catalog = ctx.repos.taskFollowUps.listEnabled();
+    const continueItem = catalog.find((item) => item.name === 'continue');
+    assert.ok(continueItem);
+    updateTaskFollowUp(ctx, continueItem.id, { trigger: 'exit-plan-mode' });
+
+    const planCatalog = listPlanFollowUpCatalog(ctx);
+    assert.deepEqual(planCatalog.map((item) => item.name), ['continue']);
+    assert.ok(planCatalog.every((item) => item.trigger === 'exit-plan-mode'));
+
+    const sessionCompleteCatalog = ctx.repos.taskFollowUps
+      .listEnabled()
+      .filter((item) => item.trigger === 'session-complete');
+    assert.ok(sessionCompleteCatalog.every((item) => item.name !== 'continue'));
+    assert.ok(sessionCompleteCatalog.length > 0);
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
 });
 
 test('maybeSuggestFollowUpTasks selects catalog ids via Anthropic', async () => {

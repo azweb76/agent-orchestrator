@@ -29,6 +29,7 @@ import { resolveTaskSuggestionAction } from './taskSuggestionActions';
 import { useChatTemplateKickoff, type ChatTemplateKickoffRequest } from './useChatTemplateKickoff';
 import { useChatAttentionFocus } from './useChatAttentionFocus';
 import { useChatPanelSessionEffects } from './useChatPanelSessionEffects';
+import { useChatPlanFollowUps } from './useChatPlanFollowUps';
 import type { SessionInsightsTab } from './sessionAnalysis';
 
 interface ChatPanelProps {
@@ -226,6 +227,18 @@ export const ChatPanel = memo(function ChatPanel({
   }, [displayMessages]);
 
   const handlePermissionError = (message: string) => setChatError(message);
+  const abortSession = (sid: string) => abortRegistry.abortBySessionRef.current.get(sid)?.abort();
+
+  const planFollowUps = useChatPlanFollowUps({
+    active,
+    archived,
+    permissionRequests: permissions.permissionRequests,
+    buildPlan: streaming.buildPlan,
+    setPermissionBusy: permissions.setPermissionBusy,
+    keepPlanning: permissions.keepPlanning,
+    abortSession,
+    onError: handlePermissionError,
+  });
 
   const { renderPermissionRequest } = useChatPanelRenderers({
     archived,
@@ -240,7 +253,7 @@ export const ChatPanel = memo(function ChatPanel({
     buildPlan: streaming.buildPlan,
     setPermissionBusy: permissions.setPermissionBusy,
     keepPlanning: permissions.keepPlanning,
-    abortSession: (sid) => abortRegistry.abortBySessionRef.current.get(sid)?.abort(),
+    abortSession,
     allowTool: permissions.allowTool,
     denyTool: permissions.denyTool,
     requestRewind: sessionActions.requestRewind,
@@ -274,6 +287,7 @@ export const ChatPanel = memo(function ChatPanel({
         scroll={scroll}
         highlightPermissions={focusPermissions}
         permissionBusy={permissions.permissionBusy}
+        {...planFollowUps}
         onRewindMessage={
           archived
             ? undefined
@@ -294,6 +308,9 @@ export const ChatPanel = memo(function ChatPanel({
           }
         }}
         renderPermission={(prompt, defaultEl) => {
+          // ExitPlanMode renders through the shared kit's card (Build / Keep
+          // planning / plan follow-ups) instead of the legacy card below.
+          if (prompt.toolName === 'ExitPlanMode') return defaultEl;
           const request = permissions.permissionRequests.find((item) => item.requestId === prompt.id);
           return request ? renderPermissionRequest(request) : defaultEl;
         }}
