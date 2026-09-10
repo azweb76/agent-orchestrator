@@ -38,15 +38,14 @@ The web app’s `SetupGate` blocks **all routes** until **both** are true from `
 - `githubTokenConfigured` — any non-empty `GITHUB_TOKEN` in env / secrets (clone/PR features still need a real token)
 - `claudeInstalled` — `CLAUDE_BIN --version` succeeds
 
-For Cloud Agent **UI screenshots / walkthroughs** without real secrets, set a dummy `GITHUB_TOKEN` and a stub Claude binary that answers `--version`, then restart `pnpm dev`. Prefer the playbook in `.claude/skills/cloud-agent-ui-test/SKILL.md`. Add a real `GITHUB_TOKEN` Cursor secret when clone/PR work is required.
+Do **not** run browser/UI tests, screenshots, or Cloud UI walkthroughs unless the user **explicitly** asks. They are expensive. When asked, set a dummy `GITHUB_TOKEN` and a stub Claude binary that answers `--version`, then restart `pnpm dev`. Use `.claude/skills/cloud-agent-ui-test/SKILL.md`. Add a real `GITHUB_TOKEN` Cursor secret when clone/PR work is required.
 
 Jira remains optional (`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`).
 
 ### Efficient verification
 
-- Prefer API + unit/integration tests first; use the GUI only for UI-visible changes
-- Live SSE (`/api/events/stream`) keeps Chrome/`networkidle0` from finishing — use `domcontentloaded` (or equivalent) and wait on visible text
-- If `computerUse` is unavailable, take screenshots with `puppeteer-core` + `/usr/bin/google-chrome-stable` (see the skill above)
+- Prefer API + unit/integration tests (`pnpm typecheck`, package test suites). Do **not** open the browser, take screenshots, or run Cloud UI walkthroughs unless the user explicitly asks
+- When UI tests **are** requested: live SSE (`/api/events/stream`) keeps Chrome/`networkidle0` from finishing — use `domcontentloaded` (or equivalent) and wait on visible text; if `computerUse` is unavailable, use `puppeteer-core` + `/usr/bin/google-chrome-stable` (see the skill above)
 - Seed a demo agent via `createRepositories` + `tsx` when GitHub clone is unavailable; server data often lives under `apps/server/data` when the API process cwd is `apps/server`
 
 ## Layout
@@ -98,9 +97,9 @@ Env vars (`GITHUB_TOKEN`, `GITHUB_LOGIN`, `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_A
 ## Do / don't
 
 - Do add or update tests for server behavior you change; run the affected suite and `pnpm typecheck` before finishing.
-- Do keep UI changes responsive (phone and desktop). Verify chat, workspaces, and dashboard if you touch shared layout or state.
+- Do keep UI changes responsive (phone and desktop). Shared layout/state should stay consistent across chat, workspaces, and dashboard — cover that with unit tests and code review, not a browser pass, unless asked.
 - Do keep new and edited files within the 400-line limit; extract shared pieces instead of duplicating logic.
-- Do read `.claude/skills/cloud-agent-ui-test/SKILL.md` before spending turns on Cloud UI screenshots or SetupGate debugging.
+- Do read `.claude/skills/cloud-agent-ui-test/SKILL.md` only when the user explicitly asks for UI tests, screenshots, or SetupGate debugging.
 - Do not commit `.env`, `data/`, SQLite files, or secrets.
 - Do not auto-approve `AskUserQuestion` or `ExitPlanMode`.
 - Do not stop detached Claude processes on orchestrator shutdown.

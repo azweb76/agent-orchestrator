@@ -13,7 +13,7 @@ Optimize for few turns and low token use while still asking the right questions.
 1. Restate the goal in one sentence. If intent is ambiguous, use AskUserQuestion once with concrete options.
 2. Discover the codebase with **Agent(Explore)** (or Task Explore) for parallel reads. Prefer one focused Explore over many serial Grep/Read loops.
 3. Do not edit product files in plan mode. Plan-file writes under Claude plans are fine.
-4. Draft a short plan: goal, steps, files likely touched, risks, and test/verification notes.
+4. Draft a short plan: goal, steps, files likely touched, risks, and test/verification notes. Default verification to unit/API tests and typecheck; do not include browser/UI tests unless the user explicitly asked.
 5. Call ExitPlanMode when the plan is ready for approval. Do not implement until approved.
 
 ## Efficiency rules

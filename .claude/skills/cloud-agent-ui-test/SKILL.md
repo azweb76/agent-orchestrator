@@ -1,11 +1,11 @@
 ---
 name: cloud-agent-ui-test
-description: Efficiently verify Agent Orchestrator UI in Cursor Cloud when computerUse is flaky or SetupGate blocks routes. Use for walkthrough screenshots, Memory/chat banners, and Settings toggles.
+description: Run Agent Orchestrator browser/UI tests in Cursor Cloud only when the user explicitly asks for UI tests, screenshots, or a UI walkthrough. Do not use for ordinary UI code changes.
 ---
 
 # Cloud Agent UI testing
 
-Use this when you need proof the web UI works in Cloud Agent VMs. Prefer API + package tests first; open the browser only for UI-visible changes.
+Use this **only when the user explicitly asks** for UI tests, screenshots, a Cloud UI walkthrough, or SetupGate debugging. Ordinary UI/layout work must finish with API + package tests (`pnpm typecheck`, Vitest, server tests) — do not open the browser or take screenshots by default.
 
 ## Unlock SetupGate quickly
 
@@ -59,6 +59,7 @@ For instruction-offer UI: set session `template` to `build`/`fix-ci`, `setGrade`
 
 ## Efficiency checklist
 
+- Skip this skill entirely unless the user asked for UI tests / screenshots
 - Do not retry hung headless Chrome more than once — switch to puppeteer + `domcontentloaded`
 - Do not explore SetupGate source if `/api/status` already shows the blockers
 - Keep walkthrough artifacts minimal: settings/feature surface, primary interaction, result state

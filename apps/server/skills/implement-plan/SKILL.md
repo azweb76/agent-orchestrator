@@ -12,7 +12,7 @@ Ship the approved plan with minimal thrash. Prefer progress over re-planning.
 
 1. Read the approved plan (and Planning Q&A / mentioned files if provided). Do not reopen scoping unless blocked.
 2. For independent areas, spawn **Agent(Explore)** or Task subagents in parallel; parent owns edits, commits, and sequencing.
-3. Implement in small, reviewable steps. Run the relevant tests or typecheck for touched areas.
+3. Implement in small, reviewable steps. Run the relevant unit/API tests or typecheck for touched areas. Do not run browser/UI tests unless the user explicitly asked.
 4. Stop when the plan is done or truly blocked. Summarize what changed and what remains.
 
 ## Efficiency rules
