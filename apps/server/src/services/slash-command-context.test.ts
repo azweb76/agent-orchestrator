@@ -115,10 +115,8 @@ describe('slash-command-context', () => {
 
   it('/diff attaches worktree diff context', async () => {
     const deps = seedDeps(tmp, repo);
-    const agent = deps.repos.agents.getById('ag-1')!;
     const result = await resolveSlashCommandContext(
       deps,
-      agent,
       repo,
       { githubOwner: 'example', githubRepo: 'demo' },
       { branch: 'feat' },
@@ -139,15 +137,7 @@ describe('slash-command-context', () => {
       JSON.stringify({ scripts: { test: 'node -e "console.log(\\"ok\\")"' } }),
     );
     const deps = seedDeps(path.join(tmp, 'db-test'), testRoot);
-    const agent = deps.repos.agents.getById('ag-1')!;
-    const result = await resolveSlashCommandContext(
-      deps,
-      agent,
-      testRoot,
-      null,
-      null,
-      '/test',
-    );
+    const result = await resolveSlashCommandContext(deps, testRoot, null, null, '/test');
     assert.equal(result.handled, true);
     assert.match(result.prompt, /Ran: `npm test`/);
     assert.match(result.prompt, /ok/);
@@ -164,8 +154,7 @@ describe('slash-command-context', () => {
       ['# Repo', '', '```bash', `pnpm test && touch ${marker}`, '```', ''].join('\n'),
     );
     const deps = seedDeps(path.join(tmp, 'db-agents-md'), agentsRoot);
-    const agent = deps.repos.agents.getById('ag-1')!;
-    const result = await resolveSlashCommandContext(deps, agent, agentsRoot, null, null, '/test');
+    const result = await resolveSlashCommandContext(deps, agentsRoot, null, null, '/test');
 
     assert.equal(result.handled, true);
     assert.match(result.prompt, /No workspace test script was found/);
@@ -184,21 +173,12 @@ describe('slash-command-context', () => {
     const emptyRoot = path.join(tmp, 'no-test');
     await fs.mkdir(emptyRoot, { recursive: true });
     const deps = seedDeps(path.join(tmp, 'db-notest'), emptyRoot);
-    const agent = deps.repos.agents.getById('ag-1')!;
-    const result = await resolveSlashCommandContext(
-      deps,
-      agent,
-      emptyRoot,
-      null,
-      null,
-      '/test',
-    );
+    const result = await resolveSlashCommandContext(deps, emptyRoot, null, null, '/test');
     assert.match(result.prompt, /No workspace test script was found/);
   });
 
   it('/pr attaches PR title/body/checks or reports missing PR', async () => {
     const deps = seedDeps(path.join(tmp, 'db-pr'), repo);
-    const agent = deps.repos.agents.getById('ag-1')!;
     deps.github = {
       getOpenPullRequestForBranch: async () => ({
         number: 12,
@@ -250,7 +230,6 @@ describe('slash-command-context', () => {
 
     const result = await resolveSlashCommandContext(
       deps,
-      agent,
       repo,
       { githubOwner: 'example', githubRepo: 'demo' },
       { branch: 'feat' },
@@ -266,7 +245,6 @@ describe('slash-command-context', () => {
     } as unknown as GitHubService;
     const missing = await resolveSlashCommandContext(
       deps,
-      agent,
       repo,
       { githubOwner: 'example', githubRepo: 'demo' },
       { branch: 'feat' },
@@ -275,12 +253,11 @@ describe('slash-command-context', () => {
     assert.match(missing.prompt, /No open pull request/);
   });
 
-  it('/code-review focuses review session and inlines diff', async () => {
+  it('/code-review stays on the current session and inlines diff', async () => {
     const deps = seedDeps(path.join(tmp, 'db-review'), repo);
-    const agent = deps.repos.agents.getById('ag-1')!;
+    const before = deps.repos.sessions.listByAgent('ag-1');
     const result = await resolveSlashCommandContext(
       deps,
-      agent,
       repo,
       { githubOwner: 'example', githubRepo: 'demo' },
       { branch: 'feat' },
@@ -288,29 +265,19 @@ describe('slash-command-context', () => {
     );
     assert.equal(result.handled, true);
     assert.equal(result.displayMessage, '/code-review');
-    assert.ok(result.sessionSwitch);
-    assert.equal(result.sessionSwitch?.template, 'review');
     assert.match(result.prompt, /code-review skill/);
     assert.match(result.prompt, /review the current uncommitted/i);
     assert.match(result.mentionContext ?? '', /### @diff/);
-
-    const again = await resolveSlashCommandContext(
-      deps,
-      agent,
-      repo,
-      { githubOwner: 'example', githubRepo: 'demo' },
-      { branch: 'feat' },
-      '/code-review',
+    assert.deepEqual(
+      deps.repos.sessions.listByAgent('ag-1').map((item) => item.id),
+      before.map((item) => item.id),
     );
-    assert.equal(again.sessionSwitch?.id, result.sessionSwitch?.id);
   });
 
   it('leaves unknown slash text untouched', async () => {
     const deps = seedDeps(path.join(tmp, 'db-unknown'), repo);
-    const agent = deps.repos.agents.getById('ag-1')!;
     const result = await resolveSlashCommandContext(
       deps,
-      agent,
       repo,
       { githubOwner: 'example', githubRepo: 'demo' },
       { branch: 'feat' },

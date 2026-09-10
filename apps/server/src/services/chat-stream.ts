@@ -22,7 +22,6 @@ import { type AppContext, makeEvent, nowIso, notify } from './app-context.js';
 import {
   maybeAutoNameChatSession,
   persistSessionRuntime,
-  requireAgent,
   requireSession,
   syncAgentFromSessions,
 } from './agent-core.js';
@@ -73,10 +72,8 @@ export async function streamAgentChat(
   const hasImages = (body.images?.length ?? 0) > 0 || (options.attachments?.length ?? 0) > 0;
   const hasMentions = requestMentions.length > 0;
 
-  const agent = requireAgent(ctx, agentId);
   const slash = await resolveSlashCommandContext(
     ctx,
-    agent,
     detail.worktree.path,
     detail.workspace
       ? { githubOwner: detail.workspace.githubOwner, githubRepo: detail.workspace.githubRepo }
@@ -84,15 +81,7 @@ export async function streamAgentChat(
     detail.worktree ? { branch: detail.worktree.branch } : null,
     rawMessage,
   );
-  const activeSession = slash.sessionSwitch ?? session;
-  if (slash.sessionSwitch && agent.activeSessionId !== slash.sessionSwitch.id) {
-    ctx.repos.agents.update({
-      ...agent,
-      activeSessionId: slash.sessionSwitch.id,
-      updatedAt: nowIso(),
-    });
-    syncAgentFromSessions(ctx, agentId);
-  }
+  const activeSession = session;
 
   const message = slash.handled ? slash.displayMessage : rawMessage;
   const claudePrompt = slash.handled ? slash.prompt : rawMessage;
@@ -380,12 +369,7 @@ export async function streamAgentChat(
     if (res && clientOpen && !res.writableEnded) {
       res.end();
     }
-    // Deliver any follow-ups queued while this run was busy. Drain the
-    // session that actually ran (it may differ from the pre-switch `session`
-    // when a slash command like /review switched sessions mid-request).
+    // Deliver any follow-ups queued while this run was busy.
     void drainSessionQueue(ctx, agentId, runningSession.id);
-    if (runningSession.id !== session.id) {
-      void drainSessionQueue(ctx, agentId, session.id);
-    }
   }
 }
