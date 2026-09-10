@@ -124,6 +124,13 @@ export function finalizeSessionRun(
         metadata,
         createdAt: nowIso(),
       };
+      // The placeholder row can be gone by the time the run finishes (rewind,
+      // clearAgentChat, or a race with another finalize). Persist it so the
+      // turn survives a refetch, but only if the session itself still
+      // exists — otherwise we'd resurrect a message into a cleared session.
+      if (ctx.repos.sessions.getById(session.id)) {
+        ctx.repos.messages.create(saved);
+      }
       refreshSessionSearchIndex(ctx, session.id);
       return saved;
     }
