@@ -53,7 +53,10 @@ export function errorHandler(
   // Everything unrecognized is logged with an id the user can quote. Without
   // this, every 500 in the app was invisible server-side.
   const correlationId = randomUUID().slice(0, 8);
-  console.error(`[error ${correlationId}] ${req.method} ${req.originalUrl}`, err);
+  // Constant format string: req.originalUrl is caller-controlled, and
+  // interpolating it would let a '%s' in the URL consume the error argument and
+  // forge the log line.
+  console.error('[error %s] %s %s', correlationId, req.method, req.originalUrl, err);
 
   // SSE routes flush headers early and then keep doing work that can throw.
   // res.status().json() would throw ERR_HTTP_HEADERS_SENT here, Express would
