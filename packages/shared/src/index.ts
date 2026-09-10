@@ -53,6 +53,8 @@ export {
   isInstructionOfferSessionTemplate,
   shouldOfferInstructionDraft,
   uniqueSessionTitle,
+  sessionTemplateIdForTaskName,
+  isChatSessionTemplateId,
   CHAT_SESSION_TEMPLATES,
   CHAT_TITLE_MAX_LENGTH,
   GIT_MUTATING_SESSION_TEMPLATES,
@@ -199,7 +201,6 @@ export {
 } from './agent-memory.js';
 
 export {
-  BUILTIN_AGENT_TASK_SEEDS,
   PHASE_SKILLS,
   PHASE_SKILL_COMMANDS,
   PHASE_SKILL_SLUGS,
@@ -217,6 +218,12 @@ export {
   type SkillEfficiencyStats,
   type SkillMetricsComparison,
 } from './phase-skills.js';
+
+export {
+  BUILTIN_AGENT_TASK_SEEDS,
+  builtinAgentTaskSeedByName,
+  type BuiltInAgentTaskSeed,
+} from './builtin-agent-tasks.js';
 
 export {
   evaluateMergeReadiness,

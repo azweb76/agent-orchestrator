@@ -12,6 +12,7 @@ import {
   DEFAULT_PERMISSION_MODE,
   chatSessionTemplateById,
   sanitizeAgentTaskAllowedTools,
+  sessionTemplateIdForTaskName,
   uniqueSessionTitle,
 } from '@agent-orchestrator/shared';
 import { fallbackTitleFromPrompt, sanitizeChatTitle } from './anthropic.js';
@@ -56,7 +57,7 @@ export async function createAgentForWorktree(
 
   ctx.repos.agents.create(agent);
   const session = createSessionForAgent(ctx, agent, {
-    template: 'chat',
+    template: sessionTemplateIdForTaskName(task?.name),
     permissionMode: agent.permissionMode,
     model: agent.model,
     effort: agent.effort,
@@ -138,7 +139,9 @@ export function createSessionForAgent(
   } = {},
 ): ChatSession {
   const task = options.task;
-  const template = chatSessionTemplateById(options.template ?? 'chat');
+  const template = chatSessionTemplateById(
+    options.template ?? sessionTemplateIdForTaskName(task?.name),
+  );
   const timestamp = nowIso();
   const existing = ctx.repos.sessions.listByAgent(agent.id);
   const requestedTitle = options.title?.trim();

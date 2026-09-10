@@ -7,7 +7,7 @@ import type {
   RewindChatResponse,
   UpdateChatSessionRequest,
 } from '@agent-orchestrator/shared';
-import { chatSessionTemplateById } from '@agent-orchestrator/shared';
+import { chatSessionTemplateById, sessionTemplateIdForTaskName } from '@agent-orchestrator/shared';
 import { buildTemplateKickoffPrompt } from './session-kickoff.js';
 import { type AppContext, makeEvent, nowIso } from './app-context.js';
 import {
@@ -21,6 +21,7 @@ import { getAgentDetail } from './agents-lifecycle.js';
 import { cleanupQueuedAttachments, clearSessionQueue, drainWaitingMutatingSessions } from './chat-queue.js';
 import { cleanupMessageAttachments } from './chat-run-lifecycle.js';
 import { removeSessionSearchIndex, touchSessionSearchTitle } from './session-search-index.js';
+import { ensureBuiltInAgentTasks, requireAgentTaskByName } from './agent-tasks.js';
 export {
   gradeAgentSession,
   listAgentInstructionFiles,
@@ -37,16 +38,14 @@ export async function createAgentSession(
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot create a session on an archived agent');
 
+  ensureBuiltInAgentTasks(ctx);
   const taskName = body.task?.trim();
   const task = taskName
-    ? (() => {
-        const found = ctx.repos.agentTasks.getByName(taskName);
-        if (!found) throw new Error(`Unknown task "${taskName}"`);
-        return found;
-      })()
-    : undefined;
+    ? requireAgentTaskByName(ctx, taskName)
+    : ctx.repos.agentTasks.getByName(body.template ?? 'chat') ?? undefined;
 
-  const template = chatSessionTemplateById(body.template ?? 'chat');
+  const templateId = body.template ?? sessionTemplateIdForTaskName(task?.name);
+  const template = chatSessionTemplateById(templateId);
   if (body.template && !template) throw new Error('Unknown session template');
 
   const session = createSessionForAgent(ctx, agent, {
@@ -67,9 +66,7 @@ export async function createAgentSession(
       agentTaskId: session.agentTaskId,
     }),
   );
-  const basePrompt = task
-    ? taskKickoffPrompt(task)
-    : (template?.prompt ?? null);
+  const basePrompt = taskKickoffPrompt(task);
   const kickoffPrompt =
     basePrompt &&
     (session.template === 'address-review' ||
@@ -85,13 +82,11 @@ export async function createAgentSession(
   return { session, kickoffPrompt };
 }
 
-function taskKickoffPrompt(task: {
-  promptTemplate: string | null;
-}): string | null {
-  const trimmed = task.promptTemplate?.trim();
+function taskKickoffPrompt(task: { promptTemplate: string | null } | undefined): string | null {
+  const trimmed = task?.promptTemplate?.trim();
   if (!trimmed) return null;
-  // Templates that require {{goal}} are only used by From goal create.
-  if (trimmed.includes('{{goal}}')) return null;
+  // Templates that require {{goal}} or {{plan}} are filled by From goal / Build.
+  if (trimmed.includes('{{goal}}') || trimmed.includes('{{plan}}')) return null;
   return trimmed;
 }
 

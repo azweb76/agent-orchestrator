@@ -218,7 +218,7 @@ test('ensureBuiltInPhaseSkills seeds once without overwriting', async () => {
   }
 });
 
-test('ensureBuiltInAgentTasks seeds feature/bugfix/refactor once', async () => {
+test('ensureBuiltInAgentTasks seeds builtin kickoffs once', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-tasks-'));
   try {
     const db = initDatabase(tmp);
@@ -230,8 +230,12 @@ test('ensureBuiltInAgentTasks seeds feature/bugfix/refactor once', async () => {
       const task = listed.find((item) => item.name === seed.name);
       assert.ok(task, seed.name);
       assert.equal(task!.builtIn, true);
-      assert.match(task!.promptTemplate ?? '', /plan-work/);
+      assert.equal(task!.listed, seed.listed ?? true);
     }
+    assert.deepEqual(
+      listed.filter((item) => item.purpose.trim().length > 0).map((item) => item.name).sort(),
+      ['bugfix', 'feature', 'refactor'],
+    );
     ensureBuiltInAgentTasks(ctx);
     assert.equal(
       listAgentTasks(ctx).filter((item) => item.builtIn).length,

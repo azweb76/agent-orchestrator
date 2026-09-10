@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
-  chatSessionTemplateById,
+  builtinAgentTaskSeedByName,
   type GitHubPullRequest,
   type PullRequestCheck,
 } from '@agent-orchestrator/shared';
@@ -276,8 +276,12 @@ async function resolveCodeReviewContext(
   command: string,
   args: string,
 ): Promise<SlashCommandResolution> {
-  const template = chatSessionTemplateById('review');
-  const basePrompt = template?.prompt ?? 'Review the current changes for bugs, edge cases, and missing tests.';
+  const reviewTask = deps.repos.agentTasks.getByName('review');
+  const seed = builtinAgentTaskSeedByName('review');
+  const basePrompt =
+    reviewTask?.promptTemplate?.trim() ||
+    seed?.promptTemplate?.trim() ||
+    'Review the current changes for bugs, edge cases, and missing tests.';
   const mentionResult = await resolveChatMentions(deps.git, worktreePath, [{ kind: 'diff' }]);
 
   return {

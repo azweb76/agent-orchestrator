@@ -8,10 +8,11 @@ import {
   matchJiraWorkspace,
   normalizeJiraWorkspaceMap,
   parseJiraIssueKey,
-  type Agent,
+  renderAgentTaskPromptTemplate,
 } from '@agent-orchestrator/shared';
-import { type AppContext, nowIso } from './app-context.js';
+import { type AppContext } from './app-context.js';
 import { ensureUniqueBranchName, resolveExplicitBranchName } from './branch-name.js';
+import { requireAgentTaskByName } from './agent-tasks.js';
 import { createWorktreeFromBranch } from './worktrees.js';
 
 const JIRA_WORKSPACE_MAP_KEY = 'jira_workspace_map';
@@ -100,13 +101,15 @@ export async function createWorktreeFromJiraIssue(
   }
 
   const issue = await ctx.jira.getIssueDetail(issueKey);
-  const prompt = buildJiraKickoffPrompt(
+  const issueMarkdown = buildJiraKickoffPrompt(
     issue,
     issue.comments.map((comment) => ({
       authorDisplayName: comment.authorDisplayName,
       body: comment.body,
     })),
   );
+  const task = requireAgentTaskByName(ctx, 'jira-issue');
+  const prompt = renderAgentTaskPromptTemplate(task.promptTemplate, { goal: issueMarkdown });
 
   const branchName =
     resolveExplicitBranchName(body.branch) ??
@@ -123,26 +126,16 @@ export async function createWorktreeFromJiraIssue(
     baseBranch: body.baseBranch,
     name: body.name,
     overwrite: body.overwrite,
+  }, {
+    task,
+    model: body.model,
+    effort: body.effort,
+    permissionMode: body.permissionMode,
   });
-
-  const configured: Agent = {
-    ...agent,
-    model: body.model?.trim() || agent.model,
-    effort: body.effort ?? agent.effort,
-    permissionMode: body.permissionMode ?? 'plan',
-    updatedAt: nowIso(),
-  };
-  if (
-    configured.model !== agent.model ||
-    configured.effort !== agent.effort ||
-    configured.permissionMode !== agent.permissionMode
-  ) {
-    ctx.repos.agents.update(configured);
-  }
 
   rememberJiraWorkspace(ctx, issue.projectKey, workspaceId);
 
-  return { worktree, agent: configured, branchName, issueKey: issue.key, prompt, projectKey: issue.projectKey };
+  return { worktree, agent, branchName, issueKey: issue.key, prompt, projectKey: issue.projectKey };
 }
 
 export async function createAgentFromJiraIssue(

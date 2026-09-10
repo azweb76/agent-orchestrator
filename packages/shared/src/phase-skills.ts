@@ -1,5 +1,4 @@
 import type { ChatSessionTemplateId } from './chat-session.js';
-import type { CreateAgentTaskRequest } from './agent-task.js';
 import type { SlashCommand } from './constants.js';
 
 /** Subset of session grade stats used for skill efficiency tracking. */
@@ -185,59 +184,3 @@ export function setSkillFrontmatterVersion(content: string, version: number): st
   return `---${block}\nversion: ${nextVersion}\n---${body}`;
 }
 
-/** Thin built-in AgentTask seeds that point at the phase skill pack. */
-export const BUILTIN_AGENT_TASK_SEEDS: ReadonlyArray<
-  CreateAgentTaskRequest & { builtIn: true }
-> = [
-  {
-    name: 'feature',
-    title: 'Feature',
-    description: 'Plan and ship a new feature from a goal.',
-    purpose:
-      'New product or engineering features, user-facing changes, and greenfield work in an existing repo.',
-    promptTemplate: [
-      '{{goal}}',
-      '',
-      skillInvocationLead('plan-work'),
-      'Stay in plan mode until the plan is approved. Prefer Agent(Explore) for codebase discovery.',
-    ].join('\n'),
-    systemPrompt:
-      'Default to the plan-work skill for scoping. Use subagents for exploration; keep synthesis on the parent.',
-    permissionMode: 'plan',
-    listed: true,
-    builtIn: true,
-  },
-  {
-    name: 'bugfix',
-    title: 'Bugfix',
-    description: 'Diagnose and fix a bug from a goal.',
-    purpose: 'Bug reports, regressions, incorrect behavior, and crash fixes.',
-    promptTemplate: [
-      '{{goal}}',
-      '',
-      skillInvocationLead('plan-work'),
-      'Reproduce first, then propose a minimal fix plan. Prefer Agent(Explore) to find related call sites.',
-    ].join('\n'),
-    systemPrompt:
-      'Bias toward root-cause analysis. Use plan-work, then implement-plan after approval.',
-    permissionMode: 'plan',
-    listed: true,
-    builtIn: true,
-  },
-  {
-    name: 'refactor',
-    title: 'Refactor',
-    description: 'Plan a focused refactor with clear boundaries.',
-    purpose: 'Refactors, cleanup, renames, and structural improvements without changing product behavior.',
-    promptTemplate: [
-      '{{goal}}',
-      '',
-      skillInvocationLead('plan-work'),
-      'Keep behavior stable. Identify blast radius with Explore before proposing steps.',
-    ].join('\n'),
-    systemPrompt: 'Prefer small, reviewable steps. Use plan-work then implement-plan.',
-    permissionMode: 'plan',
-    listed: true,
-    builtIn: true,
-  },
-];

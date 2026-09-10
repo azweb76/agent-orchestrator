@@ -1,5 +1,7 @@
 import type { AgentStatus, EffortLevel, PermissionMode } from './index.js';
 import type { InstructionFileKind, InstructionFileScope } from './instruction-files.js';
+import { builtinAgentTaskSeedByName } from './builtin-agent-tasks.js';
+import { renderAgentTaskPromptTemplate } from './agent-task.js';
 
 /** Built-in kickoff templates for a new chat session on an agent. */
 export type ChatSessionTemplateId =
@@ -130,12 +132,11 @@ export interface ChatSessionTemplate {
   description: string;
   permissionMode: PermissionMode;
   /**
-   * Initial user prompt sent when the session is created.
-   * `null` leaves the composer empty (used for blank chat and Build, which
-   * supplies the prompt at runtime).
+   * Unused on templates — kickoff text lives on the matching builtin AgentTask.
+   * Kept so older clients reading template metadata still type-check.
    */
   prompt: string | null;
-  /** Shown in the new-session picker. Hidden templates are created by the app. */
+  /** Workflow templates that used to appear in the new-session picker. */
   listed: boolean;
 }
 
@@ -153,11 +154,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     title: 'Create draft PR',
     description: 'Summarize changes and open a draft pull request.',
     permissionMode: 'auto',
-    prompt: [
-      'Create a draft pull request for the current branch.',
-      'Summarize the changes, write a good title and description, commit remaining work if needed, push, and open a draft PR.',
-      'Do not merge. If a PR already exists for this branch, update it instead of opening a duplicate.',
-    ].join(' '),
+    prompt: null,
     listed: true,
   },
   {
@@ -165,11 +162,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     title: 'Review',
     description: 'Review the current diff for bugs, edge cases, and missing tests.',
     permissionMode: 'plan',
-    prompt: [
-      'Use the code-review skill (`/code-review` or the Skill tool) to review the current uncommitted and branch changes for bugs, edge cases, missing tests, and regressions.',
-      'Start by inspecting the diff. Ask clarifying questions if the intent is unclear.',
-      'Do not make changes unless I ask you to.',
-    ].join(' '),
+    prompt: null,
     listed: true,
   },
   {
@@ -177,11 +170,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     title: 'Address review',
     description: 'Address PR review feedback seeded from GitHub comments.',
     permissionMode: 'auto',
-    prompt: [
-      'Use the address-review skill (`/address-review` or the Skill tool) to address the pull request review feedback on the current branch.',
-      'Fix the requested changes, add tests when they were asked for, and reply in the PR when a comment needs a written response rather than a code change.',
-      'Do not merge. Leave a short summary of what you changed.',
-    ].join(' '),
+    prompt: null,
     listed: true,
   },
   {
@@ -189,11 +178,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     title: 'Fix CI',
     description: 'Fix failing CI checks with GitHub check-run context.',
     permissionMode: 'auto',
-    prompt: [
-      'Use the fix-ci skill (`/fix-ci` or the Skill tool) to fix the failing CI checks on the current branch.',
-      'Reproduce the failures locally when possible, fix the root cause, and leave tests covering the failure.',
-      'Do not merge. Summarize which checks failed and what you changed.',
-    ].join(' '),
+    prompt: null,
     listed: true,
   },
   {
@@ -201,12 +186,7 @@ export const CHAT_SESSION_TEMPLATES: ChatSessionTemplate[] = [
     title: 'Resolve conflicts',
     description: 'Merge the base branch and resolve conflicts on this PR.',
     permissionMode: 'auto',
-    prompt: [
-      'This pull request has merge conflicts with the base branch.',
-      'Merge or rebase onto the base branch, resolve every conflict carefully, keep existing tests green, and push the result.',
-      'Prefer preserving intent from both sides; do not drop unrelated changes.',
-      'Do not merge the pull request. Summarize which files conflicted and how you resolved them.',
-    ].join(' '),
+    prompt: null,
     listed: true,
   },
   {
@@ -296,6 +276,17 @@ export function chatSessionTemplateById(
   return CHAT_SESSION_TEMPLATES.find((item) => item.id === id);
 }
 
+export function isChatSessionTemplateId(id: string | undefined): id is ChatSessionTemplateId {
+  return Boolean(id && chatSessionTemplateById(id));
+}
+
+/** Workflow template id for a task slug; non-template tasks start as `chat`. */
+export function sessionTemplateIdForTaskName(
+  name: string | undefined,
+): ChatSessionTemplateId {
+  return isChatSessionTemplateId(name) ? name : 'chat';
+}
+
 /** Pick a unique title among siblings, appending ` 2`, ` 3`, … as needed. */
 export function uniqueSessionTitle(existingTitles: Iterable<string>, base: string): string {
   const trimmed = base.trim() || 'Chat';
@@ -324,15 +315,21 @@ export interface UpdateChatSessionRequest {
 
 import type { PlanBuildHandoffContext } from './plan-handoff.js';
 
-export function buildImplementPlanPrompt(plan: string, handoff?: PlanBuildHandoffContext): string {
+function formatBulletSection(title: string, items: string[], trailing?: string): string {
+  if (items.length === 0) return '';
+  const lines = ['', `## ${title}`, '', ...items.map((item) => `- ${item}`)];
+  if (trailing) lines.push('', trailing);
+  return lines.join('\n');
+}
+
+export function buildImplementPlanPrompt(
+  plan: string,
+  handoff?: PlanBuildHandoffContext,
+  promptTemplate?: string | null,
+): string {
+  const seed = builtinAgentTaskSeedByName('build');
   const sections: string[] = [
-    'Use the implement-plan skill (`/implement-plan` or the Skill tool) to execute the approved plan.',
-    'The user approved the following plan. Implement it now in auto mode.',
-    'Do not ask clarifying questions unless blocked. Prefer making progress with sensible defaults.',
-    '',
-    '## Approved plan',
-    '',
-    plan,
+    renderAgentTaskPromptTemplate(promptTemplate ?? seed?.promptTemplate, { plan }),
   ];
 
   const qaPairs = handoff?.qaPairs;
@@ -362,34 +359,15 @@ export function buildCompactContinuePrompt(
   summary: string,
   filePaths: string[] = [],
   lessons: string[] = [],
+  promptTemplate?: string | null,
 ): string {
-  const sections: string[] = [
-    'This session continues earlier work whose context window was nearly full.',
-    'The summary below covers the prior conversation. Re-read the files in play before changing them; do not assume unlisted work was done.',
-    '',
-    '## Session summary',
-    '',
-    summary,
-  ];
-
-  if (filePaths.length > 0) {
-    sections.push('', '## Files in play', '');
-    for (const filePath of filePaths) {
-      sections.push(`- ${filePath}`);
-    }
-  }
-
-  if (lessons.length > 0) {
-    sections.push('', '## Durable lessons', '');
-    for (const lesson of lessons) {
-      sections.push(`- ${lesson}`);
-    }
-    sections.push('', 'Apply these lessons in this continuation. Do not rewrite instruction files unless the user asks.');
-  }
-
-  sections.push(
-    '',
-    'Continue the work from this summary. Ask only if something essential is missing.',
-  );
-  return sections.join('\n');
+  const seed = builtinAgentTaskSeedByName('compact-continue');
+  const lead = renderAgentTaskPromptTemplate(promptTemplate ?? seed?.promptTemplate, { summary });
+  const files = formatBulletSection('Files in play', filePaths);
+  const lessonNote =
+    'Apply these lessons in this continuation. Do not rewrite instruction files unless the user asks.';
+  const lessonBlock = formatBulletSection('Durable lessons', lessons, lessonNote);
+  return [lead, files, lessonBlock, '', 'Continue the work from this summary. Ask only if something essential is missing.']
+    .filter((part) => part.length > 0)
+    .join('\n');
 }

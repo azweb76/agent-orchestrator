@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {
-  CHAT_SESSION_TEMPLATES,
+  BUILTIN_AGENT_TASK_SEEDS,
   LISTED_CHAT_SESSION_TEMPLATES,
   buildImplementPlanPrompt,
 } from '@agent-orchestrator/shared';
@@ -22,9 +22,12 @@ test('listed templates include Create draft PR, Review, Address review, Fix CI, 
     'fix-ci',
     'resolve-conflicts',
   ]);
-  for (const template of CHAT_SESSION_TEMPLATES) {
-    assert.ok(!template.prompt?.includes('ExitPlanMode'));
-    assert.ok(!template.prompt?.includes('AskUserQuestion'));
+  const kickoffSeeds = BUILTIN_AGENT_TASK_SEEDS.filter((seed) =>
+    ids.includes(seed.name as (typeof ids)[number]),
+  );
+  for (const seed of kickoffSeeds) {
+    assert.ok(!seed.promptTemplate?.includes('ExitPlanMode'));
+    assert.ok(!seed.promptTemplate?.includes('AskUserQuestion'));
   }
   assert.ok(buildImplementPlanPrompt('# Plan').includes('Approved plan'));
   assert.ok(buildImplementPlanPrompt('# Plan').includes('implement-plan'));
@@ -44,6 +47,7 @@ test('createAgentSession starts a parallel session without touching the original
     const created = await createAgentSession(ctx, agent.id, { template: 'review' });
     assert.equal(created.session.template, 'review');
     assert.equal(created.session.permissionMode, 'plan');
+    assert.ok(created.session.agentTaskId);
     assert.ok(created.kickoffPrompt?.includes('code-review'));
     assert.ok(created.kickoffPrompt?.toLowerCase().includes('review'));
     assert.equal(created.session.status, 'idle');
@@ -377,6 +381,35 @@ test('createAgentSession resolve-conflicts kickoff includes PR mergeability cont
     assert.ok(created.kickoffPrompt?.includes('dirty'));
     assert.ok(created.kickoffPrompt?.includes('Resolve conflicts against base'));
     assert.ok(created.kickoffPrompt?.includes('This pull request has merge conflicts'));
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('createAgentSession from a review task uses the review template id', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-task-review-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const created = await createAgentSession(ctx, agent.id, { task: 'review' });
+    assert.equal(created.session.template, 'review');
+    assert.equal(created.session.permissionMode, 'plan');
+    assert.ok(created.kickoffPrompt?.includes('code-review'));
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('createAgentSession kickoff uses edited builtin task prompt', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-task-edit-'));
+  try {
+    const { ctx, agent } = await seedAgent(tmp);
+    const { ensureBuiltInAgentTasks, updateAgentTask } = await import('./agent-tasks.js');
+    ensureBuiltInAgentTasks(ctx);
+    const review = ctx.repos.agentTasks.getByName('review');
+    assert.ok(review);
+    updateAgentTask(ctx, review.id, { promptTemplate: 'Custom review kickoff from Brain.' });
+    const created = await createAgentSession(ctx, agent.id, { template: 'review' });
+    assert.equal(created.kickoffPrompt, 'Custom review kickoff from Brain.');
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

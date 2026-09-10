@@ -153,11 +153,17 @@ test('createWorktreeFromIssue auto-uniquifies an AI-suggested branch that alread
     suggestBranchName: async () => 'ai-suggested-slug',
   } as unknown as AppContext['anthropic'];
 
-  const result = await createWorktreeFromIssue(ctx, 'ws-1', { issueNumber: 42 });
+    const result = await createWorktreeFromIssue(ctx, 'ws-1', { issueNumber: 42 });
 
   assert.equal(result.branchName, 'ai-suggested-slug-2');
   assert.equal(result.worktree.branch, 'ai-suggested-slug-2');
   assert.equal(await execGit(result.worktree.path, ['branch', '--show-current']), 'ai-suggested-slug-2');
+  assert.match(result.prompt, /# Fix the thing/);
+  assert.match(result.prompt, /plan-work/);
+  assert.equal(result.agent.permissionMode, 'plan');
+  const sessions = ctx.repos.sessions.listByAgent(result.agent.id);
+  assert.ok(sessions[0]?.agentTaskId);
+  assert.equal(ctx.repos.agentTasks.getById(sessions[0]!.agentTaskId!)?.name, 'github-issue');
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
