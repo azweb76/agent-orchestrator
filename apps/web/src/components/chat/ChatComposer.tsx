@@ -228,12 +228,6 @@ export function ChatComposer({
           onSubmit={submit}
         />
       </Box>
-
-      {isStreaming && (
-        <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
-          Queue waits for this reply · Force interrupts it
-        </Typography>
-      )}
     </Stack>
   );
 }
