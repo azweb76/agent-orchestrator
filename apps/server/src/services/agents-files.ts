@@ -10,6 +10,7 @@ import {
 } from './chat-mentions.js';
 import { getAgentDetail } from './agents-lifecycle.js';
 import type { AppContext } from './app-context.js';
+import { isRealPathContained } from './path-containment.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -55,12 +56,24 @@ function guardWorktreePath(worktreeRoot: string, relPath: string): { rel: string
   return { rel: normalized, abs };
 }
 
+/**
+ * Re-assert containment against real paths. guardWorktreePath is lexical, and a
+ * symlink inside the worktree pointing outside it defeats both that check and
+ * the sensitive-name filter, which only inspects the requested name.
+ */
+async function assertRealPathInsideWorktree(worktreeRoot: string, absPath: string): Promise<void> {
+  if (!(await isRealPathContained(worktreeRoot, absPath))) {
+    throw new WorktreeFileError(403, 'Path escapes the worktree');
+  }
+}
+
 /** Read one file inside a worktree, capped and guarded against path escape. */
 export async function readWorktreeFile(
   worktreeRoot: string,
   relPath: string,
 ): Promise<WorktreeFileContent> {
   const { rel: normalized, abs: absPath } = guardWorktreePath(worktreeRoot, relPath);
+  await assertRealPathInsideWorktree(worktreeRoot, absPath);
 
   const stat = await fs.stat(absPath).catch(() => null);
   if (!stat) throw new WorktreeFileError(404, 'File not found');
