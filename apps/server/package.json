@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-concurrency=1 \"src/**/*.test.ts\"",
+    "test:one": "node --import tsx --test --test-concurrency=1",
     "mcp": "tsx src/mcp.ts",
     "mcp:start": "node dist/mcp.js"
   },
@@ -28,7 +29,6 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.2.0",
-    "@types/uuid": "^11.0.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2"
   }
