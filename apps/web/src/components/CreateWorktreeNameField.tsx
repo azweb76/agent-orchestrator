@@ -20,7 +20,7 @@ type CreateWorktreeNameFieldProps = {
 export function CreateWorktreeNameField({
   value,
   onChange,
-  helperText = 'Leave as Auto to suggest a name from the goal or issue',
+  helperText = 'Leave empty to suggest a name from the goal or issue',
 }: CreateWorktreeNameFieldProps) {
   return (
     <ControlTooltip title="Git branch and worktree folder name for the new agent">

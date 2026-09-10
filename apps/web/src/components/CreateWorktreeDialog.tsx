@@ -26,10 +26,7 @@ import {
   CreateWorktreeGoalFields,
   TASK_DEFAULT_SENTINEL,
 } from './CreateWorktreeGoalFields';
-import {
-  AUTO_BRANCH_NAME,
-  CreateWorktreeNameField,
-} from './CreateWorktreeNameField';
+import { CreateWorktreeNameField } from './CreateWorktreeNameField';
 import { useCreateWorktreeMutations } from './useCreateWorktreeMutations';
 import { getBranchExistsConflict } from './branchExistsConflict';
 import { CreateAgentOverwriteConfirm } from './CreateAgentOverwriteConfirm';
@@ -56,7 +53,7 @@ export function CreateWorktreeDialog({
   const [branchMode, setBranchMode] = useState<'existing' | 'new'>('existing');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [newBranchName, setNewBranchName] = useState('');
-  const [worktreeBranchName, setWorktreeBranchName] = useState(AUTO_BRANCH_NAME);
+  const [worktreeBranchName, setWorktreeBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
   const [goalText, setGoalText] = useState('');
   const [goalTask, setGoalTask] = useState<string>('auto');
@@ -119,7 +116,7 @@ export function CreateWorktreeDialog({
     setBranchMode('existing');
     setSelectedBranch('');
     setNewBranchName('');
-    setWorktreeBranchName(AUTO_BRANCH_NAME);
+    setWorktreeBranchName('');
     setBaseBranch('');
     setGoalText('');
     setGoalTask('auto');
