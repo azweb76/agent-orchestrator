@@ -1,19 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import type { AppEvent, AppEventType } from '@agent-orchestrator/shared';
+import { APP_EVENT_TYPES, type AppEvent } from '@agent-orchestrator/shared';
 
-const EVENT_TYPES: AppEventType[] = [
-  'agent_changed',
-  'run_finished',
-  'permission_request',
-  'queue_changed',
-  'workspaces_changed',
-  'instruction_draft_offer',
-  'draft_pr_offer',
-  'task_suggestions_offer',
-  'github_pr_changed',
-  'automation_triggered',
-];
+// Derived from the exhaustive `AppEventType` map in packages/shared, so a new
+// server event type that omits a client subscription fails to compile there.
+export const EVENT_TYPES = APP_EVENT_TYPES;
 
 type AppEventListener = (event: AppEvent) => void;
 
@@ -148,6 +139,27 @@ export function invalidateForEvent(queryClient: QueryClient, event: AppEvent): v
         queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       }
       break;
+    case 'watchdog_alert':
+      queryClient.invalidateQueries({ queryKey: ['sidebar'] });
+      if (agentId) {
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      }
+      if (agentId && sessionId) {
+        queryClient.invalidateQueries({ queryKey: ['permissions', agentId, sessionId] });
+      }
+      break;
+    case 'spend_cap_blocked':
+      queryClient.invalidateQueries({ queryKey: ['usage'] });
+      if (agentId && sessionId) {
+        queryClient.invalidateQueries({ queryKey: ['queue', agentId, sessionId] });
+      }
+      break;
+    default: {
+      // Exhaustiveness guard: fails to compile if a new AppEventType is added
+      // without a matching case above.
+      const exhaustiveCheck: never = event.type;
+      void exhaustiveCheck;
+    }
   }
 }
 
