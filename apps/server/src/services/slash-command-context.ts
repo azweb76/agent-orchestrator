@@ -3,12 +3,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { v4 as uuidv4 } from 'uuid';
 import {
   chatSessionTemplateById,
-  uniqueSessionTitle,
-  type Agent,
-  type ChatSession,
   type GitHubPullRequest,
   type PullRequestCheck,
 } from '@agent-orchestrator/shared';
@@ -44,7 +40,6 @@ export interface SlashCommandResolution {
   displayMessage: string;
   prompt: string;
   mentionContext?: string;
-  sessionSwitch?: ChatSession;
 }
 
 export function parseSlashCommandToken(
@@ -78,41 +73,6 @@ function truncateText(text: string, maxBytes: number): string {
 function capLength(text: string, max: number): string {
   if (text.length <= max) return text;
   return `${text.slice(0, max - 24)}\n\n…(context truncated)…`;
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
-
-function findOrCreateReviewSession(deps: SlashCommandContextDeps, agent: Agent): ChatSession {
-  const sessions = deps.repos.sessions.listByAgent(agent.id);
-  const existing = sessions.find((item) => item.template === 'review');
-  if (existing) return existing;
-
-  const template = chatSessionTemplateById('review');
-  const timestamp = nowIso();
-  const title = uniqueSessionTitle(
-    sessions.map((item) => item.title),
-    template?.title ?? 'Review',
-  );
-  const session: ChatSession = {
-    id: uuidv4(),
-    agentId: agent.id,
-    title,
-    template: 'review',
-    status: 'idle',
-    model: agent.model,
-    effort: agent.effort,
-    permissionMode: template?.permissionMode ?? 'plan',
-    claudeSessionId: null,
-    pid: null,
-    runLogPath: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    titleSource: 'default',
-  };
-  deps.repos.sessions.create(session);
-  return session;
 }
 
 async function resolveDiffContext(
@@ -312,27 +272,24 @@ async function resolvePrContext(
 
 async function resolveCodeReviewContext(
   deps: SlashCommandContextDeps,
-  agent: Agent,
   worktreePath: string,
+  command: string,
   args: string,
 ): Promise<SlashCommandResolution> {
   const template = chatSessionTemplateById('review');
   const basePrompt = template?.prompt ?? 'Review the current changes for bugs, edge cases, and missing tests.';
   const mentionResult = await resolveChatMentions(deps.git, worktreePath, [{ kind: 'diff' }]);
-  const reviewSession = findOrCreateReviewSession(deps, agent);
 
   return {
     handled: true,
-    displayMessage: args ? `/code-review ${args}` : '/code-review',
+    displayMessage: args ? `${command} ${args}` : command,
     prompt: appendArgs(basePrompt, args),
     mentionContext: mentionResult.context || undefined,
-    sessionSwitch: reviewSession,
   };
 }
 
 export async function resolveSlashCommandContext(
   deps: SlashCommandContextDeps,
-  agent: Agent,
   worktreePath: string,
   workspace: { githubOwner: string; githubRepo: string } | null,
   worktree: { branch: string } | null,
@@ -359,7 +316,7 @@ export async function resolveSlashCommandContext(
       return resolvePrContext(deps, workspace, worktree, parsed.args);
     case '/code-review':
     case '/review':
-      return resolveCodeReviewContext(deps, agent, worktreePath, parsed.args);
+      return resolveCodeReviewContext(deps, worktreePath, parsed.command, parsed.args);
     default:
       return { handled: false, displayMessage: message, prompt: message };
   }
