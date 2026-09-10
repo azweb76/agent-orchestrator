@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useImperativeHandle,
+  useMemo,
   useRef,
   type ComponentProps,
   type ReactNode,
@@ -12,7 +13,7 @@ import {
 } from 'react';
 import { Box } from '@mui/material';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import type { ChatTurn, PermissionPrompt } from './types';
+import type { ChatTranscriptItem, ChatTurn, PermissionPrompt } from './types';
 
 export const CHAT_COLUMN_MAX_WIDTH = 780;
 
@@ -21,10 +22,12 @@ export const NEAR_BOTTOM_PX = 80;
 
 export type ChatTranscriptHandle = {
   scrollToBottom: () => void;
+  scrollToIndex: (index: number, align?: 'start' | 'center' | 'end') => void;
 };
 
 type ChatTranscriptListProps = {
-  messages: ChatTurn[];
+  messages?: ChatTurn[];
+  items?: ChatTranscriptItem[];
   permissionRequests: PermissionPrompt[];
   scrollerRef: (element: HTMLDivElement | null) => void;
   bottomSentinelRef: Ref<HTMLDivElement | null>;
@@ -32,7 +35,10 @@ type ChatTranscriptListProps = {
   onShowJumpToLatestChange: (show: boolean) => void;
   onScroll: () => void;
   renderMessage: (message: ChatTurn, index: number) => ReactNode;
+  renderSessionBreak?: (sessionId: string, index: number) => ReactNode;
   renderPermissionRequest: (request: PermissionPrompt) => ReactNode;
+  emptyState?: ReactNode;
+  showEmptyState?: boolean;
 };
 
 /** Extra pixels below the fold so tall permission cards stay scrollable in Virtuoso. */
@@ -44,9 +50,24 @@ type TranscriptListBridge = {
   bottomSentinelRef: Ref<HTMLDivElement | null>;
   permissionRequests: PermissionPrompt[];
   renderPermissionRequest: (request: PermissionPrompt) => ReactNode;
+  emptyState?: ReactNode;
+  showEmptyState?: boolean;
 };
 
 const TranscriptListBridgeContext = createContext<TranscriptListBridge | null>(null);
+
+function rowsFromProps(
+  items: ChatTranscriptItem[] | undefined,
+  messages: ChatTurn[] | undefined,
+): ChatTranscriptItem[] {
+  if (items) return items;
+  return (messages ?? []).map((turn) => ({
+    kind: 'turn' as const,
+    id: turn.id,
+    turn,
+    sessionId: turn.sessionId ?? '',
+  }));
+}
 
 /** Stable Virtuoso scroller — defined once so the list is not remounted each render. */
 const ChatScroller = forwardRef<HTMLDivElement, ComponentProps<'div'>>(function ChatScroller(
@@ -78,20 +99,23 @@ const ChatTranscriptFooter = memo(function ChatTranscriptFooter() {
         pb: { xs: 1.5, sm: 2 },
       }}
     >
+      {bridge.showEmptyState ? bridge.emptyState : null}
       {bridge.permissionRequests.map((request) => bridge.renderPermissionRequest(request))}
       <Box ref={bridge.bottomSentinelRef} sx={{ height: 1, width: '100%' }} aria-hidden />
     </Box>
   );
 });
 
-const TranscriptMessageRow = memo(function TranscriptMessageRow({
+const TranscriptRow = memo(function TranscriptRow({
   index,
-  message,
+  item,
   renderMessage,
+  renderSessionBreak,
 }: {
   index: number;
-  message: ChatTurn;
+  item: ChatTranscriptItem;
   renderMessage: (message: ChatTurn, index: number) => ReactNode;
+  renderSessionBreak?: (sessionId: string, index: number) => ReactNode;
 }) {
   return (
     <Box
@@ -102,7 +126,9 @@ const TranscriptMessageRow = memo(function TranscriptMessageRow({
         pt: index === 0 ? { xs: 1.5, sm: 2 } : 0,
       }}
     >
-      {renderMessage(message, index)}
+      {item.kind === 'session'
+        ? (renderSessionBreak?.(item.sessionId, index) ?? null)
+        : renderMessage(item.turn, index)}
     </Box>
   );
 });
@@ -111,6 +137,7 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
   function ChatTranscriptList(
     {
       messages,
+      items,
       permissionRequests,
       scrollerRef,
       bottomSentinelRef,
@@ -118,19 +145,35 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
       onShowJumpToLatestChange,
       onScroll,
       renderMessage,
+      renderSessionBreak,
       renderPermissionRequest,
+      emptyState,
+      showEmptyState,
     },
     ref,
   ) {
     const virtuosoRef = useRef<VirtuosoHandle>(null);
     const permissionCountRef = useRef(permissionRequests.length);
     permissionCountRef.current = permissionRequests.length;
+    const rows = useMemo(() => rowsFromProps(items, messages), [items, messages]);
+    const rowsRef = useRef(rows);
+    rowsRef.current = rows;
 
     useImperativeHandle(ref, () => ({
       scrollToBottom: () => {
+        const last = rowsRef.current.length - 1;
+        if (last < 0) return;
         virtuosoRef.current?.scrollToIndex({
-          index: messages.length - 1,
+          index: last,
           align: 'end',
+          behavior: 'auto',
+        });
+      },
+      scrollToIndex: (index, align = 'start') => {
+        if (index < 0) return;
+        virtuosoRef.current?.scrollToIndex({
+          index,
+          align,
           behavior: 'auto',
         });
       },
@@ -150,10 +193,15 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
     );
 
     const itemContent = useCallback(
-      (index: number, message: ChatTurn) => (
-        <TranscriptMessageRow index={index} message={message} renderMessage={renderMessage} />
+      (index: number, item: ChatTranscriptItem) => (
+        <TranscriptRow
+          index={index}
+          item={item}
+          renderMessage={renderMessage}
+          renderSessionBreak={renderSessionBreak}
+        />
       ),
-      [renderMessage],
+      [renderMessage, renderSessionBreak],
     );
 
     const bridge: TranscriptListBridge = {
@@ -162,6 +210,8 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
       bottomSentinelRef,
       permissionRequests,
       renderPermissionRequest,
+      emptyState,
+      showEmptyState,
     };
 
     return (
@@ -172,7 +222,7 @@ export const ChatTranscriptList = forwardRef<ChatTranscriptHandle, ChatTranscrip
           scrollerRef={(element) => {
             scrollerRef(element as HTMLDivElement | null);
           }}
-          data={messages}
+          data={rows}
           atBottomThreshold={NEAR_BOTTOM_PX}
           increaseViewportBy={{ top: 200, bottom: PERMISSION_CARD_VIEWPORT_PADDING }}
           followOutput={followOutput}

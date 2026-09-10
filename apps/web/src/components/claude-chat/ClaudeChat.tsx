@@ -11,6 +11,7 @@ import type { ChatTurn, ClaudeChatProps, PermissionPrompt } from './types';
 
 export function ClaudeChat({
   messages,
+  items,
   pendingPermissions = [],
   status = 'idle',
   contextUsage,
@@ -21,6 +22,7 @@ export function ClaudeChat({
   renderPermission,
   renderBlock,
   renderTurn,
+  renderSessionBreak,
   loading,
   error,
   onRewindMessage,
@@ -82,11 +84,13 @@ export function ClaudeChat({
       {slots?.header}
       <ClaudeTranscript
         messages={messages}
+        items={items}
         permissionRequests={pendingPermissions}
         loading={loading}
         error={error}
         emptyState={slots?.emptyState}
         renderMessage={renderMessage}
+        renderSessionBreak={renderSessionBreak}
         renderPermissionRequest={renderPermissionRequest}
         scroll={scroll}
       />

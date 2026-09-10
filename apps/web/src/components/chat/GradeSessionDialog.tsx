@@ -107,7 +107,7 @@ function FindingCard({
             </ControlTooltip>
           ) : null}
           {onImplement ? (
-            <ControlTooltip title="Start a new chat to implement this suggestion">
+            <ControlTooltip title="Start a new session in this window to implement this suggestion">
               <Button size="small" variant="outlined" onClick={() => onImplement(finding)}>
                 Start chat
               </Button>

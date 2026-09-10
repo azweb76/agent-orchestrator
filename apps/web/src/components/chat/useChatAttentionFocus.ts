@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { AgentAttentionFocus } from '../../notifications';
 
-/** Scroll to transcript bottom and optionally focus pending permission prompts. */
+/** Scroll to a session break, or to the transcript bottom for permission prompts. */
 export function useChatAttentionFocus(input: {
   focusAttention?: AgentAttentionFocus;
   focusSessionId?: string;
@@ -10,6 +10,7 @@ export function useChatAttentionFocus(input: {
   setAwaitingPermissionFocus: (value: boolean) => void;
   setFocusPermissions: (value: boolean) => void;
   scrollToBottom: () => void;
+  scrollToSession?: (sessionId: string) => void;
   stickToBottomRef: { current: boolean };
   setShowJumpToLatest: (value: boolean) => void;
 }): void {
@@ -21,6 +22,7 @@ export function useChatAttentionFocus(input: {
     setAwaitingPermissionFocus,
     setFocusPermissions,
     scrollToBottom,
+    scrollToSession,
     stickToBottomRef,
     setShowJumpToLatest,
   } = input;
@@ -31,6 +33,12 @@ export function useChatAttentionFocus(input: {
 
     const revealAttention = () => {
       requestAnimationFrame(() => {
+        if (focusAttention !== 'needs-input' && focusSessionId && scrollToSession) {
+          scrollToSession(focusSessionId);
+          stickToBottomRef.current = false;
+          setShowJumpToLatest(true);
+          return;
+        }
         scrollToBottom();
         stickToBottomRef.current = false;
         setShowJumpToLatest(true);
@@ -62,6 +70,7 @@ export function useChatAttentionFocus(input: {
     setAwaitingPermissionFocus,
     setFocusPermissions,
     scrollToBottom,
+    scrollToSession,
     stickToBottomRef,
     setShowJumpToLatest,
   ]);

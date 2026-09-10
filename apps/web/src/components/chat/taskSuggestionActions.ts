@@ -14,7 +14,7 @@ export function isOpenInNewChatClick(event: {
 /**
  * Resolve a follow-up chip click.
  * - Normal click: send the catalog prompt in the current chat.
- * - Cmd/Ctrl+click: open a new chat and send the same prompt.
+ * - Cmd/Ctrl+click: start a new session in this window and send the same prompt.
  */
 export function resolveTaskSuggestionAction(
   suggestion: TaskSuggestion,

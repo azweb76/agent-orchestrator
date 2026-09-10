@@ -10,7 +10,7 @@ import { ControlTooltip } from '../ui/ControlTooltip';
 import { isOpenInNewChatClick } from './taskSuggestionActions';
 
 const FOLLOWUP_MOD = paletteShortcutLabel().startsWith('⌘') ? '⌘' : 'Ctrl';
-const FOLLOWUP_CLICK_HINT = `Click to send in this chat · ${FOLLOWUP_MOD}-click for a new chat`;
+const FOLLOWUP_CLICK_HINT = `Click to send in this session · ${FOLLOWUP_MOD}-click to start a new session`;
 
 interface TaskSuggestionsBannerProps {
   agentId: string;

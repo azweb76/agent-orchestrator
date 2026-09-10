@@ -138,7 +138,8 @@ export function useChatStreaming({
 
   useEffect(() => () => streamingPatches.dispose(), [streamingPatches]);
 
-  const viewed = (sid: string) => sid === sessionIdRef.current;
+  const viewed = (sid: string) =>
+    sid === sessionIdRef.current || sessions.some((item) => item.id === sid);
 
   const enqueueForSession = async (
     sid: string,
@@ -182,6 +183,7 @@ export function useChatStreaming({
       setChatError,
       streamingPatches,
       viewed,
+      stickToBottom,
       controller,
       stream,
       ...options,
