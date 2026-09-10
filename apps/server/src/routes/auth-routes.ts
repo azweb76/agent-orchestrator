@@ -54,7 +54,7 @@ export function registerAuthRoutes(router: express.Router, ctx: AppContext): voi
   router.post(
     '/setup/claude-bin',
     asyncHandler(async (req, res) => {
-      const body = z.object({ claudeBin: z.string().min(1) }).parse(req.body ?? {});
+      const body = z.object({ claudeBin: z.string().min(1).max(512) }).parse(req.body ?? {});
       await configureClaudeBin(ctx, body.claudeBin);
       res.json({ ok: true });
     }),
