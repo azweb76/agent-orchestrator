@@ -17,6 +17,7 @@ import { startGithubPollBus } from './services/github-poll-bus.js';
 import { startAssistantScheduleRunner } from './services/assistant-schedule-runner.js';
 import { startWatchdog } from './services/watchdog.js';
 import { optionalBearerAuth } from './auth.js';
+import { checkSecureBind, hostGuard, securityHeaders } from './http-security.js';
 import { applyPersistedSecrets } from './services/setup.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
@@ -30,6 +31,20 @@ const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST?.trim() || '127.0.0.1';
 const authToken = process.env.AUTH_TOKEN?.trim() || undefined;
 const claudeBin = process.env.CLAUDE_BIN ?? 'claude';
+const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const allowedHosts = (process.env.ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map((host) => host.trim())
+  .filter(Boolean);
+
+const bindCheck = checkSecureBind(host, authToken, process.env.ALLOW_INSECURE_HOST === '1');
+if (!bindCheck.ok) {
+  console.error(bindCheck.message);
+  process.exit(1);
+}
 
 const db = initDatabase(dataDir);
 const repos = createRepositories(db);
@@ -52,8 +67,15 @@ ensureBuiltInTaskFollowUps(ctx);
 ensureBuiltInAgentTasks(ctx);
 
 const app = express();
-app.use(cors());
+// The bundled SPA is same-origin and the Vite dev proxy calls the API server to
+// server, so no browser origin needs CORS. `origin: false` sends no
+// Access-Control-Allow-Origin, which stops an unrelated page in the user's
+// browser from reading API responses off the loopback port. ALLOWED_ORIGINS is
+// the opt-in escape hatch for a genuine external client.
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : false, credentials: false }));
+app.use(securityHeaders());
 app.use(express.json({ limit: '12mb' }));
+app.use('/api', hostGuard(host, allowedHosts));
 app.use('/api', (req, res, next) => {
   if (req.method === 'POST' && req.path === '/auth') {
     next();
