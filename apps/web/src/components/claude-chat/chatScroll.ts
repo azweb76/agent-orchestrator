@@ -23,7 +23,7 @@ export function useChatScroll(activeSessionId: string, agentId: string, deps: {
   useEffect(() => {
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
-  }, [agentId, activeSessionId]);
+  }, [agentId]);
 
   useEffect(() => {
     const count = deps.permissionCount;

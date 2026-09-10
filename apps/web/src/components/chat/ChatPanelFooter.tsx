@@ -1,6 +1,6 @@
 import { Alert, Box, Button } from '@mui/material';
 import { useQuery, type UseMutationResult } from '@tanstack/react-query';
-import type { AgentDetail, ChatSession, EffortLevel, InstructionDraftOffer, TaskSuggestion } from '@agent-orchestrator/shared';
+import type { AgentDetail, ChatSession, EffortLevel, InstructionDraftOffer, Message, TaskSuggestion } from '@agent-orchestrator/shared';
 import { shouldOfferInstructionDraft } from '@agent-orchestrator/shared';
 import { api } from '../../api/client';
 import { useVisualViewportInset } from '../../hooks/useVisualViewportInset';
@@ -32,7 +32,7 @@ interface ChatPanelFooterProps {
   draft: string;
   displayMessageCount: number;
   clearMutation: UseMutationResult<unknown, Error, void>;
-  rewindMutation: UseMutationResult<unknown, Error, string>;
+  rewindMutation: UseMutationResult<unknown, Error, Message>;
   deleteSessionMutation: UseMutationResult<unknown, Error, ChatSession>;
   gradeMutation: UseMutationResult<unknown, Error, { notes?: string }>;
   onDraftChange: (value: string) => void;

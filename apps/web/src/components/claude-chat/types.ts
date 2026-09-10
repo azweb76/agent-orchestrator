@@ -70,6 +70,7 @@ export interface ChatTurn {
   id: string;
   role: ChatRole;
   createdAt: string;
+  sessionId?: string;
   content?: string;
   attachments?: ChatAttachment[];
   blocks?: ChatBlock[];
@@ -193,6 +194,10 @@ export interface ClaudeComposerConfig {
   onRewind?: () => void;
 }
 
+export type ChatTranscriptItem =
+  | { kind: 'session'; id: string; sessionId: string }
+  | { kind: 'turn'; id: string; turn: ChatTurn; sessionId: string };
+
 export interface ClaudeChatSlots {
   header?: React.ReactNode;
   banners?: React.ReactNode;
@@ -204,7 +209,8 @@ export interface ClaudeChatSlots {
 }
 
 export interface ClaudeChatProps {
-  messages: ChatTurn[];
+  messages?: ChatTurn[];
+  items?: ChatTranscriptItem[];
   pendingPermissions?: PermissionPrompt[];
   status?: ChatStatus;
   contextUsage?: ContextUsage | null;
@@ -218,6 +224,7 @@ export interface ClaudeChatProps {
   ) => React.ReactNode;
   renderBlock?: (block: ChatBlock, turn: ChatTurn) => React.ReactNode | undefined;
   renderTurn?: (turn: ChatTurn, index: number, defaultEl: React.ReactNode) => React.ReactNode;
+  renderSessionBreak?: (sessionId: string, index: number) => React.ReactNode;
   loading?: boolean;
   error?: string | null;
   onRewindMessage?: (turn: ChatTurn) => void;

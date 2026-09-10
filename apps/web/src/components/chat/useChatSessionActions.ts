@@ -37,6 +37,7 @@ interface UseChatSessionActionsOptions {
     } | null>
   >;
   setDraft: React.Dispatch<React.SetStateAction<string>>;
+  stickToBottom: () => void;
   runChatRef: React.MutableRefObject<
     (
       text: string,
@@ -60,6 +61,7 @@ export function useChatSessionActions({
   setPermissionRequests,
   setLastFailed,
   setDraft,
+  stickToBottom,
   runChatRef,
 }: UseChatSessionActionsOptions) {
   const queryClient = useQueryClient();
@@ -130,21 +132,21 @@ export function useChatSessionActions({
   });
 
   const rewindMutation = useMutation({
-    mutationFn: (messageId: string) => api.rewindMessages(agentId, activeSessionId, messageId),
-    onSuccess: (result, messageId) => {
+    mutationFn: (target: Message) => api.rewindMessages(agentId, target.sessionId, target.id),
+    onSuccess: (result, target) => {
       setRewindTarget(null);
       setPermissionRequests([]);
       setChatError(null);
       setLastFailed(null);
       setDraft(result.draft);
-      setMessagesCache(queryClient, agentId, activeSessionId, (prev) => {
+      setMessagesCache(queryClient, agentId, target.sessionId, (prev) => {
         if (!prev?.length) return [];
-        const index = prev.findIndex((item) => item.id === messageId);
+        const index = prev.findIndex((item) => item.id === target.id);
         if (index < 0) return prev;
         return prev.slice(0, index);
       });
-      queryClient.invalidateQueries({ queryKey: ['queue', agentId, activeSessionId] });
-      queryClient.invalidateQueries({ queryKey: ['messages', agentId, activeSessionId] });
+      queryClient.invalidateQueries({ queryKey: ['queue', agentId, target.sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['messages', agentId, target.sessionId] });
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       queryClient.invalidateQueries({ queryKey: ['events', agentId] });
     },
@@ -208,6 +210,7 @@ export function useChatSessionActions({
       upsertAgentSession(queryClient, agentId, result.session, { activate: true });
       sessionIdRef.current = result.session.id;
       setSessionId(result.session.id);
+      stickToBottom();
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       if (result.kickoffPrompt) {
         void runChatRef.current(result.kickoffPrompt, [], [], false, result.session.id);
@@ -228,6 +231,7 @@ export function useChatSessionActions({
       upsertAgentSession(queryClient, agentId, result.session, { activate: true });
       sessionIdRef.current = result.session.id;
       setSessionId(result.session.id);
+      stickToBottom();
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       if (result.kickoffPrompt) {
         void runChatRef.current(result.kickoffPrompt, [], [], false, result.session.id);
@@ -249,6 +253,7 @@ export function useChatSessionActions({
       upsertAgentSession(queryClient, agentId, result.session, { activate: true });
       sessionIdRef.current = result.session.id;
       setSessionId(result.session.id);
+      stickToBottom();
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       void runChatRef.current(suggestion.prompt, [], [], false, result.session.id);
     } catch (error) {
@@ -269,6 +274,7 @@ export function useChatSessionActions({
       upsertAgentSession(queryClient, agentId, result.session, { activate: true });
       sessionIdRef.current = result.session.id;
       setSessionId(result.session.id);
+      stickToBottom();
       queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
       void runChatRef.current(buildFindingImplementPrompt(finding), [], [], false, result.session.id);
     } catch (error) {

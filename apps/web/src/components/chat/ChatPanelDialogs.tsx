@@ -35,7 +35,7 @@ interface ChatPanelDialogsProps {
   rewindMutation: UseMutationResult<
     { draft: string },
     Error,
-    string
+    import('@agent-orchestrator/shared').Message
   >;
   deleteSessionMutation: UseMutationResult<import('@agent-orchestrator/shared').AgentDetail, Error, ChatSession>;
   gradeMutation: UseMutationResult<ChatSession, Error, { notes?: string }>;
@@ -98,7 +98,7 @@ export function ChatPanelDialogs({
         loading={rewindMutation.isPending}
         onCancel={onRewindClose}
         onConfirm={() => {
-          if (rewindTarget) rewindMutation.mutate(rewindTarget.id);
+          if (rewindTarget) rewindMutation.mutate(rewindTarget);
         }}
       />
 

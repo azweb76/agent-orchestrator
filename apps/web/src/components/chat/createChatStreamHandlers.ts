@@ -24,6 +24,7 @@ export interface StreamHandlerContext {
     flushAll: (sid: string) => void;
   };
   viewed: (sid: string) => boolean;
+  stickToBottom?: () => void;
   controller: AbortController;
   stream: { sessionId: string };
   invalidateSidebar?: boolean;
@@ -65,6 +66,7 @@ export function createChatStreamHandlers(ctx: StreamHandlerContext): ChatStreamH
         ctx.stream.sessionId = nextSession.id;
         ctx.sessionIdRef.current = nextSession.id;
         ctx.setSessionId(nextSession.id);
+        ctx.stickToBottom?.();
       }
       upsertAgentSession(ctx.queryClient, ctx.agentId, nextSession, { activate: switched });
       ctx.queryClient.invalidateQueries({ queryKey: ['agent', ctx.agentId] });
@@ -97,7 +99,7 @@ export function createChatStreamHandlers(ctx: StreamHandlerContext): ChatStreamH
       );
     },
     onPermissionRequest: (request) => {
-      if (!ctx.mountedRef.current || !ctx.viewed(ctx.stream.sessionId)) return;
+      if (!ctx.mountedRef.current || ctx.stream.sessionId !== ctx.sessionIdRef.current) return;
       ctx.setPermissionRequests((prev) => {
         if (prev.some((item) => item.requestId === request.requestId)) return prev;
         return [...prev, request];
@@ -115,10 +117,10 @@ export function createChatStreamHandlers(ctx: StreamHandlerContext): ChatStreamH
         .invalidateQueries({ queryKey: ['permissions', ctx.agentId, sid] })
         .then(() => api.listPendingPermissions(ctx.agentId, sid))
         .then((pending) => {
-          if (ctx.mountedRef.current && ctx.viewed(sid)) ctx.setPermissionRequests(pending);
+          if (ctx.mountedRef.current && sid === ctx.sessionIdRef.current) ctx.setPermissionRequests(pending);
         })
         .catch(() => {
-          if (ctx.mountedRef.current && ctx.viewed(sid)) ctx.setPermissionRequests([]);
+          if (ctx.mountedRef.current && sid === ctx.sessionIdRef.current) ctx.setPermissionRequests([]);
         });
       ctx.queryClient.invalidateQueries({ queryKey: ['messages', ctx.agentId, sid] });
       ctx.queryClient.invalidateQueries({ queryKey: ['agent', ctx.agentId] });

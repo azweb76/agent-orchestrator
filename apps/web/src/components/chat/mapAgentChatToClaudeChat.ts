@@ -62,6 +62,7 @@ export function mapMessageToChatTurn(message: Message): ChatTurn {
     id: message.id,
     role: message.role,
     createdAt: message.createdAt,
+    sessionId: message.sessionId,
     content: message.content,
     attachments: message.attachments?.map((item) => ({
       id: item.id,

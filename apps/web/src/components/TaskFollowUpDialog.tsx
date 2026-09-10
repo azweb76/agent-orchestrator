@@ -169,7 +169,7 @@ export function TaskFollowUpDialog({
             required
             multiline
             minRows={3}
-            helperText="Message sent into the current chat. Cmd/Ctrl-click on the chip opens a new chat with the same prompt."
+            helperText="Message sent into the current session. Cmd/Ctrl-click starts a new session in this window with the same prompt."
           />
           <FormControl fullWidth>
             <InputLabel id="followup-trigger-label">Trigger</InputLabel>

@@ -4,33 +4,62 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { ChatTranscriptList, CHAT_COLUMN_MAX_WIDTH } from './ChatTranscriptList';
 import { useChatScroll } from './chatScroll';
-import type { ChatTurn, PermissionPrompt } from './types';
+import type { ChatTranscriptItem, ChatTurn, PermissionPrompt } from './types';
 
 export function ClaudeTranscript({
   messages,
+  items,
   permissionRequests,
   loading,
   error,
   emptyState,
   renderMessage,
+  renderSessionBreak,
   renderPermissionRequest,
   scroll: scrollProp,
 }: {
-  messages: ChatTurn[];
+  messages?: ChatTurn[];
+  items?: ChatTranscriptItem[];
   permissionRequests: PermissionPrompt[];
   loading?: boolean;
   error?: string | null;
   emptyState?: ReactNode;
   renderMessage: (turn: ChatTurn, index: number) => ReactNode;
+  renderSessionBreak?: (sessionId: string, index: number) => ReactNode;
   renderPermissionRequest: (prompt: PermissionPrompt) => ReactNode;
   scroll?: ReturnType<typeof useChatScroll>;
 }) {
+  const rows = items ?? (messages ?? []).map((turn) => ({
+    kind: 'turn' as const,
+    id: turn.id,
+    turn,
+    sessionId: turn.sessionId ?? '',
+  }));
+  const hasTurns = rows.some((item) => item.kind === 'turn');
   const internalScroll = useChatScroll('session', 'chat', {
-    messageCount: messages.length,
+    messageCount: rows.length,
     permissionCount: permissionRequests.length,
     messagesLoading: Boolean(loading),
   });
   const scroll = scrollProp ?? internalScroll;
+
+  const list = (
+    <ChatTranscriptList
+      ref={scroll.transcriptRef}
+      items={rows}
+      permissionRequests={permissionRequests}
+      scrollerRef={scroll.assignChatScrollerRef}
+      bottomSentinelRef={scroll.bottomSentinelRef}
+      stickToBottomRef={scroll.stickToBottomRef}
+      onShowJumpToLatestChange={scroll.setShowJumpToLatest}
+      onScroll={scroll.handleChatScroll}
+      renderMessage={renderMessage}
+      renderSessionBreak={renderSessionBreak}
+      renderPermissionRequest={renderPermissionRequest}
+      emptyState={emptyState}
+      showEmptyState={!hasTurns}
+    />
+  );
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
@@ -42,7 +71,7 @@ export function ClaudeTranscript({
         <Alert severity="error" sx={{ m: 2 }}>
           {error}
         </Alert>
-      ) : messages.length === 0 ? (
+      ) : rows.length === 0 ? (
         <Box
           ref={scroll.chatScrollRef}
           onScroll={scroll.handleChatScroll}
@@ -67,20 +96,7 @@ export function ClaudeTranscript({
           </Box>
         </Box>
       ) : (
-        <Box sx={{ flex: 1, minHeight: 0 }}>
-          <ChatTranscriptList
-            ref={scroll.transcriptRef}
-            messages={messages}
-            permissionRequests={permissionRequests}
-            scrollerRef={scroll.assignChatScrollerRef}
-            bottomSentinelRef={scroll.bottomSentinelRef}
-            stickToBottomRef={scroll.stickToBottomRef}
-            onShowJumpToLatestChange={scroll.setShowJumpToLatest}
-            onScroll={scroll.handleChatScroll}
-            renderMessage={renderMessage}
-            renderPermissionRequest={renderPermissionRequest}
-          />
-        </Box>
+        <Box sx={{ flex: 1, minHeight: 0 }}>{list}</Box>
       )}
 
       {scroll.showJumpToLatest ? (
