@@ -6,6 +6,7 @@ import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ChatTranscriptList, CHAT_COLUMN_MAX_WIDTH } from '../claude-chat/ChatTranscriptList';
 import { CONTEXT_SLASH_CHIP_COMMANDS } from './slashComposer';
+import { CHAT_EMPTY_STATE_DESCRIPTION } from './chatEmptyState';
 import type { ChatTurn, PermissionPrompt } from '../claude-chat/types';
 import type { useChatScroll } from '../claude-chat/chatScroll';
 
@@ -73,7 +74,7 @@ export function ChatPanelTranscript({
                 compact
                 icon={<ChatOutlinedIcon />}
                 title="Start a conversation"
-                description="Sessions begin in plan mode. Describe what you want; Claude will explore, ask clarifying questions, and present a plan. Use + to start a Review or Create draft PR session in parallel. Type / for commands, /clear to reset this session, or /rewind to restore the last prompt."
+                description={CHAT_EMPTY_STATE_DESCRIPTION}
                 action={
                   <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', justifyContent: 'center' }}>
                     {CONTEXT_SLASH_CHIP_COMMANDS.map((command) => (

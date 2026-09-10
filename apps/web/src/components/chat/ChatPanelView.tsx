@@ -15,7 +15,6 @@ import { useChatScroll } from '../claude-chat/chatScroll';
 import { ChatPanelDialogs } from './ChatPanelDialogs';
 import { ChatPanelEmptyState } from './ChatPanelEmptyState';
 import { ChatPanelFooter } from './ChatPanelFooter';
-import { ChatSessionBar } from './ChatSessionBar';
 import { ChatSessionBreak } from './ChatSessionBreak';
 import { mapPermissionPrompt } from './mapAgentChatToClaudeChat';
 import { resolveTaskSuggestionAction } from './taskSuggestionActions';
@@ -123,7 +122,27 @@ export function ChatPanelView({
         renderSessionBreak={(sessionId) => {
           const target = sessions.find((item) => item.id === sessionId);
           if (!target) return null;
-          return <ChatSessionBreak session={target} active={target.id === activeSessionId} />;
+          return (
+            <ChatSessionBreak
+              session={target}
+              active={target.id === activeSessionId}
+              disabled={archived}
+              onSelect={() => {
+                void sessionActions.selectSession(target.id);
+                scrollToSession(target.id);
+              }}
+              onRename={
+                archived
+                  ? undefined
+                  : (title) =>
+                      sessionActions.renameSessionMutation.mutate({
+                        sessionId: target.id,
+                        title,
+                      })
+              }
+              onDelete={archived ? undefined : () => sessionActions.setDeleteTarget(target)}
+            />
+          );
         }}
         onRewindMessage={
           archived
@@ -149,27 +168,6 @@ export function ChatPanelView({
           return request ? renderPermissionRequest(request) : defaultEl;
         }}
         slots={{
-          header: (
-            <ChatSessionBar
-              sessions={sessions}
-              activeSessionId={activeSessionId || null}
-              disabled={archived}
-              creating={sessionActions.creatingSession}
-              onSelect={(id) => {
-                void sessionActions.selectSession(id);
-                scrollToSession(id);
-              }}
-              onCreate={(template) => void sessionActions.createSessionFromTemplate(template)}
-              onCreateTask={(task) => void sessionActions.createSessionFromTask(task.name)}
-              onDelete={archived ? undefined : (target) => sessionActions.setDeleteTarget(target)}
-              onRename={
-                archived
-                  ? undefined
-                  : (target, title) =>
-                      sessionActions.renameSessionMutation.mutate({ sessionId: target.id, title })
-              }
-            />
-          ),
           emptyState: (
             <ChatPanelEmptyState
               onSlashCommand={(command) => void streaming.runChatRef.current(command, [], [], false)}
