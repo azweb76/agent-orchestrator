@@ -16,6 +16,7 @@ import type {
   WorktreeWithAgent,
 } from '@agent-orchestrator/shared';
 import { slugify } from './git.js';
+import { resolveWorktreeName, worktreePathFor } from './worktree-paths.js';
 import { ensureUniqueBranchName, resolveExplicitBranchName } from './branch-name.js';
 import { mergeLivePullRequest } from './pr-overlay.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
@@ -89,8 +90,8 @@ export async function createWorktreeFromBranch(
   const workspace = ctx.repos.workspaces.getById(workspaceId);
   if (!workspace) throw new Error('Workspace not found');
 
-  const name = body.name ?? slugify(body.branch);
-  const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
+  const name = resolveWorktreeName(body.name, body.branch);
+  const worktreePath = worktreePathFor(ctx.dataDir, workspaceId, name);
   const id = uuidv4();
 
   const baseBranch = body.baseBranch ?? workspace.defaultBranch;
@@ -156,8 +157,8 @@ export async function createWorktreeFromPr(
     return { worktree: existing, agent };
   }
   const localBranch = pr.headRef;
-  const name = body.name ?? slugify(pr.headRef);
-  const worktreePath = path.join(ctx.dataDir, 'worktrees', workspaceId, name);
+  const name = resolveWorktreeName(body.name, pr.headRef);
+  const worktreePath = worktreePathFor(ctx.dataDir, workspaceId, name);
   const id = uuidv4();
 
   await ctx.git.fetchPullRequest(workspace.repoPath, body.prNumber, localBranch);
