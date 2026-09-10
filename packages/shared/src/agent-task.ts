@@ -55,6 +55,16 @@ export interface CreateAgentTaskRequest {
   listed?: boolean;
 }
 
+/** Ask the server to AI-match a goal to an AgentTask by purpose. */
+export interface SelectAgentTaskRequest {
+  goal: string;
+}
+
+export interface SelectAgentTaskResponse {
+  /** Matched AgentTask `name` slug, or `null` when no purpose fits the goal. */
+  task: string | null;
+}
+
 export interface UpdateAgentTaskRequest {
   title?: string;
   description?: string;

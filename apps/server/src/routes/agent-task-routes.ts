@@ -9,6 +9,7 @@ import {
   listAgentTasks,
   updateAgentTask,
 } from '../services/agent-tasks.js';
+import { selectAgentTaskForGoalOrNull } from '../services/worktrees.js';
 
 const permissionMode = z.enum([
   'default',
@@ -49,6 +50,10 @@ const updateBody = z.object({
   listed: z.boolean().optional(),
 });
 
+const selectBody = z.object({
+  goal: z.string().min(1).max(20_000),
+});
+
 export function registerAgentTaskRoutes(router: express.Router, ctx: AppContext): void {
   router.get(
     '/agent-tasks',
@@ -69,6 +74,15 @@ export function registerAgentTaskRoutes(router: express.Router, ctx: AppContext)
     asyncHandler(async (req, res) => {
       const body = createBody.parse(req.body ?? {});
       res.status(201).json(createAgentTask(ctx, body));
+    }),
+  );
+
+  router.post(
+    '/agent-tasks/select',
+    asyncHandler(async (req, res) => {
+      const body = selectBody.parse(req.body ?? {});
+      const task = await selectAgentTaskForGoalOrNull(ctx, body.goal.trim());
+      res.json({ task: task?.name ?? null });
     }),
   );
 

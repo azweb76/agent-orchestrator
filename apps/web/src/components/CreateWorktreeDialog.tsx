@@ -9,7 +9,7 @@ import {
   Tab,
   Tabs,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   CLAUDE_MODELS,
   DEFAULT_EFFORT_LEVEL,
@@ -69,6 +69,7 @@ export function CreateWorktreeDialog({
   const [issueReference, setIssueReference] = useState('');
   const [jiraIssueKey, setJiraIssueKey] = useState('');
   const goalFileInputRef = useRef<HTMLInputElement>(null);
+  const [pickNoMatch, setPickNoMatch] = useState(false);
 
   const { images, clearImages, addFiles, removeImage } = useComposerImages();
   const goalMentionFilesQuery = useQuery({
@@ -120,6 +121,8 @@ export function CreateWorktreeDialog({
     setBaseBranch('');
     setGoalText('');
     setGoalTask('auto');
+    setPickNoMatch(false);
+    selectTaskMutation.reset();
     setGoalModel(TASK_DEFAULT_SENTINEL);
     setGoalEffort(TASK_DEFAULT_SENTINEL);
     setIssueModel(CLAUDE_MODELS[0].id);
@@ -187,7 +190,26 @@ export function CreateWorktreeDialog({
 
   const agentTasks = agentTasksQuery.data ?? [];
 
+  const selectTaskMutation = useMutation({
+    mutationFn: () => api.selectAgentTask(goalText.trim()),
+    onSuccess: (data) => {
+      if (data.task) applyTaskDefaults(data.task);
+      else setPickNoMatch(true);
+    },
+  });
+
+  const clearPickFeedback = () => {
+    setPickNoMatch(false);
+    selectTaskMutation.reset();
+  };
+
+  const handleGoalTextChange = (value: string) => {
+    clearPickFeedback();
+    setGoalText(value);
+  };
+
   const applyTaskDefaults = (taskName: string) => {
+    clearPickFeedback();
     setGoalTask(taskName);
     if (taskName === 'auto') {
       setGoalModel(TASK_DEFAULT_SENTINEL);
@@ -273,8 +295,11 @@ export function CreateWorktreeDialog({
               mentionOptions={mentionOptions}
               mentionHighlight={mentionHighlight}
               showMentionMenu={showMentionMenu}
+              picking={selectTaskMutation.isPending}
+              pickNoMatch={pickNoMatch}
+              pickError={selectTaskMutation.error}
               fileInputRef={goalFileInputRef}
-              onGoalTextChange={setGoalText}
+              onGoalTextChange={handleGoalTextChange}
               onClearMentionDismissed={() => setMentionDismissed(false)}
               onDismissMentionMenu={() => setMentionDismissed(true)}
               onMentionHighlight={setMentionHighlight}
@@ -285,6 +310,7 @@ export function CreateWorktreeDialog({
               onTaskChange={applyTaskDefaults}
               onModelChange={setGoalModel}
               onEffortChange={setGoalEffort}
+              onPickTask={() => selectTaskMutation.mutate()}
             />
           )}
 
