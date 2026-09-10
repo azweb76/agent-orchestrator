@@ -34,6 +34,7 @@ export function ClaudeChat({
   planFollowUps,
   planFollowUpsLoading,
   onSelectPlanFollowUp,
+  onApprovePlan,
   scroll,
 }: ClaudeChatProps & { scroll?: ReturnType<typeof useChatScroll> }) {
   const streaming = status === 'streaming';
@@ -51,6 +52,7 @@ export function ClaudeChat({
         planFollowUps={planFollowUps}
         planFollowUpsLoading={planFollowUpsLoading}
         onSelectPlanFollowUp={onSelectPlanFollowUp}
+        onApprovePlan={onApprovePlan}
       />
     );
     return renderPermission ? renderPermission(prompt, defaultEl) : defaultEl;

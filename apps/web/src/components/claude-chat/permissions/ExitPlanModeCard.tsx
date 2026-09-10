@@ -1,5 +1,6 @@
 import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 import AssignmentTurnedInOutlinedIcon from '@mui/icons-material/AssignmentTurnedInOutlined';
+import ConstructionIcon from '@mui/icons-material/Construction';
 import { ControlTooltip } from '../../ui/ControlTooltip';
 import { MarkdownContent } from '../MarkdownContent';
 import { ChatPromptCard } from './ChatPromptCard';
@@ -11,6 +12,9 @@ interface ExitPlanModeCardProps {
   followUps: PlanFollowUp[];
   followUpsLoading?: boolean;
   onSelectFollowUp: (followUp: PlanFollowUp) => void;
+  /** Approve the plan via Build. Never wire this to a raw permission allow. */
+  onApprove: () => void;
+  onKeepPlanning: () => void;
 }
 
 export function ExitPlanModeCard({
@@ -19,6 +23,8 @@ export function ExitPlanModeCard({
   followUps,
   followUpsLoading,
   onSelectFollowUp,
+  onApprove,
+  onKeepPlanning,
 }: ExitPlanModeCardProps) {
   return (
     <ChatPromptCard
@@ -27,32 +33,47 @@ export function ExitPlanModeCard({
       title="Ready to leave plan mode?"
       description="Review the plan below, then choose how to proceed."
       actions={
-        followUpsLoading ? (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-            <CircularProgress size={16} />
-            <Typography variant="body2" color="text.secondary">
-              Preparing next steps…
-            </Typography>
-          </Stack>
-        ) : followUps.length > 0 ? (
-          followUps.map((followUp) => (
-            <ControlTooltip key={followUp.id} title={followUp.description ?? followUp.label} disabled={submitting}>
-              <Button
-                variant="outlined"
-                color="inherit"
-                size="small"
-                disabled={submitting}
-                onClick={() => onSelectFollowUp(followUp)}
-              >
-                {followUp.label}
-              </Button>
-            </ControlTooltip>
-          ))
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            No follow-up actions available.
-          </Typography>
-        )
+        <>
+          <ControlTooltip title="Start a new auto-mode session to implement this plan" disabled={submitting}>
+            <Button
+              variant="contained"
+              color="success"
+              size="small"
+              startIcon={<ConstructionIcon />}
+              disabled={submitting}
+              onClick={onApprove}
+            >
+              Build
+            </Button>
+          </ControlTooltip>
+          <ControlTooltip title="Dismiss and keep refining the plan in this session" disabled={submitting}>
+            <Button variant="outlined" size="small" disabled={submitting} onClick={onKeepPlanning}>
+              Keep planning
+            </Button>
+          </ControlTooltip>
+          {followUpsLoading ? (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <CircularProgress size={16} />
+              <Typography variant="body2" color="text.secondary">
+                Preparing next steps…
+              </Typography>
+            </Stack>
+          ) : (
+            followUps.map((followUp) => (
+              <ControlTooltip key={followUp.id} title={followUp.description ?? followUp.label} disabled={submitting}>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  size="small"
+                  disabled={submitting}
+                  onClick={() => onSelectFollowUp(followUp)}
+                >
+                  {followUp.label}
+                </Button>
+              </ControlTooltip>
+            ))
+          )}
+        </>
       }
     >
       <Box

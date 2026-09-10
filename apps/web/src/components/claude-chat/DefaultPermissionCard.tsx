@@ -20,6 +20,7 @@ export function DefaultPermissionCard({
   planFollowUps,
   planFollowUpsLoading,
   onSelectPlanFollowUp,
+  onApprovePlan,
 }: {
   prompt: PermissionPrompt;
   busy?: boolean;
@@ -31,6 +32,7 @@ export function DefaultPermissionCard({
   planFollowUps?: ClaudeChatProps['planFollowUps'];
   planFollowUpsLoading?: ClaudeChatProps['planFollowUpsLoading'];
   onSelectPlanFollowUp?: ClaudeChatProps['onSelectPlanFollowUp'];
+  onApprovePlan?: ClaudeChatProps['onApprovePlan'];
 }) {
   const card =
     prompt.toolName === 'AskUserQuestion' || prompt.toolName === 'ask_user' ? (
@@ -47,6 +49,8 @@ export function DefaultPermissionCard({
         followUps={planFollowUps ?? []}
         followUpsLoading={planFollowUpsLoading}
         onSelectFollowUp={(followUp) => onSelectPlanFollowUp?.(prompt, followUp)}
+        onApprove={() => onApprovePlan?.(prompt)}
+        onKeepPlanning={() => onDeny?.(prompt)}
       />
     ) : (
       <ToolPermissionCard

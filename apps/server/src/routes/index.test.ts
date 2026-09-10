@@ -229,3 +229,29 @@ test('PUT /api/task-followups persists the exit-plan-mode trigger', async () => 
     assert.equal(reread.trigger, 'exit-plan-mode');
   });
 });
+
+test('GET /api/sessions/plan-follow-ups returns only exit-plan-mode follow-ups', async () => {
+  await withServer(async (url) => {
+    const followUps = (await (await fetch(`${url}/api/task-followups`)).json()) as Array<{
+      id: string;
+      name: string;
+      trigger: string;
+    }>;
+    // Seeded built-ins are all session-complete.
+    assert.ok(followUps.every((item) => item.trigger === 'session-complete'));
+
+    const target = followUps.find((item) => item.name === 'continue');
+    assert.ok(target, 'expected a seeded continue follow-up');
+    await fetch(`${url}/api/task-followups/${target.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger: 'exit-plan-mode' }),
+    });
+
+    const planFollowUps = (await (
+      await fetch(`${url}/api/sessions/plan-follow-ups`)
+    ).json()) as Array<{ id: string; name: string; trigger: string }>;
+    assert.deepEqual(planFollowUps.map((item) => item.name), ['continue']);
+    assert.ok(planFollowUps.every((item) => item.trigger === 'exit-plan-mode'));
+  });
+});

@@ -45,6 +45,14 @@ export function registerSessionRoutes(router: express.Router, ctx: AppContext): 
     }),
   );
 
+  router.get(
+    '/sessions/plan-follow-ups',
+    asyncHandler(async (_req, res) => {
+      const { listPlanFollowUpCatalog } = await import('../services/task-suggestions.js');
+      res.json(listPlanFollowUpCatalog(ctx));
+    }),
+  );
+
   router.post(
     '/agents/:agentId/sessions',
     asyncHandler(async (req, res) => {
