@@ -1,5 +1,5 @@
 import type { BuildPlanRequest } from '@agent-orchestrator/shared';
-import { API_BASE, authHeaders } from './request';
+import { API_BASE } from './request';
 import type { ChatStreamHandlers, StreamChatOptions } from './types';
 import type { ChatSession, Message, PermissionRequest } from '@agent-orchestrator/shared';
 
@@ -70,7 +70,7 @@ export async function streamChat(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({
       message: options.message,
@@ -93,7 +93,6 @@ export async function streamSessionFollow(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/stream`, {
     method: 'GET',
-    headers: authHeaders(),
     credentials: 'include',
     signal,
   });
@@ -113,7 +112,7 @@ export async function streamCompactSession(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/agents/${agentId}/sessions/${sessionId}/compact`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     signal,
   });
@@ -133,7 +132,7 @@ export async function streamBuildPlan(
     `${API_BASE}/agents/${agentId}/sessions/${sessionId}/permissions/build`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify(body),
       signal,

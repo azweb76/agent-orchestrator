@@ -1,4 +1,4 @@
-import { API_BASE, authHeaders } from './request';
+import { API_BASE } from './request';
 import type { AssistantStreamEvent } from '@agent-orchestrator/shared';
 import { request } from './request';
 import type {
@@ -60,7 +60,7 @@ export async function streamAssistantChat(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/assistant/chat/stream`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
     body: JSON.stringify({ content }),
     signal,

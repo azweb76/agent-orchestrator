@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Alert, Box, Button, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { api, setAuthToken } from '../api/client';
+import { api } from '../api/client';
 import { ControlTooltip } from './ui/ControlTooltip';
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
@@ -32,11 +32,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       setSubmitting(true);
       setError(null);
       try {
-        setAuthToken(token.trim());
+        // submitAuth is exempt from the auth gate and carries the token in the
+        // body; on success the server sets the HttpOnly cookie every later
+        // request relies on, so nothing is stored client-side.
         await api.submitAuth(token.trim());
         await statusQuery.refetch();
       } catch (err) {
-        setAuthToken('');
         setError((err as Error).message || 'Invalid token');
       } finally {
         setSubmitting(false);

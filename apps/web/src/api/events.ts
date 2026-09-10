@@ -173,18 +173,9 @@ export function useAppEventStream(): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const token = (() => {
-      try {
-        return localStorage.getItem('ao.authToken') ?? '';
-      } catch {
-        return '';
-      }
-    })();
-    const source = new EventSource(
-      token
-        ? `/api/events/stream?access_token=${encodeURIComponent(token)}`
-        : '/api/events/stream',
-    );
+    // Same-origin EventSource sends the HttpOnly auth cookie automatically, so
+    // the token never needs to appear in the URL.
+    const source = new EventSource('/api/events/stream');
 
     let openedOnce = false;
     source.onopen = () => {

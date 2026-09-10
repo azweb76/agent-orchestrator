@@ -1,32 +1,14 @@
 export const API_BASE = '/api';
-const AUTH_STORAGE_KEY = 'ao.authToken';
 
-function getAuthToken(): string {
-  try {
-    return localStorage.getItem(AUTH_STORAGE_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-export function setAuthToken(token: string): void {
-  try {
-    if (token) localStorage.setItem(AUTH_STORAGE_KEY, token);
-    else localStorage.removeItem(AUTH_STORAGE_KEY);
-  } catch {
-    // private mode
-  }
-}
-
-export function authHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
+/**
+ * The auth token is held only in the HttpOnly `ao_token` cookie the server sets
+ * at POST /api/auth. It is deliberately not mirrored into localStorage: a copy
+ * there is readable by any script on the page, which would undo the point of
+ * the HttpOnly cookie. Every request sends `credentials: 'include'` instead.
+ */
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...authHeaders(),
   };
   const extra = init?.headers;
   if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
