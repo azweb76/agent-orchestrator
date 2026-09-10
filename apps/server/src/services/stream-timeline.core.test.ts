@@ -69,6 +69,28 @@ describe('stream timeline ordering', () => {
     assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
   });
 
+  it('keeps coalesceTimelineText byte-identical around a completed foreground subagent', () => {
+    // Characterization: completeToolIds now finishes foreground Task/Agent rows
+    // on their tool_result; text joining must stay untouched by that change.
+    let parts: StreamPart[] = [{ type: 'text', id: 't1', text: 'Kicking off exploration.' }];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'tool_use', id: 'task_1', name: 'Task', input: { description: 'Explore' } },
+        ],
+      },
+    });
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'task_1', content: 'done' }],
+      },
+    });
+    parts = [...parts, { type: 'text', id: 't2', text: 'Found it.' }];
+    assert.equal(coalesceTimelineText(parts), 'Kicking off exploration.\n\nFound it.');
+  });
+
   it('joins tool-separated text parts with paragraph breaks', () => {
     const parts: StreamPart[] = [
       { type: 'text', id: 't1', text: 'I will ask a clarifying question.' },
@@ -385,6 +407,22 @@ describe('task events', () => {
     assert.equal(thinking?.type === 'thinking' && thinking.text, 'Hmm. ');
     assert.equal(todos?.type === 'todo_list' && todos.items[0]?.content, 'Ship chat kit');
     assert.equal(result?.type === 'tool' && result.result, 'ok');
+  });
+
+  it('completes a task_notification with neither tool_use_id nor task_id', () => {
+    // Some CLI events surface only a `summary`/`status`; both id lookups used to
+    // fall through to `findToolIndex` (which requires a truthy key) and leave the
+    // synthesized row stuck at 'running' forever.
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'system',
+      subtype: 'task_notification',
+      status: 'completed',
+      summary: 'Task finished',
+    });
+    assert.equal(parts.length, 1);
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    assert.equal(parts[0]?.type === 'tool' && parts[0].task?.summary, 'Task finished');
   });
 
   it('records Edit diffs from tool input', () => {

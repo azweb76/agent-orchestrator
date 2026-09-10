@@ -37,11 +37,16 @@ export function taskFromToolInput(
     if (!input) return { taskType: 'local_agent' };
     const description = stringField(input.description);
     const subagentType = stringField(input.subagent_type);
-    if (!description && !subagentType) return { taskType: 'local_agent' };
+    // `task_started.is_backgrounded` sometimes lands later (or is omitted by
+    // some CLI versions); the launch input's own flag is an earlier, equally
+    // reliable signal that a launch tool_result must not complete this row.
+    const backgrounded = input.run_in_background === true ? true : undefined;
+    if (!description && !subagentType && !backgrounded) return { taskType: 'local_agent' };
     return {
       taskType: 'local_agent',
       description,
       subagentType,
+      backgrounded,
     };
   }
   // Background Bash emits task_* events; tag it immediately so a launch
@@ -50,6 +55,7 @@ export function taskFromToolInput(
     return {
       taskType: 'local_bash',
       description: stringField(input.description),
+      backgrounded: true,
     };
   }
   return undefined;
@@ -105,14 +111,17 @@ export function findToolIndex(
   });
 }
 
-export function pushTool(
+/** pushTool plus the index of the row it created or updated, so callers don't
+ * have to re-search for an id that may not exist (e.g. a task_notification
+ * with neither `tool_use_id` nor `task_id`). */
+export function pushToolIndexed(
   parts: StreamPart[],
   name: string,
   detail: string | undefined,
   toolId?: string,
   task?: ToolTaskInfo,
   input?: Record<string, unknown>,
-): StreamPart[] {
+): { parts: StreamPart[]; index: number } {
   const id = toolId || `${name}-${detail ?? ''}-${parts.length}`;
   const existingIndex = parts.findIndex((part) => {
     if (part.type !== 'tool') return false;
@@ -136,7 +145,7 @@ export function pushTool(
       task: mergeTask(prev.task, task),
       input: input ?? prev.input,
     };
-    return next;
+    return { parts: next, index: existingIndex };
   }
   const item: Extract<StreamPart, { type: 'tool' }> = {
     type: 'tool',
@@ -147,7 +156,18 @@ export function pushTool(
   if (detail !== undefined) item.detail = detail;
   if (task) item.task = task;
   if (input) item.input = input;
-  return [...parts, item];
+  return { parts: [...parts, item], index: parts.length };
+}
+
+export function pushTool(
+  parts: StreamPart[],
+  name: string,
+  detail: string | undefined,
+  toolId?: string,
+  task?: ToolTaskInfo,
+  input?: Record<string, unknown>,
+): StreamPart[] {
+  return pushToolIndexed(parts, name, detail, toolId, task, input).parts;
 }
 
 export function patchTool(
@@ -296,15 +316,14 @@ export function applyTaskEvent(parts: StreamPart[], event: Record<string, unknow
     if (index >= 0) {
       return patchTool(parts, index, { status: 'done', task });
     }
-    const created = pushTool(
+    const { parts: created, index: createdIndex } = pushToolIndexed(
       parts,
       taskName(taskType, 'Agent'),
       summary,
       toolUseId ?? taskId,
       task,
     );
-    const createdIndex = findToolIndex(created, { toolUseId, taskId, id: toolUseId ?? taskId });
-    return createdIndex >= 0 ? patchTool(created, createdIndex, { status: 'done' }) : created;
+    return patchTool(created, createdIndex, { status: 'done' });
   }
 
   return parts;

@@ -58,7 +58,7 @@ function completeToolIds(
     if (part.status === 'done' || part.status === 'error') {
       return hit.content && !part.result ? { ...part, result: hit.content } : part;
     }
-    if (isSubagentItem(toolItemFields(part)) || part.task?.backgrounded) {
+    if (part.task?.backgrounded) {
       return hit.content && !part.result ? { ...part, result: hit.content } : part;
     }
     return {

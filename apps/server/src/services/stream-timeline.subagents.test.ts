@@ -220,6 +220,91 @@ describe('parallel tools and subagents', () => {
     assert.equal(parts[1]?.type === 'tool' && parts[1].status, 'running');
   });
 
+  it('completes a foreground Task subagent on its own tool_result', () => {
+    // Some CLI versions omit `parent_tool_use_id` on the nested session's own
+    // `result`, so this must complete from the top-level tool_result alone.
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'task_1',
+            name: 'Task',
+            input: { description: 'Explore auth', subagent_type: 'Explore' },
+          },
+        ],
+      },
+    });
+    assert.equal(runningSubagentItems(parts).length, 1);
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'task_1', content: 'Found the auth bug.' }],
+      },
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'done');
+    assert.equal(parts[0]?.type === 'tool' && parts[0].result, 'Found the auth bug.');
+    assert.equal(runningSubagentItems(parts).length, 0);
+  });
+
+  it('does not complete a backgrounded subagent on its launch-ack tool_result', () => {
+    // Regression guard: only `task.backgrounded` rows should stay running past
+    // their own tool_result — foreground subagents must not regress to that.
+    let parts: StreamPart[] = [
+      {
+        type: 'tool',
+        id: 'agent_1',
+        name: 'Agent',
+        status: 'running',
+        task: { taskType: 'local_agent', backgrounded: true },
+      },
+    ];
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      message: {
+        content: [
+          { type: 'tool_result', tool_use_id: 'agent_1', content: 'Async agent launched successfully.' },
+        ],
+      },
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
+  });
+
+  it('derives backgrounded from the Task tool_use input, before any task_started event arrives', () => {
+    // `task_started.is_backgrounded` can land after (or never precede) the
+    // launch-ack `tool_result`; the launch input's own `run_in_background`
+    // flag must be enough on its own to keep this row running past that ack.
+    let parts: StreamPart[] = [];
+    parts = applyStreamEvent(parts, {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: 'task_1',
+            name: 'Task',
+            input: {
+              description: 'Explore repo',
+              subagent_type: 'Explore',
+              run_in_background: true,
+            },
+          },
+        ],
+      },
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].task?.backgrounded, true);
+    parts = applyStreamEvent(parts, {
+      type: 'user',
+      message: {
+        content: [{ type: 'tool_result', tool_use_id: 'task_1', content: 'Async agent launched successfully.' }],
+      },
+    });
+    assert.equal(parts[0]?.type === 'tool' && parts[0].status, 'running');
+    assert.equal(runningSubagentItems(parts).length, 1);
+  });
+
   it('keeps a backgrounded agent running when its launch ack arrives', () => {
     // Backgrounded Agent/Task calls get an immediate `tool_result` ("Async agent
     // launched successfully") long before the subagent finishes. Completing the
