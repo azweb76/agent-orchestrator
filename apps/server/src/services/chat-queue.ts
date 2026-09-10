@@ -179,6 +179,14 @@ const drainingSessions = new Set<string>();
 const drainingMutatingAgents = new Set<string>();
 
 /**
+ * Why a drain attempt stopped. Only `drained` means the session made all the
+ * progress it could; `blocked` / `not-eligible` / `busy` need an external event
+ * (a run finishing, a spend cap resetting, a new enqueue) before a retry can
+ * differ, so retrying them in a loop only burns CPU.
+ */
+export type DrainOutcome = 'drained' | 'busy' | 'blocked' | 'not-eligible' | 'failed';
+
+/**
  * Send queued messages for an idle session, in order, until the queue is empty
  * or the session is busy/archived. Safe to call from any finalization path.
  */
@@ -186,29 +194,29 @@ export async function drainSessionQueue(
   ctx: AppContext,
   agentId: string,
   sessionId: string,
-): Promise<void> {
-  if (drainingSessions.has(sessionId)) return;
+): Promise<DrainOutcome> {
+  if (drainingSessions.has(sessionId)) return 'busy';
   drainingSessions.add(sessionId);
   try {
     while (true) {
       const agent = ctx.repos.agents.getById(agentId);
-      if (!agent || agent.archivedAt) return;
+      if (!agent || agent.archivedAt) return 'not-eligible';
       const session = ctx.repos.sessions.getById(sessionId);
-      if (!session || session.status === 'running') return;
+      if (!session || session.status === 'running') return 'not-eligible';
       const spendBlock = evaluateSpendCap(ctx, agentId);
       if (spendBlock) {
         ctx.repos.queued.setBlockedReason(sessionId, spendBlock.reason);
-        return;
+        return 'blocked';
       }
       ctx.repos.queued.clearBlockedReason(sessionId);
       if (shouldQueueMutatingStart(ctx.repos.sessions.listByAgent(agentId), session)) {
         markSessionQueued(ctx, session);
-        return;
+        return 'blocked';
       }
       const next = ctx.repos.queued.takeNext(sessionId);
       if (!next) {
         clearQueuedStatusIfIdle(ctx, session);
-        return;
+        return 'drained';
       }
       ctx.repos.events.create(
         makeEvent(agentId, 'queued_message_sent', { queuedId: next.id, sessionId }),
@@ -221,7 +229,7 @@ export async function drainSessionQueue(
         });
       } catch (error) {
         console.error(`Failed to send queued message for session ${sessionId}:`, error);
-        return;
+        return 'failed';
       }
     }
   } finally {
@@ -246,21 +254,38 @@ function clearQueuedStatusIfIdle(ctx: AppContext, session: ChatSession): void {
   });
 }
 
+/** Hard stop so an unexpected non-progress outcome can never spin the loop. */
+const MAX_MUTATING_HANDOFFS = 50;
+
 /** Start the next git-mutating session waiting on this agent/worktree. */
 export async function drainWaitingMutatingSessions(
   ctx: AppContext,
   agentId: string,
 ): Promise<void> {
   if (drainingMutatingAgents.has(agentId)) return;
+  const agent = ctx.repos.agents.getById(agentId);
+  if (!agent || agent.archivedAt) return;
   drainingMutatingAgents.add(agentId);
   try {
-    while (true) {
+    // Sessions whose send threw: pass them over so a later waiter still starts.
+    const skipped = new Set<string>();
+    let lastSessionId: string | null = null;
+    for (let handoff = 0; handoff < MAX_MUTATING_HANDOFFS; handoff += 1) {
       const sessions = ctx.repos.sessions.listByAgent(agentId);
       if (findRunningMutatingSession(sessions)) return;
-      const next = nextWaitingMutatingSession(sessions, (id) => hasQueuedMessages(ctx, id));
-      if (!next) return;
-      await drainSessionQueue(ctx, agentId, next.id);
+      const waiting = sessions.filter((item) => !skipped.has(item.id));
+      const next = nextWaitingMutatingSession(waiting, (id) => hasQueuedMessages(ctx, id));
+      // Re-selecting the same session means the last pass changed nothing that
+      // would let it start, so another pass would only burn CPU.
+      if (!next || next.id === lastSessionId) return;
+      lastSessionId = next.id;
+      const outcome = await drainSessionQueue(ctx, agentId, next.id);
+      if (outcome === 'failed') skipped.add(next.id);
+      else if (outcome !== 'drained') return;
+      // Hand the lock to the next waiter without starving the event loop.
+      await new Promise((resolve) => setImmediate(resolve));
     }
+    console.warn(`Stopped mutating queue handoff for agent ${agentId} after ${MAX_MUTATING_HANDOFFS} passes`);
   } finally {
     drainingMutatingAgents.delete(agentId);
   }
