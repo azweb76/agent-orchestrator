@@ -170,7 +170,13 @@ export function ChatPanelView({
         slots={{
           emptyState: (
             <ChatPanelEmptyState
+              archived={archived}
               onSlashCommand={(command) => void streaming.runChatRef.current(command, [], [], false)}
+              onCreateTask={
+                archived
+                  ? undefined
+                  : (task) => void sessionActions.createSessionFromTask(task.name)
+              }
             />
           ),
           footer: (

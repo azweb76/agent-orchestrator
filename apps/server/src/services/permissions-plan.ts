@@ -12,6 +12,7 @@ import fs from 'node:fs/promises';
 import { enrichPermissionInput } from './git.js';
 import { gatherPlanBuildHandoffContext } from './plan-handoff.js';
 import { type AppContext, makeEvent } from './app-context.js';
+import { requireAgentTaskByName } from './agent-tasks.js';
 import { createSessionForAgent, requireAgent, requireSession } from './agent-core.js';
 import { getAgentDetail } from './agents-lifecycle.js';
 import { clearSessionQueue } from './chat-queue.js';
@@ -252,9 +253,10 @@ export async function buildApprovedPlan(
   await clearSessionQueue(ctx, planSession.id);
 
   const agent = requireAgent(ctx, agentId);
+  const buildTask = requireAgentTaskByName(ctx, 'build');
   const buildSession = createSessionForAgent(ctx, agent, {
     template: 'build',
-    permissionMode: 'auto',
+    task: buildTask,
     activate: true,
   });
 
@@ -269,7 +271,7 @@ export async function buildApprovedPlan(
   await streamAgentChat(
     ctx,
     agentId,
-    { message: buildImplementPlanPrompt(plan, handoff), force: true },
+    { message: buildImplementPlanPrompt(plan, handoff, buildTask.promptTemplate), force: true },
     res,
     buildSession.id,
     { createdSession: buildSession },

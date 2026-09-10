@@ -2,7 +2,6 @@ import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { buildIssueKickoffPrompt, parseIssueReference, renderAgentTaskPromptTemplate } from '@agent-orchestrator/shared';
 import type {
-  Agent,
   AgentTask,
   CreateWorktreeFromBranchRequest,
   CreateWorktreeFromGoalRequest,
@@ -365,7 +364,9 @@ export async function createWorktreeFromIssue(
 
   const issueNumber = await resolveIssueNumberForWorkspace(ctx, workspaceId, body);
   const issue = await ctx.github.getIssueDetail(workspace.githubOwner, workspace.githubRepo, issueNumber);
-  const prompt = buildIssueKickoffPrompt(issue, issue.comments);
+  const issueMarkdown = buildIssueKickoffPrompt(issue, issue.comments);
+  const task = requireAgentTaskByName(ctx, 'github-issue');
+  const prompt = renderAgentTaskPromptTemplate(task.promptTemplate, { goal: issueMarkdown });
 
   const branchName =
     resolveExplicitBranchName(body.branch) ??
@@ -380,22 +381,12 @@ export async function createWorktreeFromIssue(
     baseBranch: body.baseBranch,
     name: body.name,
     overwrite: body.overwrite,
+  }, {
+    task,
+    model: body.model,
+    effort: body.effort,
+    permissionMode: body.permissionMode,
   });
 
-  const configured: Agent = {
-    ...agent,
-    model: body.model?.trim() || agent.model,
-    effort: body.effort ?? agent.effort,
-    permissionMode: body.permissionMode ?? 'plan',
-    updatedAt: nowIso(),
-  };
-  if (
-    configured.model !== agent.model ||
-    configured.effort !== agent.effort ||
-    configured.permissionMode !== agent.permissionMode
-  ) {
-    ctx.repos.agents.update(configured);
-  }
-
-  return { worktree, agent: configured, branchName, issueNumber, prompt };
+  return { worktree, agent, branchName, issueNumber, prompt };
 }

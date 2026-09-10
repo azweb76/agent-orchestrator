@@ -81,17 +81,30 @@ export interface UpdateAgentTaskRequest {
 }
 
 /**
- * Render a task prompt template. Missing/blank template returns `goal` unchanged
- * so From goal still sends the raw text by default.
+ * Render a task prompt template. Missing/blank template returns `goal` (or empty
+ * when no goal is provided) so From goal still sends the raw text by default.
  */
+export interface AgentTaskPromptVars {
+  goal?: string;
+  plan?: string;
+  summary?: string;
+  files?: string;
+  lessons?: string;
+}
+
 export function renderAgentTaskPromptTemplate(
   template: string | null | undefined,
-  vars: { goal: string },
+  vars: AgentTaskPromptVars = {},
 ): string {
-  const goal = vars.goal.trim();
+  const goal = vars.goal?.trim() ?? '';
   const trimmed = template?.trim();
   if (!trimmed) return goal;
-  return trimmed.replaceAll('{{goal}}', goal);
+  return trimmed
+    .replaceAll('{{goal}}', goal)
+    .replaceAll('{{plan}}', vars.plan?.trim() ?? '')
+    .replaceAll('{{summary}}', vars.summary?.trim() ?? '')
+    .replaceAll('{{files}}', vars.files ?? '')
+    .replaceAll('{{lessons}}', vars.lessons ?? '');
 }
 
 /** Drop interactive tools that must never be auto-approved via `--allowedTools`. */

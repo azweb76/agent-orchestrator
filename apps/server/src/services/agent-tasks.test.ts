@@ -42,11 +42,20 @@ test('renderAgentTaskPromptTemplate passes through raw goal by default', () => {
   assert.equal(renderAgentTaskPromptTemplate('  ', { goal: 'Ship dark mode' }), 'Ship dark mode');
 });
 
-test('renderAgentTaskPromptTemplate substitutes {{goal}}', () => {
+test('renderAgentTaskPromptTemplate substitutes plan, summary, files, and lessons', () => {
   assert.equal(
-    renderAgentTaskPromptTemplate('Goal:\n{{goal}}\nDo it.', { goal: 'Add tests' }),
-    'Goal:\nAdd tests\nDo it.',
+    renderAgentTaskPromptTemplate('Plan:\n{{plan}}', { plan: 'Do the thing' }),
+    'Plan:\nDo the thing',
   );
+  assert.equal(
+    renderAgentTaskPromptTemplate('{{summary}}\n{{files}}\n{{lessons}}', {
+      summary: 'Prior work',
+      files: '- src/a.ts',
+      lessons: '- Prefer Explore',
+    }),
+    'Prior work\n- src/a.ts\n- Prefer Explore',
+  );
+  assert.equal(renderAgentTaskPromptTemplate('Lead {{plan}}', { goal: 'ignored' }), 'Lead ');
 });
 
 test('sanitizeAgentTaskAllowedTools strips interactive tools', () => {

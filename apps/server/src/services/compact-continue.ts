@@ -7,6 +7,7 @@ import {
   getInstructionDraftOffer,
   publishInstructionDraftOffer,
 } from './instruction-offers.js';
+import { requireAgentTaskByName } from './agent-tasks.js';
 import { nowIso } from './app-context.js';
 import {
   createSessionForAgent,
@@ -119,10 +120,14 @@ export async function compactAndContinueSession(
     });
   }
 
+  const compactTask = requireAgentTaskByName(ctx, 'compact-continue');
   await streamAgentChat(
     ctx,
     agentId,
-    { message: buildCompactContinuePrompt(summary, filePaths, lessons), force: true },
+    {
+      message: buildCompactContinuePrompt(summary, filePaths, lessons, compactTask.promptTemplate),
+      force: true,
+    },
     res,
     continuation.id,
     { createdSession: continuation },
