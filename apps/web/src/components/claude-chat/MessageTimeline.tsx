@@ -6,7 +6,6 @@ import {
   ImageBlock,
   ThinkingBlock,
   TodoListBlock,
-  ToolResultBlock,
 } from './blocks/ChatBlocks';
 import { ChatBubble } from './ChatBubble';
 import { SubagentActivityList, ThinkingIndicator, ToolProgressBar } from './ToolActivity';
@@ -76,22 +75,7 @@ export const MessageTimeline = memo(function MessageTimeline({
         if (custom !== undefined) return <Box key={block.id}>{custom}</Box>;
         if (block.type === 'todo_list') return <TodoListBlock key={block.id} block={block} />;
         if (block.type === 'diff') return <DiffBlock key={block.id} block={block} />;
-        if (block.type === 'tool_result') return <ToolResultBlock key={block.id} block={block} />;
         if (block.type === 'image') return <ImageBlock key={block.id} block={block} />;
-        if (block.type === 'tool_use' && block.result && !streaming) {
-          return (
-            <ToolResultBlock
-              key={`${block.id}-result`}
-              block={{
-                type: 'tool_result',
-                id: `${block.id}-result`,
-                toolUseId: block.id,
-                content: block.result,
-                isError: block.status === 'error',
-              }}
-            />
-          );
-        }
         return null;
       })}
     </Box>
