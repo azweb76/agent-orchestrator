@@ -31,6 +31,31 @@ import {
 
 const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']);
 
+/**
+ * Append a streamed token to the running assistant text without re-joining
+ * every text part accumulated so far (that's what coalesceTimelineText does,
+ * and calling it once per token is O(total response length) per token).
+ *
+ * `timelineBeforeToken` must be the timeline *before* this token is applied
+ * via appendStreamText. When the last part is already text, appendStreamText
+ * only extends that part's string, so the coalesced result only grows by the
+ * token itself. Otherwise a new text part is started, which coalesces onto a
+ * new line (coalesceTimelineText joins text parts with '\n\n').
+ *
+ * Must stay byte-identical to
+ * `coalesceTimelineText(appendStreamText(timelineBeforeToken, token))`.
+ */
+export function appendAssistantText(
+  assistantText: string,
+  timelineBeforeToken: StreamPart[],
+  token: string,
+): string {
+  if (!token) return assistantText;
+  const last = timelineBeforeToken[timelineBeforeToken.length - 1];
+  if (last?.type === 'text') return assistantText + token;
+  return assistantText ? `${assistantText}\n\n${token}` : token;
+}
+
 function extensionForMime(mimeType: string): string {
   switch (mimeType) {
     case 'image/png':
@@ -188,11 +213,12 @@ async function recoverOneSession(ctx: AppContext, session: ChatSession): Promise
     parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, record);
     const token = parentStreamTextDelta(record, parentClaudeSessionId);
     if (token) {
+      assistantText = appendAssistantText(assistantText, timeline, token);
       timeline = appendStreamText(timeline, token);
-      assistantText = coalesceTimelineText(timeline);
       flushProgress();
     } else if (event.type !== 'stderr') {
       timeline = applyStreamEvent(timeline, record, parentClaudeSessionId);
+      assistantText = coalesceTimelineText(timeline);
       flushProgress(true);
       if (!meta?.replay) {
         ctx.repos.events.create(

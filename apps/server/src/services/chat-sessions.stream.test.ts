@@ -3,13 +3,25 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createRepositories, initDatabase } from '../db/index.js';
-import { streamAgentChat, type AppContext } from './app.js';
+import { enqueueChatMessage, streamAgentChat, type AppContext } from './app.js';
 import { AnthropicService } from './anthropic.js';
 import { ClaudeService, GitService } from './git.js';
 import { GitHubService } from './github.js';
 import { JiraService } from './jira.js';
 import { mockResponse, writeFakeClaude } from './chat-sessions.test-helpers.js';
+
+const execFileAsync = promisify(execFile);
+
+async function waitFor(check: () => boolean, message: string, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(message);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
 
 test('streamAgentChat goes idle after a result even if Claude keeps running', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-idle-'));
@@ -356,6 +368,162 @@ rl.on('line', (line) => {
     assert.equal(assistant?.content.includes('[no output]'), false);
     assert.equal(assistant?.metadata.streaming, false);
     assert.equal(ctx.repos.sessions.getById('sess-1')?.claudeSessionId, 'claude-empty');
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test('streamAgentChat drains the post-switch session after a slash command switches sessions mid-run', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-chat-switch-drain-'));
+  try {
+    const execGit = (args: string[]) => execFileAsync('git', ['-C', tmp, ...args]);
+    await execGit(['init']);
+    await execGit(['config', 'user.email', 'test@example.com']);
+    await execGit(['config', 'user.name', 'Test']);
+    await fs.writeFile(path.join(tmp, 'README.md'), '# hello\n');
+    await execGit(['add', 'README.md']);
+    await execGit(['commit', '-m', 'initial']);
+
+    const db = initDatabase(tmp);
+    const repos = createRepositories(db);
+    const ctx: AppContext = {
+      repos,
+      git: new GitService(),
+      github: new GitHubService({}),
+      jira: new JiraService({}),
+      claude: new ClaudeService('unused-claude-bin', path.join(tmp, 'runs')),
+      anthropic: { suggestChatTitle: async () => 'Stub title' } as unknown as AnthropicService,
+      dataDir: tmp,
+    };
+
+    repos.workspaces.create({
+      id: 'ws-1',
+      name: 'demo',
+      repoUrl: 'https://github.com/example/demo',
+      repoPath: tmp,
+      defaultBranch: 'main',
+      githubOwner: 'example',
+      githubRepo: 'demo',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    repos.worktrees.create({
+      id: 'wt-1',
+      workspaceId: 'ws-1',
+      name: 'agent-1',
+      path: tmp,
+      branch: 'feat',
+      prNumber: null,
+      prTitle: null,
+      baseBranch: 'main',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    const agent = repos.agents.create({
+      id: 'ag-1',
+      worktreeId: 'wt-1',
+      name: 'Agent',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      activeSessionId: 'sess-1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      archivedAt: null,
+    });
+    repos.sessions.create({
+      id: 'sess-1',
+      agentId: agent.id,
+      title: 'Chat',
+      template: 'chat',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    // /code-review reuses the existing 'review' template session if one
+    // already exists, so pin its id to make it easy to assert against.
+    repos.sessions.create({
+      id: 'review-sess',
+      agentId: agent.id,
+      title: 'Review',
+      template: 'review',
+      status: 'idle',
+      model: 'sonnet',
+      effort: 'high',
+      permissionMode: 'plan',
+      claudeSessionId: null,
+      pid: null,
+      runLogPath: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+
+    let releaseRun: (() => void) | undefined;
+    const runGate = new Promise<void>((resolve) => {
+      releaseRun = resolve;
+    });
+    let runCount = 0;
+    ctx.claude = {
+      getRunningProcess: () => undefined,
+      runStreaming: async (
+        _id: string,
+        options: { onStarted?: (handle: { pid: number; logPath: string }) => void },
+      ) => {
+        runCount += 1;
+        const isFirstRun = runCount === 1;
+        options.onStarted?.({ pid: 900_000 + runCount, logPath: path.join(tmp, `run-${runCount}.log`) });
+        if (isFirstRun) await runGate;
+        return {
+          result: isFirstRun ? 'Reviewed.' : 'Handled the follow-up.',
+          sessionId: 'claude-review',
+          events: [],
+          stopped: false,
+        };
+      },
+    } as unknown as ClaudeService;
+
+    const { res } = mockResponse();
+    const first = streamAgentChat(ctx, agent.id, { message: '/code-review' }, res, 'sess-1');
+
+    // Wait until the slash command has switched to the review session and
+    // that session (not the pre-switch chat session) is the one running.
+    await waitFor(
+      () => ctx.repos.sessions.getById('review-sess')?.status === 'running',
+      'review session never started running',
+    );
+    assert.equal(ctx.repos.sessions.getById('sess-1')?.status, 'idle');
+
+    // A follow-up arrives while the review session (the one that actually
+    // switched in and is running) is busy.
+    await enqueueChatMessage(ctx, agent.id, 'review-sess', { message: 'follow up' });
+    assert.equal(ctx.repos.queued.listBySession('review-sess').length, 1);
+
+    releaseRun?.();
+    await first;
+
+    // The run-end drain must target the session that actually ran
+    // (review-sess), not the stale pre-switch `sess-1` id. Wait for the
+    // drained follow-up to actually finish its own run (queue length alone
+    // only proves it was taken off the queue, not that it completed).
+    await waitFor(
+      () =>
+        repos.messages
+          .listBySession('review-sess')
+          .some((item) => item.role === 'user' && item.content === 'follow up'),
+      'queued follow-up on the running session was never drained',
+    );
+
+    assert.equal(ctx.repos.queued.listBySession('review-sess').length, 0);
+    assert.equal(repos.sessions.getById('review-sess')?.status, 'idle');
+    assert.equal(runCount, 2);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }
