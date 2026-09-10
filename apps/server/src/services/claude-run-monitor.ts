@@ -15,6 +15,10 @@ import {
 import { followClaudeLog, readClaudeLogSnapshot } from './claude-log.js';
 import { cleanupStdinSidecars, killProcessTree } from './claude-process.js';
 import { enrichPermissionInput } from './claude-permission-input.js';
+import {
+  clearResolvedReplayedPermissions,
+  resolveUnansweredPermissions,
+} from './claude-permission-resolution.js';
 import type {
   ClaudeEventMeta,
   ClaudePermissionRequest,
@@ -67,7 +71,10 @@ export function stashPermissionRequest(
     toolUseId: parsed.toolUseId,
     requestedAt: Date.now(),
   };
-  tracked.pendingPermissions.clear();
+  // A single assistant message can carry several parallel tool_use blocks, each
+  // triggering its own concurrent can_use_tool control request. Every one of them
+  // needs its own control_response, so all pending requests must accumulate here
+  // rather than evicting one another.
   tracked.pendingPermissions.set(parsed.requestId, request);
   return request;
 }
@@ -141,9 +148,11 @@ export function handleControlEvent(
     return;
   }
 
-  // Claude continued past a permission prompt (it was answered). Drop it.
+  // Claude may have continued past a still-pending prompt because it was
+  // answered by a previous orchestrator process. Only drop entries with direct
+  // evidence of that — see clearResolvedReplayedPermissions.
   if (meta.replay && event.type !== 'stderr') {
-    tracked.pendingPermissions.clear();
+    clearResolvedReplayedPermissions(tracked, event);
   }
 }
 
@@ -183,12 +192,26 @@ export async function monitorClaudeRun(
   let lifecycleTimeline: StreamPart[] = [];
   let resultDeferred = false;
   let wakeTimer: NodeJS.Timeout | null = null;
+  let hardCeilingTimer: NodeJS.Timeout | null = null;
 
   const clearWakeTimer = () => {
     if (wakeTimer) {
       clearTimeout(wakeTimer);
       wakeTimer = null;
     }
+  };
+  const clearHardCeilingTimer = () => {
+    if (hardCeilingTimer) {
+      clearTimeout(hardCeilingTimer);
+      hardCeilingTimer = null;
+    }
+  };
+  // Every exit from the deferred state must reset both timers together —
+  // leaving one armed is exactly the shape of bug 3 (a dangling timer).
+  const settleDeferred = () => {
+    resultDeferred = false;
+    clearWakeTimer();
+    clearHardCeilingTimer();
   };
   const endRunAfterResult = () => {
     const tracked = host.getTrackedRun(agentId);
@@ -206,10 +229,25 @@ export async function monitorClaudeRun(
     wakeTimer = setTimeout(() => {
       wakeTimer = null;
       if (!resultDeferred || runningSubagentItems(lifecycleTimeline).length > 0) return;
-      resultDeferred = false;
+      settleDeferred();
       endRunAfterResult();
     }, host.wakeGraceMs);
     wakeTimer.unref?.();
+  };
+  const armHardCeilingTimer = () => {
+    if (hardCeilingTimer) return;
+    // Safety net: a subagent row stuck permanently `running` (e.g. its own
+    // timeline never learns of completion) keeps tasksRunning true forever, so
+    // the `!tasksRunning` check gating armWakeTimer() below never fires, and the
+    // deferred result would otherwise hold this run — and its per-worktree
+    // mutex — open forever.
+    hardCeilingTimer = setTimeout(() => {
+      hardCeilingTimer = null;
+      if (!resultDeferred) return;
+      settleDeferred();
+      endRunAfterResult();
+    }, host.wakeGraceMs * 10);
+    hardCeilingTimer.unref?.();
   };
 
   const processLine = (line: string, replay: boolean) => {
@@ -232,20 +270,23 @@ export async function monitorClaudeRun(
         resultError = claudeResultErrorMessage(record) ?? resultError;
         const trackedForResult = host.getTrackedRun(agentId);
         if (trackedForResult?.pid === handle.pid) {
-          trackedForResult.pendingPermissions.clear();
+          // The parent turn is over — any permission request it left unanswered
+          // (a race, or one the client never got to) can no longer be resolved
+          // via the UI. Answer it (deny) so the CLI's control_request does not
+          // block forever, instead of silently dropping it.
+          resolveUnansweredPermissions(host, agentId, trackedForResult);
           if (tasksRunning) {
             resultDeferred = true;
+            armHardCeilingTimer();
           } else {
-            resultDeferred = false;
-            clearWakeTimer();
+            settleDeferred();
             endRunAfterResult();
           }
         }
       } else if (resultDeferred && isParentTurnActivity(record, sessionId)) {
         // The CLI woke the model after a task settled; the follow-up turn's
         // own result decides when the run ends.
-        resultDeferred = false;
-        clearWakeTimer();
+        settleDeferred();
       }
 
       if (resultDeferred && !tasksRunning) {
@@ -278,7 +319,7 @@ export async function monitorClaudeRun(
       signal,
     });
   } finally {
-    clearWakeTimer();
+    settleDeferred();
     signal?.removeEventListener('abort', handleAbort);
     const tracked = host.getTrackedRun(agentId);
     if (tracked?.pid === handle.pid) {
