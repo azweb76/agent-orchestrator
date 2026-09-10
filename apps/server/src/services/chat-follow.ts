@@ -11,6 +11,7 @@ import {
 import { followClaudeLog, isPidAlive, readClaudeLogSnapshot } from './git.js';
 import { type AppContext, nowIso } from './app-context.js';
 import { requireAgent, requireSession } from './agent-core.js';
+import { appendAssistantText } from './chat-run-lifecycle.js';
 import {
   attachChatSse,
   startSseHeartbeat,
@@ -113,11 +114,12 @@ export async function followAgentSession(
     parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, event);
     const token = parentStreamTextDelta(event, parentClaudeSessionId);
     if (token) {
+      assistantText = appendAssistantText(assistantText, timeline, token);
       timeline = appendStreamText(timeline, token);
-      assistantText = coalesceTimelineText(timeline);
       if (live) send('token', { text: token });
     } else if (String(event.type ?? '') !== 'stderr') {
       timeline = applyStreamEvent(timeline, event, parentClaudeSessionId);
+      assistantText = coalesceTimelineText(timeline);
       if (live) send('event', event);
     }
   };

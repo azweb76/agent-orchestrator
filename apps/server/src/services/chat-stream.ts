@@ -37,6 +37,7 @@ import {
 } from './chat-queue.js';
 import { attachChatSse, startSseHeartbeat } from './chat-sse.js';
 import {
+  appendAssistantText,
   finalizeSessionRun,
   markStreamingAssistantStopped,
   persistAssistantProgress,
@@ -302,12 +303,13 @@ export async function streamAgentChat(
         parentClaudeSessionId = adoptParentClaudeSessionId(parentClaudeSessionId, record);
         const token = parentStreamTextDelta(record, parentClaudeSessionId);
         if (token) {
+          assistantText = appendAssistantText(assistantText, timeline, token);
           timeline = appendStreamText(timeline, token);
-          assistantText = coalesceTimelineText(timeline);
           flushProgress();
           send('token', { text: token });
         } else if (event.type !== 'stderr') {
           timeline = applyStreamEvent(timeline, record, parentClaudeSessionId);
+          assistantText = coalesceTimelineText(timeline);
           flushProgress(true);
           ctx.repos.events.create(makeEvent(agentId, event.type, record));
           send('event', event);
@@ -378,7 +380,12 @@ export async function streamAgentChat(
     if (res && clientOpen && !res.writableEnded) {
       res.end();
     }
-    // Deliver any follow-ups queued while this run was busy.
-    void drainSessionQueue(ctx, agentId, session.id);
+    // Deliver any follow-ups queued while this run was busy. Drain the
+    // session that actually ran (it may differ from the pre-switch `session`
+    // when a slash command like /review switched sessions mid-request).
+    void drainSessionQueue(ctx, agentId, runningSession.id);
+    if (runningSession.id !== session.id) {
+      void drainSessionQueue(ctx, agentId, session.id);
+    }
   }
 }
