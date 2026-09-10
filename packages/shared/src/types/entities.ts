@@ -123,3 +123,29 @@ export interface AppEvent {
   data: Record<string, unknown>;
   createdAt: string;
 }
+
+/**
+ * Exhaustive map of every `AppEventType` to `true`. Adding a member to
+ * `AppEventType` without adding it here fails the build, which is what keeps
+ * `APP_EVENT_TYPES` (derived below) from silently drifting out of sync with
+ * the server's SSE event surface.
+ */
+const APP_EVENT_TYPE_MAP: Record<AppEventType, true> = {
+  agent_changed: true,
+  run_finished: true,
+  permission_request: true,
+  queue_changed: true,
+  workspaces_changed: true,
+  instruction_draft_offer: true,
+  github_pr_changed: true,
+  automation_triggered: true,
+  draft_pr_offer: true,
+  task_suggestions_offer: true,
+  spend_cap_blocked: true,
+  watchdog_alert: true,
+};
+
+/** Every `AppEventType` value, derived from `APP_EVENT_TYPE_MAP` above. */
+export const APP_EVENT_TYPES: readonly AppEventType[] = Object.keys(
+  APP_EVENT_TYPE_MAP,
+) as AppEventType[];
