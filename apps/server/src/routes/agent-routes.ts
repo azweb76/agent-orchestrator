@@ -8,6 +8,7 @@ import {
   pruneArchivedAgents,
   stopAgent,
   unarchiveAgent,
+  updateAgentGoal,
 } from '../services/app.js';
 import { asyncHandler, param } from './helpers.js';
 
@@ -16,6 +17,14 @@ export function registerAgentRoutes(router: express.Router, ctx: AppContext): vo
     '/agents/:agentId',
     asyncHandler(async (req, res) => {
       res.json(await getAgentDetail(ctx, param(req.params.agentId)));
+    }),
+  );
+
+  router.patch(
+    '/agents/:agentId',
+    asyncHandler(async (req, res) => {
+      const body = z.object({ goal: z.string().trim().min(1) }).parse(req.body ?? {});
+      res.json(await updateAgentGoal(ctx, param(req.params.agentId), body.goal));
     }),
   );
 

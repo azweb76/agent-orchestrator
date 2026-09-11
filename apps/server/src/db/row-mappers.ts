@@ -80,6 +80,7 @@ export function rowToAgent(row: unknown): Agent {
     pid: r.pid == null ? null : Number(r.pid),
     runLogPath: r.run_log_path == null ? null : String(r.run_log_path),
     activeSessionId: r.active_session_id == null ? null : String(r.active_session_id),
+    goal: String(r.goal ?? ''),
     createdAt: String(r.created_at),
     updatedAt: String(r.updated_at),
     archivedAt: r.archived_at == null ? null : String(r.archived_at),

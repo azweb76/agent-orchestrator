@@ -96,6 +96,7 @@ async function seedAgent(tmp: string): Promise<{ ctx: AppContext; agent: Agent }
     pid: null,
     runLogPath: null,
     activeSessionId: null,
+    goal: 'Ship the feature',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     archivedAt: null,

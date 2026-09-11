@@ -1,0 +1,15 @@
+import { describe, expect, it } from 'vitest';
+import { AGENT_PAGE_TAB, agentHasGoal, defaultAgentPageTab } from './agentPageTypes';
+
+describe('defaultAgentPageTab', () => {
+  it('opens Goal when the agent has no goal', () => {
+    expect(agentHasGoal('')).toBe(false);
+    expect(agentHasGoal('  ')).toBe(false);
+    expect(defaultAgentPageTab(false)).toBe(AGENT_PAGE_TAB.goal);
+  });
+
+  it('opens Chat when a goal is saved', () => {
+    expect(agentHasGoal('Ship dark mode')).toBe(true);
+    expect(defaultAgentPageTab(true)).toBe(AGENT_PAGE_TAB.chat);
+  });
+});

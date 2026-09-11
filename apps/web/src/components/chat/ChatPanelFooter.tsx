@@ -16,6 +16,8 @@ interface ChatPanelFooterProps {
   agentId: string;
   agent?: Pick<AgentDetail, 'draftPrOffer' | 'taskSuggestions' | 'instructionDraftOffer'>;
   archived: boolean;
+  goalBlocked?: boolean;
+  goalPath?: string | null;
   activeSessionId: string;
   session?: ChatSession;
   agentDefaults?: {
@@ -59,6 +61,8 @@ export function ChatPanelFooter({
   agentId,
   agent,
   archived,
+  goalBlocked = false,
+  goalPath = null,
   activeSessionId,
   session,
   agentDefaults,
@@ -146,6 +150,13 @@ export function ChatPanelFooter({
           />
         ) : null}
 
+        {goalBlocked && (
+          <Alert severity="info" sx={{ mb: 1 }}>
+            Save a goal on the Goal tab before chatting. Attach it with @goal so Claude reads the
+            goal file by path.
+          </Alert>
+        )}
+
         {chatError && (
           <Alert
             severity="error"
@@ -187,6 +198,7 @@ export function ChatPanelFooter({
           agentId={agentId}
           sessionId={activeSessionId}
           archived={archived}
+          goalAvailable={Boolean(goalPath) && !goalBlocked}
           isStreaming={sessionBusy}
           model={session?.model ?? agentDefaults?.model ?? 'sonnet'}
           effort={session?.effort ?? agentDefaults?.effort ?? 'high'}

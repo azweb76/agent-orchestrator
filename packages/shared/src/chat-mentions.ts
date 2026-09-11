@@ -1,4 +1,4 @@
-export type ChatMentionKind = 'file' | 'diff';
+export type ChatMentionKind = 'file' | 'diff' | 'goal';
 
 export interface ChatMention {
   kind: ChatMentionKind;
@@ -13,6 +13,7 @@ export interface WorktreeFileEntry {
 /** User-visible @ token inserted into chat messages. */
 export function formatChatMentionToken(mention: ChatMention): string {
   if (mention.kind === 'diff') return '@diff';
+  if (mention.kind === 'goal') return '@goal';
   const filePath = mention.path?.trim();
   return filePath ? `@${filePath}` : '@file';
 }

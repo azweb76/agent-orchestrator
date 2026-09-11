@@ -18,6 +18,7 @@ import {
 import { fallbackTitleFromPrompt, sanitizeChatTitle } from './anthropic.js';
 import { type AppContext, nowIso, notify } from './app-context.js';
 import { refreshSessionSearchIndex, touchSessionSearchTitle } from './session-search-index.js';
+import { syncAgentGoalFile } from './agent-goal.js';
 
 export async function createAgentForWorktree(
   ctx: AppContext,
@@ -28,6 +29,7 @@ export async function createAgentForWorktree(
     effort?: EffortLevel;
     permissionMode?: PermissionMode;
     task?: AgentTask;
+    goal?: string;
   },
 ): Promise<Agent> {
   const existing = ctx.repos.agents.getByWorktreeId(worktreeId);
@@ -50,12 +52,16 @@ export async function createAgentForWorktree(
     pid: null,
     runLogPath: null,
     activeSessionId: null,
+    goal: options?.goal?.trim() ?? '',
     createdAt: timestamp,
     updatedAt: timestamp,
     archivedAt: null,
   };
 
   ctx.repos.agents.create(agent);
+  if (agent.goal.trim()) {
+    await syncAgentGoalFile(ctx, agent);
+  }
   const session = createSessionForAgent(ctx, agent, {
     template: sessionTemplateIdForTaskName(task?.name),
     permissionMode: agent.permissionMode,

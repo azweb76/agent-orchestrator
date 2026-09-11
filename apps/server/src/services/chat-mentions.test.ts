@@ -102,3 +102,21 @@ test('resolveChatMentions includes pending diff via git helper', async () => {
 
   await fs.rm(tmp, { recursive: true, force: true });
 });
+
+test('resolveChatMentions attaches the goal path without file contents', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-mentions-goal-'));
+  const git = new GitService();
+  const goalPath = path.join(root, 'GOAL.md');
+  await fs.writeFile(goalPath, 'SECRET GOAL TEXT\n');
+
+  const result = await resolveChatMentions(git, root, [{ kind: 'goal' }], { goalPath });
+  assert.match(result.context, /### @goal/);
+  assert.match(result.context, /Read tool/);
+  assert.match(result.context, new RegExp(goalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.doesNotMatch(result.context, /SECRET GOAL TEXT/);
+
+  const missing = await resolveChatMentions(git, root, [{ kind: 'goal' }], {});
+  assert.ok(missing.notes.some((note) => note.note.includes('no goal file')));
+
+  await fs.rm(root, { recursive: true, force: true });
+});

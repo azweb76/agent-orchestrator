@@ -122,7 +122,10 @@ export function useCreateWorktreeMutations(
         ...img,
         previewUrl: `data:${img.mimeType};base64,${img.dataBase64}`,
       }));
-      const initialMentions = mentions;
+      const initialMentions = [
+        ...mentions.filter((item) => item.kind !== 'goal'),
+        { id: `goal:${data.agent.id}`, kind: 'goal' as const },
+      ];
       onCloseForm();
       navigate(`/agents/${data.agent.id}`, {
         state: { initialPrompt: data.kickoffPrompt, initialImages, initialMentions },

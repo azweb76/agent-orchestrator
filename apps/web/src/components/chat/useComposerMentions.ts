@@ -15,7 +15,9 @@ export function useComposerMentions(
   files: WorktreeFileEntry[] | undefined,
   draft: string,
   onDraftChange: (value: string) => void,
+  options?: { goalAvailable?: boolean },
 ) {
+  const goalAvailable = Boolean(options?.goalAvailable);
   const [mentions, setMentions] = useState<PendingMention[]>([]);
   const [mentionDismissed, setMentionDismissed] = useState(false);
   const [mentionHighlight, setMentionHighlight] = useState(0);
@@ -24,25 +26,32 @@ export function useComposerMentions(
   const mentionOptions = useMemo((): MentionMenuOption[] => {
     if (!mentionMatch) return [];
     const query = mentionMatch.query;
-    const options: MentionMenuOption[] = [];
+    const menu: MentionMenuOption[] = [];
     if ('diff'.startsWith(query.toLowerCase())) {
-      options.push({
+      menu.push({
         kind: 'diff',
         label: '@diff',
         description: 'Current worktree patch',
       });
     }
+    if (goalAvailable && 'goal'.startsWith(query.toLowerCase())) {
+      menu.push({
+        kind: 'goal',
+        label: '@goal',
+        description: 'Attach the goal file path for the Read tool',
+      });
+    }
     const filePaths = files?.map((item) => item.path) ?? [];
     for (const filePath of filterMentionFiles(filePaths, query)) {
-      options.push({
+      menu.push({
         kind: 'file',
         path: filePath,
         label: `@${filePath}`,
         description: 'Attach file contents on send',
       });
     }
-    return options.slice(0, 12);
-  }, [files, mentionMatch]);
+    return menu.slice(0, 12);
+  }, [files, goalAvailable, mentionMatch]);
 
   const showMentionMenu =
     !mentionDismissed &&
@@ -63,7 +72,11 @@ export function useComposerMentions(
   const applyMentionSelection = (option: MentionMenuOption) => {
     if (!mentionMatch) return;
     const candidate = createPendingMention(
-      option.kind === 'diff' ? { kind: 'diff' } : { kind: 'file', path: option.path },
+      option.kind === 'diff'
+        ? { kind: 'diff' }
+        : option.kind === 'goal'
+          ? { kind: 'goal' }
+          : { kind: 'file', path: option.path },
     );
     if (!hasPendingMention(mentions, candidate)) {
       setMentions((prev) => [...prev, candidate]);

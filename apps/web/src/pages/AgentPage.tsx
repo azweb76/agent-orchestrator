@@ -10,6 +10,7 @@ import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { UndoFilesDialog } from '../components/changes/UndoFilesDialog';
 import type { FilesViewMode } from '../components/changes/filesViewMode';
 import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
+import { AgentGoalPanel } from '../components/agent/AgentGoalPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import type { ChatTemplateKickoffRequest } from '../components/chat/useChatTemplateKickoff';
 import type { AgentPrKickoffTemplate } from '../components/agent/agentPrStatusSummary';
@@ -17,6 +18,7 @@ import { AgentPageHeader } from './AgentPageHeader';
 import { CommitChangesDialog } from './CommitChangesDialog';
 import { CreatePullRequestDialog } from './CreatePullRequestDialog';
 import type { AgentLocationState } from './agentPageTypes';
+import { AGENT_PAGE_TAB, agentHasGoal, defaultAgentPageTab } from './agentPageTypes';
 import { useAgentPageMutations } from './useAgentPageMutations';
 
 export function AgentPage() {
@@ -39,7 +41,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const [initialTemplate] = useState(() => locationState?.sessionTemplate);
   const [focusAttention] = useState(() => locationState?.focusAttention);
   const [focusSessionId] = useState(() => locationState?.sessionId);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState<number | null>(null);
   const [prKickoff, setPrKickoff] = useState<ChatTemplateKickoffRequest | null>(null);
   const prKickoffNonce = useRef(0);
   const [mode, setMode] = useState<FilesViewMode>('pending');
@@ -137,6 +139,8 @@ function AgentPageContent({ agentId }: { agentId: string }) {
 
   const agent = agentQuery.data;
   const archived = Boolean(agent.archivedAt);
+  const hasGoal = agentHasGoal(agent.goal);
+  const resolvedTab = tab ?? defaultAgentPageTab(hasGoal);
 
   return (
     <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
@@ -157,7 +161,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         onStartPrKickoff={(template: AgentPrKickoffTemplate) => {
           prKickoffNonce.current += 1;
           setPrKickoff({ template, nonce: prKickoffNonce.current });
-          setTab(0);
+          setTab(AGENT_PAGE_TAB.chat);
         }}
       />
 
@@ -184,7 +188,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         }}
       >
         <Tabs
-          value={tab}
+          value={resolvedTab}
           onChange={(_, value) => setTab(value)}
           variant="scrollable"
           scrollButtons="auto"
@@ -197,6 +201,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             flexShrink: 0,
           }}
         >
+          <Tab label="Goal" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Chat" sx={{ minHeight: 40, py: 1 }} />
           <Tab
             label={pendingFileCount > 0 ? `Files (${pendingFileCount})` : 'Files'}
@@ -209,14 +214,32 @@ function AgentPageContent({ agentId }: { agentId: string }) {
           sx={{
             flex: 1,
             minHeight: 0,
-            display: tab === 0 ? 'flex' : 'none',
+            display: resolvedTab === AGENT_PAGE_TAB.goal ? 'flex' : 'none',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          <AgentGoalPanel
+            agentId={agentId}
+            goal={agent.goal}
+            goalPath={agent.goalPath}
+            archived={archived}
+            enabled={resolvedTab === AGENT_PAGE_TAB.goal}
+          />
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: resolvedTab === AGENT_PAGE_TAB.chat ? 'flex' : 'none',
             flexDirection: 'column',
             overflow: 'hidden',
           }}
         >
           <ChatPanel
             agentId={agentId}
-            active={tab === 0}
+            active={resolvedTab === AGENT_PAGE_TAB.chat}
             archived={archived}
             initialPrompt={initialPrompt}
             initialImages={initialImages}
@@ -233,7 +256,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             flex: 1,
             minHeight: 0,
             overflow: 'hidden',
-            display: tab === 1 ? 'flex' : 'none',
+            display: resolvedTab === AGENT_PAGE_TAB.files ? 'flex' : 'none',
             flexDirection: 'column',
           }}
         >
@@ -242,7 +265,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             worktreePath={agent.worktree.path}
             mode={mode}
             onModeChange={setMode}
-            enabled={tab === 1}
+            enabled={resolvedTab === AGENT_PAGE_TAB.files}
             archived={archived}
             onCommit={() => openCommitDialog({ push: false, hasPendingChanges: true })}
             onCommitAndPush={() => openCommitDialog({ push: true, hasPendingChanges: true })}
@@ -259,7 +282,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             flex: 1,
             minHeight: 0,
             overflow: 'hidden',
-            display: tab === 2 ? 'flex' : 'none',
+            display: resolvedTab === AGENT_PAGE_TAB.memory ? 'flex' : 'none',
             flexDirection: 'column',
           }}
         >
@@ -267,7 +290,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             agentId={agentId}
             workspaceId={agent.workspace.id}
             archived={archived}
-            enabled={tab === 2}
+            enabled={resolvedTab === AGENT_PAGE_TAB.memory}
           />
         </Box>
       </Paper>

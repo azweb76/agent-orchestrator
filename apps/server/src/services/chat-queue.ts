@@ -11,6 +11,7 @@ import type {
 } from '@agent-orchestrator/shared';
 import type { AppContext } from './app.js';
 import { evaluateSpendCap, type SpendCapEvaluation } from './spend-cap.js';
+import { requireAgentGoal } from './agent-goal.js';
 import {
   findRunningMutatingPeer,
   findRunningMutatingSession,
@@ -111,6 +112,7 @@ export async function enqueueChatMessage(
 ): Promise<QueuedChatMessage> {
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot queue messages on an archived agent');
+  requireAgentGoal(agent);
   const session = requireSession(ctx, agentId, sessionId);
 
   const message = body.message.trim();

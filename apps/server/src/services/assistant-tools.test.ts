@@ -51,6 +51,7 @@ function makeCtx(tmp: string): AppContext {
     updatedAt: new Date().toISOString(),
     archivedAt: null,
     activeSessionId: null,
+    goal: '',
   });
   return {
     repos,

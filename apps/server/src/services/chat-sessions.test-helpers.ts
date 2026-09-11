@@ -106,11 +106,14 @@ rl.on('line', (line) => {
     pid: null,
     runLogPath: null,
     activeSessionId: null,
+    goal: 'Ship the feature',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     archivedAt: null,
   };
-  repos.agents.create(agent);
+    repos.agents.create(agent);
+  await fs.mkdir(path.join(tmp, 'agents', agent.id), { recursive: true });
+  await fs.writeFile(path.join(tmp, 'agents', agent.id, 'GOAL.md'), `${agent.goal}\n`);
 
   const session = repos.sessions.create({
     id: 'plan-sess',

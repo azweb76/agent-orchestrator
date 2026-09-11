@@ -16,6 +16,7 @@ export const mentionBody = z
   .array(
     z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('diff') }),
+      z.object({ kind: z.literal('goal') }),
       z.object({ kind: z.literal('file'), path: z.string().min(1) }),
     ]),
   )

@@ -11,3 +11,18 @@ export type AgentLocationState = {
   focusAttention?: AgentAttentionFocus;
   sessionId?: string;
 };
+
+export const AGENT_PAGE_TAB = {
+  goal: 0,
+  chat: 1,
+  files: 2,
+  memory: 3,
+} as const;
+
+export function defaultAgentPageTab(hasGoal: boolean): number {
+  return hasGoal ? AGENT_PAGE_TAB.chat : AGENT_PAGE_TAB.goal;
+}
+
+export function agentHasGoal(goal: string | undefined | null): boolean {
+  return Boolean(goal?.trim());
+}

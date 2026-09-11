@@ -78,6 +78,7 @@ type AgentCreateOptions = {
   effort?: EffortLevel;
   permissionMode?: PermissionMode;
   agentName?: string;
+  goal?: string;
 };
 
 export async function createWorktreeFromBranch(
@@ -129,6 +130,7 @@ export async function createWorktreeFromBranch(
       model: agentOptions?.model,
       effort: agentOptions?.effort,
       permissionMode: agentOptions?.permissionMode,
+      goal: agentOptions?.goal,
     },
   );
   notify(ctx, 'workspaces_changed');
@@ -297,6 +299,7 @@ export async function createWorktreeFromGoal(
       model: body.model,
       effort: body.effort,
       agentName: `${name} agent`,
+      goal,
     },
   );
 
@@ -386,6 +389,7 @@ export async function createWorktreeFromIssue(
     model: body.model,
     effort: body.effort,
     permissionMode: body.permissionMode,
+    goal: issueMarkdown,
   });
 
   return { worktree, agent, branchName, issueNumber, prompt };

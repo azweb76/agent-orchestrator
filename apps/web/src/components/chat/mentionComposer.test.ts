@@ -64,13 +64,16 @@ describe('hasPendingMention', () => {
     expect(hasPendingMention(mentions, { kind: 'file', path: 'a.ts' })).toBe(true);
     expect(hasPendingMention(mentions, { kind: 'diff' })).toBe(true);
     expect(hasPendingMention(mentions, { kind: 'file', path: 'b.ts' })).toBe(false);
+    expect(hasPendingMention([pending('goal')], { kind: 'goal' })).toBe(true);
   });
 });
 
 describe('appendMentionTokens', () => {
   it('appends formatted tokens after the trimmed text', () => {
-    const mentions = [pending('file', 'src/app.ts'), pending('diff')];
-    expect(appendMentionTokens('review this ', mentions)).toBe('review this @src/app.ts @diff');
+    const mentions = [pending('file', 'src/app.ts'), pending('diff'), pending('goal')];
+    expect(appendMentionTokens('review this ', mentions)).toBe(
+      'review this @src/app.ts @diff @goal',
+    );
   });
 
   it('returns only tokens when the text is empty', () => {
