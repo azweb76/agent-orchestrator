@@ -12,4 +12,10 @@ describe('defaultAgentPageTab', () => {
     expect(agentHasGoal('Ship dark mode')).toBe(true);
     expect(defaultAgentPageTab(true)).toBe(AGENT_PAGE_TAB.chat);
   });
+
+  it('places Pull Request after Files and before Memory', () => {
+    expect(AGENT_PAGE_TAB.files).toBe(2);
+    expect(AGENT_PAGE_TAB.pr).toBe(3);
+    expect(AGENT_PAGE_TAB.memory).toBe(4);
+  });
 });

@@ -1,13 +1,14 @@
-import { Alert, Box, Button, Chip, Link, Stack, Typography } from '@mui/material';
+import { Alert, Box, Chip, Link, Stack, Typography } from '@mui/material';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RemoveCircleOutlinedIcon from '@mui/icons-material/RemoveCircleOutlined';
 import type { PullRequestCheck, PullRequestChecks } from '@agent-orchestrator/shared';
-import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowMeta, ListRowTitle } from '../ui/ListPanel';
+import { PrFixButton } from './PrFixButton';
+import type { PrFixCopySource } from './prFixCopy';
 import { TabState } from './TabState';
 
 const FAILING = new Set(['failure', 'timed_out', 'action_required', 'startup_failure']);
@@ -32,6 +33,7 @@ export interface PullRequestChecksTabProps {
   error: unknown;
   onFixCi?: () => void;
   fixing?: boolean;
+  fixCopy?: PrFixCopySource;
 }
 
 export function PullRequestChecksTab({
@@ -40,6 +42,7 @@ export function PullRequestChecksTab({
   error,
   onFixCi,
   fixing,
+  fixCopy = 'assistant',
 }: PullRequestChecksTabProps) {
   return (
     <TabState
@@ -59,11 +62,12 @@ export function PullRequestChecksTab({
           <Alert
             severity="error"
             action={
-              <ControlTooltip title="Ask Assistant to start a Claude agent to fix failing CI checks" disabled={fixing}>
-                <Button color="inherit" size="small" disabled={fixing} onClick={onFixCi}>
-                  {fixing ? 'Asking…' : 'Fix CI'}
-                </Button>
-              </ControlTooltip>
+              <PrFixButton
+                template="fix-ci"
+                source={fixCopy}
+                pending={fixing}
+                onClick={onFixCi}
+              />
             }
           >
             {checks.failing === 1 ? '1 check is failing.' : `${checks.failing} checks are failing.`}

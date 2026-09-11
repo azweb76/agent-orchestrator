@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Alert, AlertTitle, Box, Chip, CircularProgress, Stack, Typography } from '@mui/material';
 import type {
   MergeReadiness,
@@ -17,15 +18,17 @@ export interface MergeReadinessPanelProps {
   pr: PullRequestDetail;
   readiness: MergeReadiness;
   checks?: PullRequestChecks;
+  action?: ReactNode;
 }
 
-export function MergeReadinessPanel({ pr, readiness, checks }: MergeReadinessPanelProps) {
+export function MergeReadinessPanel({ pr, readiness, checks, action }: MergeReadinessPanelProps) {
   const rollup = checks ? ROLLUP_LABELS[checks.rollup] : null;
 
   return (
     <Alert
       severity={readiness.severity}
       icon={readiness.computing ? <CircularProgress size={18} /> : undefined}
+      action={action}
       sx={{ '& .MuiAlert-message': { width: '100%', minWidth: 0 } }}
     >
       <AlertTitle sx={{ mb: 0.5 }}>{readiness.reason}</AlertTitle>

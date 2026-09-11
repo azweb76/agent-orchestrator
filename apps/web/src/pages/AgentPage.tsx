@@ -9,8 +9,9 @@ import { ArchiveAgentDialog } from '../components/ArchiveAgentDialog';
 import { AgentChangesPanel } from '../components/changes/AgentChangesPanel';
 import { UndoFilesDialog } from '../components/changes/UndoFilesDialog';
 import type { FilesViewMode } from '../components/changes/filesViewMode';
-import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
 import { AgentGoalPanel } from '../components/agent/AgentGoalPanel';
+import { AgentMemoryPanel } from '../components/agent/AgentMemoryPanel';
+import { AgentPrPanel } from '../components/agent/AgentPrPanel';
 import { ChatPanel } from '../components/chat/ChatPanel';
 import type { ChatTemplateKickoffRequest } from '../components/chat/useChatTemplateKickoff';
 import type { AgentPrKickoffTemplate } from '../components/agent/agentPrStatusSummary';
@@ -142,6 +143,12 @@ function AgentPageContent({ agentId }: { agentId: string }) {
   const hasGoal = agentHasGoal(agent.goal);
   const resolvedTab = tab ?? defaultAgentPageTab(hasGoal);
 
+  const startPrKickoff = (template: AgentPrKickoffTemplate) => {
+    prKickoffNonce.current += 1;
+    setPrKickoff({ template, nonce: prKickoffNonce.current });
+    setTab(AGENT_PAGE_TAB.chat);
+  };
+
   return (
     <Stack spacing={1} sx={{ height: '100%', minHeight: 0 }}>
       <AgentPageHeader
@@ -158,11 +165,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         onStop={() => stopMutation.mutate()}
         onCommit={openCommitDialog}
         onCreateDraftPr={openCreateDraftPr}
-        onStartPrKickoff={(template: AgentPrKickoffTemplate) => {
-          prKickoffNonce.current += 1;
-          setPrKickoff({ template, nonce: prKickoffNonce.current });
-          setTab(AGENT_PAGE_TAB.chat);
-        }}
+        onStartPrKickoff={startPrKickoff}
       />
 
       {stopMutation.error && (
@@ -207,6 +210,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             label={pendingFileCount > 0 ? `Files (${pendingFileCount})` : 'Files'}
             sx={{ minHeight: 40, py: 1 }}
           />
+          <Tab label="Pull Request" sx={{ minHeight: 40, py: 1 }} />
           <Tab label="Memory" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
@@ -274,6 +278,24 @@ function AgentPageContent({ agentId }: { agentId: string }) {
               setUndoPaths(paths);
               setUndoOpen(true);
             }}
+          />
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: resolvedTab === AGENT_PAGE_TAB.pr ? 'flex' : 'none',
+            flexDirection: 'column',
+          }}
+        >
+          <AgentPrPanel
+            agent={agent}
+            archived={archived}
+            enabled={resolvedTab === AGENT_PAGE_TAB.pr}
+            onCreateDraftPr={openCreateDraftPr}
+            onStartKickoff={startPrKickoff}
           />
         </Box>
 

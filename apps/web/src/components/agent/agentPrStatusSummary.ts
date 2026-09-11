@@ -1,11 +1,11 @@
 import type {
   ChatSession,
-  ChatSessionTemplateId,
   PullRequestChecks,
   PullRequestChecksRollup,
   PullRequestDetail,
 } from '@agent-orchestrator/shared';
 import { evaluateMergeReadiness, isPullRequestConflicted } from '@agent-orchestrator/shared';
+import type { PrKickoffTemplate } from '../pr/prFixCopy';
 import {
   PULL_REQUEST_STATUS_LABELS,
   resolvePullRequestStatus,
@@ -34,10 +34,7 @@ export interface AgentPrStatusSummary {
   kickoffs: AgentPrKickoffTemplate[];
 }
 
-export type AgentPrKickoffTemplate = Extract<
-  ChatSessionTemplateId,
-  'fix-ci' | 'address-review' | 'resolve-conflicts'
->;
+export type AgentPrKickoffTemplate = PrKickoffTemplate;
 
 function templateBusy(
   sessions: readonly Pick<ChatSession, 'template' | 'status'>[] | undefined,
