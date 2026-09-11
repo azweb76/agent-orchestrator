@@ -34,7 +34,7 @@ export function MentionMenu({ options, highlight, onHighlight, onSelect }: Menti
     >
       {options.map((option, index) => (
         <Box
-          key={`${option.kind}:${option.path ?? 'diff'}`}
+          key={`${option.kind}:${option.path ?? option.kind}`}
           role="option"
           aria-selected={index === highlight}
           onMouseEnter={() => onHighlight(index)}
