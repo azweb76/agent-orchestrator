@@ -26,6 +26,10 @@ export function pendingMentionToChatMention(mention: PendingMention): ChatMentio
   return { kind: 'file', path: mention.path };
 }
 
+export function pendingMentionLabel(mention: PendingMention): string {
+  return formatChatMentionToken(pendingMentionToChatMention(mention));
+}
+
 export function mentionKey(mention: Pick<PendingMention, 'kind' | 'path'>): string {
   if (mention.kind === 'diff') return 'diff';
   if (mention.kind === 'goal') return 'goal';
