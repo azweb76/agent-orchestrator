@@ -8,8 +8,8 @@ export class AgentRepository {
   create(agent: Agent): Agent {
     this.db
       .prepare(
-        `INSERT INTO agents (id, worktree_id, name, status, model, effort, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at, active_session_id)
-         VALUES (@id, @worktreeId, @name, @status, @model, @effort, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt, @activeSessionId)`,
+        `INSERT INTO agents (id, worktree_id, name, status, model, effort, permission_mode, claude_session_id, pid, run_log_path, created_at, updated_at, archived_at, active_session_id, goal)
+         VALUES (@id, @worktreeId, @name, @status, @model, @effort, @permissionMode, @claudeSessionId, @pid, @runLogPath, @createdAt, @updatedAt, @archivedAt, @activeSessionId, @goal)`,
       )
       .run({
         id: agent.id,
@@ -26,6 +26,7 @@ export class AgentRepository {
         updatedAt: agent.updatedAt,
         archivedAt: agent.archivedAt,
         activeSessionId: agent.activeSessionId,
+        goal: agent.goal ?? '',
       });
     return agent;
   }
@@ -102,7 +103,7 @@ export class AgentRepository {
         `UPDATE agents SET name = @name, status = @status, model = @model, effort = @effort,
          permission_mode = @permissionMode, claude_session_id = @claudeSessionId, pid = @pid,
          run_log_path = @runLogPath, updated_at = @updatedAt, archived_at = @archivedAt,
-         active_session_id = @activeSessionId
+         active_session_id = @activeSessionId, goal = @goal
          WHERE id = @id`,
       )
       .run({
@@ -118,6 +119,7 @@ export class AgentRepository {
         updatedAt: agent.updatedAt,
         archivedAt: agent.archivedAt,
         activeSessionId: agent.activeSessionId,
+        goal: agent.goal ?? '',
       });
     return agent;
   }

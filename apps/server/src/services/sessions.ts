@@ -22,6 +22,7 @@ import { cleanupQueuedAttachments, clearSessionQueue, drainWaitingMutatingSessio
 import { cleanupMessageAttachments } from './chat-run-lifecycle.js';
 import { removeSessionSearchIndex, touchSessionSearchTitle } from './session-search-index.js';
 import { ensureBuiltInAgentTasks, requireAgentTaskByName } from './agent-tasks.js';
+import { requireAgentGoal } from './agent-goal.js';
 export {
   gradeAgentSession,
   listAgentInstructionFiles,
@@ -37,6 +38,7 @@ export async function createAgentSession(
 ): Promise<{ session: ChatSession; kickoffPrompt: string | null }> {
   const agent = requireAgent(ctx, agentId);
   if (agent.archivedAt) throw new Error('Cannot create a session on an archived agent');
+  requireAgentGoal(agent);
 
   ensureBuiltInAgentTasks(ctx);
   const taskName = body.task?.trim();

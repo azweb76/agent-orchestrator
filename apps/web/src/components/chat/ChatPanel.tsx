@@ -62,11 +62,15 @@ export const ChatPanel = memo(function ChatPanel({
       instructionDraftOffer: data.instructionDraftOffer ?? null,
       worktree: data.worktree,
       prStatus: data.prStatus ?? null,
+      goal: data.goal ?? '',
+      goalPath: data.goalPath ?? null,
     }),
   });
 
   const sessions = agentDetailQuery.data?.sessions ?? [];
   const agentDefaults = agentDetailQuery.data;
+  const goalBlocked = agentDetailQuery.isSuccess && !agentDefaults?.goal.trim();
+  const chatLocked = archived || goalBlocked;
   const [sessionId, setSessionId] = useState<string | null>(null);
   const resolvedSessionId =
     sessionId ?? agentDefaults?.activeSessionId ?? agentDefaults?.sessions[0]?.id ?? '';
@@ -133,7 +137,7 @@ export const ChatPanel = memo(function ChatPanel({
     agentId,
     activeSessionId,
     active,
-    archived,
+    archived: chatLocked,
     session,
     sessions,
     sessionIdRef,
@@ -156,7 +160,7 @@ export const ChatPanel = memo(function ChatPanel({
   const sessionActions = useChatSessionActions({
     agentId,
     activeSessionId,
-    archived,
+    archived: chatLocked,
     sessionBusy,
     sessionIdRef,
     setSessionId,
@@ -194,7 +198,7 @@ export const ChatPanel = memo(function ChatPanel({
   });
 
   useChatTemplateKickoff({
-    archived,
+    archived: chatLocked,
     initialTemplate,
     requested: templateKickoff,
     createFromTemplateId: sessionActions.createFromTemplateId,
@@ -205,7 +209,7 @@ export const ChatPanel = memo(function ChatPanel({
 
   const planFollowUps = useChatPlanFollowUps({
     active,
-    archived,
+    archived: chatLocked,
     permissionRequests: permissions.permissionRequests,
     buildPlan: streaming.buildPlan,
     setPermissionBusy: permissions.setPermissionBusy,
@@ -215,7 +219,7 @@ export const ChatPanel = memo(function ChatPanel({
   });
 
   const { renderPermissionRequest } = useChatPanelRenderers({
-    archived,
+    archived: chatLocked,
     focusPermissions,
     permissionBusy: permissions.permissionBusy,
     permissionRequests: permissions.permissionRequests,
@@ -237,7 +241,9 @@ export const ChatPanel = memo(function ChatPanel({
   return (
     <ChatPanelView
       agentId={agentId}
-      archived={archived}
+      archived={chatLocked}
+      goalBlocked={goalBlocked && !archived}
+      goalPath={agentDefaults?.goalPath ?? null}
       sessions={sessions}
       session={session}
       activeSessionId={activeSessionId}

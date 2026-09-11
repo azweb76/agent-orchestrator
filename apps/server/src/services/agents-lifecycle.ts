@@ -30,6 +30,10 @@ import { getDraftPrOfferSessionId } from './draft-pr-offer.js';
 import { getTaskSuggestionsOffer } from './task-suggestions.js';
 import { getInstructionDraftOffer } from './instruction-offers.js';
 import { getCachedPrStatus, cachePrStatusFromDetail } from './github-automation.js';
+import {
+  goalPathForAgent,
+  syncAgentGoalFile,
+} from './agent-goal.js';
 
 export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<AgentDetail> {
   const agent = ctx.repos.agents.getById(agentId);
@@ -55,6 +59,7 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
   return {
     ...agent,
     activeSessionId,
+    goalPath: goalPathForAgent(ctx, agent),
     worktree: liveWorktree,
     workspace,
     sessions: ctx.repos.sessions.listByAgent(agentId),
@@ -160,6 +165,26 @@ export async function unarchiveAgent(ctx: AppContext, agentId: string): Promise<
   ctx.repos.events.create(makeEvent(agentId, 'agent_unarchived', {}));
   notify(ctx, 'agent_changed', { agentId, data: { status: updated.status } });
   return updated;
+}
+
+export async function updateAgentGoal(
+  ctx: AppContext,
+  agentId: string,
+  goal: string,
+): Promise<AgentDetail> {
+  const agent = requireAgent(ctx, agentId);
+  if (agent.archivedAt) throw new Error('Cannot update an archived agent');
+  const trimmed = goal.trim();
+  if (!trimmed) throw new Error('Goal is required');
+  const updated: Agent = {
+    ...agent,
+    goal: trimmed,
+    updatedAt: nowIso(),
+  };
+  ctx.repos.agents.update(updated);
+  await syncAgentGoalFile(ctx, updated);
+  notify(ctx, 'agent_changed', { agentId, data: { goal: trimmed } });
+  return getAgentDetail(ctx, agentId);
 }
 
 export async function deleteAgent(

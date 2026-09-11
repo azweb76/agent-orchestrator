@@ -131,6 +131,7 @@ export async function createWorktreeFromJiraIssue(
     model: body.model,
     effort: body.effort,
     permissionMode: body.permissionMode,
+    goal: issueMarkdown,
   });
 
   rememberJiraWorkspace(ctx, issue.projectKey, workspaceId);

@@ -71,6 +71,8 @@ export interface AgentDetail extends Agent {
   worktree: Worktree;
   workspace: Workspace;
   sessions: ChatSession[];
+  /** Absolute GOAL.md path when `goal` is non-empty; Claude should Read this file. */
+  goalPath: string | null;
   /** Set when a completed Build session has a diff and no open PR. */
   draftPrOffer?: DraftPrOffer | null;
   /** Set after any completed session, offering AI-selected follow-ups for the same chat. */

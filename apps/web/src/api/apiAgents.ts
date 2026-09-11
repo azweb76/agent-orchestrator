@@ -45,6 +45,11 @@ import { request } from './request';
 
 export const apiAgents = {
   getAgent: (agentId: string) => request<AgentDetail>(`/agents/${agentId}`),
+  updateAgent: (agentId: string, body: { goal: string }) =>
+    request<AgentDetail>(`/agents/${agentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   stopAgent: (agentId: string) =>
     request<Agent>(`/agents/${agentId}/stop`, { method: 'POST' }),
   archiveAgent: (agentId: string, body: ArchiveAgentRequest = {}) =>

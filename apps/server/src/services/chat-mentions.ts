@@ -80,6 +80,7 @@ export async function resolveChatMentions(
   git: GitService,
   worktreePath: string,
   mentions: ChatMention[] | undefined,
+  options: { goalPath?: string | null } = {},
 ): Promise<MentionResolutionResult> {
   if (!mentions?.length) return { context: '', notes: [] };
 
@@ -88,6 +89,29 @@ export async function resolveChatMentions(
   let totalBytes = 0;
 
   for (const mention of mentions) {
+    if (mention.kind === 'goal') {
+      const token = '@goal';
+      const goalPath = options.goalPath?.trim();
+      if (!goalPath) {
+        notes.push({ token, note: 'no goal file for this agent' });
+        continue;
+      }
+      try {
+        const stat = await fs.stat(goalPath);
+        if (!stat.isFile()) {
+          notes.push({ token, note: 'goal path is not a file' });
+          continue;
+        }
+      } catch {
+        notes.push({ token, note: 'goal file not found' });
+        continue;
+      }
+      sections.push(
+        `### ${token}\nAgent goal file (read this path with the Read tool; do not assume contents from this message):\n- ${goalPath}`,
+      );
+      continue;
+    }
+
     if (mention.kind === 'diff') {
       const token = '@diff';
       const remaining = CHAT_MENTION_MAX_TOTAL_BYTES - totalBytes;

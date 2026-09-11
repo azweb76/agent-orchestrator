@@ -14,18 +14,22 @@ export interface MentionQueryMatch {
 
 export function createPendingMention(mention: ChatMention): PendingMention {
   return {
-    id: `${mention.kind}:${mention.path ?? 'diff'}-${Date.now()}-${Math.random()}`,
+    id: `${mention.kind}:${mention.path ?? mention.kind}-${Date.now()}-${Math.random()}`,
     kind: mention.kind,
     path: mention.path,
   };
 }
 
 export function pendingMentionToChatMention(mention: PendingMention): ChatMention {
-  return mention.kind === 'diff' ? { kind: 'diff' } : { kind: 'file', path: mention.path };
+  if (mention.kind === 'diff') return { kind: 'diff' };
+  if (mention.kind === 'goal') return { kind: 'goal' };
+  return { kind: 'file', path: mention.path };
 }
 
 export function mentionKey(mention: Pick<PendingMention, 'kind' | 'path'>): string {
-  return mention.kind === 'diff' ? 'diff' : (mention.path ?? '');
+  if (mention.kind === 'diff') return 'diff';
+  if (mention.kind === 'goal') return 'goal';
+  return mention.path ?? '';
 }
 
 export function hasPendingMention(

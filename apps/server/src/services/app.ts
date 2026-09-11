@@ -53,6 +53,7 @@ export {
   stopAgent,
   archiveAgent,
   unarchiveAgent,
+  updateAgentGoal,
   deleteAgent,
   pruneArchivedAgents,
   getAgentAttachment,

@@ -112,6 +112,7 @@ function migrateSchema(db: Database.Database): void {
   ensureColumn(db, 'agents', 'permission_mode', "TEXT NOT NULL DEFAULT 'plan'");
   ensureColumn(db, 'agents', 'effort', "TEXT NOT NULL DEFAULT 'high'");
   ensureColumn(db, 'agents', 'archived_at', 'TEXT');
+  ensureColumn(db, 'agents', 'goal', "TEXT NOT NULL DEFAULT ''");
   ensureColumn(db, 'messages', 'attachments', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, 'messages', 'metadata', "TEXT NOT NULL DEFAULT '{}'");
   ensureColumn(db, 'queued_messages', 'mentions', "TEXT NOT NULL DEFAULT '[]'");

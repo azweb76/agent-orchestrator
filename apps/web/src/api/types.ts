@@ -1,4 +1,4 @@
-import type { ChatSession, Message, PermissionRequest } from '@agent-orchestrator/shared';
+import type { ChatMention, ChatSession, Message, PermissionRequest } from '@agent-orchestrator/shared';
 
 export interface SystemStatus {
   claudeInstalled: boolean;
@@ -41,5 +41,5 @@ export interface StreamChatOptions {
   message: string;
   force?: boolean;
   images?: Array<{ name: string; mimeType: string; dataBase64: string }>;
-  mentions?: Array<{ kind: 'file' | 'diff'; path?: string }>;
+  mentions?: ChatMention[];
 }

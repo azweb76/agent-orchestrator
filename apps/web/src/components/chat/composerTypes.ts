@@ -20,6 +20,7 @@ export interface ChatComposerProps {
   agentId: string;
   sessionId: string;
   archived: boolean;
+  goalAvailable?: boolean;
   isStreaming: boolean;
   model: string;
   effort: EffortLevel;

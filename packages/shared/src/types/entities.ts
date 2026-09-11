@@ -54,6 +54,8 @@ export interface Agent {
   runLogPath: string | null;
   /** Currently selected chat session. Runtime (pid / Claude session) lives on that session. */
   activeSessionId: string | null;
+  /** Free-form goal; empty until the Goal tab is saved. */
+  goal: string;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;

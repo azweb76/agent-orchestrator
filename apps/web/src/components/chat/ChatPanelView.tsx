@@ -31,6 +31,8 @@ type Streaming = ReturnType<typeof useChatStreaming>;
 export function ChatPanelView({
   agentId,
   archived,
+  goalBlocked = false,
+  goalPath = null,
   sessions,
   session,
   activeSessionId,
@@ -59,6 +61,8 @@ export function ChatPanelView({
 }: {
   agentId: string;
   archived: boolean;
+  goalBlocked?: boolean;
+  goalPath?: string | null;
   sessions: ChatSession[];
   session?: ChatSession;
   activeSessionId: string;
@@ -192,6 +196,8 @@ export function ChatPanelView({
                   : undefined
               }
               archived={archived}
+              goalBlocked={goalBlocked}
+              goalPath={goalPath}
               activeSessionId={activeSessionId}
               session={session}
               agentDefaults={agentDefaults}

@@ -21,6 +21,7 @@ export function ChatComposer({
   agentId,
   sessionId,
   archived,
+  goalAvailable = false,
   isStreaming,
   model,
   effort,
@@ -61,7 +62,7 @@ export function ChatComposer({
     removeMention,
     applyMentionSelection,
     buildOutgoingMessage,
-  } = useComposerMentions(filesQuery.data, draft, onDraftChange);
+  } = useComposerMentions(filesQuery.data, draft, onDraftChange, { goalAvailable });
 
   const slashQuery = useQuery({
     queryKey: ['slash-commands', agentId],

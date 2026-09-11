@@ -94,6 +94,11 @@ export interface ArchiveAgentResponse {
   deletedWorktree: boolean;
 }
 
+export interface UpdateAgentRequest {
+  /** Non-empty trimmed goal text persisted to the agent and GOAL.md. */
+  goal: string;
+}
+
 export interface DeleteAgentRequest {
   /** When true, also remove the agent's git worktree from disk. */
   deleteWorktree?: boolean;

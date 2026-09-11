@@ -50,6 +50,7 @@ function seedAgent(dataDir: string) {
     pid: null,
     runLogPath: null,
     activeSessionId: null,
+    goal: '',
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
