@@ -16,6 +16,7 @@ export interface AgentPrStatusStripProps {
   archived?: boolean;
   kickoffPending?: boolean;
   onStartKickoff?: (template: AgentPrKickoffTemplate) => void;
+  onOpenPrTab?: () => void;
 }
 
 const KICKOFF_UI: Record<
@@ -48,6 +49,7 @@ export function AgentPrStatusStrip({
   archived = false,
   kickoffPending = false,
   onStartKickoff,
+  onOpenPrTab,
 }: AgentPrStatusStripProps) {
   const { enabled, prNumber, prQuery, checksQuery, pr, checks } = useAgentLinkedPr(agent);
 
@@ -86,15 +88,22 @@ export function AgentPrStatusStrip({
       useFlexGap
       sx={{ alignItems: 'center', flexWrap: 'wrap', minWidth: 0, px: 0.25 }}
     >
-      <PullRequestStatusChip status={model.prStatus} />
+      <PullRequestStatusChip status={model.prStatus} onClick={onOpenPrTab} />
       {model.conflicted ? (
-        <Chip size="small" color="error" variant="outlined" label="Conflicts" />
+        <Chip
+          size="small"
+          color="error"
+          variant="outlined"
+          label="Conflicts"
+          onClick={onOpenPrTab}
+        />
       ) : model.mergeLabel && model.mergeLabel !== 'Draft' ? (
         <Chip
           size="small"
           variant="outlined"
           color={model.mergeTone === 'default' ? undefined : model.mergeTone}
           label={model.mergeLabel}
+          onClick={onOpenPrTab}
         />
       ) : null}
       {model.checksLabel ? (
@@ -105,12 +114,13 @@ export function AgentPrStatusStrip({
             model.checksTone === 'default' || model.conflicted ? undefined : model.checksTone
           }
           label={model.checksLabel}
+          onClick={onOpenPrTab}
         />
       ) : checksQuery.isLoading ? (
-        <Chip size="small" variant="outlined" label="Checks…" />
+        <Chip size="small" variant="outlined" label="Checks…" onClick={onOpenPrTab} />
       ) : null}
       {model.reviewLabel ? (
-        <Chip size="small" variant="outlined" label={model.reviewLabel} />
+        <Chip size="small" variant="outlined" label={model.reviewLabel} onClick={onOpenPrTab} />
       ) : null}
       {onStartKickoff
         ? model.kickoffs.map((template) => {

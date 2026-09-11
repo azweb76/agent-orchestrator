@@ -21,6 +21,8 @@ import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowTitle } from '../ui/ListPanel';
 import { formatRelativeTime } from '../../utils/format';
+import { PrFixButton } from './PrFixButton';
+import type { PrFixCopySource } from './prFixCopy';
 import { TabState } from './TabState';
 
 const STATE_COLORS: Record<string, 'success' | 'error' | 'info' | 'default'> = {
@@ -43,6 +45,9 @@ export interface PullRequestReviewsTabProps {
   submitting?: boolean;
   submitError?: string | null;
   onSubmitReview?: (event: PullRequestReviewEvent, body: string) => void;
+  onFixReview?: () => void;
+  fixing?: boolean;
+  fixCopy?: PrFixCopySource;
 }
 
 export function PullRequestReviewsTab({
@@ -53,12 +58,30 @@ export function PullRequestReviewsTab({
   submitting,
   submitError,
   onSubmitReview,
+  onFixReview,
+  fixing,
+  fixCopy = 'assistant',
 }: PullRequestReviewsTabProps) {
   const [event, setEvent] = useState<PullRequestReviewEvent>('COMMENT');
   const [body, setBody] = useState('');
 
   return (
     <Stack spacing={2}>
+      {onFixReview ? (
+        <Alert
+          severity="warning"
+          action={
+            <PrFixButton
+              template="address-review"
+              source={fixCopy}
+              pending={fixing}
+              onClick={onFixReview}
+            />
+          }
+        >
+          Review comments need a response.
+        </Alert>
+      ) : null}
     <TabState
       loading={loading}
       error={error}

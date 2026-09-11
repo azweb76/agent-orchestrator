@@ -16,7 +16,8 @@ export const AGENT_PAGE_TAB = {
   goal: 0,
   chat: 1,
   files: 2,
-  memory: 3,
+  pr: 3,
+  memory: 4,
 } as const;
 
 export function defaultAgentPageTab(hasGoal: boolean): number {
@@ -25,4 +26,9 @@ export function defaultAgentPageTab(hasGoal: boolean): number {
 
 export function agentHasGoal(goal: string | undefined | null): boolean {
   return Boolean(goal?.trim());
+}
+
+export function agentPagePrTabLabel(prNumber: number | null | undefined): string {
+  if (prNumber != null && prNumber > 0) return `Pull Request (#${prNumber})`;
+  return 'Pull Request';
 }
