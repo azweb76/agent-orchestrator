@@ -326,10 +326,11 @@ export function buildImplementPlanPrompt(
   plan: string,
   handoff?: PlanBuildHandoffContext,
   promptTemplate?: string | null,
+  planFilePath?: string,
 ): string {
   const seed = builtinAgentTaskSeedByName('build');
   const sections: string[] = [
-    renderAgentTaskPromptTemplate(promptTemplate ?? seed?.promptTemplate, { plan }),
+    renderAgentTaskPromptTemplate(promptTemplate ?? seed?.promptTemplate, { plan, planFilePath }),
   ];
 
   const qaPairs = handoff?.qaPairs;

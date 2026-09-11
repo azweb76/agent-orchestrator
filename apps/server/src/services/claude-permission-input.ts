@@ -2,25 +2,25 @@ import {
   extractPlanFilePath,
   extractPlanFilePathsFromLog,
 } from '@agent-orchestrator/shared';
-import {
-  readdirSync,
-  readFileSync,
-  statSync,
-} from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { readFileSync } from 'node:fs';
 
 /** Load ExitPlanMode plan text from disk when the CLI omits inline plan. */
 export function enrichPermissionInput(
   toolName: string,
   input: Record<string, unknown>,
-  options: { logPath?: string; plansDir?: string } = {},
+  options: { logPath?: string } = {},
 ): Record<string, unknown> {
   if (toolName !== 'ExitPlanMode') return input;
   if (typeof input.plan === 'string' && input.plan.trim()) {
     return input;
   }
 
+  // `~/.claude/plans/` is a single directory shared by every agent on the
+  // machine, and plan filenames carry no agent/session identifier (they're a
+  // content-derived slug). There is no way to verify a file found there
+  // belongs to this requesting agent, so it is intentionally never scanned
+  // for candidates here — the only trustworthy candidates are ones explicitly
+  // tied to this agent's own tool input or its own run log.
   const candidates: string[] = [];
   const inlinePath = extractPlanFilePath(input);
   if (inlinePath) candidates.push(inlinePath);
@@ -31,10 +31,6 @@ export function enrichPermissionInput(
     } catch {
       // log may not exist yet
     }
-  }
-
-  for (const filePath of listRecentClaudePlanFiles(options.plansDir)) {
-    if (!candidates.includes(filePath)) candidates.push(filePath);
   }
 
   for (const filePath of candidates) {
@@ -49,26 +45,4 @@ export function enrichPermissionInput(
   }
 
   return input;
-}
-
-export function claudePlansDirectory(): string {
-  return path.join(os.homedir(), '.claude', 'plans');
-}
-
-function listRecentClaudePlanFiles(plansDir?: string): string[] {
-  const dir = plansDir ?? claudePlansDirectory();
-  try {
-    const cutoff = Date.now() - 6 * 60 * 60 * 1000;
-    return readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.md') && !entry.name.includes('-agent-'))
-      .map((entry) => {
-        const filePath = path.join(dir, entry.name);
-        return { filePath, mtime: statSync(filePath).mtimeMs };
-      })
-      .filter((entry) => entry.mtime >= cutoff)
-      .sort((a, b) => b.mtime - a.mtime)
-      .map((entry) => entry.filePath);
-  } catch {
-    return [];
-  }
 }

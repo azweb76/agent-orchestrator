@@ -185,8 +185,8 @@ async function resolvePlanText(
   agentId: string,
   session: ChatSession,
   body: BuildPlanRequest,
-): Promise<string> {
-  if (body.plan?.trim()) return body.plan.trim();
+): Promise<{ plan: string; planFilePath: string | null }> {
+  if (body.plan?.trim()) return { plan: body.plan.trim(), planFilePath: null };
 
   if (body.requestId) {
     const pending = ctx.claude
@@ -196,15 +196,16 @@ async function resolvePlanText(
       const enriched = enrichPermissionInput('ExitPlanMode', pending.input, {
         logPath: ctx.claude.getRunningProcess(session.id)?.logPath ?? session.runLogPath ?? undefined,
       });
-      const fromInput = extractPlanFromInput(enriched);
-      if (fromInput) return fromInput;
-
       const planFilePath =
         typeof enriched.planFilePath === 'string' ? enriched.planFilePath : null;
+
+      const fromInput = extractPlanFromInput(enriched);
+      if (fromInput) return { plan: fromInput, planFilePath };
+
       if (planFilePath) {
         try {
           const text = await fs.readFile(planFilePath, 'utf8');
-          if (text.trim()) return text.trim();
+          if (text.trim()) return { plan: text.trim(), planFilePath };
         } catch {
           // fall through
         }
@@ -216,7 +217,7 @@ async function resolvePlanText(
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message?.role === 'assistant' && message.content.trim()) {
-      return message.content.trim();
+      return { plan: message.content.trim(), planFilePath: null };
     }
   }
 
@@ -238,7 +239,7 @@ export async function buildApprovedPlan(
   if (detail.archivedAt) throw new Error('Cannot build with archived agent');
 
   const planSession = resolvePermissionSession(ctx, agentId, sessionId, body.requestId);
-  const plan = await resolvePlanText(ctx, agentId, planSession, body);
+  const { plan, planFilePath } = await resolvePlanText(ctx, agentId, planSession, body);
   const handoff = await gatherPlanBuildHandoffContext(ctx, agentId, planSession, plan);
 
   if (body.requestId) {
@@ -271,7 +272,10 @@ export async function buildApprovedPlan(
   await streamAgentChat(
     ctx,
     agentId,
-    { message: buildImplementPlanPrompt(plan, handoff, buildTask.promptTemplate), force: true },
+    {
+      message: buildImplementPlanPrompt(plan, handoff, buildTask.promptTemplate, planFilePath ?? undefined),
+      force: true,
+    },
     res,
     buildSession.id,
     { createdSession: buildSession },

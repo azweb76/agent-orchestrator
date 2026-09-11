@@ -87,6 +87,7 @@ export interface UpdateAgentTaskRequest {
 export interface AgentTaskPromptVars {
   goal?: string;
   plan?: string;
+  planFilePath?: string;
   summary?: string;
   files?: string;
   lessons?: string;
@@ -102,6 +103,7 @@ export function renderAgentTaskPromptTemplate(
   return trimmed
     .replaceAll('{{goal}}', goal)
     .replaceAll('{{plan}}', vars.plan?.trim() ?? '')
+    .replaceAll('{{planFilePath}}', vars.planFilePath?.trim() ?? '')
     .replaceAll('{{summary}}', vars.summary?.trim() ?? '')
     .replaceAll('{{files}}', vars.files ?? '')
     .replaceAll('{{lessons}}', vars.lessons ?? '');

@@ -58,6 +58,20 @@ test('renderAgentTaskPromptTemplate substitutes plan, summary, files, and lesson
   assert.equal(renderAgentTaskPromptTemplate('Lead {{plan}}', { goal: 'ignored' }), 'Lead ');
 });
 
+test('renderAgentTaskPromptTemplate substitutes planFilePath', () => {
+  assert.equal(
+    renderAgentTaskPromptTemplate('{{plan}} at {{planFilePath}}', {
+      plan: 'Do the thing',
+      planFilePath: '/tmp/plan.md',
+    }),
+    'Do the thing at /tmp/plan.md',
+  );
+  assert.equal(
+    renderAgentTaskPromptTemplate('{{plan}} at {{planFilePath}}', { plan: 'Do the thing' }),
+    'Do the thing at ',
+  );
+});
+
 test('sanitizeAgentTaskAllowedTools strips interactive tools', () => {
   assert.equal(sanitizeAgentTaskAllowedTools(null), null);
   assert.equal(sanitizeAgentTaskAllowedTools(''), null);

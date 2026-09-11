@@ -34,6 +34,16 @@ test('buildImplementPlanPrompt omits empty Q&A and file sections', () => {
   assert.equal(prompt.includes('## Files mentioned'), false);
 });
 
+test('buildImplementPlanPrompt substitutes planFilePath in a custom promptTemplate', () => {
+  const prompt = buildImplementPlanPrompt(
+    'the plan text',
+    undefined,
+    'Do this:\n{{plan}}\nPath: {{planFilePath}}',
+    '/tmp/plan.md',
+  );
+  assert.match(prompt, /Path: \/tmp\/plan\.md/);
+});
+
 test('extractAskUserQuestionPairsFromLog pairs control_request with control_response', () => {
   const log = [
     JSON.stringify({

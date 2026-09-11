@@ -53,14 +53,24 @@ test('enrichPermissionInput loads ExitPlanMode plan text from disk when input is
     })}\n`,
   );
 
-  const enriched = enrichPermissionInput('ExitPlanMode', {}, { logPath, plansDir });
+  const enriched = enrichPermissionInput('ExitPlanMode', {}, { logPath });
   assert.equal(enriched.plan, '# Do the thing\n\n1. Ship it.');
   assert.equal(enriched.planFilePath, planFile);
 
-  const fromRecent = enrichPermissionInput('ExitPlanMode', {}, { plansDir });
-  assert.equal(fromRecent.plan, '# Do the thing\n\n1. Ship it.');
-
   await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test("enrichPermissionInput never leaks another agent's plan from the shared plans dir", () => {
+  // ~/.claude/plans/ is global to the machine and plan filenames carry no
+  // agent/session identifier. Agent A has no plan file of its own (no inline
+  // plan, no file_path candidate, no log reference), even though a plan
+  // written by a different agent may exist somewhere in that shared
+  // directory. Agent A must not be handed that content just because it is
+  // the only recent file — enrichPermissionInput never scans the shared
+  // plans dir for candidates at all.
+  const enrichedForAgentA = enrichPermissionInput('ExitPlanMode', {});
+  assert.equal(enrichedForAgentA.plan, undefined);
+  assert.equal(enrichedForAgentA.planFilePath, undefined);
 });
 
 test('stopping a hung ExitPlanMode run does not untrack a replacement process', async () => {

@@ -29,6 +29,6 @@ export { readClaudeLogSnapshot, followClaudeLog } from './claude-log.js';
 
 export { ClaudeService } from './claude-service.js';
 
-export { enrichPermissionInput, claudePlansDirectory } from './claude-permission-input.js';
+export { enrichPermissionInput } from './claude-permission-input.js';
 
 export { parseGitHubUrl, slugify } from './repo-slug.js';
