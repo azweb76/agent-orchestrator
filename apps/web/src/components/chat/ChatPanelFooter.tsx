@@ -198,6 +198,7 @@ export function ChatPanelFooter({
           agentId={agentId}
           sessionId={activeSessionId}
           archived={archived}
+          goalLocked={goalBlocked}
           goalAvailable={Boolean(goalPath) && !goalBlocked}
           isStreaming={sessionBusy}
           model={session?.model ?? agentDefaults?.model ?? 'sonnet'}

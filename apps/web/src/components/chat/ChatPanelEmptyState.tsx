@@ -50,6 +50,7 @@ export function ChatPanelEmptyState({
               label={command}
               variant="outlined"
               clickable
+              disabled={archived}
               onClick={() => onSlashCommand(command)}
               sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
             />

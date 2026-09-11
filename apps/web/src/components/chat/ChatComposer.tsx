@@ -7,6 +7,7 @@ import { ComposerInput } from './ComposerInput';
 import { ComposerPendingAttachments } from './ComposerPendingAttachments';
 import { ComposerToolbar } from './ComposerToolbar';
 import type { ChatComposerProps } from './composerTypes';
+import { composerInputPlaceholder } from './composerPlaceholder';
 import { MentionMenu } from './MentionMenu';
 import { SlashCommandMenu } from '../claude-chat/composer/SlashCommandMenu';
 import { useComposerImages } from './useComposerImages';
@@ -21,6 +22,7 @@ export function ChatComposer({
   agentId,
   sessionId,
   archived,
+  goalLocked = false,
   goalAvailable = false,
   isStreaming,
   model,
@@ -197,6 +199,7 @@ export function ChatComposer({
       >
         <ComposerInput
           archived={archived}
+          placeholder={composerInputPlaceholder({ archived, goalLocked })}
           draft={draft}
           onDraftChange={onDraftChange}
           onPaste={(files) => void addFiles(files)}
