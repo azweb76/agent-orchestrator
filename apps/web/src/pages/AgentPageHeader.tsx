@@ -35,6 +35,7 @@ interface AgentPageHeaderProps {
   onCommit: (opts: { push: boolean; hasPendingChanges: boolean }) => void;
   onCreateDraftPr: () => void;
   onStartPrKickoff?: (template: AgentPrKickoffTemplate) => void;
+  onOpenPrTab?: () => void;
 }
 
 /** Runtime status is redundant with delivery phase when idle — only surface active states. */
@@ -59,6 +60,7 @@ export function AgentPageHeader({
   onCommit,
   onCreateDraftPr,
   onStartPrKickoff,
+  onOpenPrTab,
 }: AgentPageHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const busy = archivePending || unarchivePending || stopPending;
@@ -139,7 +141,12 @@ export function AgentPageHeader({
       </Stack>
 
       {hasPr ? (
-        <AgentPrStatusStrip agent={agent} archived={archived} onStartKickoff={onStartPrKickoff} />
+        <AgentPrStatusStrip
+          agent={agent}
+          archived={archived}
+          onStartKickoff={onStartPrKickoff}
+          onOpenPrTab={onOpenPrTab}
+        />
       ) : null}
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>

@@ -27,6 +27,7 @@ export interface PullRequestStatusChipProps {
   size?: ChipProps['size'];
   variant?: ChipProps['variant'];
   sx?: ChipProps['sx'];
+  onClick?: ChipProps['onClick'];
 }
 
 /** Outlined chip with a GitHub-style PR icon (not a colored status dot). */
@@ -36,6 +37,7 @@ export function PullRequestStatusChip({
   size = 'small',
   variant = 'outlined',
   sx,
+  onClick,
 }: PullRequestStatusChipProps) {
   const status = statusProp ?? (pr ? resolvePullRequestStatus(pr) : 'open');
   return (
@@ -46,6 +48,7 @@ export function PullRequestStatusChip({
       icon={<PullRequestStatusIcon status={status} sx={{ ml: 0.5 }} />}
       label={PULL_REQUEST_STATUS_LABELS[status]}
       sx={sx}
+      onClick={onClick}
     />
   );
 }

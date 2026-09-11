@@ -16,10 +16,16 @@ import { ChatPanel } from '../components/chat/ChatPanel';
 import type { ChatTemplateKickoffRequest } from '../components/chat/useChatTemplateKickoff';
 import type { AgentPrKickoffTemplate } from '../components/agent/agentPrStatusSummary';
 import { AgentPageHeader } from './AgentPageHeader';
+import { AgentPageTabPanel } from './AgentPageTabPanel';
 import { CommitChangesDialog } from './CommitChangesDialog';
 import { CreatePullRequestDialog } from './CreatePullRequestDialog';
 import type { AgentLocationState } from './agentPageTypes';
-import { AGENT_PAGE_TAB, agentHasGoal, defaultAgentPageTab } from './agentPageTypes';
+import {
+  AGENT_PAGE_TAB,
+  agentHasGoal,
+  agentPagePrTabLabel,
+  defaultAgentPageTab,
+} from './agentPageTypes';
 import { useAgentPageMutations } from './useAgentPageMutations';
 
 export function AgentPage() {
@@ -166,6 +172,7 @@ function AgentPageContent({ agentId }: { agentId: string }) {
         onCommit={openCommitDialog}
         onCreateDraftPr={openCreateDraftPr}
         onStartPrKickoff={startPrKickoff}
+        onOpenPrTab={() => setTab(AGENT_PAGE_TAB.pr)}
       />
 
       {stopMutation.error && (
@@ -210,19 +217,14 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             label={pendingFileCount > 0 ? `Files (${pendingFileCount})` : 'Files'}
             sx={{ minHeight: 40, py: 1 }}
           />
-          <Tab label="Pull Request" sx={{ minHeight: 40, py: 1 }} />
+          <Tab
+            label={agentPagePrTabLabel(agent.worktree.prNumber)}
+            sx={{ minHeight: 40, py: 1 }}
+          />
           <Tab label="Memory" sx={{ minHeight: 40, py: 1 }} />
         </Tabs>
 
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            display: resolvedTab === AGENT_PAGE_TAB.goal ? 'flex' : 'none',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
-        >
+        <AgentPageTabPanel active={resolvedTab === AGENT_PAGE_TAB.goal}>
           <AgentGoalPanel
             agentId={agentId}
             goal={agent.goal}
@@ -230,17 +232,9 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             archived={archived}
             enabled={resolvedTab === AGENT_PAGE_TAB.goal}
           />
-        </Box>
+        </AgentPageTabPanel>
 
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            display: resolvedTab === AGENT_PAGE_TAB.chat ? 'flex' : 'none',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
-        >
+        <AgentPageTabPanel active={resolvedTab === AGENT_PAGE_TAB.chat}>
           <ChatPanel
             agentId={agentId}
             active={resolvedTab === AGENT_PAGE_TAB.chat}
@@ -253,17 +247,9 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             focusSessionId={focusSessionId}
             templateKickoff={prKickoff}
           />
-        </Box>
+        </AgentPageTabPanel>
 
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            overflow: 'hidden',
-            display: resolvedTab === AGENT_PAGE_TAB.files ? 'flex' : 'none',
-            flexDirection: 'column',
-          }}
-        >
+        <AgentPageTabPanel active={resolvedTab === AGENT_PAGE_TAB.files}>
           <AgentChangesPanel
             agentId={agentId}
             worktreePath={agent.worktree.path}
@@ -279,17 +265,9 @@ function AgentPageContent({ agentId }: { agentId: string }) {
               setUndoOpen(true);
             }}
           />
-        </Box>
+        </AgentPageTabPanel>
 
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            overflow: 'hidden',
-            display: resolvedTab === AGENT_PAGE_TAB.pr ? 'flex' : 'none',
-            flexDirection: 'column',
-          }}
-        >
+        <AgentPageTabPanel active={resolvedTab === AGENT_PAGE_TAB.pr}>
           <AgentPrPanel
             agent={agent}
             archived={archived}
@@ -297,24 +275,16 @@ function AgentPageContent({ agentId }: { agentId: string }) {
             onCreateDraftPr={openCreateDraftPr}
             onStartKickoff={startPrKickoff}
           />
-        </Box>
+        </AgentPageTabPanel>
 
-        <Box
-          sx={{
-            flex: 1,
-            minHeight: 0,
-            overflow: 'hidden',
-            display: resolvedTab === AGENT_PAGE_TAB.memory ? 'flex' : 'none',
-            flexDirection: 'column',
-          }}
-        >
+        <AgentPageTabPanel active={resolvedTab === AGENT_PAGE_TAB.memory}>
           <AgentMemoryPanel
             agentId={agentId}
             workspaceId={agent.workspace.id}
             archived={archived}
             enabled={resolvedTab === AGENT_PAGE_TAB.memory}
           />
-        </Box>
+        </AgentPageTabPanel>
       </Paper>
 
       <CreatePullRequestDialog

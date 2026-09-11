@@ -27,3 +27,8 @@ export function defaultAgentPageTab(hasGoal: boolean): number {
 export function agentHasGoal(goal: string | undefined | null): boolean {
   return Boolean(goal?.trim());
 }
+
+export function agentPagePrTabLabel(prNumber: number | null | undefined): string {
+  if (prNumber != null && prNumber > 0) return `Pull Request (#${prNumber})`;
+  return 'Pull Request';
+}
