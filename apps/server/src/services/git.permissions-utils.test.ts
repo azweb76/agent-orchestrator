@@ -60,6 +60,99 @@ test('enrichPermissionInput loads ExitPlanMode plan text from disk when input is
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
+test('enrichPermissionInput derives planFilePath even when input.plan is already inline', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'exit-plan-inline-'));
+  const plansDir = path.join(tmp, '.claude', 'plans');
+  await fs.mkdir(plansDir, { recursive: true });
+  const planFile = path.join(plansDir, 'bold-eagle.md');
+  await fs.writeFile(planFile, '# Do the thing\n\n1. Ship it.\n');
+
+  const logPath = path.join(tmp, 'run.log');
+  await fs.writeFile(
+    logPath,
+    `${JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', name: 'Write', input: { file_path: planFile } }],
+      },
+    })}\n`,
+  );
+
+  const enriched = enrichPermissionInput(
+    'ExitPlanMode',
+    { plan: '# Do the thing\n\n1. Ship it.' },
+    { logPath },
+  );
+  assert.equal(enriched.plan, '# Do the thing\n\n1. Ship it.');
+  assert.equal(enriched.planFilePath, planFile);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('enrichPermissionInput only attaches planFilePath from a candidate matching the inline plan text', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'exit-plan-revision-'));
+  const plansDir = path.join(tmp, '.claude', 'plans');
+  await fs.mkdir(plansDir, { recursive: true });
+  const planV1 = path.join(plansDir, 'plan-v1.md');
+  const planV2 = path.join(plansDir, 'plan-v2.md');
+  await fs.writeFile(planV1, '# Old plan\n\n1. Do old thing.\n');
+  await fs.writeFile(planV2, '# New plan\n\n1. Do new thing.\n');
+
+  const logPath = path.join(tmp, 'run.log');
+  await fs.writeFile(
+    logPath,
+    [planV1, planV2]
+      .map((filePath) =>
+        JSON.stringify({
+          type: 'assistant',
+          message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: filePath } }] },
+        }),
+      )
+      .join('\n') + '\n',
+  );
+
+  // The log lists the older plan-v1 first, but the inline plan text matches
+  // the newer plan-v2 — enrichPermissionInput must not pair it with plan-v1.
+  const enriched = enrichPermissionInput(
+    'ExitPlanMode',
+    { plan: '# New plan\n\n1. Do new thing.' },
+    { logPath },
+  );
+  assert.equal(enriched.plan, '# New plan\n\n1. Do new thing.');
+  assert.equal(enriched.planFilePath, planV2);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
+test('enrichPermissionInput leaves planFilePath unset when no candidate matches the inline plan text', async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'exit-plan-no-match-'));
+  const plansDir = path.join(tmp, '.claude', 'plans');
+  await fs.mkdir(plansDir, { recursive: true });
+  const planV1 = path.join(plansDir, 'plan-v1.md');
+  await fs.writeFile(planV1, '# Old plan\n\n1. Do old thing.\n');
+
+  const logPath = path.join(tmp, 'run.log');
+  await fs.writeFile(
+    logPath,
+    `${JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', name: 'Write', input: { file_path: planV1 } }],
+      },
+    })}\n`,
+  );
+
+  const enriched = enrichPermissionInput(
+    'ExitPlanMode',
+    { plan: '# Revised plan\n\n1. Do revised thing.' },
+    { logPath },
+  );
+  assert.equal(enriched.plan, '# Revised plan\n\n1. Do revised thing.');
+  assert.equal(enriched.planFilePath, undefined);
+
+  await fs.rm(tmp, { recursive: true, force: true });
+});
+
 test("enrichPermissionInput never leaks another agent's plan from the shared plans dir", () => {
   // ~/.claude/plans/ is global to the machine and plan filenames carry no
   // agent/session identifier. Agent A has no plan file of its own (no inline
