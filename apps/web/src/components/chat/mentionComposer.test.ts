@@ -4,6 +4,7 @@ import {
   filterMentionFiles,
   getMentionQueryAtEnd,
   hasPendingMention,
+  pendingMentionLabel,
   removeMentionQuery,
   type PendingMention,
 } from './mentionComposer';
@@ -65,6 +66,14 @@ describe('hasPendingMention', () => {
     expect(hasPendingMention(mentions, { kind: 'diff' })).toBe(true);
     expect(hasPendingMention(mentions, { kind: 'file', path: 'b.ts' })).toBe(false);
     expect(hasPendingMention([pending('goal')], { kind: 'goal' })).toBe(true);
+  });
+});
+
+describe('pendingMentionLabel', () => {
+  it('labels pathless kinds without interpolating undefined', () => {
+    expect(pendingMentionLabel(pending('goal'))).toBe('@goal');
+    expect(pendingMentionLabel(pending('diff'))).toBe('@diff');
+    expect(pendingMentionLabel(pending('file', 'src/app.ts'))).toBe('@src/app.ts');
   });
 });
 

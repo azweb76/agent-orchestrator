@@ -2,7 +2,7 @@ import { Box, Chip, IconButton, Stack } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import type { PendingImage } from './ChatComposer';
-import type { PendingMention } from './mentionComposer';
+import { pendingMentionLabel, type PendingMention } from './mentionComposer';
 
 interface ComposerPendingAttachmentsProps {
   mentions: PendingMention[];
@@ -26,7 +26,7 @@ export function ComposerPendingAttachments({
           {mentions.map((mention) => (
             <Chip
               key={mention.id}
-              label={mention.kind === 'diff' ? '@diff' : `@${mention.path}`}
+              label={pendingMentionLabel(mention)}
               onDelete={() => onRemoveMention(mention.id)}
               size="small"
               sx={{ fontFamily: '"IBM Plex Mono", monospace' }}
