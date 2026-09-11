@@ -14,6 +14,7 @@ import {
   type GithubPrChangeEvent,
 } from './github-automation.js';
 import { handleAutomationEvents } from './github-automation-actions.js';
+import { stopAgent } from './agents-lifecycle.js';
 import type { PollTarget } from './github-poll-targets.js';
 import { seedAgent } from './chat-sessions.test-helpers.js';
 import type { GitHubService } from './github.js';
@@ -194,8 +195,8 @@ test('pollTargetState clears checksRollup to none once a PR merges', async () =>
 
 test('auto Fix CI enqueues a session and respects retry cap per commit SHA', async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ao-auto-fixci-'));
+  const { ctx } = await seedAgent(tmp);
   try {
-    const { ctx } = await seedAgent(tmp);
     const notifier = new Notifier();
     ctx.notifier = notifier;
     const appEvents = captureEvents(notifier);
@@ -254,6 +255,7 @@ test('auto Fix CI enqueues a session and respects retry cap per commit SHA', asy
         .some((m) => m.role === 'assistant' && /Retry cap hit/i.test(m.content)),
     );
   } finally {
+    await stopAgent(ctx, 'ag-1').catch(() => undefined);
     await fs.rm(tmp, { recursive: true, force: true });
   }
 });

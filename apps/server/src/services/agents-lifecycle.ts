@@ -31,7 +31,6 @@ import { getTaskSuggestionsOffer } from './task-suggestions.js';
 import { getInstructionDraftOffer } from './instruction-offers.js';
 import { getCachedPrStatus, cachePrStatusFromDetail } from './github-automation.js';
 import {
-  ensureAgentGoalFile,
   goalPathForAgent,
   syncAgentGoalFile,
 } from './agent-goal.js';
@@ -57,7 +56,6 @@ export async function getAgentDetail(ctx: AppContext, agentId: string): Promise<
     }
     ctx.repos.agents.update({ ...agent, activeSessionId, updatedAt: nowIso() });
   }
-  await ensureAgentGoalFile(ctx, agent);
   return {
     ...agent,
     activeSessionId,

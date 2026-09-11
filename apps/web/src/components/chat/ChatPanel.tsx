@@ -69,8 +69,7 @@ export const ChatPanel = memo(function ChatPanel({
 
   const sessions = agentDetailQuery.data?.sessions ?? [];
   const agentDefaults = agentDetailQuery.data;
-  const goalBlocked =
-    agentDetailQuery.isSuccess && !Boolean(agentDefaults?.goal.trim());
+  const goalBlocked = agentDetailQuery.isSuccess && !agentDefaults?.goal.trim();
   const chatLocked = archived || goalBlocked;
   const [sessionId, setSessionId] = useState<string | null>(null);
   const resolvedSessionId =

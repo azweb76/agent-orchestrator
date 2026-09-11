@@ -111,9 +111,7 @@ rl.on('line', (line) => {
     updatedAt: '2026-01-01T00:00:00.000Z',
     archivedAt: null,
   };
-    repos.agents.create(agent);
-  await fs.mkdir(path.join(tmp, 'agents', agent.id), { recursive: true });
-  await fs.writeFile(path.join(tmp, 'agents', agent.id, 'GOAL.md'), `${agent.goal}\n`);
+  repos.agents.create(agent);
 
   const session = repos.sessions.create({
     id: 'plan-sess',

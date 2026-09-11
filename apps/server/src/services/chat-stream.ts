@@ -17,7 +17,7 @@ import {
   type StreamPart,
 } from '@agent-orchestrator/shared';
 import { resolveChatMentions } from './chat-mentions.js';
-import { requireAgentGoal } from './agent-goal.js';
+import { requireAgentGoal, ensureAgentGoalFile } from './agent-goal.js';
 import { resolveSlashCommandContext } from './slash-command-context.js';
 import { type AppContext, makeEvent, nowIso, notify } from './app-context.js';
 import {
@@ -163,8 +163,9 @@ export async function streamAgentChat(
   let mentionContext = slash.mentionContext?.trim() ?? '';
   try {
     attachments = options.attachments ?? (await saveChatImages(ctx, agentId, body.images));
+    const goalPath = (await ensureAgentGoalFile(ctx, detail)) ?? detail.goalPath;
     const mentionResult = await resolveChatMentions(ctx.git, detail.worktree.path, requestMentions, {
-      goalPath: detail.goalPath,
+      goalPath,
     });
     if (mentionResult.context.trim()) {
       mentionContext = mentionContext
