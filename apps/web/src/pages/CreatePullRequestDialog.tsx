@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import type { UseMutationResult } from '@tanstack/react-query';
 import { ControlTooltip } from '../components/ui/ControlTooltip';
+import { MarkdownEditor } from '../components/ui/MarkdownEditor';
 import { ResponsiveDialog } from '../components/ui/ResponsiveDialog';
 
 interface CreatePullRequestDialogProps {
@@ -59,13 +60,12 @@ export function CreatePullRequestDialog({
             />
           </ControlTooltip>
           <ControlTooltip title="Optional description for the pull request body">
-            <TextField
+            <MarkdownEditor
               label="Description"
               value={body}
-              onChange={(e) => onBodyChange(e.target.value)}
-              fullWidth
-              multiline
+              onChange={onBodyChange}
               minRows={4}
+              helperText="Optional description for the pull request body. Markdown supported."
             />
           </ControlTooltip>
           <ControlTooltip title="Create a draft pull request on GitHub">
