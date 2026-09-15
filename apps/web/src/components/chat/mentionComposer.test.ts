@@ -5,7 +5,8 @@ import {
   getMentionQueryAtEnd,
   hasPendingMention,
   pendingMentionLabel,
-  removeMentionQuery,
+  removeMentionToken,
+  replaceMentionQuery,
   type PendingMention,
 } from './mentionComposer';
 
@@ -26,18 +27,26 @@ describe('getMentionQueryAtEnd', () => {
   });
 });
 
-describe('removeMentionQuery', () => {
-  it('strips the active token and surrounding whitespace', () => {
-    const draft = 'check @src/app';
+describe('replaceMentionQuery', () => {
+  it('keeps the reference in the draft as the full token', () => {
+    const draft = 'check @src/ap';
     const match = getMentionQueryAtEnd(draft);
     if (!match) throw new Error('expected a mention match');
-    expect(removeMentionQuery(draft, match)).toBe('check');
+    expect(replaceMentionQuery(draft, match, '@src/app.ts')).toBe('check @src/app.ts ');
   });
 
   it('handles a draft that is only the token', () => {
-    const match = getMentionQueryAtEnd('@query');
+    const match = getMentionQueryAtEnd('@d');
     if (!match) throw new Error('expected a mention match');
-    expect(removeMentionQuery('@query', match)).toBe('');
+    expect(replaceMentionQuery('@d', match, '@diff')).toBe('@diff ');
+  });
+});
+
+describe('removeMentionToken', () => {
+  it('drops the token without touching similar paths', () => {
+    expect(removeMentionToken('check @src/app.ts now', '@src/app.ts')).toBe('check now');
+    expect(removeMentionToken('check @src/app.tsx', '@src/app.ts')).toBe('check @src/app.tsx');
+    expect(removeMentionToken('review @diff @goal', '@diff')).toBe('review @goal');
   });
 });
 
@@ -91,5 +100,12 @@ describe('appendMentionTokens', () => {
 
   it('returns trimmed text when there are no mentions', () => {
     expect(appendMentionTokens('  hello  ', [])).toBe('hello');
+  });
+
+  it('skips tokens the draft already carries inline', () => {
+    const mentions = [pending('file', 'src/app.ts'), pending('diff'), pending('goal')];
+    expect(appendMentionTokens('review @src/app.ts and @diff ', mentions)).toBe(
+      'review @src/app.ts and @diff @goal',
+    );
   });
 });

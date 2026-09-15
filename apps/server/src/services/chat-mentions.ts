@@ -86,6 +86,7 @@ export async function resolveChatMentions(
 
   const sections: string[] = [];
   const notes: MentionResolutionNote[] = [];
+  const tokenPaths: { token: string; absPath: string }[] = [];
   let totalBytes = 0;
 
   for (const mention of mentions) {
@@ -106,6 +107,7 @@ export async function resolveChatMentions(
         notes.push({ token, note: 'goal file not found' });
         continue;
       }
+      tokenPaths.push({ token, absPath: goalPath });
       sections.push(
         `### ${token}\nAgent goal file (read this path with the Read tool; do not assume contents from this message):\n- ${goalPath}`,
       );
@@ -179,6 +181,7 @@ export async function resolveChatMentions(
       notes.push({ token, note: 'file not found' });
       continue;
     }
+    tokenPaths.push({ token, absPath });
 
     const remaining = CHAT_MENTION_MAX_TOTAL_BYTES - totalBytes;
     if (remaining <= 0) {
@@ -193,6 +196,13 @@ export async function resolveChatMentions(
     if (clipped.truncated) {
       notes.push({ token, note: 'file truncated to mention size cap' });
     }
+  }
+
+  if (tokenPaths.length > 0) {
+    const pathLines = tokenPaths.map((item) => `- ${item.token}: ${item.absPath}`);
+    sections.unshift(
+      `### Mention paths\nAbsolute path for each @-mention token used in the message (use these with the Read tool):\n${pathLines.join('\n')}`,
+    );
   }
 
   if (notes.length > 0) {

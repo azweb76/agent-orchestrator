@@ -50,6 +50,11 @@ test('resolveChatMentions attaches file contents and notes missing files', async
 
   assert.match(result.context, /### @src\/app\.ts/);
   assert.match(result.context, /export const app = 1;/);
+  assert.match(result.context, /### Mention paths/);
+  assert.match(
+    result.context,
+    new RegExp(`- @src/app\\.ts: ${path.join(root, 'src', 'app.ts').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+  );
   assert.match(result.context, /### Mention notes/);
   assert.ok(result.notes.some((note) => note.note.includes('file not found')));
   assert.ok(result.notes.some((note) => note.note.includes('sensitive file')));
@@ -77,7 +82,8 @@ test('resolveChatMentions caps oversized files and total budget', async () => {
     await fs.writeFile(path.join(root, item.path), chunk);
   }
   const capped = await resolveChatMentions(git, root, many);
-  assert.ok(Buffer.byteLength(capped.context, 'utf8') <= CHAT_MENTION_MAX_TOTAL_BYTES + 2_000);
+  // Slack covers the mention paths + notes sections, which sit outside the content budget.
+  assert.ok(Buffer.byteLength(capped.context, 'utf8') <= CHAT_MENTION_MAX_TOTAL_BYTES + 4_000);
   assert.ok(capped.notes.some((note) => note.note.includes('mention budget')));
 
   await fs.rm(root, { recursive: true, force: true });
@@ -112,6 +118,7 @@ test('resolveChatMentions attaches the goal path without file contents', async (
   const result = await resolveChatMentions(git, root, [{ kind: 'goal' }], { goalPath });
   assert.match(result.context, /### @goal/);
   assert.match(result.context, /Read tool/);
+  assert.match(result.context, new RegExp(`- @goal: ${goalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
   assert.match(result.context, new RegExp(goalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(result.context, /SECRET GOAL TEXT/);
 

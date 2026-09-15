@@ -7,7 +7,9 @@ import {
   filterMentionFiles,
   getMentionQueryAtEnd,
   hasPendingMention,
-  removeMentionQuery,
+  pendingMentionLabel,
+  removeMentionToken,
+  replaceMentionQuery,
   type PendingMention,
 } from './mentionComposer';
 
@@ -66,7 +68,9 @@ export function useComposerMentions(
   const clearMentions = () => setMentions([]);
 
   const removeMention = (id: string) => {
+    const target = mentions.find((item) => item.id === id);
     setMentions((prev) => prev.filter((item) => item.id !== id));
+    if (target) onDraftChange(removeMentionToken(draft, pendingMentionLabel(target)));
   };
 
   const applyMentionSelection = (option: MentionMenuOption) => {
@@ -81,7 +85,7 @@ export function useComposerMentions(
     if (!hasPendingMention(mentions, candidate)) {
       setMentions((prev) => [...prev, candidate]);
     }
-    onDraftChange(removeMentionQuery(draft, mentionMatch));
+    onDraftChange(replaceMentionQuery(draft, mentionMatch, pendingMentionLabel(candidate)));
     setMentionDismissed(true);
   };
 

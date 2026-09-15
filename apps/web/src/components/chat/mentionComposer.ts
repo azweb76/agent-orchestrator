@@ -53,10 +53,28 @@ export function getMentionQueryAtEnd(draft: string): MentionQueryMatch | null {
   return { query: match[1] ?? '', start };
 }
 
-export function removeMentionQuery(draft: string, match: MentionQueryMatch): string {
-  const before = draft.slice(0, match.start).replace(/\s$/, '');
+/** Swap the active `@query` for the mention's full token, leaving it in the draft. */
+export function replaceMentionQuery(
+  draft: string,
+  match: MentionQueryMatch,
+  token: string,
+): string {
+  const before = draft.slice(0, match.start);
   const after = draft.slice(match.start + match.query.length + 1);
-  return `${before}${after}`.replace(/^\s+/, '');
+  return `${before}${token} ${after.replace(/^\s+/, '')}`;
+}
+
+export function hasMentionToken(draft: string, token: string): boolean {
+  return draft.split(/\s+/).includes(token);
+}
+
+/** Drop a mention token from the draft, used when its chip is removed. */
+export function removeMentionToken(draft: string, token: string): string {
+  return draft
+    .split(/(\s+)/)
+    .filter((part) => part !== token)
+    .join('')
+    .replace(/ {2,}/g, ' ');
 }
 
 export function filterMentionFiles(files: string[], query: string, limit = 12): string[] {
@@ -69,10 +87,13 @@ export function filterMentionFiles(files: string[], query: string, limit = 12): 
   return matches.slice(0, limit);
 }
 
+/** Append only the tokens the draft does not already carry inline. */
 export function appendMentionTokens(text: string, mentions: PendingMention[]): string {
-  if (mentions.length === 0) return text.trim();
-  const tokens = mentions.map((mention) => formatChatMentionToken(pendingMentionToChatMention(mention)));
   const trimmed = text.trim();
+  const tokens = mentions
+    .map((mention) => formatChatMentionToken(pendingMentionToChatMention(mention)))
+    .filter((token) => !hasMentionToken(trimmed, token));
+  if (tokens.length === 0) return trimmed;
   if (!trimmed) return tokens.join(' ');
   return `${trimmed} ${tokens.join(' ')}`;
 }
