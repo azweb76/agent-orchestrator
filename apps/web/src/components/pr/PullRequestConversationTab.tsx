@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { Alert, Avatar, Box, Button, Link, Stack, TextField, Typography } from '@mui/material';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Avatar, Box, Button, Link, Stack, Typography } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import type { PullRequestComment } from '@agent-orchestrator/shared';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { ControlTooltip } from '../ui/ControlTooltip';
 import { EmptyState } from '../ui/EmptyState';
 import { ListPanel, ListRow, ListRowTitle } from '../ui/ListPanel';
+import { MarkdownEditor } from '../ui/MarkdownEditor';
 import { formatRelativeTime } from '../../utils/format';
 import { TabState } from './TabState';
 
@@ -29,6 +30,16 @@ export function PullRequestConversationTab({
   onSubmitComment,
 }: PullRequestConversationTabProps) {
   const [body, setBody] = useState('');
+  const [composerKey, setComposerKey] = useState(0);
+  const wasSubmittingRef = useRef(submitting);
+
+  useEffect(() => {
+    if (wasSubmittingRef.current && !submitting && !submitError) {
+      setBody('');
+      setComposerKey((k) => k + 1);
+    }
+    wasSubmittingRef.current = submitting;
+  }, [submitting, submitError]);
 
   return (
     <Stack spacing={2}>
@@ -82,14 +93,14 @@ export function PullRequestConversationTab({
         <Stack spacing={1.25}>
           <Typography variant="subtitle2">Add a comment</Typography>
           <ControlTooltip title="Leave a conversation comment on this pull request">
-            <TextField
+            <MarkdownEditor
               label="Comment"
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              fullWidth
-              multiline
+              onChange={setBody}
               minRows={3}
-              placeholder="Leave a conversation comment on this pull request"
+              disabled={submitting}
+              helperText="Leave a conversation comment on this pull request. Review comments live on the Reviews tab."
+              key={composerKey}
             />
           </ControlTooltip>
           {submitError ? <Alert severity="error">{submitError}</Alert> : null}
@@ -98,10 +109,7 @@ export function PullRequestConversationTab({
               <Button
                 variant="contained"
                 disabled={submitting || !body.trim()}
-                onClick={() => {
-                  onSubmitComment(body.trim());
-                  setBody('');
-                }}
+                onClick={() => onSubmitComment(body.trim())}
               >
                 {submitting ? 'Posting…' : 'Comment'}
               </Button>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
-import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Stack, Typography } from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { EmptyState } from '../ui/EmptyState';
+import { MarkdownEditor } from '../ui/MarkdownEditor';
 
 interface AgentGoalPanelProps {
   agentId: string;
@@ -77,11 +78,10 @@ export function AgentGoalPanel({
         <Alert severity="error">{(saveMutation.error as Error).message}</Alert>
       ) : null}
 
-      <TextField
+      <MarkdownEditor
         label="Agent goal"
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        multiline
+        onChange={setDraft}
         minRows={6}
         disabled={archived || !enabled}
         placeholder="Ship dark mode on the settings page, including tests and a draft PR."

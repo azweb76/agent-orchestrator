@@ -7,6 +7,7 @@ import {
 } from '@mui/material';
 import { brainDraftCanSave, type BrainDraft, type BrainMarkdownDraft } from '@agent-orchestrator/shared';
 import { ControlTooltip } from '../../components/ui/ControlTooltip';
+import { MarkdownEditor } from '../../components/ui/MarkdownEditor';
 import { BrainFollowUpFields, BrainTaskFields } from './BrainCatalogFields';
 
 export function MarkdownFields({
@@ -53,18 +54,17 @@ export function MarkdownFields({
         multiline
         minRows={2}
       />
-      <TextField
+      <MarkdownEditor
         label={contentLabel}
         value={draft.content}
-        onChange={(event) => {
+        onChange={(next) => {
           onDirty('content');
-          onChange({ ...draft, content: event.target.value });
+          onChange({ ...draft, content: next });
         }}
         required
-        fullWidth
-        multiline
         minRows={10}
-        slotProps={{ htmlInput: { sx: { fontFamily: '"IBM Plex Mono", monospace' } } }}
+        monospace
+        helperText={draft.kind === 'agent' ? 'Markdown supported. Saved as the agent system prompt.' : 'Markdown supported. Saved as the skill body.'}
       />
     </>
   );
