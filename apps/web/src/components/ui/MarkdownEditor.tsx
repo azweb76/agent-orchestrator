@@ -1,12 +1,21 @@
 // Out of scope for this component: image paste/drop upload, @/# autocomplete, syntax
 // highlighting in Write mode, Tab-key list indent/outdent, the full GitHub shortcut set
-// beyond Bold/Italic/Link, a controlled `mode` prop, and preserving native undo granularity.
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+// beyond Bold/Italic/Link, and a controlled `mode` prop.
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Box, FormControl, FormHelperText, FormLabel, InputBase, Tab, Tabs } from '@mui/material';
+import {
+  Box,
+  FormControl,
+  FormHelperText,
+  FormLabel,
+  InputBase,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material';
 import { MarkdownContent } from '../chat/MarkdownContent';
 import { MarkdownEditorToolbar } from './MarkdownEditorToolbar';
 import { MARKDOWN_ACTION_TRANSFORMS, resolveToolbarGroups, type MarkdownToolbarActionId } from './markdownEditorActions';
+import { createHistory, isContinuousEdit, recordEdit, redo, undo, type MarkdownHistoryState } from './markdownHistory';
 import { continueListOnEnter, previewMinHeight, type MarkdownTransform } from './markdownTransforms';
 
 export interface MarkdownEditorProps {
@@ -50,7 +59,7 @@ export function MarkdownEditor({
   helperText,
   error,
   monospace,
-  initialMode = 'write',
+  initialMode = 'preview',
   hideToolbar,
   hidePreview,
   toolbarActions,
@@ -74,6 +83,45 @@ export function MarkdownEditor({
   valueRef.current = value;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const initialValueRef = useRef(value);
+  const historyRef = useRef<MarkdownHistoryState>(
+    createHistory({ value, selectionStart: value.length, selectionEnd: value.length }),
+  );
+  const lastEditTimeRef = useRef<number | null>(null);
+
+  const recordChange = useCallback(
+    (entry: { value: string; selectionStart: number; selectionEnd: number }, coalesce: boolean) => {
+      historyRef.current = recordEdit(historyRef.current, entry, coalesce);
+      onChangeRef.current(entry.value);
+    },
+    [],
+  );
+
+  const performUndo = useCallback(() => {
+    const next = undo(historyRef.current);
+    if (!next) return;
+    historyRef.current = next;
+    lastEditTimeRef.current = null;
+    pendingSelection.current = { start: next.present.selectionStart, end: next.present.selectionEnd };
+    onChangeRef.current(next.present.value);
+  }, []);
+
+  const performRedo = useCallback(() => {
+    const next = redo(historyRef.current);
+    if (!next) return;
+    historyRef.current = next;
+    lastEditTimeRef.current = null;
+    pendingSelection.current = { start: next.present.selectionStart, end: next.present.selectionEnd };
+    onChangeRef.current(next.present.value);
+  }, []);
+
+  const revertToInitial = useCallback(() => {
+    const initial = initialValueRef.current;
+    historyRef.current = createHistory({ value: initial, selectionStart: initial.length, selectionEnd: initial.length });
+    lastEditTimeRef.current = null;
+    pendingSelection.current = { start: initial.length, end: initial.length };
+    onChangeRef.current(initial);
+  }, []);
 
   const setRefs = useCallback(
     (el: HTMLTextAreaElement | null) => {
@@ -97,9 +145,10 @@ export function MarkdownEditor({
         : { value: currentValue, selectionStart: currentValue.length, selectionEnd: currentValue.length };
       const result = transform(current);
       pendingSelection.current = { start: result.selectionStart, end: result.selectionEnd };
-      onChangeRef.current(result.value);
+      lastEditTimeRef.current = null;
+      recordChange({ value: result.value, selectionStart: result.selectionStart, selectionEnd: result.selectionEnd }, false);
     },
-    [],
+    [recordChange],
   );
 
   useLayoutEffect(() => {
@@ -112,26 +161,58 @@ export function MarkdownEditor({
     }
   });
 
+  const previousModeRef = useRef(mode);
+  useEffect(() => {
+    if (mode === 'write' && previousModeRef.current !== 'write') {
+      inputRef.current?.focus();
+    }
+    previousModeRef.current = mode;
+  }, [mode]);
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       const isMod = event.metaKey || event.ctrlKey;
-      if (isMod && !event.shiftKey && !event.altKey) {
+
+      if (event.key === 'Escape' && !isMod && !event.shiftKey && !event.altKey) {
+        const hasChanges = valueRef.current !== initialValueRef.current;
+        if (hasChanges || !hidePreview) {
+          event.preventDefault();
+          if (hasChanges) revertToInitial();
+          if (!hidePreview) setMode('preview');
+          onKeyDown?.(event);
+          return;
+        }
+      }
+
+      if (isMod && !event.altKey) {
         const key = event.key.toLowerCase();
-        if (key === 'b') {
+        if (!event.shiftKey && key === 'b') {
           event.preventDefault();
           applyTransform(MARKDOWN_ACTION_TRANSFORMS.bold);
           onKeyDown?.(event);
           return;
         }
-        if (key === 'i') {
+        if (!event.shiftKey && key === 'i') {
           event.preventDefault();
           applyTransform(MARKDOWN_ACTION_TRANSFORMS.italic);
           onKeyDown?.(event);
           return;
         }
-        if (key === 'k') {
+        if (!event.shiftKey && key === 'k') {
           event.preventDefault();
           applyTransform(MARKDOWN_ACTION_TRANSFORMS.link);
+          onKeyDown?.(event);
+          return;
+        }
+        if (!event.shiftKey && key === 'z') {
+          event.preventDefault();
+          performUndo();
+          onKeyDown?.(event);
+          return;
+        }
+        if (event.shiftKey && key === 'z') {
+          event.preventDefault();
+          performRedo();
           onKeyDown?.(event);
           return;
         }
@@ -147,7 +228,8 @@ export function MarkdownEditor({
         if (result) {
           event.preventDefault();
           pendingSelection.current = { start: result.selectionStart, end: result.selectionEnd };
-          onChange(result.value);
+          lastEditTimeRef.current = null;
+          recordChange({ value: result.value, selectionStart: result.selectionStart, selectionEnd: result.selectionEnd }, false);
           onKeyDown?.(event);
           return;
         }
@@ -155,7 +237,7 @@ export function MarkdownEditor({
 
       onKeyDown?.(event);
     },
-    [applyTransform, onChange, onKeyDown],
+    [applyTransform, performRedo, performUndo, recordChange, revertToInitial, hidePreview, onKeyDown],
   );
 
   const groups = useMemo(() => resolveToolbarGroups(toolbarActions), [toolbarActions]);
@@ -183,55 +265,120 @@ export function MarkdownEditor({
           },
         }}
       >
-        {!hidePreview && (
-          <Tabs
-            value={mode}
-            onChange={(_, next) => setMode(next)}
-            sx={{ minHeight: 36, borderBottom: 1, borderColor: 'divider', px: 1 }}
+        {(!hideToolbar || !hidePreview) && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              rowGap: 0.5,
+              px: 1,
+              py: 0.5,
+              bgcolor: 'action.hover',
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
           >
-            <Tab value="write" label="Write" sx={{ minHeight: 36, py: 0.5 }} />
-            <Tab value="preview" label="Preview" sx={{ minHeight: 36, py: 0.5 }} />
-          </Tabs>
-        )}
-
-        {mode === 'write' ? (
-          <>
             {!hideToolbar && (
               <MarkdownEditorToolbar
                 groups={groups}
-                disabled={disabled}
+                disabled={disabled || mode === 'preview'}
                 onAction={handleToolbarAction}
+                canUndo={historyRef.current.past.length > 0}
+                canRedo={historyRef.current.future.length > 0}
+                onUndo={performUndo}
+                onRedo={performRedo}
               />
             )}
-            <InputBase
-              inputRef={setRefs}
-              id={inputId}
-              name={name}
-              multiline
-              fullWidth
-              minRows={minRows}
-              maxRows={maxRows}
-              value={value}
-              placeholder={placeholder}
-              disabled={disabled}
-              required={required}
-              autoFocus={autoFocus}
-              onChange={(event) => onChange(event.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={onBlur}
-              aria-label={ariaLabel ?? label}
-              aria-describedby={helperText ? helperTextId : undefined}
-              sx={{
-                px: 1.5,
-                py: 1,
-                fontSize: '0.9375rem',
-                alignItems: 'flex-start',
-                ...monospaceSx,
-              }}
-            />
-          </>
+            {!hidePreview && (
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={mode}
+                onChange={(_, next: 'write' | 'preview' | null) => {
+                  if (next) setMode(next);
+                }}
+                aria-label="Editor mode"
+                disabled={disabled}
+                sx={{
+                  ml: 'auto',
+                  flexShrink: 0,
+                  '& .MuiToggleButton-root': {
+                    px: 1.1,
+                    py: 0.25,
+                    textTransform: 'none',
+                    fontSize: 12.5,
+                    lineHeight: 1.35,
+                  },
+                }}
+              >
+                <ToggleButton value="write" title="Write">
+                  Write
+                </ToggleButton>
+                <ToggleButton value="preview" title="Preview">
+                  Preview
+                </ToggleButton>
+              </ToggleButtonGroup>
+            )}
+          </Box>
+        )}
+
+        {mode === 'write' ? (
+          <InputBase
+            inputRef={setRefs}
+            id={inputId}
+            name={name}
+            multiline
+            fullWidth
+            minRows={minRows}
+            maxRows={maxRows}
+            value={value}
+            placeholder={placeholder}
+            disabled={disabled}
+            required={required}
+            autoFocus={autoFocus}
+            onChange={(event) => {
+              const el = event.target;
+              const prevValue = valueRef.current;
+              const nextValue = el.value;
+              const now = Date.now();
+              const elapsed = lastEditTimeRef.current == null ? Infinity : now - lastEditTimeRef.current;
+              const coalesce = isContinuousEdit(prevValue, nextValue, elapsed);
+              lastEditTimeRef.current = now;
+              recordChange(
+                {
+                  value: nextValue,
+                  selectionStart: el.selectionStart ?? nextValue.length,
+                  selectionEnd: el.selectionEnd ?? nextValue.length,
+                },
+                coalesce,
+              );
+            }}
+            onKeyDown={handleKeyDown}
+            onBlur={onBlur}
+            aria-label={ariaLabel ?? label}
+            aria-describedby={helperText ? helperTextId : undefined}
+            sx={{
+              px: 1.5,
+              py: 1,
+              fontSize: '0.9375rem',
+              alignItems: 'flex-start',
+              ...monospaceSx,
+            }}
+          />
         ) : (
-          <Box sx={{ px: 1.5, py: 1, minHeight: previewMinHeight(minRows), ...monospaceSx }}>
+          <Box
+            onClick={() => {
+              if (!disabled) setMode('write');
+            }}
+            sx={{
+              px: 1.5,
+              py: 1,
+              minHeight: previewMinHeight(minRows),
+              cursor: disabled ? 'default' : 'text',
+              ...monospaceSx,
+            }}
+          >
             {value.trim() ? (
               <MarkdownContent content={value} />
             ) : (

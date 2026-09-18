@@ -12,6 +12,8 @@ import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
 import type { ReactNode } from 'react';
 import { ControlTooltip } from './ControlTooltip';
 import {
@@ -24,6 +26,10 @@ export interface MarkdownEditorToolbarProps {
   groups: MarkdownToolbarActionId[][];
   disabled?: boolean;
   onAction: (id: MarkdownToolbarActionId) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }
 
 const HEADING_GLYPHS: Partial<Record<MarkdownToolbarActionId, string>> = {
@@ -57,6 +63,10 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
   groups,
   disabled,
   onAction,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: MarkdownEditorToolbarProps) {
   return (
     <Stack
@@ -67,13 +77,36 @@ export const MarkdownEditorToolbar = memo(function MarkdownEditorToolbar({
         flexWrap: 'wrap',
         alignItems: 'center',
         rowGap: 0.5,
-        px: 1,
-        py: 0.5,
-        bgcolor: 'action.hover',
-        borderBottom: 1,
-        borderColor: 'divider',
+        flex: 1,
+        minWidth: 0,
       }}
     >
+      <Stack direction="row" spacing={0.25} sx={{ flexWrap: 'wrap' }}>
+        <ControlTooltip title="Undo (⌘Z)" disabled={disabled || !canUndo}>
+          <IconButton
+            size="small"
+            aria-label="Undo"
+            tabIndex={-1}
+            disabled={disabled || !canUndo}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onUndo}
+          >
+            <UndoIcon fontSize="small" />
+          </IconButton>
+        </ControlTooltip>
+        <ControlTooltip title="Redo (⌘⇧Z)" disabled={disabled || !canRedo}>
+          <IconButton
+            size="small"
+            aria-label="Redo"
+            tabIndex={-1}
+            disabled={disabled || !canRedo}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onRedo}
+          >
+            <RedoIcon fontSize="small" />
+          </IconButton>
+        </ControlTooltip>
+      </Stack>
       {groups.map((group, index) => (
         <Stack key={index} direction="row" spacing={0.25} sx={{ flexWrap: 'wrap' }}>
           {group.map((id) => (

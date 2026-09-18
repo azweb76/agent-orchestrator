@@ -315,8 +315,8 @@ function SubagentRow({ item }: { item: ToolRow }) {
 
 /**
  * One card per Task/Agent (and background bash) so parallel subagents stay visible
- * during the turn, including Done/Failed siblings while another is still running.
- * The chat timeline hides this list once the turn is finished.
+ * during the turn. The chat timeline only passes items that are still running,
+ * so finished (Done/Failed) siblings drop out of this list as soon as they complete.
  */
 export function SubagentActivityList({ items }: { items: ToolRow[] }) {
   if (items.length === 0) return null;

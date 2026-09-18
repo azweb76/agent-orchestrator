@@ -19,6 +19,12 @@ function isSubagentBlock(block: Extract<ChatBlock, { type: 'tool_use' }>): boole
   );
 }
 
+export function filterRunningSubagents(
+  tools: Extract<ChatBlock, { type: 'tool_use' }>[],
+): Extract<ChatBlock, { type: 'tool_use' }>[] {
+  return tools.filter((item) => isSubagentBlock(item) && item.status === 'running');
+}
+
 function textFromBlocks(blocks: ChatBlock[] | undefined, fallback?: string): string {
   const texts = (blocks ?? [])
     .filter((block): block is Extract<ChatBlock, { type: 'text' }> => block.type === 'text')
@@ -41,7 +47,7 @@ export const MessageTimeline = memo(function MessageTimeline({
   const tools = blocks.filter(
     (block): block is Extract<ChatBlock, { type: 'tool_use' }> => block.type === 'tool_use',
   );
-  const subagents = tools.filter((item) => isSubagentBlock(item));
+  const subagents = filterRunningSubagents(tools);
   const otherTools = tools.filter((item) => !isSubagentBlock(item));
   const thinking = blocks.filter(
     (block): block is Extract<ChatBlock, { type: 'thinking' }> => block.type === 'thinking',
